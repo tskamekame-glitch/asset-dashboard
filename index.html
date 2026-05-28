@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="資産管理">
+<title>💼 資産管理ダッシュボード</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+/* ============================================================
+   BASE RESET & VARIABLES
+============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#ffffff;--bg2:#f5f5f3;--bg3:#eeecea;
+  --text:#1a1a18;--text2:#6b6b68;--text3:#9b9b97;
+  --border:rgba(0,0,0,0.10);--border2:rgba(0,0,0,0.18);
+  --accent:#185fa5;--danger:#c0392b;--green:#0f6e56;--amber:#ba7517;
+  --radius:10px;--radius-lg:14px;
+  --nav-h:56px;--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#000000;
+    --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
+    --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.16);
+  }
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif;background:var(--bg3);color:var(--text);-webkit-font-smoothing:antialiased}
+
+/* ============================================================
+   BOTTOM NAV
+============================================================ */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:var(--bg);border-top:0.5px solid var(--border);
+  display:flex;
+  padding-bottom:var(--safe-bot);
+}
+.nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;padding:8px 4px;border:none;background:transparent;
+  cursor:pointer;font-family:inherit;color:var(--text3);
+  font-size:10px;font-weight:500;min-height:49px;
+  transition:color 0.15s;
+}
+.nav-btn .ni{font-size:20px;line-height:1}
+.nav-btn.active{color:var(--accent)}
+
+/* ============================================================
+   PANELS
+============================================================ */
+.panels{
+  position:fixed;top:0;left:0;right:0;
+  bottom:calc(49px + var(--safe-bot));
+  overflow:hidden;
+}
+.panel{
+  position:absolute;inset:0;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:none;
+  padding-top:var(--safe-top);
+}
+.panel.active{display:block}
+
+/* ============================================================
+   SHARED COMPONENTS
+============================================================ */
+.page-inner{padding:12px 12px 24px;max-width:640px;margin:0 auto}
+.phead{
+  position:sticky;top:0;z-index:50;background:var(--bg);
+  border-bottom:0.5px solid var(--border);
+  padding:0 16px;
+}
+.phead-inner{display:flex;align-items:center;justify-content:space-between;padding:12px 0;gap:8px}
+.phead h1{font-size:17px;font-weight:600;flex:1}
+.btn-accent{background:var(--accent);color:#fff;border:none;border-radius:20px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.btn-sm{background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:9px 14px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit;min-height:40px;flex:1}
+.card{background:var(--bg);border-radius:var(--radius-lg);border:0.5px solid var(--border);margin-bottom:12px;overflow:hidden}
+.card-head{padding:14px 16px 4px}
+.card-head h2{font-size:15px;font-weight:600}
+.metric{background:var(--bg);border-radius:var(--radius);padding:12px;border:0.5px solid var(--border)}
+.metric .label{font-size:11px;color:var(--text2);margin-bottom:4px}
+.metric .value{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.metric .sub{font-size:11px;margin-top:2px;color:var(--text3)}
+.up{color:var(--green)}.down{color:var(--danger)}
+.hint{background:var(--bg);border-radius:var(--radius);border:0.5px solid var(--border);padding:14px 16px;margin-bottom:12px;font-size:13px;color:var(--text2);line-height:1.6}
+.hint strong{color:var(--text)}
+.toast-el{position:fixed;bottom:calc(70px + var(--safe-bot));left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast-el.show{opacity:1}
+
+/* ============================================================
+   HOME PANEL
+============================================================ */
+.home-header{text-align:center;padding:20px 12px 16px}
+.home-header h2{font-size:22px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px}
+.home-header p{font-size:13px;color:var(--text2)}
+.home-total{background:var(--accent);color:#fff;border-radius:var(--radius-lg);padding:20px;margin-bottom:12px;text-align:center}
+.home-total .ht-label{font-size:13px;opacity:0.8;margin-bottom:6px}
+.home-total .ht-value{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-1px}
+.home-total .ht-sub{font-size:12px;opacity:0.7;margin-top:4px}
+.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.home-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px;cursor:pointer;transition:transform 0.12s}
+.home-card:active{transform:scale(0.97)}
+.home-card .hc-icon{font-size:24px;margin-bottom:6px}
+.home-card .hc-title{font-size:13px;font-weight:600;margin-bottom:4px}
+.home-card .hc-meta{font-size:11px;color:var(--text2);line-height:1.4}
+.home-card .hc-badge{font-size:10px;margin-top:6px;padding:2px 8px;border-radius:10px;display:inline-block;font-weight:600;background:rgba(24,95,165,0.1);color:var(--accent)}
+.home-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+
+/* ============================================================
+   ASSET MANAGER PANEL
+============================================================ */
+.total-card{background:var(--accent);color:#fff;border-radius:var(--radius-lg);padding:20px;margin-bottom:12px;text-align:center}
+.total-card .label{font-size:13px;opacity:0.8;margin-bottom:6px}
+.total-card .value{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.5px}
+.total-card .sub{font-size:12px;opacity:0.7;margin-top:4px}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.export-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.section{background:var(--bg);border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden;border:0.5px solid var(--border)}
+.section-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;user-select:none;min-height:50px}
+.section-head:active{background:var(--bg2)}
+.section-head-left{display:flex;align-items:center;gap:10px}
+.cat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.section-head h2{font-size:15px;font-weight:500}
+.chevron{font-size:12px;color:var(--text3);transition:transform 0.2s;display:inline-block;margin-left:6px}
+.collapsed .chevron{transform:rotate(-90deg)}
+.account-list{display:block;border-top:0.5px solid var(--border)}
+.collapsed .account-list{display:none}
+.account-row{display:flex;align-items:center;padding:13px 16px;border-bottom:0.5px solid var(--border);gap:10px;min-height:58px}
+.account-row:last-child{border-bottom:none}
+.acct-info{flex:1;min-width:0}
+.acct-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-note{font-size:12px;color:var(--text3);margin-top:2px}
+.acct-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.acct-amount{font-size:15px;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.row-btns{display:flex;gap:6px}
+.icon-btn{border:0.5px solid var(--border2);border-radius:8px;cursor:pointer;color:var(--text2);background:var(--bg2);padding:5px 11px;font-size:13px;font-family:inherit;min-height:30px}
+.icon-btn.danger{color:var(--danger)}
+.add-row{padding:10px 16px}
+.add-btn-inline{background:none;border:1px dashed var(--border2);border-radius:var(--radius);color:var(--text3);font-size:13px;cursor:pointer;padding:10px 12px;width:100%;text-align:center;font-family:inherit;min-height:42px}
+.chart-wrap{padding:14px 16px}
+.bar-chart{display:flex;flex-direction:column;gap:12px}
+.bar-row{display:flex;align-items:center;gap:10px}
+.bar-label{width:80px;font-size:12px;color:var(--text2);text-align:right;flex-shrink:0}
+.bar-track{flex:1;height:20px;background:var(--bg2);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width 0.4s}
+.bar-val{width:80px;font-size:12px;font-variant-numeric:tabular-nums;text-align:right}
+.reminder-banner{background:#faeeda;border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;border:0.5px solid #e8c870}
+.reminder-icon{font-size:20px;flex-shrink:0}
+.reminder-title{font-size:13px;font-weight:600;color:#7a5000;margin-bottom:4px}
+.reminder-text{font-size:12px;color:#9a6800;line-height:1.6}
+.sync-status{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+.sync-dot.ok{background:var(--green)}.sync-dot.syncing{background:var(--amber);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ============================================================
+   BOTTOM SHEET (shared)
+============================================================ */
+.sheet-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:300;align-items:flex-end;justify-content:center}
+.sheet-bg.open{display:flex}
+.sheet{background:var(--bg);width:100%;max-width:600px;border-radius:20px 20px 0 0;padding:0 0 calc(16px + var(--safe-bot));max-height:92vh;overflow-y:auto;animation:slideUp 0.25s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px}
+.sheet-title{font-size:17px;font-weight:600;text-align:center;padding:0 16px 16px;border-bottom:0.5px solid var(--border)}
+.sheet-body{padding:16px}
+.field{margin-bottom:14px}
+.field label{font-size:13px;color:var(--text2);display:block;margin-bottom:6px}
+.field input,.field select{width:100%;padding:12px 14px;font-size:16px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;-webkit-appearance:none;min-height:48px}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.sheet-btns{display:flex;gap:10px;padding:4px 16px 0}
+.btn-cancel{flex:1;background:var(--bg2);border:none;border-radius:var(--radius);padding:14px;font-size:16px;cursor:pointer;color:var(--text2);font-family:inherit;min-height:50px}
+.btn-save{flex:2;background:var(--accent);border:none;border-radius:var(--radius);padding:14px;font-size:16px;cursor:pointer;color:#fff;font-weight:600;font-family:inherit;min-height:50px}
+.confirm-sheet{background:var(--bg);width:100%;max-width:600px;border-radius:20px 20px 0 0;padding:20px 16px calc(16px + var(--safe-bot));animation:slideUp 0.2s ease}
+.confirm-sheet h3{font-size:17px;font-weight:600;text-align:center}
+.confirm-sheet p{font-size:14px;text-align:center;margin:8px 0 20px;color:var(--text2)}
+.btn-del{width:100%;background:#fcebeb;border:none;border-radius:var(--radius);padding:14px;font-size:16px;cursor:pointer;color:var(--danger);font-weight:600;font-family:inherit;min-height:50px;margin-bottom:10px}
+
+/* FAB */
+.fab{position:fixed;bottom:calc(64px + var(--safe-bot));right:16px;width:52px;height:52px;border-radius:26px;background:var(--accent);color:#fff;border:none;font-size:26px;cursor:pointer;z-index:100;box-shadow:0 4px 16px rgba(24,95,165,0.4);display:flex;align-items:center;justify-content:center}
+.fab.hidden{display:none}
+
+/* ============================================================
+   TREND PANEL
+============================================================ */
+.upload-area{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:28px 20px;text-align:center;margin-bottom:12px;background:var(--bg);cursor:pointer}
+.upload-area .icon{font-size:32px;margin-bottom:8px}
+.upload-area p{font-size:14px;color:var(--text2);margin-bottom:4px}
+.upload-area small{font-size:12px;color:var(--text3)}
+.file-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.file-item{background:var(--bg);border-radius:var(--radius);border:0.5px solid var(--border);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.file-item .fname{font-weight:500}
+.file-item .fmeta{font-size:11px;color:var(--text3);margin-top:2px}
+.file-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px 8px;line-height:1}
+.tr-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.filter-bar{display:flex;gap:6px;margin-bottom:10px}
+.filter-btn{background:var(--bg);border:0.5px solid var(--border2);border-radius:16px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text2);font-family:inherit}
+.filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chart-container{padding:8px 8px 12px;min-height:200px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:10px 12px;text-align:right;color:var(--text3);font-weight:500;font-size:11px;border-bottom:0.5px solid var(--border);white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:10px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{text-align:left;font-weight:500}
+tr:last-child td{border-bottom:none}
+.empty{text-align:center;padding:3rem 1rem;color:var(--text3);font-size:14px}
+
+/* ============================================================
+   PORTFOLIO PANEL
+============================================================ */
+.pf-header{text-align:center;margin-bottom:1rem;padding:1rem 0 0.5rem}
+.pf-header-label{font-size:11px;letter-spacing:0.15em;color:var(--accent);margin-bottom:4px}
+.pf-header h2{font-size:18px;font-weight:700;letter-spacing:-0.02em}
+.pf-sum-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
+.pf-sum-grid.four{grid-template-columns:repeat(2,1fr)}
+.s-card{background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:10px 12px;position:relative;overflow:hidden}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.s-card.c-done::before{background:var(--green)}
+.s-card.c-nisa::before{background:var(--amber)}
+.s-card.c-pending::before{background:var(--text3)}
+.s-card.c-total::before{background:linear-gradient(90deg,var(--accent),#8b5cf6)}
+.s-label{font-size:10px;color:var(--text2);margin-bottom:4px}
+.s-amount{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.s-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.pf-progress{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.ps-title{font-size:11px;color:var(--text2);margin-bottom:10px}
+.ps-bars{display:flex;flex-direction:column;gap:8px}
+.ps-row{display:flex;align-items:center;gap:8px}
+.ps-label{font-size:11px;color:var(--text2);min-width:90px}
+.ps-bar{flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden}
+.ps-fill{height:100%;border-radius:4px;transition:width 0.5s}
+.fill-done{background:var(--green)}.fill-nisa{background:var(--amber)}.fill-pending{background:var(--text3)}
+.ps-val{font-size:10px;color:var(--text2);min-width:80px;text-align:right;font-variant-numeric:tabular-nums}
+.pf-tabs{display:flex;gap:4px;margin-bottom:10px;background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:4px}
+.pf-tab{flex:1;padding:7px 4px;border:none;border-radius:7px;font-family:inherit;font-size:11px;font-weight:500;cursor:pointer;transition:all 0.2s;background:transparent;color:var(--text2)}
+.pf-tab.active{background:var(--bg2);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,0.15)}
+.invest-card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;position:relative;overflow:hidden}
+.invest-card::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px}
+.invest-card.status-done::after{background:var(--green)}
+.invest-card.status-nisa::after{background:var(--amber)}
+.invest-card.status-pending::after{background:var(--text3)}
+.invest-card.status-sell::after{background:var(--danger)}
+.status-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:500;white-space:nowrap}
+.sb-done{background:rgba(15,110,86,0.15);color:var(--green)}
+.sb-nisa{background:rgba(186,117,23,0.15);color:var(--amber)}
+.sb-pending{background:rgba(100,100,100,0.15);color:var(--text2)}
+.sb-sell{background:rgba(192,57,43,0.15);color:var(--danger)}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.card-left{flex:1;min-width:0}
+.fund-name{font-size:13px;font-weight:500;margin-bottom:4px;line-height:1.4}
+.fund-meta{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.card-right{text-align:right;flex-shrink:0}
+.main-amount{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.main-label{font-size:10px;color:var(--text3);margin-top:1px}
+.card-memo{font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5}
+.status-indicator{display:flex;align-items:center;gap:5px;margin-top:7px;padding-top:7px;border-top:0.5px solid var(--border)}
+.si-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.si-dot.done{background:var(--green)}.si-dot.nisa{background:var(--amber)}.si-dot.pending{background:var(--text3)}.si-dot.sell{background:var(--danger)}
+.si-text{font-size:11px}
+.si-text.done{color:var(--green)}.si-text.nisa{color:var(--amber)}.si-text.pending{color:var(--text2)}.si-text.sell{color:var(--danger)}
+.card-actions{display:flex;gap:5px;margin-top:7px}
+.action-btn{padding:3px 9px;border:0.5px solid var(--border);border-radius:5px;background:transparent;color:var(--text3);font-family:inherit;font-size:11px;cursor:pointer}
+.pf-add-btn{width:100%;padding:12px;background:transparent;border:1px dashed var(--border);border-radius:12px;color:var(--text3);font-family:inherit;font-size:13px;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+.pf-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.pf-modal-overlay.open{display:flex}
+.pf-modal{background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto}
+.pf-modal-title{font-size:16px;font-weight:600;margin-bottom:16px}
+.form-group{margin-bottom:12px}
+.form-label{font-size:12px;color:var(--text2);margin-bottom:5px;display:block}
+.form-input,.form-select{width:100%;padding:10px 12px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:14px;outline:none;-webkit-appearance:none}
+.form-input:focus,.form-select:focus{border-color:var(--accent)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-actions{display:flex;gap:8px;margin-top:16px}
+.btn-primary{flex:1;padding:10px;border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;background:var(--accent);color:white}
+.btn-secondary{flex:1;padding:10px;border:0.5px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;background:var(--bg2);color:var(--text2)}
+.btn-danger-pf{width:100%;padding:10px;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.3);border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;color:var(--danger);margin-top:8px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.section-title{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:var(--text2)}
+.section-dot{width:7px;height:7px;border-radius:50%}
+.section-total{font-size:11px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+/* ============================================================
+   TODO PANEL
+============================================================ */
+.todo-header-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.todo-h1{font-size:18px;font-weight:700;letter-spacing:-0.3px}
+.todo-h1 span{display:block;font-size:11px;font-weight:400;color:var(--text2);margin-top:2px}
+.todo-header-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.stat-badge{background:var(--bg);border:0.5px solid var(--border2);border-radius:999px;padding:5px 14px;font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+.stat-badge strong{color:var(--text)}
+.pbw{height:4px;background:var(--bg2);border-radius:999px;overflow:hidden;margin-bottom:14px}
+.pbf{height:100%;width:0%;background:var(--accent);border-radius:999px;transition:width 0.4s cubic-bezier(.4,0,.2,1)}
+.category{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden}
+.cat-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--border);gap:8px}
+.cat-hl{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.cat-icon{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cat-title{font-size:12px;font-weight:500;line-height:1.4;flex:1}
+.cat-count{font-size:10px;color:var(--text3);background:var(--bg2);border:0.5px solid var(--border);border-radius:999px;padding:2px 7px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.cat-acts{display:flex;gap:4px;flex-shrink:0}
+.btn-tsm{background:transparent;border:0.5px solid var(--border);border-radius:5px;padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;white-space:nowrap;font-family:inherit}
+.todo-item{display:flex;align-items:flex-start;gap:8px;padding:9px 14px;border-bottom:0.5px solid var(--border)}
+.todo-item:last-child{border-bottom:none}
+.todo-item input[type=checkbox]{width:16px;height:16px;border-radius:4px;cursor:pointer;flex-shrink:0;margin-top:2px}
+.todo-lbl-wrap{flex:1;min-width:0}
+.todo-lbl{font-size:13px;line-height:1.6;cursor:pointer;color:var(--text)}
+.todo-lbl.done{text-decoration:line-through;color:var(--text3)}
+.todo-meta{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:2px}
+.priority-badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500}
+.p-high{background:#FEF0F0;color:#E24B4A}.p-mid{background:#FAEEDA;color:#BA7517}.p-low{background:#E1F5EE;color:#0F6E56}
+.due-badge{font-size:10px;color:var(--text3)}
+.due-badge.overdue{color:#E24B4A;font-weight:600}.due-badge.soon{color:#BA7517;font-weight:600}
+.todo-ia{display:flex;gap:3px;flex-shrink:0;margin-top:1px}
+.ib{background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:12px;color:var(--text3)}
+.todo-add-row{display:flex;gap:6px;padding:8px 14px;border-top:0.5px dashed var(--border)}
+.todo-add-inp{flex:1;font-size:13px;border:0.5px solid var(--border);border-radius:8px;padding:7px 10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-height:36px}
+.todo-add-btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+/* TODO item modal */
+.item-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:400;align-items:center;justify-content:center;padding:16px}
+.item-modal-bg.open{display:flex}
+.item-modal{background:var(--bg);border-radius:14px;padding:20px;width:100%;max-width:420px;border:0.5px solid var(--border)}
+.item-modal h3{font-size:15px;font-weight:600;margin-bottom:14px}
+.item-modal label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px;margin-top:10px}
+.item-modal input,.item-modal select{width:100%;font-size:14px;border:0.5px solid var(--border2);border-radius:8px;padding:9px 12px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;-webkit-appearance:none;min-height:42px}
+.item-modal-acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+/* cat modal */
+.cat-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:400;align-items:center;justify-content:center;padding:16px}
+.cat-modal-bg.open{display:flex}
+.cat-modal{background:var(--bg);border-radius:14px;padding:20px;width:100%;max-width:400px;border:0.5px solid var(--border)}
+.cat-modal h3{font-size:15px;font-weight:600;margin-bottom:14px}
+.cat-modal label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px;margin-top:10px}
+.cat-modal input{width:100%;font-size:14px;border:0.5px solid var(--border2);border-radius:8px;padding:9px 12px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-height:42px}
+.cr{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.cd{width:26px;height:26px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:border-color .15s}
+.cd.sel{border-color:var(--text)}
+.cat-modal-acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.empty-msg{padding:2rem;font-size:14px;color:var(--text3);text-align:center}
+
+
+/* FIRE SIMULATOR */
+#fire-scope .hero { background: linear-gradient(135deg,#0f1117 0%,#1a1040 50%,#0f1117 100%); border-bottom: 0.5px solid var(--border2); padding: 2rem 1.25rem 1.5rem; text-align: center; }
+#fire-scope .hero h1 { font-size: clamp(20px,5vw,30px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 6px; }
+#fire-scope .hero p { font-size: 13px; color: var(--text2); line-height: 1.6; }
+#fire-scope .tabs { display: flex; margin: 1.25rem 0 1rem; border: 0.5px solid var(--border2); border-radius: 12px; overflow: hidden; }
+#fire-scope .tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--text2); border: none; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+#fire-scope .tab.active { background: var(--accent); color: #fff; }
+#fire-scope .tab:first-child { border-right: 0.5px solid var(--border2); }
+#fire-scope .container { max-width: 560px; margin: 0 auto; padding: 0 1rem 4rem; }
+#fire-scope .card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
+#fire-scope .card-head { padding: 12px 16px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; }
+#fire-scope .card-head h2 { font-size: 12px; font-weight: 500; color: var(--text2); }
+#fire-scope .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+#fire-scope .dot.purple { background: var(--purple); }
+#fire-scope .field-list { padding: 6px 0; }
+#fire-scope .field-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; border-bottom: 0.5px solid var(--border); }
+#fire-scope .field-row:last-child { border-bottom: none; }
+#fire-scope .field-label { font-size: 14px; color: var(--text2); flex: 1; line-height: 1.4; }
+#fire-scope .field-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+#fire-scope .field-input-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+#fire-scope .field-unit { font-size: 12px; color: var(--text3); white-space: nowrap; }
+#fire-scope .field-input { width: 88px; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 10px; color: var(--text); font-size: 16px; font-weight: 500; text-align: right; padding: 7px 9px; outline: none; -webkit-appearance: none; appearance: none; font-family: inherit; }
+#fire-scope .field-input:focus { border-color: var(--accent); }
+#fire-scope .field-input::-webkit-inner-spin-button, #fire-scope .field-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#fire-scope .field-input[type=number] { -moz-appearance: textfield; }
+#fire-scope .hint-box { background: rgba(167,139,250,0.08); border: 0.5px solid rgba(167,139,250,0.25); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-size: 12px; color: #c4b5fd; line-height: 1.7; }
+#fire-scope .hint-box strong { color: var(--purple); }
+#fire-scope .calc-btn { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 14px; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+#fire-scope .calc-btn:active { opacity: 0.85; }
+#fire-scope .results { display: none; }
+#fire-scope .results.visible { display: block; }
+#fire-scope .compare-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+#fire-scope .compare-card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px 14px; }
+#fire-scope .compare-card.family { border-color: rgba(167,139,250,0.4); }
+#fire-scope .compare-title { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+#fire-scope .compare-title.family { color: #c4b5fd; }
+#fire-scope .compare-val { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#fire-scope .verdict-card { border-radius: 14px; padding: 16px 18px; border: 1px solid; margin-bottom: 12px; }
+#fire-scope .verdict-card.ok { background: rgba(52,211,153,.09);  border-color: rgba(52,211,153,.28); }
+#fire-scope .verdict-card.warn { background: rgba(251,191,36,.09);   border-color: rgba(251,191,36,.28); }
+#fire-scope .verdict-card.ng { background: rgba(248,113,113,.09);  border-color: rgba(248,113,113,.28); }
+#fire-scope .verdict-icon { font-size: 20px; margin-bottom: 5px; }
+#fire-scope .verdict-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+#fire-scope .verdict-card.ok   .verdict-title { color: var(--green); }
+#fire-scope .verdict-card.warn .verdict-title { color: var(--amber); }
+#fire-scope .verdict-card.ng   .verdict-title { color: var(--red); }
+#fire-scope .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+#fire-scope .metric-card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 12px; padding: 13px 14px; }
+#fire-scope .metric-card .mlabel { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+#fire-scope .metric-card .mvalue { font-size: 18px; font-weight: 600; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+#fire-scope .metric-card .msub { font-size: 11px; color: var(--text3); }
+#fire-scope .val-ok { color: var(--green); }
+#fire-scope .val-warn { color: var(--amber); }
+#fire-scope .val-ng { color: var(--red); }
+#fire-scope .val-blue { color: var(--accent); }
+#fire-scope .val-purple { color: var(--purple); }
+#fire-scope .chart-card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+#fire-scope .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
+#fire-scope .chart-title { font-size: 12px; color: var(--text2); font-weight: 500; }
+#fire-scope .chart-legend { display: flex; gap: 10px; flex-wrap: wrap; }
+#fire-scope .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text3); }
+#fire-scope .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+#fire-scope canvas { display: block; width: 100% !important; }
+#fire-scope .timeline { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+#fire-scope .timeline-title { font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 12px; }
+#fire-scope .tl-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+#fire-scope .tl-row:last-child { margin-bottom: 0; }
+#fire-scope .tl-age { font-size: 11px; color: var(--accent); font-weight: 600; width: 52px; flex-shrink: 0; padding-top: 2px; }
+#fire-scope .tl-bar { flex: 1; }
+#fire-scope .tl-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+#fire-scope .tl-track { height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+#fire-scope .tl-fill { height: 100%; border-radius: 99px; }
+#fire-scope .tl-cost { font-size: 11px; color: var(--text3); margin-top: 3px; }
+#fire-scope .note { font-size: 11px; color: var(--text3); text-align: center; line-height: 1.9; margin-top: 4px; }
+#fire-scope .tab-content { display: none; }
+#fire-scope .tab-content.active { display: block; }
+
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     BOTTOM NAVIGATION
+============================================================ -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><span class="ni">🏠</span>ホーム</button>
+  <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
+  <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
+  <button class="nav-btn" data-tab="portfolio" onclick="switchTab('portfolio')"><span class="ni">📊</span>PF</button>
+  <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
+  <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
+</nav>
+
+<!-- ============================================================
+     PANELS
+============================================================ -->
+<div class="panels">
+
+<!-- ========== HOME ========== -->
+<div class="panel active" id="tab-home">
+  <div class="page-inner">
+    <div class="home-header">
+      <h2>💼 資産管理</h2>
+      <p>4つのツールを一元管理</p>
+    </div>
+    <div class="home-total">
+      <div class="ht-label">総資産</div>
+      <div class="ht-value" id="home-total">—</div>
+      <div class="ht-sub" id="home-total-sub">口座を登録してください</div>
+    </div>
+    <div class="home-summary-grid">
+      <div class="metric"><div class="label">口座数</div><div class="value" id="home-accounts">—</div></div>
+      <div class="metric"><div class="label">前月比</div><div class="value" id="home-diff">—</div></div>
+      <div class="metric"><div class="label">TODO残り</div><div class="value" id="home-todo">—</div></div>
+    </div>
+    <div class="home-grid">
+      <div class="home-card" onclick="switchTab('manager')">
+        <div class="hc-icon">💰</div>
+        <div class="hc-title">資産管理</div>
+        <div class="hc-meta">口座・残高を登録<br>CSVで推移ツールへ</div>
+        <div class="hc-badge" id="hbadge-manager">—</div>
+      </div>
+      <div class="home-card" onclick="switchTab('trend')">
+        <div class="hc-icon">📈</div>
+        <div class="hc-title">資産推移グラフ</div>
+        <div class="hc-meta">CSVを読み込んで<br>月次推移を可視化</div>
+        <div class="hc-badge" id="hbadge-trend">—</div>
+      </div>
+      <div class="home-card" onclick="switchTab('portfolio')">
+        <div class="hc-icon">📊</div>
+        <div class="hc-title">PF管理</div>
+        <div class="hc-meta">投資銘柄の状況<br>NISA・積立を追跡</div>
+        <div class="hc-badge" id="hbadge-portfolio">—</div>
+      </div>
+      <div class="home-card" onclick="switchTab('todo')">
+        <div class="hc-icon">✅</div>
+        <div class="hc-title">TODOリスト</div>
+        <div class="hc-meta">投資・税金・手続き<br>期限日・優先度付き</div>
+        <div class="hc-badge" id="hbadge-todo">—</div>
+      </div>
+      <div class="home-card" onclick="switchTab('fire')">
+        <div class="hc-icon">🔥</div>
+        <div class="hc-title">FIREシミュレーター</div>
+        <div class="hc-meta">独身・家族ありで<br>資産寿命を試算</div>
+        <div class="hc-badge">サイド収入20万円</div>
+      </div>
+    </div>
+    <div class="hint"><strong>ヒント：</strong>「資産管理」でCSV書き出し→「推移グラフ」に読み込むと月次推移を記録できます。「PF反映」ボタンでポートフォリオの評価額を資産管理に自動反映できます。</div>
+  </div>
+</div>
+
+<!-- ========== ASSET MANAGER ========== -->
+<div class="panel" id="tab-manager">
+  <div class="phead">
+    <div class="phead-inner">
+      <h1>💰 資産管理</h1>
+      <button class="btn-accent" id="btnHeaderAdd" onclick="openAddModal()">＋ 追加</button>
+    </div>
+  </div>
+  <div class="page-inner" id="managerMain">
+    <div id="reminderBanner"></div>
+    <div id="totalCard"></div>
+    <div class="summary-grid" id="mgSummaryGrid"></div>
+    <div class="export-bar">
+      <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
+      <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
+      <button class="btn-sm" onclick="importFromPortfolio()" style="color:var(--accent);border-color:var(--accent)">📊 PF反映</button>
+      <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
+      <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
+    </div>
+    <div class="section" id="chartSection">
+      <div class="section-head" onclick="toggleSection('chartSection')">
+        <div class="section-head-left"><span>📊</span><h2>カテゴリ別内訳</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list"><div class="chart-wrap"><div class="bar-chart" id="amBarChart"></div></div></div>
+    </div>
+    <div id="accountSections"></div>
+  </div>
+</div>
+
+<!-- ========== PORTFOLIO ========== -->
+<div class="panel" id="tab-portfolio">
+  <div class="phead">
+    <div class="phead-inner"><h1>📊 PF管理</h1></div>
+  </div>
+  <div class="page-inner">
+    <div class="pf-header">
+      <div class="pf-header-label">INVESTMENT TRACKER</div>
+      <h2>投資ポートフォリオ管理</h2>
+    </div>
+    <div class="pf-sum-grid four" style="grid-template-columns:1fr 1fr">
+      <div class="s-card c-total"><div class="s-label">総額（目標）</div><div class="s-amount" id="pf-sum-total">—</div><div class="s-sub">3,000万円</div></div>
+      <div class="s-card c-done"><div class="s-label">✅ 購入済み</div><div class="s-amount" id="pf-sum-done">—</div><div class="s-sub">投資完了</div></div>
+      <div class="s-card c-nisa"><div class="s-label">⏳ NISA待ち</div><div class="s-amount" id="pf-sum-nisa">—</div><div class="s-sub">開設後に購入</div></div>
+      <div class="s-card c-pending"><div class="s-label">🔲 未購入</div><div class="s-amount" id="pf-sum-pending">—</div><div class="s-sub">銀行キープ中</div></div>
+    </div>
+    <div class="pf-progress">
+      <div class="ps-title">投資進捗状況</div>
+      <div class="ps-bars">
+        <div class="ps-row"><span class="ps-label">✅ 購入済み</span><div class="ps-bar"><div class="ps-fill fill-done" id="pf-bar-done" style="width:0%"></div></div><span class="ps-val" id="pf-pct-done">0%</span></div>
+        <div class="ps-row"><span class="ps-label">⏳ NISA待ち</span><div class="ps-bar"><div class="ps-fill fill-nisa" id="pf-bar-nisa" style="width:0%"></div></div><span class="ps-val" id="pf-pct-nisa">0%</span></div>
+        <div class="ps-row"><span class="ps-label">🔲 未購入</span><div class="ps-bar"><div class="ps-fill fill-pending" id="pf-bar-pending" style="width:0%"></div></div><span class="ps-val" id="pf-pct-pending">0%</span></div>
+      </div>
+    </div>
+    <div class="pf-tabs">
+      <button class="pf-tab active" onclick="setPfTab('all')">すべて</button>
+      <button class="pf-tab" onclick="setPfTab('done')">✅ 購入済み</button>
+      <button class="pf-tab" onclick="setPfTab('nisa-wait')">⏳ NISA待ち</button>
+      <button class="pf-tab" onclick="setPfTab('pending')">🔲 未購入</button>
+    </div>
+    <div id="pf-invest-list"></div>
+    <button class="pf-add-btn" onclick="pfOpenModal()">＋ 銘柄を追加する</button>
+  </div>
+</div>
+
+<!-- ========== TREND ========== -->
+<div class="panel" id="tab-trend">
+  <div class="phead">
+    <div class="phead-inner">
+      <h1>📈 資産推移グラフ</h1>
+      <button class="btn-accent" onclick="document.getElementById('csvInput2').click()">＋ CSV追加</button>
+    </div>
+  </div>
+  <div class="page-inner">
+    <div class="hint"><strong>使い方：</strong>資産管理ツールでCSVを書き出し、ここで読み込むと資産推移が確認できます。</div>
+    <div class="upload-area" id="uploadArea" ondragover="event.preventDefault()" ondrop="handleDrop(event)">
+      <div class="icon">📂</div>
+      <p>CSVファイルをドロップ</p>
+      <small>または下のボタンをタップして選択</small><br><br>
+      <button class="btn-accent" onclick="document.getElementById('csvInput2').click()">CSVを選択</button>
+    </div>
+    <input type="file" id="csvInput2" accept=".csv" multiple style="display:none">
+    <div class="file-list" id="fileList"></div>
+    <div class="tr-summary-grid" id="trSummaryGrid" style="display:none"></div>
+    <div class="filter-bar" id="filterBar" style="display:none">
+      <button class="filter-btn active" data-f="all" onclick="setFilter('all')">全期間</button>
+      <button class="filter-btn" data-f="1y" onclick="setFilter('1y')">1年</button>
+      <button class="filter-btn" data-f="6m" onclick="setFilter('6m')">6ヶ月</button>
+      <button class="filter-btn" data-f="3m" onclick="setFilter('3m')">3ヶ月</button>
+    </div>
+    <div class="card" id="lineCard" style="display:none"><div class="card-head"><h2>総資産推移</h2></div><div class="chart-container"><canvas id="lineChart"></canvas></div></div>
+    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>証券・投資 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
+    <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
+    <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div></div>
+    <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+    <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前月比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
+    <div style="display:none;margin-bottom:12px" id="exportBar">
+      <button class="btn-accent" style="width:100%;border-radius:10px;padding:12px" onclick="exportAllCSV()">↓ 全期間データをCSVで書き出し（バックアップ）</button>
+    </div>
+    <div class="card" id="tableCard" style="display:none">
+      <div class="card-head"><h2>履歴一覧</h2></div>
+      <div class="table-wrap">
+        <table><thead><tr><th>日付</th><th>総資産</th><th>増減額</th><th>増減率</th></tr></thead><tbody id="tableBody"></tbody></table>
+      </div>
+    </div>
+    <div class="empty" id="emptyMsg">CSVを読み込むと資産推移が表示されます</div>
+  </div>
+</div>
+
+<!-- ========== TODO ========== -->
+<div class="panel" id="tab-todo">
+  <div class="phead">
+    <div class="phead-inner">
+      <h1 style="font-size:15px;font-weight:700">✅ TODOリスト</h1>
+      <div style="display:flex;gap:6px">
+        <div class="stat-badge">完了 <strong id="dc">0</strong>/<strong id="tc">0</strong></div>
+        <button class="btn-accent" style="padding:6px 12px;font-size:12px" onclick="showCatModal()">＋カテゴリ</button>
+      </div>
+    </div>
+  </div>
+  <div class="page-inner">
+    <div class="pbw"><div class="pbf" id="pb"></div></div>
+    <div id="todo-container"></div>
+  </div>
+</div>
+
+
+<!-- ========== FIRE SIMULATOR ========== -->
+<div class="panel" id="tab-fire">
+  <div class="phead">
+    <div class="phead-inner"><h1>🔥 FIREシミュレーター</h1></div>
+  </div>
+  <div id="fire-scope" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px;background:#0f1117;min-height:100%">
+<div class="hero">
+  <h1>サイドFIRE<br>資産シミュレーター</h1>
+  <p>独身・家族ありを切り替えて比較できます</p>
+</div>
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="fireSwitchTab('single')">独身</button>
+    <button class="tab" onclick="fireSwitchTab('family')">既婚・子1人（0歳）</button>
+  </div>
+
+  <!-- 独身タブ -->
+  <div class="tab-content active" id="fire-tab-single">
+    <div class="card">
+      <div class="card-head"><div class="dot"></div><h2>資産・収支</h2></div>
+      <div class="field-list">
+        <div class="field-row"><span class="field-label">現在の資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-asset" value="4400" inputmode="numeric"><span class="field-unit">万円</span></div></div>
+        <div class="field-row"><span class="field-label">月の生活費</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-expense" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><span class="field-label">サイドFIRE月収</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="dot"></div><h2>運用・年齢・年金</h2></div>
+      <div class="field-list">
+        <div class="field-row"><span class="field-label">運用利回り（年）</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-rate" value="3" step="0.1" inputmode="decimal"><span class="field-unit">%</span></div></div>
+        <div class="field-row"><span class="field-label">現在の年齢</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-curage" value="45" inputmode="numeric"><span class="field-unit">歳</span></div></div>
+        <div class="field-row"><span class="field-label">年金受給開始</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-pension-age" value="65" inputmode="numeric"><span class="field-unit">歳</span></div></div>
+        <div class="field-row"><span class="field-label">想定年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-pension-amt" value="14" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+      </div>
+    </div>
+    <button class="calc-btn" onclick="calcSingle()">計算する</button>
+    <div class="results" id="single-results">
+      <div class="verdict-card ok" id="s-verdict"><div class="verdict-icon" id="s-vicon"></div><div class="verdict-title" id="s-vtitle"></div><div class="verdict-body" id="s-vbody"></div></div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
+        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
+        <div class="metric-card"><div class="mlabel">90歳時の残資産</div><div class="mvalue" id="s-m3">—</div><div class="msub" id="s-m3s"></div></div>
+        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head">
+          <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#4f9cf9"></div><span>資産残高</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇ライン</span></div>
+          </div>
+        </div>
+        <canvas id="s-chart" height="200"></canvas>
+      </div>
+      <p class="note">※税金・医療費・インフレは未考慮。参考試算としてご利用ください。</p>
+    </div>
+  </div>
+
+  <!-- 家族タブ -->
+  <div class="tab-content" id="fire-tab-family">
+    <div class="hint-box"><strong>家族費用の目安（自動加算）</strong><br>配偶者の生活費・教育費・住居費増加分を年齢ごとに自動計算します。各費用は下で調整できます。</div>
+    <div class="card">
+      <div class="card-head"><div class="dot"></div><h2>資産・収支（共通）</h2></div>
+      <div class="field-list">
+        <div class="field-row"><span class="field-label">現在の資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-asset" value="4400" inputmode="numeric"><span class="field-unit">万円</span></div></div>
+        <div class="field-row"><span class="field-label">自分の月収（副業）</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><span class="field-label">配偶者の月収</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-spouse-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><span class="field-label">運用利回り（年）</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate" value="3" step="0.1" inputmode="decimal"><span class="field-unit">%</span></div></div>
+        <div class="field-row"><span class="field-label">現在の年齢</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-curage" value="45" inputmode="numeric"><span class="field-unit">歳</span></div></div>
+        <div class="field-row"><span class="field-label">年金受給開始</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-pension-age" value="65" inputmode="numeric"><span class="field-unit">歳</span></div></div>
+        <div class="field-row"><span class="field-label">自分の年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-pension-amt" value="14" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><span class="field-label">配偶者の年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-spouse-pension" value="8" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="dot purple"></div><h2>家族の生活費・教育費</h2></div>
+      <div class="field-list">
+        <div class="field-row"><div><span class="field-label">家族の基本生活費</span><div class="field-sub">食費・光熱費・日用品など</div></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-living" value="30" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">保育料（0〜5歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-nursery" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">小学校費用（6〜11歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-elem" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">中学校費用（12〜14歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-jhs" value="5" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">高校費用（15〜17歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-hs" value="6" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">大学費用（18〜21歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-univ" value="15" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">住宅費</span><div class="field-sub">賃貸or住宅ローン</div></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+      </div>
+    </div>
+    <button class="calc-btn" onclick="calcFamily()">計算する</button>
+    <div class="results" id="family-results">
+      <div class="compare-box">
+        <div class="compare-card"><div class="compare-title">独身の場合（90歳残高）</div><div class="compare-val val-ok" id="f-compare-single">—</div></div>
+        <div class="compare-card family"><div class="compare-title family">家族ありの場合（90歳残高）</div><div class="compare-val val-purple" id="f-compare-family">—</div></div>
+      </div>
+      <div class="verdict-card ok" id="f-verdict"><div class="verdict-icon" id="f-vicon"></div><div class="verdict-title" id="f-vtitle"></div><div class="verdict-body" id="f-vbody"></div></div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
+        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
+        <div class="metric-card"><div class="mlabel">90歳時の残資産</div><div class="mvalue" id="f-m3">—</div><div class="msub" id="f-m3s"></div></div>
+        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-head">
+          <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#4f9cf9"></div><span>独身</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span>家族あり</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇ライン</span></div>
+          </div>
+        </div>
+        <canvas id="f-chart" height="200"></canvas>
+      </div>
+      <div class="timeline">
+        <div class="timeline-title">子供の教育費タイムライン</div>
+        <div class="tl-row"><div class="tl-age" id="tl-age1"></div><div class="tl-bar"><div class="tl-label">保育園・幼稚園（0〜5歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#34d399"></div></div><div class="tl-cost" id="tl-cost1"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age2"></div><div class="tl-bar"><div class="tl-label">小学校（6〜11歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#4f9cf9"></div></div><div class="tl-cost" id="tl-cost2"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age3"></div><div class="tl-bar"><div class="tl-label">中学校（12〜14歳）</div><div class="tl-track"><div class="tl-fill" style="width:35%;background:#fbbf24"></div></div><div class="tl-cost" id="tl-cost3"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age4"></div><div class="tl-bar"><div class="tl-label">高校（15〜17歳）</div><div class="tl-track"><div class="tl-fill" style="width:45%;background:#f87171"></div></div><div class="tl-cost" id="tl-cost4"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age5"></div><div class="tl-bar"><div class="tl-label">大学（18〜21歳）</div><div class="tl-track"><div class="tl-fill" style="width:100%;background:#a78bfa"></div></div><div class="tl-cost" id="tl-cost5"></div></div></div>
+      </div>
+      <p class="note">※配偶者収入は65歳まで継続と仮定。税金・医療費・インフレは未考慮。<br>※参考試算としてご利用ください。</p>
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+</div><!-- /panels -->
+
+<!-- ============================================================
+     FAB（資産管理タブのみ表示）
+============================================================ -->
+<button class="fab hidden" id="fab" onclick="openAddModal()">＋</button>
+
+<!-- ============================================================
+     BOTTOM SHEETS: Asset Manager
+============================================================ -->
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="sheetTitle">口座を追加</div>
+    <div class="sheet-body">
+      <div class="field"><label>口座名</label><input type="text" id="fName" placeholder="例: ゆうちょ銀行 普通" autocomplete="off"></div>
+      <div class="field"><label>カテゴリ</label>
+        <select id="fCat">
+          <option value="銀行">🏦 銀行</option>
+          <option value="証券">📈 証券・投資</option>
+          <option value="現金">💵 現金・財布</option>
+          <option value="不動産">🏠 不動産</option>
+          <option value="年金">🧓 年金・iDeCo</option>
+          <option value="仮想通貨">₿ 仮想通貨</option>
+          <option value="その他">📁 その他</option>
+        </select>
+      </div>
+      <div class="field"><label>残高（円）</label><input type="number" id="fAmount" placeholder="例: 500000" inputmode="numeric"></div>
+      <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
+    </div>
+    <div class="sheet-btns">
+      <button class="btn-cancel" onclick="closeSheet()">キャンセル</button>
+      <button class="btn-save" onclick="saveAccount()">保存する</button>
+    </div>
+  </div>
+</div>
+<div class="sheet-bg" id="confirmBg">
+  <div class="confirm-sheet">
+    <h3>この口座を削除しますか？</h3>
+    <p id="confirmName"></p>
+    <button class="btn-del" id="confirmOkBtn">削除する</button>
+    <button class="btn-cancel" style="width:100%;min-height:50px;border-radius:10px;border:none;font-size:16px;font-family:inherit;cursor:pointer;background:var(--bg2);color:var(--text2)" onclick="closeConfirm()">キャンセル</button>
+  </div>
+</div>
+
+<!-- Portfolio Modal -->
+<div class="pf-modal-overlay" id="pfModal" onclick="pfCloseModalOutside(event)">
+  <div class="pf-modal">
+    <div class="pf-modal-title" id="pfModalTitle">銘柄を追加</div>
+    <div class="form-group"><label class="form-label">銘柄名・資金名</label><input class="form-input" id="pf-f-name" placeholder="例：eMAXIS Slim 米国株式（S&P500）"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">カテゴリ</label>
+        <select class="form-select" id="pf-f-category">
+          <option value="証券">📈 証券（米国インデックス）</option>
+          <option value="証券-JP">📈 証券（日本インデックス）</option>
+          <option value="証券-インド">📈 証券（インド）</option>
+          <option value="証券-高配当">📈 証券（高配当株）</option>
+          <option value="証券-個別">📈 証券（個別株）</option>
+          <option value="銀行">🏦 銀行キープ</option>
+          <option value="年金">🧓 年金・iDeCo</option>
+          <option value="その他">📁 その他</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">購入状況</label>
+        <select class="form-select" id="pf-f-status">
+          <option value="done">✅ 購入済み（特定口座）</option>
+          <option value="done-credit">✅ クレカ積立設定済み</option>
+          <option value="nisa-wait">⏳ NISA開設後に購入予定</option>
+          <option value="nisa-credit">⏳ NISA開設後にクレカ切替</option>
+          <option value="pending">🔲 未購入（銀行キープ）</option>
+          <option value="sell">🔴 保有中・売却予定</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">一括金額（円）</label><input class="form-input" id="pf-f-lump" type="number" placeholder="例：1500000"></div>
+      <div class="form-group"><label class="form-label">月積立額（円）</label><input class="form-input" id="pf-f-monthly" type="number" placeholder="例：40000"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">現在の評価額</label><input class="form-input" id="pf-f-value" type="number" placeholder="例：1600000"></div>
+      <div class="form-group"><label class="form-label">株数（個別株）</label><input class="form-input" id="pf-f-shares" type="number" placeholder="例：280"></div>
+    </div>
+    <div class="form-group"><label class="form-label">メモ</label><input class="form-input" id="pf-f-memo" placeholder="例：NISA開設後に切替予定"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="pfCloseModal()">キャンセル</button>
+      <button class="btn-primary" onclick="pfSaveEntry()">保存する</button>
+    </div>
+    <div id="pf-delete-section" style="display:none">
+      <button class="btn-danger-pf" onclick="pfDeleteEntry()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- TODO Item Modal -->
+<div class="item-modal-bg" id="itemModalBg" onclick="if(event.target===this)closeItemModal()">
+  <div class="item-modal">
+    <h3>項目を編集</h3>
+    <label>タスク名</label><input type="text" id="im-text">
+    <label>優先度</label>
+    <select id="im-priority"><option value="">なし</option><option value="high">🔴 高（urgent）</option><option value="mid">🟡 中（normal）</option><option value="low">🟢 低（someday）</option></select>
+    <label>期限日</label><input type="date" id="im-due">
+    <div class="item-modal-acts">
+      <button class="btn-secondary" style="padding:8px 16px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-family:inherit;cursor:pointer" onclick="closeItemModal()">キャンセル</button>
+      <button class="btn-primary" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:inherit;cursor:pointer" onclick="saveItemModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- TODO Cat Modal -->
+<div class="cat-modal-bg" id="catModalBg" onclick="if(event.target===this)closeCatModal()">
+  <div class="cat-modal">
+    <h3>カテゴリを追加</h3>
+    <label>カテゴリ名</label><input type="text" id="new-cat-name" placeholder="例：保険の見直し">
+    <label>カラー</label>
+    <div class="cr" id="color-picker"></div>
+    <div class="cat-modal-acts">
+      <button class="btn-secondary" style="padding:8px 16px;border-radius:8px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text2);font-family:inherit;cursor:pointer" onclick="closeCatModal()">キャンセル</button>
+      <button class="btn-primary" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:inherit;cursor:pointer" onclick="addCategory()">追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-el" id="toast"></div>
+
+<!-- ============================================================
+     JAVASCRIPT
+============================================================ -->
+<script>
+'use strict';
+
+// ============================================================
+// SHARED UTILS
+// ============================================================
+function fmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP')}
+function fmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP')}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+let _toastTimer;
+function showToast(msg,dur=2200){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+// ============================================================
+// TAB SWITCHER
+// ============================================================
+let currentTab='home';
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  const fab=document.getElementById('fab');
+  fab.classList.toggle('hidden',tab!=='manager');
+  if(tab==='home')refreshHome();
+  if(tab==='portfolio')pfRender();
+}
+
+// ============================================================
+// HOME
+// ============================================================
+function refreshHome(){
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const total=accs.reduce((s,a)=>s+(a.amount||0),0);
+    document.getElementById('home-total').textContent=total>0?fmt(total):'—';
+    document.getElementById('home-accounts').textContent=accs.length>0?accs.length+'口座':'—';
+    document.getElementById('home-total-sub').textContent=accs.length>0?accs.length+'口座':'口座を登録してください';
+    document.getElementById('hbadge-manager').textContent=accs.length>0?accs.length+'口座 · '+fmt(total):'データなし';
+  }catch(e){}
+  try{
+    const snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');
+    if(snaps.length>=2){
+      const d=snaps[snaps.length-1].total-snaps[snaps.length-2].total;
+      const el=document.getElementById('home-diff');
+      el.textContent=(d>=0?'＋':'')+Math.round(d).toLocaleString()+'円';
+      el.className='value '+(d>=0?'up':'down');
+      document.getElementById('hbadge-trend').textContent=snaps.length+'件記録済み';
+    }else{
+      document.getElementById('hbadge-trend').textContent=snaps.length>0?snaps.length+'件記録':'CSVなし';
+    }
+  }catch(e){}
+  try{
+    const pf=JSON.parse(localStorage.getItem('portfolio_v4')||'[]');
+    const done=pf.filter(d=>d.status==='done'||d.status==='done-credit').length;
+    document.getElementById('hbadge-portfolio').textContent=pf.length>0?done+'/'+pf.length+'件 購入済み':'データなし';
+  }catch(e){}
+  try{
+    const ts=JSON.parse(localStorage.getItem('todo_kb_v3')||'{}');
+    const cats=ts.categories||[];const chk=ts.checked||{};
+    let t=0,dn=0;cats.forEach(c=>c.items.forEach(i=>{t++;if(chk[i.id])dn++;}));
+    const rem=t-dn;
+    document.getElementById('home-todo').textContent=rem>0?rem+'件':t>0?'完了🎉':'—';
+    document.getElementById('hbadge-todo').textContent=t>0?dn+'/'+t+'件 完了':'データなし';
+  }catch(e){}
+}
+
+// ============================================================
+// ASSET MANAGER
+// ============================================================
+const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
+const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const SHEET_NAME='資産管理データ';
+const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
+const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
+const CAT_MAP_FROM_PF={'証券':'証券','証券-JP':'証券','証券-インド':'証券','証券-高配当':'証券','証券-個別':'証券','銀行':'銀行','年金':'年金','仮想通貨':'仮想通貨','その他':'その他','米国インデックス':'証券','日本インデックス':'証券','インド':'証券','高配当株':'証券','個別株':'証券','銀行キープ':'銀行'};
+
+let amAccounts=[];
+let amEditId=null;
+let amDeleteId=null;
+let amIsOnline=false;
+let amSpreadsheetId=null;
+let amTokenClient=null;
+let amGapiInited=false;
+let amGisInited=false;
+
+function amShowMain(){
+  document.getElementById('fab').classList.remove('hidden');
+  if(currentTab!=='manager')document.getElementById('fab').classList.add('hidden');
+}
+function amShowLogin(){/* Google連携無効化 */}
+function setSyncStatus(state,text){/* Google連携無効化 */}
+function daysSince(ds){return Math.floor((new Date()-new Date(ds))/(864e5))}
+function amRenderReminder(){
+  const el=document.getElementById('reminderBanner');if(!el)return;
+  const stale=amAccounts.filter(a=>daysSince(a.updated)>=30);
+  el.innerHTML=stale.length?`<div class="reminder-banner"><span class="reminder-icon">🔔</span><div><div class="reminder-title">残高の更新をお忘れなく！</div><div class="reminder-text">${stale.map(a=>a.name+'（'+daysSince(a.updated)+'日未更新）').join('<br>')}</div></div></div>`:'';
+}
+function amRender(){
+  const total=amAccounts.reduce((s,a)=>s+a.amount,0);
+  const cats={};amAccounts.forEach(a=>{cats[a.cat]=(cats[a.cat]||0)+a.amount;});
+  amRenderReminder();
+  document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産</div><div class="value">${fmt(total)}</div><div class="sub">${amAccounts.length}口座</div></div>`;
+  document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
+  const maxAmt=Math.max(...Object.values(cats),1);
+  document.getElementById('amBarChart').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`<div class="bar-row"><span class="bar-label">${cat}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(amt/maxAmt*100)}%;background:${AM_CAT_COLORS[cat]||'#888'}"></div></div><span class="bar-val">${fmt(amt)}</span></div>`).join('')||'<p style="text-align:center;color:var(--text3);font-size:13px">口座を追加してください</p>';
+  const catGroups={};amAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
+  document.getElementById('accountSections').innerHTML=Object.entries(catGroups).map(([cat,accts])=>{
+    const catTotal=accts.reduce((s,a)=>s+a.amount,0);
+    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>`<div class="account-row"><div class="acct-info"><div class="acct-name">${esc(a.name)}</div>${a.note?`<div class="acct-note">${esc(a.note)}</div>`:''}</div><div class="acct-right"><span class="acct-amount">${fmt(a.amount)}</span>${daysSince(a.updated)>=30?`<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ ${daysSince(a.updated)}日未更新</span>`:''}<span class="row-btns"><button class="icon-btn" onclick="openEditModal(${a.id})">編集</button><button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')">削除</button></span></div></div>`).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
+  }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
+}
+function toggleSection(id){document.getElementById(id).classList.toggle('collapsed')}
+function openAddModal(defaultCat){
+  amEditId=null;
+  document.getElementById('sheetTitle').textContent='口座を追加';
+  document.getElementById('fName').value='';
+  document.getElementById('fCat').value=defaultCat||'銀行';
+  document.getElementById('fAmount').value='';
+  document.getElementById('fNote').value='';
+  document.getElementById('sheetBg').classList.add('open');
+  setTimeout(()=>document.getElementById('fName').focus(),300);
+}
+function openAddModalCat(cat){openAddModal(cat)}
+function openEditModal(id){
+  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  amEditId=id;
+  document.getElementById('sheetTitle').textContent='口座を編集';
+  document.getElementById('fName').value=a.name;
+  document.getElementById('fCat').value=a.cat;
+  document.getElementById('fAmount').value=a.amount;
+  document.getElementById('fNote').value=a.note||'';
+  document.getElementById('sheetBg').classList.add('open');
+  setTimeout(()=>document.getElementById('fAmount').focus(),300);
+}
+function closeSheet(){document.getElementById('sheetBg').classList.remove('open')}
+async function saveAccount(){
+  const name=document.getElementById('fName').value.trim();
+  const cat=document.getElementById('fCat').value;
+  const amount=parseFloat(document.getElementById('fAmount').value)||0;
+  const note=document.getElementById('fNote').value.trim();
+  if(!name){document.getElementById('fName').focus();return;}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,amount,note,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,amount,note,updated:todayStr()});}
+  closeSheet();amRender();await amSaveToSheet();refreshHome();
+}
+function confirmDelete(id,name){amDeleteId=id;document.getElementById('confirmName').textContent=name;document.getElementById('confirmBg').classList.add('open')}
+function closeConfirm(){document.getElementById('confirmBg').classList.remove('open')}
+document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();};
+document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===document.getElementById('sheetBg'))closeSheet()});
+document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
+function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
+function amLoadFromLocal(){try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}}
+function amExportCSV(){
+  if(!amAccounts.length){showToast('口座データがありません');return;}
+  const rows=[['id','口座名','カテゴリ','残高','メモ','更新日']];
+  amAccounts.forEach(a=>rows.push([a.id,a.name,a.cat,a.amount,a.note||'',a.updated]));
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=`資産管理_${todayStr()}.csv`;a.click();URL.revokeObjectURL(url);
+}
+function triggerImport(){document.getElementById('importInput').click()}
+function importCSV(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    const text=ev.target.result.replace(/^\uFEFF/,'');
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    const imported=[];
+    for(let i=1;i<lines.length;i++){const cols=[];let cur='',inQ=false;for(const ch of lines[i]){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur);cur='';}else{cur+=ch;}}cols.push(cur);if(cols.length>=4&&cols[1])imported.push({name:cols[1]||'',cat:cols[2]||'その他',amount:parseFloat(cols[3])||0,note:cols[4]||'',updated:cols[5]||todayStr()});}
+    if(imported.length){
+      let updated=0,added=0;
+      imported.forEach(imp=>{
+        const ex=amAccounts.find(a=>a.name===imp.name);
+        if(ex){ex.amount=imp.amount;ex.cat=imp.cat;if(imp.note)ex.note=imp.note;ex.updated=imp.updated||todayStr();updated++;}
+        else{const maxId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id)):0;amAccounts.push({id:maxId+added+1,...imp});added++;}
+      });
+      amRender();await amSaveToSheet();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();
+    }else{showToast('有効なデータがありませんでした');}
+    e.target.value='';
+  };reader.readAsText(file,'UTF-8');
+}
+// 現在の口座データをスナップショットとして推移グラフに記録
+function sendToTrend(){
+  if(!amAccounts.length){showToast('口座データがありません');return;}
+  const dateStr=todayStr();
+  const existing=snapshots.findIndex(s=>s.date===dateStr);
+  if(existing>=0){
+    if(!confirm(dateStr+'のデータはすでにあります。上書きしますか？'))return;
+    snapshots.splice(existing,1);
+  }
+  const cats={};amAccounts.forEach(a=>{cats[a.cat]=(cats[a.cat]||0)+a.amount;});
+  const total=amAccounts.reduce((s,a)=>s+a.amount,0);
+  const accounts=amAccounts.map(a=>({name:a.name,cat:a.cat,amount:a.amount,updated:a.updated}));
+  snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
+  snapshots.sort((a,b)=>a.date.localeCompare(b.date));
+  trSaveToStorage();
+  showToast('✓ 推移グラフに記録しました（'+dateStr+'）',3000);
+  refreshHome();
+}
+function importFromPortfolio(){
+  try{
+    const pfRaw=localStorage.getItem('portfolio_v4');if(!pfRaw){showToast('PFデータが見つかりません');return;}
+    const pfData=JSON.parse(pfRaw);
+    const active=pfData.filter(d=>d.status==='done'||d.status==='done-credit'||d.status==='sell');
+    if(!active.length){showToast('反映できるデータがありません');return;}
+    let updated=0,added=0;
+    active.forEach(pf=>{
+      const amount=pf.value>0?pf.value:pf.lump>0?pf.lump:0;if(amount===0)return;
+      const cat=CAT_MAP_FROM_PF[pf.category]||'証券';
+      const ex=amAccounts.find(a=>a.name===pf.name);
+      if(ex){ex.amount=amount;ex.cat=cat;ex.updated=todayStr();updated++;}
+      else{const maxId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id)):0;amAccounts.push({id:maxId+1+added,name:pf.name,cat,amount,note:pf.memo||'',updated:todayStr()});added++;}
+    });
+    amRender();amSaveToSheet();showToast(`✓ PF反映：${updated}件更新、${added}件追加`,3000);refreshHome();
+  }catch(e){showToast('反映に失敗しました')}
+}
+// Google Auth
+async function amSaveToSheet(){
+  if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
+  setSyncStatus('syncing','保存中...');
+  try{
+    const values=[['id','name','cat','amount','note','updated'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.updated])];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:F${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<100)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:F1000`});
+    amSaveToLocal();setSyncStatus('ok','同期済み');showToast('✓ 保存・同期しました');
+  }catch(e){setSyncStatus('','エラー');amSaveToLocal();showToast('⚠ オフライン保存しました');}
+}
+async function amFindOrCreateSheet(){
+  try{
+    const res=await gapi.client.request({path:'https://www.googleapis.com/drive/v3/files',params:{q:`name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,fields:'files(id,name)'}});
+    if(res.result.files&&res.result.files.length>0){amSpreadsheetId=res.result.files[0].id;}
+    else{const create=await gapi.client.sheets.spreadsheets.create({resource:{properties:{title:SHEET_NAME},sheets:[{properties:{title:'accounts'}}]}});amSpreadsheetId=create.result.spreadsheetId;await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:'accounts!A1:F1',valueInputOption:'RAW',resource:{values:[['id','name','cat','amount','note','updated']]}});}
+  }catch(e){console.error(e);}
+}
+async function amLoadFromSheet(){
+  if(!amSpreadsheetId)return;
+  try{const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:F1000'});const rows=res.result.values||[];amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',updated:r[5]||todayStr()}));amSaveToLocal();amRender();}catch(e){amLoadFromLocal();amRender();}
+}
+async function onSignedIn(){
+  amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
+  amShowMain();setSyncStatus('syncing','同期中...');
+  await amFindOrCreateSheet();await amLoadFromSheet();setSyncStatus('ok','同期済み');refreshHome();
+}
+function signIn(){
+  if(CLIENT_ID==='YOUR_ID'){alert('APIキーの設定が必要です');return;}
+  amTokenClient.requestAccessToken({prompt:'consent'});
+}
+function signOut(){
+  const token=gapi.client.getToken();
+  if(token)google.accounts.oauth2.revoke(token.access_token);
+  gapi.client.setToken('');localStorage.removeItem('assetGoogleMode');
+  amIsOnline=false;amSpreadsheetId=null;amShowLogin();
+  document.getElementById('syncStatus').style.display='none';
+}
+function useOffline(){
+  amIsOnline=false;
+  amLoadFromLocal();amRender();refreshHome();
+}
+function amMaybeInit(){
+  // Google連携なし・直接オフラインモードで起動
+  amLoadFromLocal();amRender();refreshHome();
+}
+window.addEventListener('load',()=>{
+  // Google連携なし・直接localStorageから読み込み
+  amMaybeInit();
+});
+
+// ============================================================
+// PORTFOLIO TRACKER
+// ============================================================
+const PF_KEY='portfolio_v4';
+const PF_CAT_COLORS={'証券':'#0F6E56','証券-JP':'#185FA5','証券-インド':'#EF9F27','証券-高配当':'#8B5CF6','証券-個別':'#E24B4A','銀行':'#185FA5','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780','米国インデックス':'#378ADD','日本インデックス':'#1D9E75','インド':'#EF9F27','高配当株':'#8B5CF6','個別株':'#E24B4A','銀行キープ':'#64748b'};
+const PF_STATUS_CONFIG={'done':{label:'✅ 購入済み（特定口座）',cls:'done',cardCls:'status-done',dotCls:'done',textCls:'done'},'done-credit':{label:'✅ クレカ積立 設定済み',cls:'done',cardCls:'status-done',dotCls:'done',textCls:'done'},'nisa-wait':{label:'⏳ NISA開設後に一括購入予定',cls:'nisa',cardCls:'status-nisa',dotCls:'nisa',textCls:'nisa'},'nisa-credit':{label:'⏳ NISA開設後にクレカ積立切替予定',cls:'nisa',cardCls:'status-nisa',dotCls:'nisa',textCls:'nisa'},'pending':{label:'🔲 未購入（銀行キープ中）',cls:'pending',cardCls:'status-pending',dotCls:'pending',textCls:'pending'},'sell':{label:'🔴 保有中・売却予定',cls:'sell',cardCls:'status-sell',dotCls:'sell',textCls:'sell'}};
+let pfData=[];let pfCurrentTab='all';let pfEditingId=null;
+function pfUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2)}
+function pfFmt(n){if(!n)return'¥0';if(n>=10000000)return'¥'+(n/10000000).toFixed(1)+'千万';if(n>=10000)return'¥'+(n/10000).toFixed(0)+'万';return'¥'+n.toLocaleString()}
+function pfFmtFull(n){return'¥'+Number(n||0).toLocaleString()}
+function pfGetGroup(s){if(s==='done'||s==='done-credit'||s==='sell')return'done';if(s==='nisa-wait'||s==='nisa-credit')return'nisa-wait';return'pending';}
+function pfLoadData(){try{const r=localStorage.getItem(PF_KEY);pfData=r?JSON.parse(r):[];}catch(e){pfData=[];}if(pfData.length===0)pfLoadDefaults();}
+function pfSaveData(){localStorage.setItem(PF_KEY,JSON.stringify(pfData));}
+function pfLoadDefaults(){
+  pfData=[
+    {id:pfUID(),name:'eMAXIS Slim 米国株式（S&P500）',category:'証券',status:'done-credit',lump:0,monthly:40000,value:0,shares:0,memo:'クレカ積立✅ 設定済み・NISA開設後につみたて枠に切替予定'},
+    {id:pfUID(),name:'eMAXIS Slim 国内株式（TOPIX）',category:'証券-JP',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,memo:'クレカ積立✅ 設定済み'},
+    {id:pfUID(),name:'eMAXIS インド株式インデックス',category:'証券-インド',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'クレカ積立✅ 設定済み'},
+    {id:pfUID(),name:'SBI日本高配当株式ファンド',category:'証券-高配当',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'クレカ積立✅ 設定済み'},
+    {id:pfUID(),name:'iTrustインド株式',category:'証券-インド',status:'done',lump:1500000,monthly:0,value:1500000,shares:0,memo:'特定口座✅ 一括購入済み'},
+    {id:pfUID(),name:'ソフトバンク（9434）36,000株',category:'証券-高配当',status:'sell',lump:8028000,monthly:0,value:8028000,shares:36000,memo:'保有中・株価推移見て売却予定'},
+    {id:pfUID(),name:'eMAXIS Slim 米国株式（S&P500）一括',category:'証券',status:'nisa-wait',lump:7680000,monthly:0,value:0,shares:0,memo:'NISA成長投資枠・NISA開設後に購入'},
+    {id:pfUID(),name:'eMAXIS Slim 国内株式（TOPIX）一括',category:'証券-JP',status:'nisa-wait',lump:5760000,monthly:0,value:0,shares:0,memo:'NISA成長投資枠'},
+    {id:pfUID(),name:'SBG（9984）280株',category:'証券-個別',status:'nisa-wait',lump:1673280,monthly:0,value:0,shares:280,memo:'NISA成長投資枠2026年'},
+    {id:pfUID(),name:'NISA成長投資枠キープ（三井住友銀行）',category:'銀行',status:'pending',lump:7200000,monthly:0,value:0,shares:0,memo:'240万×3年分'},
+    {id:pfUID(),name:'クレカ積立キープ（銀行）',category:'銀行',status:'pending',lump:3600000,monthly:0,value:0,shares:0,memo:'月10万×36ヶ月分'},
+  ];pfSaveData();
+}
+function pfRender(){
+  const total=30000000;
+  const doneAmt=pfData.filter(d=>pfGetGroup(d.status)==='done').reduce((s,d)=>s+Number(d.lump||0)+Number(d.monthly||0)*12,0);
+  const nisaAmt=pfData.filter(d=>pfGetGroup(d.status)==='nisa-wait').reduce((s,d)=>s+Number(d.lump||0),0);
+  const pendAmt=pfData.filter(d=>pfGetGroup(d.status)==='pending').reduce((s,d)=>s+Number(d.lump||0),0);
+  document.getElementById('pf-sum-total').textContent=pfFmt(total);
+  document.getElementById('pf-sum-done').textContent=pfFmt(doneAmt);
+  document.getElementById('pf-sum-nisa').textContent=pfFmt(nisaAmt);
+  document.getElementById('pf-sum-pending').textContent=pfFmt(pendAmt);
+  const dPct=Math.min(100,(doneAmt/total)*100),nPct=Math.min(100,(nisaAmt/total)*100),pPct=Math.min(100,(pendAmt/total)*100);
+  document.getElementById('pf-bar-done').style.width=dPct+'%';document.getElementById('pf-bar-nisa').style.width=nPct+'%';document.getElementById('pf-bar-pending').style.width=pPct+'%';
+  document.getElementById('pf-pct-done').textContent=pfFmt(doneAmt)+' ('+dPct.toFixed(0)+'%)';
+  document.getElementById('pf-pct-nisa').textContent=pfFmt(nisaAmt)+' ('+nPct.toFixed(0)+'%)';
+  document.getElementById('pf-pct-pending').textContent=pfFmt(pendAmt)+' ('+pPct.toFixed(0)+'%)';
+  pfRenderList();
+}
+function pfRenderList(){
+  const filtered=pfCurrentTab==='all'?pfData:pfData.filter(d=>pfGetGroup(d.status)===pfCurrentTab);
+  const list=document.getElementById('pf-invest-list');
+  if(!filtered.length){list.innerHTML='<div class="empty-msg">該当する銘柄がありません</div>';return;}
+  const GROUPS=[{key:'done',title:'✅ 購入済み・積立設定済み',dotColor:'var(--green)'},{key:'nisa-wait',title:'⏳ NISA開設後に購入予定',dotColor:'var(--amber)'},{key:'pending',title:'🔲 未購入（銀行キープ中）',dotColor:'var(--text3)'}];
+  const groups={};filtered.forEach(d=>{const g=pfGetGroup(d.status);if(!groups[g])groups[g]=[];groups[g].push(d);});
+  let html='';
+  GROUPS.forEach(g=>{
+    if(!groups[g.key]||!groups[g.key].length)return;
+    const items=groups[g.key];
+    const gTotal=items.reduce((s,d)=>s+Number(d.lump||0),0);
+    const gMonthly=items.reduce((s,d)=>s+Number(d.monthly||0),0);
+    html+=`<div style="margin-bottom:12px"><div class="section-header"><div class="section-title"><div class="section-dot" style="background:${g.dotColor}"></div>${g.title}</div><div class="section-total">${gTotal>0?pfFmt(gTotal):''}${gMonthly>0?(gTotal>0?' + ':'')+pfFmtFull(gMonthly)+'/月':''}</div></div>`;
+    items.forEach(item=>{
+      const sc=PF_STATUS_CONFIG[item.status]||PF_STATUS_CONFIG['pending'];
+      const lump=Number(item.lump||0),monthly=Number(item.monthly||0),val=Number(item.value||0);
+      const gain=val>0&&lump>0?val-lump:null;
+      const gainPct=gain!==null&&lump>0?((gain/lump)*100).toFixed(1):null;
+      const catColor=PF_CAT_COLORS[item.category]||'#888';
+      html+=`<div class="invest-card ${sc.cardCls}"><div class="card-top"><div class="card-left"><div class="fund-name">${item.name}</div><div class="fund-meta"><span class="status-badge sb-${sc.cls}">${sc.label}</span><span class="status-badge" style="background:${catColor}22;color:${catColor}">${item.category}</span>${monthly>0?'<span class="status-badge sb-done">クレカ積立</span>':''}${item.shares>0?`<span class="status-badge sb-pending">${Number(item.shares).toLocaleString()}株</span>`:''}</div></div><div class="card-right">${lump>0?`<div class="main-amount">${pfFmtFull(lump)}</div><div class="main-label">${item.status==='pending'?'キープ中':item.status.startsWith('done')?'購入額':'購入予定額'}</div>`:''}${monthly>0?`<div class="main-amount">${pfFmtFull(monthly)}</div><div class="main-label">/月</div>`:''}</div></div>${item.memo?`<div class="card-memo">${item.memo}</div>`:''}${val>0&&lump>0?`<div style="display:flex;gap:12px;margin-top:6px"><div><div style="font-size:10px;color:var(--text3)">評価額</div><div style="font-size:12px;font-variant-numeric:tabular-nums">${pfFmtFull(val)}</div></div>${gain!==null?`<div><div style="font-size:10px;color:var(--text3)">損益</div><div style="font-size:12px;font-variant-numeric:tabular-nums;color:${gain>=0?'var(--green)':'var(--danger)'}">${gain>=0?'+':''}${pfFmtFull(gain)}（${gainPct}%）</div></div>`:''}`:''}</div>${val>0&&lump>0?'</div>':''}<div class="status-indicator"><div class="si-dot ${sc.dotCls}"></div><span class="si-text ${sc.textCls}">${item.status==='done'?'特定口座で購入済み':item.status==='done-credit'?'クレカ積立 設定完了':item.status==='nisa-wait'?'NISA口座開設後に購入予定':item.status==='nisa-credit'?'NISA口座開設後にクレカ積立を切替':item.status==='sell'?'保有中・株価推移を見て売却予定':'三井住友銀行に預金中'}</span></div><div class="card-actions"><button class="action-btn" onclick="pfOpenModal('${item.id}')">編集</button></div></div>`;
+    });html+='</div>';
+  });
+  list.innerHTML=html;
+}
+function setPfTab(tab){
+  pfCurrentTab=tab;
+  document.querySelectorAll('.pf-tab').forEach((t,i)=>t.classList.toggle('active',['all','done','nisa-wait','pending'][i]===tab));
+  pfRenderList();
+}
+function pfOpenModal(id=null){
+  pfEditingId=id;
+  document.getElementById('pfModalTitle').textContent=id?'銘柄を編集':'銘柄を追加';
+  document.getElementById('pf-delete-section').style.display=id?'block':'none';
+  if(id){const item=pfData.find(d=>d.id===id);if(item){document.getElementById('pf-f-name').value=item.name;document.getElementById('pf-f-category').value=item.category;document.getElementById('pf-f-status').value=item.status;document.getElementById('pf-f-lump').value=item.lump||'';document.getElementById('pf-f-monthly').value=item.monthly||'';document.getElementById('pf-f-value').value=item.value||'';document.getElementById('pf-f-shares').value=item.shares||'';document.getElementById('pf-f-memo').value=item.memo||'';}}
+  else{['pf-f-name','pf-f-lump','pf-f-monthly','pf-f-value','pf-f-shares','pf-f-memo'].forEach(i=>document.getElementById(i).value='');document.getElementById('pf-f-category').value='証券';document.getElementById('pf-f-status').value='done';}
+  document.getElementById('pfModal').classList.add('open');
+}
+function pfCloseModal(){document.getElementById('pfModal').classList.remove('open');pfEditingId=null;}
+function pfCloseModalOutside(e){if(e.target===document.getElementById('pfModal'))pfCloseModal();}
+function pfSaveEntry(){
+  const name=document.getElementById('pf-f-name').value.trim();if(!name){alert('名称を入力してください');return;}
+  const entry={id:pfEditingId||pfUID(),name,category:document.getElementById('pf-f-category').value,status:document.getElementById('pf-f-status').value,lump:parseInt(document.getElementById('pf-f-lump').value)||0,monthly:parseInt(document.getElementById('pf-f-monthly').value)||0,value:parseInt(document.getElementById('pf-f-value').value)||0,shares:parseInt(document.getElementById('pf-f-shares').value)||0,memo:document.getElementById('pf-f-memo').value.trim()};
+  if(pfEditingId){const idx=pfData.findIndex(d=>d.id===pfEditingId);pfData[idx]=entry;}else{pfData.push(entry);}
+  pfSaveData();pfCloseModal();pfRender();
+}
+function pfDeleteEntry(){if(!confirm('削除しますか？'))return;pfData=pfData.filter(d=>d.id!==pfEditingId);pfSaveData();pfCloseModal();pfRender();}
+
+// ============================================================
+// TREND (ASSET CHART)
+// ============================================================
+const TR_CAT_COLORS=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780','#2980b9','#8e44ad'];
+let snapshots=[];let activeFilter='all';let chartInstances={};
+function trFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP')}
+function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP')}
+function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}}
+function trLoadFromStorage(){try{snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snapshots=[];}}
+function getFiltered(){
+  if(activeFilter==='all')return snapshots;
+  const months=activeFilter==='6m'?6:activeFilter==='1y'?12:3;
+  const now=new Date();const cutoff=new Date(now.getFullYear(),now.getMonth()-months,now.getDate()).toISOString().slice(0,10);
+  return snapshots.filter(s=>s.date>=cutoff);
+}
+function setFilter(f){
+  activeFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.f===f));
+  trRenderCharts();trRenderSummary();trRenderTable();renderComment();
+}
+document.getElementById('csvInput2').addEventListener('change',e=>{Array.from(e.target.files).forEach(f=>trReadFile(f));e.target.value='';});
+function handleDrop(e){e.preventDefault();Array.from(e.dataTransfer.files).filter(f=>f.name.endsWith('.csv')).forEach(f=>trReadFile(f));}
+function trReadFile(file){const reader=new FileReader();reader.onload=ev=>trParseCSV(ev.target.result,file.name);reader.readAsText(file,'UTF-8');}
+function trParseCSV(text,filename){
+  text=text.replace(/^\uFEFF/,'');const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2){alert('データが見つかりませんでした: '+filename);return;}
+  const rows=[];
+  for(let i=1;i<lines.length;i++){const cols=[];let cur='',inQ=false;for(const ch of lines[i]){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur);cur='';}else{cur+=ch;}}cols.push(cur);if(cols.length>=4&&cols[1])rows.push({name:cols[1]||'',cat:cols[2]||'その他',amount:parseFloat(cols[3])||0,updated:cols[5]||''});}
+  if(!rows.length){alert('有効なデータがありませんでした: '+filename);return;}
+  let dateStr='';const m=filename.match(/(\d{4}-\d{2}-\d{2})/);
+  if(m){dateStr=m[1];}else{const dates=rows.map(r=>r.updated).filter(Boolean).sort();dateStr=dates[dates.length-1]||new Date().toISOString().slice(0,10);}
+  const existing=snapshots.findIndex(s=>s.date===dateStr);
+  if(existing>=0){if(!confirm(`${dateStr}のデータはすでにあります。上書きしますか？`))return;snapshots.splice(existing,1);}
+  const cats={};rows.forEach(r=>{cats[r.cat]=(cats[r.cat]||0)+r.amount;});
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  snapshots.push({date:dateStr,filename,total,cats,accounts:rows});
+  snapshots.sort((a,b)=>a.date.localeCompare(b.date));
+  trSaveToStorage();trRenderAll();refreshHome();
+}
+function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();trRenderAll();refreshHome();}
+function trRenderAll(){
+  trRenderFileList();
+  const hasData=snapshots.length>0;
+  document.getElementById('emptyMsg').style.display=hasData?'none':'block';
+  ['lineCard','barCard','donutCard','securitiesCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
+  document.getElementById('filterBar').style.display=hasData?'flex':'none';
+  document.getElementById('exportBar').style.display=hasData?'block':'none';
+  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+}
+function trRenderFileList(){
+  document.getElementById('fileList').innerHTML=snapshots.map(s=>`<div class="file-item"><div><div class="fname">📄 ${s.filename}</div><div class="fmeta">${s.date} ・ ${trFmt(s.total)}</div></div><button class="file-del" onclick="removeSnapshot('${s.date}')">✕</button></div>`).join('');
+}
+function trRenderSummary(){
+  const filtered=getFiltered();if(!filtered.length)return;
+  const latest=filtered[filtered.length-1],first=filtered[0];
+  const diff=latest.total-first.total,diffPct=first.total>0?diff/first.total*100:0;
+  const prev=filtered.length>=2?filtered[filtered.length-2]:null;
+  const monthDiff=prev?latest.total-prev.total:null;
+  document.getElementById('trSummaryGrid').innerHTML=`<div class="metric"><div class="label">現在の総資産</div><div class="value">${trFmt(latest.total)}</div><div class="sub">${latest.date}</div></div><div class="metric"><div class="label">期間増減</div><div class="value ${diff>=0?'up':'down'}">${trFmtDiff(diff)}</div><div class="sub ${diff>=0?'up':'down'}">${diff>=0?'＋':''}${diffPct.toFixed(1)}%</div></div><div class="metric"><div class="label">前回比</div><div class="value ${monthDiff===null?'':monthDiff>=0?'up':'down'}">${monthDiff===null?'—':trFmtDiff(monthDiff)}</div><div class="sub">${prev?prev.date:'—'}</div></div>`;
+}
+function trDestroyChart(key){if(chartInstances[key]){chartInstances[key].destroy();chartInstances[key]=null;}}
+function trRenderCharts(){
+  const filtered=getFiltered();if(!filtered.length)return;
+  const labels=filtered.map(s=>s.date),totals=filtered.map(s=>s.total);
+  const allCats=[...new Set(snapshots.flatMap(s=>Object.keys(s.cats)))];
+  const isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
+  const tickColor=isDark?'#636366':'#9b9b97';
+  trDestroyChart('line');
+  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[{label:'総資産',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},datalabels:{align:'top',anchor:'end',color:'#185FA5',font:{size:10,weight:'600'},formatter:v=>'¥'+Math.round(v/10000)+'万'}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+  trDestroyChart('bar');
+  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:ctx=>ctx.datasetIndex===allCats.length-1,anchor:'end',align:'top',color:isDark?'#aeaeb2':'#6b6b68',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.chart.data.datasets.reduce((s,ds)=>s+(ds.data[ctx.dataIndex]||0),0);return'¥'+Math.round(t/10000)+'万';}}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+  trDestroyChart('donut');
+  const latest=filtered[filtered.length-1];const catEntries=Object.entries(latest.cats).sort((a,b)=>b[1]-a[1]);
+  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map((_,i)=>TR_CAT_COLORS[i%TR_CAT_COLORS.length]),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.label+': '+trFmt(ctx.raw)+' ('+((ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0))*100).toFixed(1)+'%)'}},datalabels:{color:'#fff',font:{size:11,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return p<5?'':p+'%';}}},cutout:'55%'},plugins:[ChartDataLabels]});
+  trRenderCategoryChart('証券','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
+  trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
+}
+function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
+  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName).map(a=>a.name):[]))];
+  const card=document.getElementById(cardId);if(!accountNames.length){card.style.display='none';return;}card.style.display='block';
+  const colors=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780'];
+  const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{if(!s.accounts)return 0;const acct=s.accounts.find(a=>a.name===name&&a.cat===catName);return acct?acct.amount:0;}),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:2,pointRadius:4,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3}));
+  datasets.unshift({label:catName+'合計',data:filtered.map(s=>{if(!s.accounts)return s.cats[catName]||0;return s.accounts.filter(a=>a.cat===catName).reduce((sum,a)=>sum+a.amount,0);}),borderColor:isDark?'#fff':'#333',backgroundColor:'transparent',borderWidth:2.5,borderDash:[5,3],pointRadius:5,pointBackgroundColor:isDark?'#fff':'#333',fill:false,tension:0.3});
+  trDestroyChart(canvasId);const canvas=document.getElementById(canvasId);canvas.height=200+Math.ceil(datasets.length/2)*30;
+  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true},onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},datalabels:{align:'top',anchor:'end',color:ctx=>datasets[ctx.datasetIndex].borderColor,font:{size:9,weight:'600'},formatter:v=>v>0?'¥'+Math.round(v/10000)+'万':'',display:ctx=>ctx.datasetIndex===0}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+}
+function renderComment(){
+  const filtered=getFiltered();const el=document.getElementById('commentBody');
+  if(filtered.length<2){el.innerHTML='<span style="color:var(--text3)">データが2件以上になると自動コメントが表示されます。</span>';return;}
+  const latest=filtered[filtered.length-1],prev=filtered[filtered.length-2];
+  const diff=latest.total-prev.total,pct=prev.total>0?diff/prev.total*100:0;
+  const absPct=Math.abs(pct).toFixed(1),sign=diff>=0?'＋':'',color=diff>=0?'#0f6e56':'#c0392b',arrow=diff>=0?'📈':'📉';
+  const diffFmt=sign+Math.round(diff).toLocaleString('ja-JP');
+  const allCats=[...new Set([...Object.keys(latest.cats),...Object.keys(prev.cats)])];
+  const catChanges=allCats.map(cat=>({cat,diff:(latest.cats[cat]||0)-(prev.cats[cat]||0)})).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+  const topGain=catChanges.filter(c=>c.diff>0)[0],topLoss=catChanges.filter(c=>c.diff<0)[0];
+  let catComment='';
+  if(topGain&&Math.abs(topGain.diff)>10000)catComment+=`<br>・<strong>${topGain.cat}</strong>が ＋${Math.round(topGain.diff).toLocaleString()}円 増加`;
+  if(topLoss&&Math.abs(topLoss.diff)>10000)catComment+=`<br>・<strong>${topLoss.cat}</strong>が ${Math.round(topLoss.diff).toLocaleString()}円 減少`;
+  let comment='';
+  if(Math.abs(pct)<0.5){comment=`${arrow} ${prev.date} → ${latest.date}：<strong style="color:${color}">${diffFmt}円（${sign}${absPct}%）</strong>とほぼ横ばいでした。${catComment}`;}
+  else if(diff>0){const level=pct>=5?'大幅に増加':pct>=2?'増加':'小幅増加';comment=`${arrow} ${prev.date} → ${latest.date}：資産が<strong style="color:${color}">${diffFmt}円（＋${absPct}%）${level}</strong>しました。${catComment}`;}
+  else{const level=Math.abs(pct)>=5?'大幅に減少':Math.abs(pct)>=2?'減少':'小幅減少';comment=`${arrow} ${prev.date} → ${latest.date}：資産が<strong style="color:${color}">${diffFmt}円（${absPct}%）${level}</strong>しました。${catComment}`;}
+  const first=filtered[0],totalDiff=latest.total-first.total,totalPct=first.total>0?totalDiff/first.total*100:0;
+  const sColor=totalDiff>=0?'#0f6e56':'#c0392b',sSign=totalDiff>=0?'＋':'';
+  const summaryLine=filtered.length>2?`<br><span style="color:var(--text3);font-size:12px">📊 ${first.date}〜${latest.date}の累計：<strong style="color:${sColor}">${sSign}${Math.round(totalDiff).toLocaleString()}円（${sSign}${totalPct.toFixed(1)}%）</strong></span>`:'';
+  el.innerHTML=comment+summaryLine;
+}
+function exportAllCSV(){
+  if(!snapshots.length)return;
+  const rows=[['日付','口座名','カテゴリ','残高','メモ','更新日']];
+  snapshots.forEach(s=>{if(s.accounts&&s.accounts.length){s.accounts.forEach(a=>rows.push([s.date,a.name,a.cat,a.amount,'',a.updated||s.date]));}else{Object.entries(s.cats).forEach(([cat,amt])=>rows.push([s.date,cat,cat,amt,'',s.date]));}});
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`資産推移バックアップ_${todayStr()}.csv`;a.click();URL.revokeObjectURL(url);
+}
+function trRenderTable(){
+  const filtered=getFiltered();
+  document.getElementById('tableBody').innerHTML=[...filtered].reverse().map((s,i,arr)=>{
+    const prev=arr[i+1];const diff=prev?s.total-prev.total:null;const pct=prev&&prev.total>0?diff/prev.total*100:null;
+    return`<tr><td>${s.date}</td><td>${trFmt(s.total)}</td><td class="${diff===null?'':diff>=0?'up':'down'}">${diff===null?'—':trFmtDiff(diff)}</td><td class="${pct===null?'':pct>=0?'up':'down'}">${pct===null?'—':(pct>=0?'＋':'')+pct.toFixed(1)+'%'}</td></tr>`;
+  }).join('');
+}
+
+// ============================================================
+// TODO
+// ============================================================
+const TODO_COLORS=[{c:'#E24B4A',bg:'#FEF0F0'},{c:'#993C1D',bg:'#FAECE7'},{c:'#BA7517',bg:'#FAEEDA'},{c:'#854F0B',bg:'#FEF3DC'},{c:'#534AB7',bg:'#EEEDFE'},{c:'#185FA5',bg:'#E6F1FB'},{c:'#0F6E56',bg:'#E1F5EE'},{c:'#3B6D11',bg:'#EAF3DE'},{c:'#993556',bg:'#FBEAF0'},{c:'#5F5E5A',bg:'#F1EFE8'},{c:'#1A1A18',bg:'#F1EFE8'},{c:'#D4537E',bg:'#FBEAF0'}];
+let todoSelColor=TODO_COLORS[6];
+const TODO_DEFS=[
+{id:'urgent',label:'今すぐやること',color:'#E24B4A',bg:'#FEF0F0',items:[{id:'u1',text:'野村証券から毎日500万円出金手続き（残り日数分）'},{id:'u2',text:'三井住友銀行着金確認 → SBI証券へ即時入金'},{id:'u3',text:'SBI特定口座で金ETF（1540）200万円購入'},{id:'u4',text:'SBG売却代金（約134万円）着金後（5/27頃）に三井住友へ出金'}]},
+{id:'tax_sbg',label:'税金対応①｜SBG（9984）200株売却分',color:'#993C1D',bg:'#FAECE7',items:[{id:'t1',text:'野村証券から「年間取引報告書」が届く（来年1月）→ 保存する'},{id:'t2',text:'SBG取得原価の証明書類を保存（取得単価800円）'},{id:'t3',text:'売却益の計算：売却額約134万円 − 取得原価16万円 ＝ 約118万円'},{id:'t4',text:'e-Tax or 税務署で確定申告（来年2月16日〜3月15日）'},{id:'t5',text:'納税：売却益118万円 × 20.315% ≒ 約24万円を納付（来年5月頃）'}]},
+{id:'tax_sb',label:'税金対応②｜ソフトバンク株（9434）売却分',color:'#854F0B',bg:'#FAEEDA',items:[{id:'ts1',text:'社内コンプライアンスにインサイダー規制・売却可能期間を確認'},{id:'ts2',text:'取得単価を確認（持株会事務局 or みずほ証券の取引履歴）'},{id:'ts3',text:'みずほ証券から「年間取引報告書」が届く（来年1月）→ 保存する'},{id:'ts4',text:'e-Tax or 税務署で確定申告（来年2月16日〜3月15日）'},{id:'ts5',text:'納税：売却益 × 20.315% を納付（来年5月頃）'}]},
+{id:'nisa',label:'NISA口座開設後すぐ（最優先）',color:'#0F6E56',bg:'#E1F5EE',items:[{id:'n1',text:'OliveカードでeMAXIS Slim 米国株式(S&P500) 月10万円クレカ積立設定'},{id:'n2',text:'eMAXIS Slim 米国株式(S&P500) 成長投資枠で一括240万円購入'},{id:'n3',text:'スシロー 成長投資枠で約80〜90万円購入'},{id:'n4',text:'ドンキホーテ 成長投資枠で約80〜90万円購入'}]},
+{id:'card',label:'未利用クレジットカード解約',color:'#993556',bg:'#FBEAF0',items:[{id:'c1',text:'保有中のクレジットカードを全てリストアップする'},{id:'c2',text:'直近1年間利用していないカードを選別する'},{id:'c3',text:'年会費が発生しているカードを優先的に解約する'},{id:'c4',text:'ポイント残高を確認・使い切ってから解約する'},{id:'c5',text:'解約対象カードに紐付いている定期支払いを他カードへ変更する'},{id:'c6',text:'各カード会社に解約の電話 or アプリで手続きをする'}]},
+{id:'phone',label:'携帯番号変更の届け出',color:'#5F5E5A',bg:'#F1EFE8',items:[{id:'ph1',text:'【最優先】SBI証券 - 電話番号変更'},{id:'ph2',text:'【最優先】野村証券 - 電話番号変更'},{id:'ph3',text:'【最優先】みずほ証券 - 電話番号変更'},{id:'ph4',text:'【最優先】三井住友銀行（Olive）- 電話番号変更'},{id:'ph5',text:'【最優先】PayPay銀行 - 電話番号変更'},{id:'ph6',text:'確定拠出年金（DC）運営会社 - 電話番号変更'},{id:'ph7',text:'生命保険・損害保険各社 - 電話番号変更'},{id:'ph8',text:'Amazon・楽天・Yahoo! - アカウント設定で電話番号変更'},{id:'ph9',text:'マイナポータル・e-Tax - オンライン変更'},{id:'ph10',text:'勤務先（緊急連絡先）- 人事部に変更届'}]}
+];
+const TODO_KEY='todo_kb_v3';
+let todoState=todoLoadState();
+let todoEditMeta={catId:null,itemId:null};
+function todoLoadState(){try{const s=localStorage.getItem(TODO_KEY);if(s)return JSON.parse(s);}catch(e){}return{categories:JSON.parse(JSON.stringify(TODO_DEFS)),checked:{}};}
+function todoSaveState(){try{localStorage.setItem(TODO_KEY,JSON.stringify(todoState));}catch(e){}}
+function todoUID(){return 'i'+Math.random().toString(36).slice(2,9)}
+function buildColorPicker(){const r=document.getElementById('color-picker');r.innerHTML='';TODO_COLORS.forEach((col,i)=>{const d=document.createElement('div');d.className='cd'+(i===6?' sel':'');d.style.background=col.c;d.onclick=()=>{todoSelColor=col;document.querySelectorAll('.cd').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};r.appendChild(d);});}
+function showCatModal(){document.getElementById('new-cat-name').value='';todoSelColor=TODO_COLORS[6];buildColorPicker();document.getElementById('catModalBg').classList.add('open');setTimeout(()=>document.getElementById('new-cat-name').focus(),50);}
+function closeCatModal(){document.getElementById('catModalBg').classList.remove('open')}
+function addCategory(){const n=document.getElementById('new-cat-name').value.trim();if(!n)return;todoState.categories.push({id:todoUID(),label:n,color:todoSelColor.c,bg:todoSelColor.bg,items:[]});todoSaveState();closeCatModal();todoRender();}
+function deleteTodoCat(id){if(!confirm('このカテゴリを削除しますか？'))return;todoState.categories=todoState.categories.filter(c=>c.id!==id);todoSaveState();todoRender();}
+function todoAddItem(catId){const inp=document.getElementById('tai-'+catId);const t=inp.value.trim();if(!t)return;const cat=todoState.categories.find(c=>c.id===catId);if(!cat)return;cat.items.push({id:todoUID(),text:t});todoSaveState();inp.value='';todoRender();}
+function todoDeleteItem(catId,itemId){const cat=todoState.categories.find(c=>c.id===catId);if(!cat)return;cat.items=cat.items.filter(i=>i.id!==itemId);delete todoState.checked[itemId];todoSaveState();todoRender();}
+function toggleCat(catId){const cat=todoState.categories.find(c=>c.id===catId);if(!cat)return;const all=cat.items.every(i=>!!todoState.checked[i.id]);cat.items.forEach(i=>{todoState.checked[i.id]=!all;});todoSaveState();todoRender();}
+function openItemModal(catId,itemId){
+  const cat=todoState.categories.find(c=>c.id===catId);const item=cat&&cat.items.find(i=>i.id===itemId);if(!item)return;
+  todoEditMeta={catId,itemId};
+  document.getElementById('im-text').value=item.text||'';
+  document.getElementById('im-priority').value=item.priority||'';
+  document.getElementById('im-due').value=item.due||'';
+  document.getElementById('itemModalBg').classList.add('open');
+}
+function closeItemModal(){document.getElementById('itemModalBg').classList.remove('open');todoEditMeta={catId:null,itemId:null};}
+function saveItemModal(){
+  const {catId,itemId}=todoEditMeta;
+  const cat=todoState.categories.find(c=>c.id===catId);const item=cat&&cat.items.find(i=>i.id===itemId);if(!item)return;
+  item.text=document.getElementById('im-text').value.trim()||item.text;
+  item.priority=document.getElementById('im-priority').value;
+  item.due=document.getElementById('im-due').value;
+  todoSaveState();closeItemModal();todoRender();
+}
+function dueBadge(due){if(!due)return'';const today=new Date();today.setHours(0,0,0,0);const d=new Date(due);const diff=Math.ceil((d-today)/(864e5));if(diff<0)return`<span class="due-badge overdue">⚠ ${Math.abs(diff)}日超過</span>`;if(diff<=3)return`<span class="due-badge soon">⏰ ${diff}日後</span>`;return`<span class="due-badge">📅 ${due}</span>`;}
+function priorityBadge(p){if(!p)return'';const map={high:'<span class="priority-badge p-high">🔴 高</span>',mid:'<span class="priority-badge p-mid">🟡 中</span>',low:'<span class="priority-badge p-low">🟢 低</span>'};return map[p]||'';}
+function todoUpdateProgress(){let t=0,d=0;todoState.categories.forEach(cat=>cat.items.forEach(i=>{t++;if(todoState.checked[i.id])d++;}));document.getElementById('dc').textContent=d;document.getElementById('tc').textContent=t;document.getElementById('pb').style.width=(t?Math.round(d/t*100):0)+'%';}
+function todoRender(){
+  const c=document.getElementById('todo-container');c.innerHTML='';
+  todoState.categories.forEach(cat=>{
+    const sec=document.createElement('div');sec.className='category';
+    const hdr=document.createElement('div');hdr.className='cat-header';
+    const hl=document.createElement('div');hl.className='cat-hl';
+    const icon=document.createElement('div');icon.className='cat-icon';icon.style.background=cat.bg;
+    icon.innerHTML=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${cat.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`;
+    const titleWrap=document.createElement('div');titleWrap.style.cssText='display:flex;align-items:center;gap:6px;flex:1;min-width:0';
+    const title=document.createElement('span');title.className='cat-title';title.style.color=cat.color;title.textContent=cat.label;
+    const cnt=document.createElement('span');cnt.className='cat-count';cnt.id='cc-'+cat.id;
+    const dn=cat.items.filter(i=>todoState.checked[i.id]).length;cnt.textContent=dn+'/'+cat.items.length;
+    titleWrap.appendChild(title);hl.appendChild(icon);hl.appendChild(titleWrap);hl.appendChild(cnt);
+    const acts=document.createElement('div');acts.className='cat-acts';
+    const tBtn=document.createElement('button');tBtn.className='btn-tsm';tBtn.textContent='一括';tBtn.onclick=()=>toggleCat(cat.id);
+    const dBtn=document.createElement('button');dBtn.className='btn-tsm';dBtn.textContent='削除';dBtn.onclick=()=>deleteTodoCat(cat.id);dBtn.style.color='var(--danger)';
+    acts.appendChild(tBtn);acts.appendChild(dBtn);hdr.appendChild(hl);hdr.appendChild(acts);sec.appendChild(hdr);
+    const body=document.createElement('div');body.className='cat-body';
+    cat.items.forEach(item=>{
+      const isC=!!todoState.checked[item.id];
+      const row=document.createElement('div');row.className='todo-item';
+      const cb=document.createElement('input');cb.type='checkbox';cb.checked=isC;cb.style.accentColor=cat.color;
+      cb.onchange=function(){todoState.checked[item.id]=this.checked;todoSaveState();lbl.classList.toggle('done',this.checked);todoUpdateProgress();const cc=document.getElementById('cc-'+cat.id);if(cc)cc.textContent=cat.items.filter(i=>todoState.checked[i.id]).length+'/'+cat.items.length;refreshHome();};
+      const lblWrap=document.createElement('div');lblWrap.className='todo-lbl-wrap';
+      const lbl=document.createElement('span');lbl.className='todo-lbl'+(isC?' done':'');lbl.textContent=item.text;
+      const metaDiv=document.createElement('div');metaDiv.className='todo-meta';metaDiv.innerHTML=(priorityBadge(item.priority)||'')+(dueBadge(item.due)||'');
+      lblWrap.appendChild(lbl);if(item.priority||item.due)lblWrap.appendChild(metaDiv);
+      const ia=document.createElement('div');ia.className='todo-ia';
+      const eBtn=document.createElement('button');eBtn.className='ib';eBtn.textContent='✏️';eBtn.onclick=()=>openItemModal(cat.id,item.id);
+      const xBtn=document.createElement('button');xBtn.className='ib';xBtn.textContent='🗑';xBtn.onclick=()=>todoDeleteItem(cat.id,item.id);
+      ia.appendChild(eBtn);ia.appendChild(xBtn);
+      row.appendChild(cb);row.appendChild(lblWrap);row.appendChild(ia);body.appendChild(row);
+    });
+    const ar=document.createElement('div');ar.className='todo-add-row';
+    const ai=document.createElement('input');ai.className='todo-add-inp';ai.id='tai-'+cat.id;ai.placeholder='＋ 項目を追加…';ai.onkeydown=e=>{if(e.key==='Enter')todoAddItem(cat.id);};
+    const ab=document.createElement('button');ab.className='todo-add-btn';ab.textContent='追加';ab.onclick=()=>todoAddItem(cat.id);
+    ar.appendChild(ai);ar.appendChild(ab);body.appendChild(ar);sec.appendChild(body);c.appendChild(sec);
+  });
+  todoUpdateProgress();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+pfLoadData();
+trLoadFromStorage();trRenderAll();
+todoRender();
+refreshHome();
+
+// ===== FIRE SIMULATOR =====
+
+function gv(id){return parseFloat(document.getElementById(id).value)||0}
+function fw(n){return Math.round(n).toLocaleString('ja-JP')+'万円'}
+function fp(n){return(+n).toFixed(1)+'%'}
+function el(id){return document.getElementById(id)}
+
+function fireSwitchTab(tab){
+  document.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',(tab==='single'&&i===0)||(tab==='family'&&i===1))});
+  document.getElementById('fire-tab-single').classList.toggle('active',tab==='single');
+  document.getElementById('fire-tab-family').classList.toggle('active',tab==='family');
+}
+
+function simRun(asset,rate,curAge,netFn){
+  var bal=asset,zero=null,ar=rate/100,bals=[],ages=[];
+  for(var age=curAge;age<=90;age++){
+    ages.push(age);
+    bal=bal*(1+ar)+netFn(age)*12;
+    if(bal<0&&!zero)zero=age;
+    bals.push(Math.round(Math.max(0,bal)));
+  }
+  return{zero:zero,final:bals[bals.length-1],ages:ages,bals:bals};
+}
+
+function drawChart(canvasId,ages,datasets,zeroAge){
+  var canvas=el(canvasId);
+  var ctx=canvas.getContext('2d');
+  var dpr=window.devicePixelRatio||1;
+  var w=canvas.parentElement.clientWidth-2;
+  var h=200;
+  canvas.width=Math.round(w*dpr);
+  canvas.height=Math.round(h*dpr);
+  canvas.style.width=w+'px';
+  canvas.style.height=h+'px';
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  var pad={top:14,right:12,bottom:32,left:52};
+  var cw=w-pad.left-pad.right;
+  var ch=h-pad.top-pad.bottom;
+  var allVals=[];
+  datasets.forEach(function(d){allVals=allVals.concat(d.data)});
+  var maxBal=Math.max.apply(null,allVals);
+  if(maxBal<1)maxBal=1;
+  function xp(i){return pad.left+(i/Math.max(ages.length-1,1))*cw}
+  function yp(v){return pad.top+ch-(Math.max(0,v)/maxBal)*ch}
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=0.5;
+  for(var gi=0;gi<=4;gi++){var gy=pad.top+ch/4*gi;ctx.beginPath();ctx.moveTo(pad.left,gy);ctx.lineTo(pad.left+cw,gy);ctx.stroke()}
+  // zero line
+  if(zeroAge!==null){
+    var zi=zeroAge-ages[0];
+    if(zi>=0&&zi<ages.length){
+      ctx.save();ctx.strokeStyle='#f87171';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+      var zx=xp(zi);ctx.beginPath();ctx.moveTo(zx,pad.top);ctx.lineTo(zx,pad.top+ch);ctx.stroke();ctx.restore();
+    }
+  }
+  // lines
+  datasets.forEach(function(ds){
+    if(ds.data.length<2)return;
+    // fill
+    ctx.save();ctx.beginPath();ctx.moveTo(xp(0),yp(ds.data[0]));
+    for(var fi=1;fi<ds.data.length;fi++){var cpx=(xp(fi-1)+xp(fi))/2;ctx.bezierCurveTo(cpx,yp(ds.data[fi-1]),cpx,yp(ds.data[fi]),xp(fi),yp(ds.data[fi]))}
+    ctx.lineTo(xp(ds.data.length-1),pad.top+ch);ctx.lineTo(xp(0),pad.top+ch);ctx.closePath();
+    var grad=ctx.createLinearGradient(0,pad.top,0,pad.top+ch);
+    grad.addColorStop(0,ds.fillTop);grad.addColorStop(1,ds.fillBot);
+    ctx.fillStyle=grad;ctx.fill();ctx.restore();
+    // line
+    ctx.save();ctx.strokeStyle=ds.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(xp(0),yp(ds.data[0]));
+    for(var li=1;li<ds.data.length;li++){var lcpx=(xp(li-1)+xp(li))/2;ctx.bezierCurveTo(lcpx,yp(ds.data[li-1]),lcpx,yp(ds.data[li]),xp(li),yp(ds.data[li]))}
+    ctx.stroke();ctx.restore();
+  });
+  // x labels
+  ctx.fillStyle='#555870';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='center';
+  var step=Math.max(1,Math.ceil(ages.length/9));
+  for(var xi=0;xi<ages.length;xi+=step)ctx.fillText(ages[xi]+'歳',xp(xi),h-7);
+  // y labels
+  ctx.textAlign='right';
+  for(var yi=0;yi<=4;yi++){
+    var val=(maxBal/4)*(4-yi);
+    var lbl=val>=10000?(Math.round(val/100)/100).toFixed(1)+'億':Math.round(val)+'万';
+    ctx.fillText(lbl,pad.left-4,pad.top+ch/4*yi+4);
+  }
+}
+
+function setVerdict(prefix,survives,sr,zero,pt,label){
+  var vc=el(prefix+'verdict'),vi=el(prefix+'vicon'),vt=el(prefix+'vtitle'),vb=el(prefix+'vbody');
+  if(survives&&sr<=4){vc.className='verdict-card ok';vi.textContent='✅';vt.textContent='問題なし — '+label+'でも十分な資産です';vb.textContent='90歳まで資産が持続。取り崩し率'+fp(sr)+'は安全圏内。年金受給後は月'+pt+'万円の収入になります。'}
+  else if(survives){vc.className='verdict-card warn';vi.textContent='⚠️';vt.textContent='注意 — 取り崩し率がやや高め';vb.textContent='90歳まで資産は持ちますが取り崩し率'+fp(sr)+'が4%超。収入を増やすか支出を見直すと安心です。'}
+  else{vc.className='verdict-card ng';vi.textContent='❌';vt.textContent='要見直し — '+zero+'歳で枯渇';vb.textContent=zero+'歳で資産がゼロになります。収入を増やす・支出を下げる・利回りを上げる調整が必要です。'}
+}
+
+function calcSingle(){
+  var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income'),rate=gv('s-rate');
+  var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
+  if(!A||!E){alert('資産と生活費を入力してください');return}
+  var res=simRun(A,rate,CA,function(age){return(age>=PA?I+PM:I)-E});
+  var surv=!res.zero,sr=A>0?Math.max(0,E-I)*12/A*100:0,ms=I-E,pt=I+PM;
+  var m1=el('s-m1');m1.textContent=(ms>=0?'+':'')+ms+'万円';m1.className='mvalue '+(ms>=0?'val-ok':ms>=-5?'val-warn':'val-ng');
+  var m2=el('s-m2');m2.textContent=fp(sr);m2.className='mvalue '+(sr<=3?'val-ok':sr<=4?'val-warn':'val-ng');
+  var m3=el('s-m3'),m3s=el('s-m3s');
+  if(surv){m3.textContent=fw(res.final);m3.className='mvalue val-ok';m3s.textContent='90歳時点の残高'}
+  else{m3.textContent=res.zero+'歳で枯渇';m3.className='mvalue val-ng';m3s.textContent='見直しが必要'}
+  el('s-m4').textContent=pt+'万円/月';el('s-m4s').textContent=PA+'歳〜（副収入＋年金）';
+  setVerdict('s-',surv,sr,res.zero,pt,'独身');
+  el('single-results').className='results visible';
+  setTimeout(function(){
+    drawChart('s-chart',res.ages,[{data:res.bals,color:'#4f9cf9',fillTop:'rgba(79,156,249,0.18)',fillBot:'rgba(79,156,249,0.01)'}],res.zero);
+    el('single-results').scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+function calcFamily(){
+  var A=gv('f-asset'),I=gv('f-income'),SI=gv('f-spouse-income'),rate=gv('f-rate');
+  var CA=Math.round(gv('f-curage')),PA=Math.round(gv('f-pension-age')),PM=gv('f-pension-amt'),SPM=gv('f-spouse-pension');
+  var living=gv('f-living'),nursery=gv('f-nursery'),elem=gv('f-elem'),jhs=gv('f-jhs'),hs=gv('f-hs'),univ=gv('f-univ'),housing=gv('f-housing');
+  if(!A){alert('資産を入力してください');return}
+  function childCost(age){var c=age-CA;if(c<0||c>21)return 0;if(c<=5)return nursery;if(c<=11)return elem;if(c<=14)return jhs;if(c<=17)return hs;if(c<=21)return univ;return 0}
+  function totalInc(age){return(age>=PA?I+PM:I)+(age<65?SI:SPM)}
+  function netFn(age){return totalInc(age)-(living+housing+childCost(age))}
+  var res=simRun(A,rate,CA,netFn);
+  // 独身比較
+  var singleRes=simRun(A,rate,CA,function(age){return(age>=PA?I+PM:I)-20});
+  var surv=!res.zero,curNet=netFn(CA),sr=A>0?Math.max(0,-curNet)*12/A*100:0,pt=I+PM+SPM;
+  el('f-compare-single').textContent=singleRes.zero?singleRes.zero+'歳で枯渇':fw(singleRes.final);
+  el('f-compare-family').textContent=res.zero?res.zero+'歳で枯渇':fw(res.final);
+  var m1=el('f-m1');m1.textContent=(curNet>=0?'+':'')+Math.round(curNet)+'万円';m1.className='mvalue '+(curNet>=0?'val-ok':curNet>=-5?'val-warn':'val-ng');
+  var m2=el('f-m2');m2.textContent=fp(sr);m2.className='mvalue '+(sr<=3?'val-ok':sr<=4?'val-warn':'val-ng');
+  var m3=el('f-m3'),m3s=el('f-m3s');
+  if(surv){m3.textContent=fw(res.final);m3.className='mvalue val-purple';m3s.textContent='90歳時点の残高'}
+  else{m3.textContent=res.zero+'歳で枯渇';m3.className='mvalue val-ng';m3s.textContent='見直しが必要'}
+  el('f-m4').textContent=pt+'万円/月';el('f-m4s').textContent=PA+'歳〜（両方の年金＋副収入）';
+  setVerdict('f-',surv,sr,res.zero,pt,'家族あり');
+  el('tl-age1').textContent=CA+'〜'+(CA+5)+'歳';el('tl-age2').textContent=(CA+6)+'〜'+(CA+11)+'歳';
+  el('tl-age3').textContent=(CA+12)+'〜'+(CA+14)+'歳';el('tl-age4').textContent=(CA+15)+'〜'+(CA+17)+'歳';
+  el('tl-age5').textContent=(CA+18)+'〜'+(CA+21)+'歳';
+  el('tl-cost1').textContent='月'+nursery+'万円 × 6年 ＝ 計'+Math.round(nursery*12*6)+'万円';
+  el('tl-cost2').textContent='月'+elem+'万円 × 6年 ＝ 計'+Math.round(elem*12*6)+'万円';
+  el('tl-cost3').textContent='月'+jhs+'万円 × 3年 ＝ 計'+Math.round(jhs*12*3)+'万円';
+  el('tl-cost4').textContent='月'+hs+'万円 × 3年 ＝ 計'+Math.round(hs*12*3)+'万円';
+  el('tl-cost5').textContent='月'+univ+'万円 × 4年 ＝ 計'+Math.round(univ*12*4)+'万円';
+  el('family-results').className='results visible';
+  setTimeout(function(){
+    drawChart('f-chart',res.ages,[
+      {data:singleRes.bals,color:'#4f9cf9',fillTop:'rgba(79,156,249,0.1)',fillBot:'rgba(79,156,249,0.01)'},
+      {data:res.bals,color:'#a78bfa',fillTop:'rgba(167,139,250,0.15)',fillBot:'rgba(167,139,250,0.01)'}
+    ],res.zero);
+    el('family-results').scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+</script>
+</body>
+</html>
