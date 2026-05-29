@@ -1183,24 +1183,25 @@ const TWELVE_DATA_KEY='3bf15d860df44c599f8deb756f1af9b7';
 
 // ── 株式・ETF：Twelve Data API（CORS対応済み）──
 async function amFetchViaAPI(query, isIndex){
-  if(isIndex){
-    return await amFetchNAVFromMinkabu(query);
-  }
+  if(isIndex) throw new Error('fund_manual');
 
-  // 日本株のティッカー変換：9984.T → symbol=9984&exchange=TYO
+  // 日本株・米国株どちらにも対応
+  // Twelve Dataの日本株シンボル形式: 数字のみ（exchange=JPX）
   let symbol = query;
-  let exchange = '';
-  if(query.endsWith('.T')){
+  let extraParam = '';
+  if(query.match(/^\d+\.T$/)){
+    // 9984.T → symbol=9984, exchange=JPX
     symbol = query.replace('.T','');
-    exchange = '&exchange=TYO';
+    extraParam = '&exchange=JPX&country=Japan';
   }
 
-  const url = `https://api.twelvedata.com/quote?symbol=${symbol}${exchange}&apikey=${TWELVE_DATA_KEY}`;
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}${extraParam}&apikey=${TWELVE_DATA_KEY}`;
   const res = await fetch(url, {signal: AbortSignal.timeout(10000)});
   if(!res.ok) throw new Error('HTTP '+res.status);
   const d = await res.json();
   if(d.status==='error'||d.code) throw new Error(d.message||'not_found');
   const price = parseFloat(d.close||d.price||0);
+  if(!price) throw new Error('no price');
   const prevClose = parseFloat(d.previous_close||price);
   const changePct = prevClose>0?(price-prevClose)/prevClose*100:0;
   return {
@@ -1210,24 +1211,6 @@ async function amFetchViaAPI(query, isIndex){
     changePct,
     longName: d.name||query
   };
-}
-
-// ── 投資信託：minkabu経由（CORSプロキシ不要のJSONP的アクセス）──
-async function amFetchNAVFromMinkabu(query){
-  // minkabu 投信検索API（JSONPなしで使えるエンドポイント）
-  const encoded = encodeURIComponent(query.fundName);
-  const searchUrl = `https://api.allorigins.win/get?url=${encodeURIComponent('https://minkabu.jp/fund/search?keyword='+encoded+'&format=json')}`;
-
-  // alloriginsがブロックされている場合はcorsproxy.ioを試す
-  const proxies = [
-    `https://corsproxy.io/?${encodeURIComponent('https://minkabu.jp/fund/search_api?query='+encoded)}`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent('https://minkabu.jp/fund/search_api?query='+encoded)}`
-  ];
-
-  // プロキシが使えない環境のため、Claude API fallback（ブラウザ以外の環境用）
-  // GitHub Pages上ではAnthropicAPIが使えないので、Twelve DataのFX機能で為替のみ取得
-  // 投信はユーザーが手動更新するか、将来的に別手段を検討
-  throw new Error('fund_manual');
 }
 
 // 株価取得（ticker利用）
