@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>免許・資格取得 TODO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f2ed;
+    --surface: #fffefb;
+    --border: #e0dbd3;
+    --text: #1a1814;
+    --muted: #7a756e;
+    --accent: #2d4a3e;
+  }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0 0 80px;
+  }
+
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 28px 24px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+
+  .header-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .header-title { font-size: 20px; font-weight: 700; letter-spacing: 0.04em; flex: 1; }
+  .header-sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+  .total-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+  }
+  .total-bar-wrap {
+    width: 120px;
+    height: 6px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+  .total-bar-fill {
+    height: 100%;
+    background: #7ecba8;
+    border-radius: 100px;
+    transition: width 0.4s ease;
+  }
+  .total-label { opacity: 0.85; white-space: nowrap; }
+
+  .reset-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.8);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .reset-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 0; }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 100px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    color: var(--muted);
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--text); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab .tab-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    opacity: 0.75;
+  }
+  .tab-icon { font-size: 16px; }
+
+  .section { display: none; }
+  .section.visible { display: block; }
+
+  .section-hero {
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .hero-now    { background: #e8f0ee; color: #1e3d32; }
+  .hero-study  { background: #ece8f0; color: #2e1e40; }
+  .hero-drone  { background: #e8ecf5; color: #1e2a45; }
+  .hero-camp   { background: #f0ede5; color: #3d3520; }
+  .hero-career { background: #f0e8ea; color: #401e24; }
+
+  .section-icon { font-size: 28px; }
+  .section-title { font-size: 18px; font-weight: 700; }
+  .section-prog-wrap { flex: 1; }
+  .section-prog-bar {
+    height: 8px;
+    background: rgba(0,0,0,0.1);
+    border-radius: 100px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .section-prog-fill { height: 100%; border-radius: 100px; transition: width 0.4s ease; }
+  .section-prog-text { font-size: 12px; opacity: 0.75; font-family: 'DM Mono', monospace; }
+
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .cat-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+  .cat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+
+  .cat-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: #faf9f6;
+  }
+  .cat-header-icon { font-size: 16px; }
+  .cat-count {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .cat-items { padding: 8px; }
+
+  .item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .item:hover { background: #f5f2ed; }
+  .item.checked { background: #f0f7f4; }
+
+  .checkbox {
+    width: 20px; height: 20px; min-width: 20px;
+    border: 2px solid #c8c3bc;
+    border-radius: 6px;
+    margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .item.checked .checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .checkmark { display: none; }
+  .item.checked .checkmark { display: block; }
+  .checkmark svg { display: block; }
+
+  .item-body { flex: 1; }
+  .item-name {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+    transition: color 0.2s;
+  }
+  .item.checked .item-name {
+    text-decoration: line-through;
+    color: var(--muted);
+  }
+  .item-point {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 100px;
+    margin-top: 4px;
+    letter-spacing: 0.03em;
+  }
+  .badge-done   { background: #d1f0e3; color: #0f6e56; }
+  .badge-urgent { background: #fde8d8; color: #8c3a10; }
+  .badge-now    { background: #e8f0ee; color: #1e3d32; }
+  .badge-aug    { background: #ece8f0; color: #2e1e40; }
+  .badge-oct    { background: #e8ecf5; color: #1e2a45; }
+  .badge-later  { background: #f0ede5; color: #3d3520; }
+
+  .cat-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 10px;
+  }
+  .mini-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+  .mini-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.4s ease;
+  }
+  .mini-pct {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .celebration {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  .celebration.show { display: flex; }
+  .celebration-card {
+    background: var(--surface);
+    border-radius: 20px;
+    padding: 40px 32px;
+    text-align: center;
+    max-width: 320px;
+  }
+  .celebration-emoji { font-size: 48px; margin-bottom: 16px; }
+  .celebration-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .celebration-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+  .celebration-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 100px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-title">📋 免許・資格取得 TODO</div>
+      <div class="header-sub">土地家屋調査士補助転職プラン</div>
+    </div>
+    <div class="total-progress">
+      <div class="total-bar-wrap">
+        <div class="total-bar-fill" id="totalFill" style="width:0%"></div>
+      </div>
+      <span class="total-label" id="totalLabel">0 / 0</span>
+    </div>
+    <button class="reset-btn" onclick="resetAll()">リセット</button>
+  </div>
+</header>
+
+<main>
+  <div class="tabs" id="tabs"></div>
+  <div id="sections"></div>
+</main>
+
+<div class="celebration" id="celebration">
+  <div class="celebration-card">
+    <div class="celebration-emoji">🎉</div>
+    <div class="celebration-title">全タスク完了！</div>
+    <div class="celebration-sub">土地家屋調査士補助への転職準備、お疲れ様でした！</div>
+    <button class="celebration-btn" onclick="document.getElementById('celebration').classList.remove('show')">閉じる</button>
+  </div>
+</div>
+
+<script>
+const DATA = [
+  {
+    id: 'now', label: '今すぐ', icon: '⚡', heroClass: 'hero-now', barColor: '#3d8c6e',
+    categories: [
+      { name: 'アガルート申込', icon: '📚', items: [
+        { name: 'アガルート 無料体験申込', point: '20日間無料・約10.5時間の講義見放題', badge: 'done', badgeText: '✅ 完了' },
+        { name: 'アガルート ダブル合格カリキュラム 正式申込', point: '測量士補含む・約30万円。合格特典で全額返金も', badge: 'urgent', badgeText: '🔥 次のアクション' },
+      ]},
+      { name: 'ドローンスクール確認', icon: '🚁', items: [
+        { name: 'JDO柏校 お問合せ送信', point: '国家資格（二等）登録講習機関か確認', badge: 'done', badgeText: '✅ 完了' },
+        { name: 'JDO柏校 返信確認・国家資格対応の確認', point: '未対応なら流山IC校（Drone Safety License）も検討', badge: 'urgent', badgeText: '🔥 次のアクション' },
+        { name: 'ドローンスクール 8〜9月の受講日程を予約', point: 'JDO柏校 or 流山IC校で集中受講', badge: 'now', badgeText: '今すぐ' },
+      ]},
+    ]
+  },
+  {
+    id: 'study', label: '〜7月末', icon: '📖', heroClass: 'hero-study', barColor: '#7052a8',
+    categories: [
+      { name: '土地家屋調査士 学習', icon: '📐', items: [
+        { name: '毎日オンライン学習を継続', point: '仕事後・休日に学習。測量士補から始めるのがおすすめ', badge: 'now', badgeText: '進行中' },
+        { name: '測量士補の基礎（数学・測量）を固める', point: '2027年1月願書提出に向けて基礎固め', badge: 'now', badgeText: '進行中' },
+        { name: '不動産登記法の基礎学習スタート', point: '土地家屋調査士本試験の中核科目', badge: 'now', badgeText: '進行中' },
+      ]},
+    ]
+  },
+  {
+    id: 'drone', label: '8〜9月', icon: '🚁', heroClass: 'hero-drone', barColor: '#4a6db5',
+    categories: [
+      { name: 'ドローン国家資格取得', icon: '🎯', items: [
+        { name: '学科講習（オンライン10時間）受講', point: '二等無人航空機操縦士 初学者コース', badge: 'aug', badgeText: '8〜9月' },
+        { name: '実地講習（10時間）受講', point: 'スクールで実機操作を習得', badge: 'aug', badgeText: '8〜9月' },
+        { name: '修了審査（実地試験免除を獲得）', point: 'スクールの修了審査に合格で指定試験機関の実技が免除', badge: 'aug', badgeText: '8〜9月' },
+        { name: '指定試験機関 学科試験・身体検査 受験', point: '日本海事協会の試験。DIPS2.0から事前申請が必要', badge: 'aug', badgeText: '8〜9月' },
+        { name: '二等無人航空機操縦士 資格取得', point: '技能証明申請 → 証明書受取', badge: 'aug', badgeText: '8〜9月' },
+      ]},
+      { name: '合宿免許 準備', icon: '🚗', items: [
+        { name: '那須自動車学校 本申込書類送付', point: '仮申込済（合宿免許わかば）→ 本申込手続き', badge: 'aug', badgeText: '8月中に' },
+        { name: '合宿免許 持ち物・住民票など準備', point: '住民票（本籍地記載）・印鑑・眼鏡など', badge: 'aug', badgeText: '9月末まで' },
+      ]},
+    ]
+  },
+  {
+    id: 'camp', label: '10月', icon: '🚗', heroClass: 'hero-camp', barColor: '#b07d2e',
+    categories: [
+      { name: '合宿免許（那須自動車学校）', icon: '🏫', items: [
+        { name: '合宿免許 仮申込（那須自動車学校）', point: '10月1日入校・合宿免許わかばで仮申込済', badge: 'done', badgeText: '✅ 完了' },
+        { name: '10/1 入校・合宿スタート', point: '栃木県那須塩原市。JR西那須野駅から車10分', badge: 'oct', badgeText: '10/1〜' },
+        { name: '技能教習・学科教習 全過程修了', point: '最短14〜15日で卒業検定。延長保証は+4泊・+8時限', badge: 'oct', badgeText: '10月' },
+        { name: '卒業検定 合格・教習所卒業', point: '10月15日前後に卒業予定', badge: 'oct', badgeText: '10月中旬' },
+        { name: '運転免許センターで本免学科試験 受験・合格', point: '千葉県：幕張の免許センター。卒業後に受験', badge: 'oct', badgeText: '10月中旬〜' },
+        { name: '普通自動車免許（AT限定）取得！', point: '免許証交付。土地家屋調査士補助の仕事にも活用', badge: 'oct', badgeText: '10月' },
+      ]},
+    ]
+  },
+  {
+    id: 'career', label: '10月〜', icon: '🏢', heroClass: 'hero-career', barColor: '#a84255',
+    categories: [
+      { name: '転職活動', icon: '💼', items: [
+        { name: '土地家屋調査士補助 求人リサーチ開始', point: '「UAV測量」「ドローン測量」対応事務所を優先', badge: 'later', badgeText: '10月〜' },
+        { name: '履歴書・職務経歴書 作成', point: 'ドローン国家資格・学習中の土地家屋調査士も記載', badge: 'later', badgeText: '10月〜' },
+        { name: '応募・面接', point: 'ドローン測量を活用している事務所への転職が目標', badge: 'later', badgeText: '随時' },
+        { name: '土地家屋調査士補助として転職！', point: '目標：ドローン測量に取り組む事務所', badge: 'later', badgeText: '目標' },
+      ]},
+      { name: '測量士補・土地家屋調査士 試験', icon: '📝', items: [
+        { name: '測量士補 2027年1月 願書提出', point: '2027年5月試験・合格で土地家屋調査士試験午前免除', badge: 'later', badgeText: '2027年1月' },
+        { name: '測量士補 2027年5月 試験・合格', point: '28問中18問以上正解で合格。合格率40%前後', badge: 'later', badgeText: '2027年5月' },
+        { name: '土地家屋調査士 2027年10月 筆記試験', point: '測量士補合格で午前免除。午後の法律・書式に集中', badge: 'later', badgeText: '2027年10月' },
+      ]},
+    ]
+  },
+];
+
+const state = {};
+DATA.forEach(s => {
+  s.categories.forEach((c, ci) => {
+    c.items.forEach((item, ii) => {
+      const key = `${s.id}-${ci}-${ii}`;
+      const saved = localStorage.getItem(key);
+      state[key] = saved !== null ? JSON.parse(saved) : (item.badge === 'done');
+    });
+  });
+});
+
+function save(key) { localStorage.setItem(key, JSON.stringify(state[key])); }
+
+function toggle(key) {
+  state[key] = !state[key];
+  save(key);
+  updateItem(key);
+  updateAll();
+}
+
+function updateItem(key) {
+  const el = document.querySelector(`[data-key="${key}"]`);
+  if (!el) return;
+  el.classList.toggle('checked', state[key]);
+}
+
+function getProgress(sectionId) {
+  const keys = Object.keys(state).filter(k => k.startsWith(sectionId + '-'));
+  return { done: keys.filter(k => state[k]).length, total: keys.length };
+}
+
+function getCatProgress(sectionId, ci) {
+  const keys = Object.keys(state).filter(k => k.startsWith(`${sectionId}-${ci}-`));
+  return { done: keys.filter(k => state[k]).length, total: keys.length };
+}
+
+function getTotalProgress() {
+  const keys = Object.keys(state);
+  return { done: keys.filter(k => state[k]).length, total: keys.length };
+}
+
+function pct(done, total) { return total ? Math.round(done / total * 100) : 0; }
+
+function updateAll() {
+  const tot = getTotalProgress();
+  document.getElementById('totalFill').style.width = pct(tot.done, tot.total) + '%';
+  document.getElementById('totalLabel').textContent = `${tot.done} / ${tot.total}`;
+
+  DATA.forEach(s => {
+    const p = getProgress(s.id);
+    const fill = document.getElementById(`sfill-${s.id}`);
+    const text = document.getElementById(`stext-${s.id}`);
+    if (fill) fill.style.width = pct(p.done, p.total) + '%';
+    if (text) text.textContent = `${p.done} / ${p.total} 完了`;
+
+    const tab = document.getElementById(`tab-${s.id}`);
+    if (tab) {
+      const cnt = tab.querySelector('.tab-count');
+      if (cnt) cnt.textContent = `${p.done}/${p.total}`;
+    }
+
+    s.categories.forEach((_, ci) => {
+      const cp = getCatProgress(s.id, ci);
+      const mf = document.getElementById(`mfill-${s.id}-${ci}`);
+      const mp = document.getElementById(`mpct-${s.id}-${ci}`);
+      const cc = document.getElementById(`ccount-${s.id}-${ci}`);
+      if (mf) mf.style.width = pct(cp.done, cp.total) + '%';
+      if (mp) mp.textContent = pct(cp.done, cp.total) + '%';
+      if (cc) cc.textContent = `${cp.done}/${cp.total}`;
+    });
+  });
+
+  const cel = document.getElementById('celebration');
+  const tot2 = getTotalProgress();
+  if (tot2.done === tot2.total && tot2.total > 0) {
+    cel.classList.add('show');
+  } else {
+    cel.classList.remove('show');
+  }
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
+  document.getElementById(`tab-${id}`).classList.add('active');
+  document.getElementById(`sec-${id}`).classList.add('visible');
+}
+
+function resetAll() {
+  if (!confirm('すべてのチェックをリセットしますか？')) return;
+  Object.keys(state).forEach(k => {
+    state[k] = false;
+    localStorage.removeItem(k);
+  });
+  document.querySelectorAll('.item').forEach(el => el.classList.remove('checked'));
+  updateAll();
+}
+
+function buildUI() {
+  const tabsEl = document.getElementById('tabs');
+  const secsEl = document.getElementById('sections');
+
+  DATA.forEach((s, si) => {
+    const p = getProgress(s.id);
+
+    const tab = document.createElement('button');
+    tab.className = 'tab' + (si === 0 ? ' active' : '');
+    tab.id = `tab-${s.id}`;
+    tab.onclick = () => switchTab(s.id);
+    tab.innerHTML = `<span class="tab-icon">${s.icon}</span>${s.label}<span class="tab-count">${p.done}/${p.total}</span>`;
+    tabsEl.appendChild(tab);
+
+    const sec = document.createElement('div');
+    sec.className = 'section' + (si === 0 ? ' visible' : '');
+    sec.id = `sec-${s.id}`;
+
+    sec.innerHTML = `
+      <div class="section-hero ${s.heroClass}">
+        <div class="section-icon">${s.icon}</div>
+        <div class="section-prog-wrap">
+          <div class="section-title">${s.label}</div>
+          <div class="section-prog-text" id="stext-${s.id}">${p.done} / ${p.total} 完了</div>
+          <div class="section-prog-bar">
+            <div class="section-prog-fill" id="sfill-${s.id}" style="width:${pct(p.done,p.total)}%; background:${s.barColor};"></div>
+          </div>
+        </div>
+      </div>
+      <div class="cat-grid">
+        ${s.categories.map((cat, ci) => {
+          const cp = getCatProgress(s.id, ci);
+          return `
+          <div class="cat-card">
+            <div class="cat-header">
+              <span class="cat-header-icon">${cat.icon}</span>
+              ${cat.name}
+              <span class="cat-count" id="ccount-${s.id}-${ci}">${cp.done}/${cp.total}</span>
+            </div>
+            <div class="cat-items">
+              ${cat.items.map((item, ii) => {
+                const key = `${s.id}-${ci}-${ii}`;
+                const checked = state[key];
+                return `
+                <div class="item ${checked ? 'checked' : ''}" data-key="${key}" onclick="toggle('${key}')">
+                  <div class="checkbox">
+                    <span class="checkmark">
+                      <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                        <path d="M1 4L4 7.5L10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                  </div>
+                  <div class="item-body">
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-point">${item.point}</div>
+                    <span class="badge badge-${item.badge}">${item.badgeText}</span>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+            <div class="cat-progress">
+              <div class="mini-bar">
+                <div class="mini-bar-fill" id="mfill-${s.id}-${ci}" style="width:${pct(cp.done,cp.total)}%; background:${s.barColor};"></div>
+              </div>
+              <span class="mini-pct" id="mpct-${s.id}-${ci}">${pct(cp.done,cp.total)}%</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+    secsEl.appendChild(sec);
+  });
+}
+
+buildUI();
+updateAll();
+</script>
+</body>
+</html>
