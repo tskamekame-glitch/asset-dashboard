@@ -9,6 +9,8 @@
 <title>💼 資産管理ダッシュボード</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 /* ============================================================
    BASE RESET & VARIABLES
@@ -502,6 +504,12 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="page-inner" id="managerMain">
     <div id="reminderBanner"></div>
+    <!-- Google Drive 同期バー -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <span id="syncStatus" style="display:none;font-size:12px;flex:1"></span>
+      <button id="btnSignIn" onclick="signIn()" style="font-size:12px;padding:7px 12px;border:0.5px solid var(--accent);border-radius:8px;background:rgba(24,95,165,0.08);color:var(--accent);font-weight:600;font-family:inherit;cursor:pointer">☁ Googleでデータ同期</button>
+      <button id="btnSignOut" onclick="signOut()" style="display:none;font-size:12px;padding:7px 12px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text3);font-family:inherit;cursor:pointer">サインアウト</button>
+    </div>
     <div id="totalCard"></div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div class="export-bar">
@@ -1023,7 +1031,13 @@ function amShowMain(){
   if(currentTab!=='manager')document.getElementById('fab').classList.add('hidden');
 }
 function amShowLogin(){/* Google連携無効化 */}
-function setSyncStatus(state,text){/* Google連携無効化 */}
+function setSyncStatus(state,text){
+  const el=document.getElementById('syncStatus');
+  if(!el)return;
+  el.style.display=text?'flex':'none';
+  el.textContent=state==='ok'?'☁ '+text:state==='syncing'?'⏳ '+text:'⚠ '+text;
+  el.style.color=state==='ok'?'var(--green)':state==='syncing'?'var(--accent)':'var(--amber)';
+}
 function daysSince(ds){return Math.floor((new Date()-new Date(ds))/(864e5))}
 function amRenderReminder(){
   const el=document.getElementById('reminderBanner');if(!el)return;
@@ -1473,37 +1487,62 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const values=[['id','name','cat','amount','note','updated'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.updated])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:F${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<100)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:F1000`});
-    amSaveToLocal();setSyncStatus('ok','同期済み');showToast('✓ 保存・同期しました');
+    const cols=['id','name','cat','amount','note','updated','ticker','shares','fundName','units','lastPrice','lastPriceChange','lastUpdated'];
+    const values=[cols,...amAccounts.map(a=>cols.map(k=>a[k]??''))];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:M${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<100)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:M1000`});
+    amSaveToLocal();setSyncStatus('ok','同期済み');showToast('☁ 保存・同期しました');
   }catch(e){setSyncStatus('','エラー');amSaveToLocal();showToast('⚠ オフライン保存しました');}
 }
 async function amFindOrCreateSheet(){
   try{
     const res=await gapi.client.request({path:'https://www.googleapis.com/drive/v3/files',params:{q:`name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,fields:'files(id,name)'}});
     if(res.result.files&&res.result.files.length>0){amSpreadsheetId=res.result.files[0].id;}
-    else{const create=await gapi.client.sheets.spreadsheets.create({resource:{properties:{title:SHEET_NAME},sheets:[{properties:{title:'accounts'}}]}});amSpreadsheetId=create.result.spreadsheetId;await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:'accounts!A1:F1',valueInputOption:'RAW',resource:{values:[['id','name','cat','amount','note','updated']]}});}
+    else{const create=await gapi.client.sheets.spreadsheets.create({resource:{properties:{title:SHEET_NAME},sheets:[{properties:{title:'accounts'}}]}});amSpreadsheetId=create.result.spreadsheetId;await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:'accounts!A1:M1',valueInputOption:'RAW',resource:{values:[['id','name','cat','amount','note','updated','ticker','shares','fundName','units','lastPrice','lastPriceChange','lastUpdated']]}});}
   }catch(e){console.error(e);}
 }
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
-  try{const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:F1000'});const rows=res.result.values||[];amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',updated:r[5]||todayStr()}));amSaveToLocal();amRender();}catch(e){amLoadFromLocal();amRender();}
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A1:M1000'});
+    const rows=res.result.values||[];
+    if(rows.length<2){amLoadFromLocal();amRender();return;}
+    const header=rows[0];
+    const idx=k=>header.indexOf(k);
+    amAccounts=rows.slice(1).filter(r=>r[idx('id')]||r[0]).map(r=>{
+      const g=k=>{const i=idx(k);return i>=0?(r[i]??''):''};
+      return{
+        id:parseInt(g('id'))||Date.now(),name:g('name'),cat:g('cat')||'その他',
+        amount:parseFloat(g('amount'))||0,note:g('note'),updated:g('updated')||todayStr(),
+        ticker:g('ticker'),shares:parseInt(g('shares'))||0,
+        fundName:g('fundName'),units:parseInt(g('units'))||0,
+        lastPrice:parseFloat(g('lastPrice'))||0,lastPriceChange:parseFloat(g('lastPriceChange'))||0,
+        lastUpdated:g('lastUpdated')
+      };
+    });
+    amSaveToLocal();amRender();
+  }catch(e){amLoadFromLocal();amRender();}
 }
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
+  document.getElementById('btnSignIn').style.display='none';
+  document.getElementById('btnSignOut').style.display='block';
+  document.getElementById('syncStatus').style.display='flex';
   await amFindOrCreateSheet();await amLoadFromSheet();setSyncStatus('ok','同期済み');refreshHome();
 }
 function signIn(){
   if(CLIENT_ID==='YOUR_ID'){alert('APIキーの設定が必要です');return;}
+  if(!amTokenClient){alert('Google APIの読み込み中です。少し待ってから再度お試しください。');return;}
   amTokenClient.requestAccessToken({prompt:'consent'});
 }
 function signOut(){
   const token=gapi.client.getToken();
   if(token)google.accounts.oauth2.revoke(token.access_token);
   gapi.client.setToken('');localStorage.removeItem('assetGoogleMode');
-  amIsOnline=false;amSpreadsheetId=null;amShowLogin();
+  amIsOnline=false;amSpreadsheetId=null;
+  document.getElementById('btnSignIn').style.display='block';
+  document.getElementById('btnSignOut').style.display='none';
   document.getElementById('syncStatus').style.display='none';
 }
 function useOffline(){
@@ -1511,13 +1550,37 @@ function useOffline(){
   amLoadFromLocal();amRender();refreshHome();
 }
 function amMaybeInit(){
-  // Google連携なし・直接オフラインモードで起動
-  amLoadFromLocal();amRender();refreshHome();
+  // GAPI初期化を試みる。失敗したらオフラインモードで起動
+  if(typeof gapi !== 'undefined'){
+    gapi.load('client', async()=>{
+      try{
+        await gapi.client.init({discoveryDocs:['https://sheets.googleapis.com/$discovery/rest?version=v4']});
+        amGapiInited=true;
+        amTokenClient=google.accounts.oauth2.initTokenClient({
+          client_id:CLIENT_ID,scope:SCOPES,
+          callback:async(resp)=>{
+            if(resp.error){amLoadFromLocal();amRender();refreshHome();return;}
+            await onSignedIn();
+          }
+        });
+        amGisInited=true;
+        // 前回Google連携していたなら自動サインイン
+        if(localStorage.getItem('assetGoogleMode')==='online'){
+          amTokenClient.requestAccessToken({prompt:''});
+        } else {
+          amLoadFromLocal();amRender();refreshHome();
+        }
+      }catch(e){
+        amLoadFromLocal();amRender();refreshHome();
+      }
+    });
+  } else {
+    amLoadFromLocal();amRender();refreshHome();
+  }
 }
 window.addEventListener('load',()=>{
   // 古いキャッシュをクリア（totalValue計算バグ修正のため）
   try{localStorage.removeItem('am_price_cache');}catch(e){}
-  // Google連携なし・直接localStorageから読み込み
   amMaybeInit();
 });
 
