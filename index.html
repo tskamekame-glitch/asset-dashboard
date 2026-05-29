@@ -1179,41 +1179,16 @@ function amIsIndexFund(account){
 }
 
 // Claude API (web_search) 経由で株価 or 基準価額を取得
-const TWELVE_DATA_KEY='3bf15d860df44c599f8deb756f1af9b7';
+// ── 株式・ETF：Cloudflare Workers経由でYahoo Finance取得（CORSなし）──
+const STOCK_PROXY = 'https://small-poetry-c9c2.tskamekame.workers.dev';
 
-// ── 株式・ETF：Yahoo Finance v8 API ──
-// 日本株(.T)・米国株どちらも対応、CORS対応済み
 async function amFetchViaAPI(query, isIndex){
   if(isIndex) throw new Error('fund_manual');
-
-  // Yahoo Finance v8 Chart API
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(query)}?interval=1d&range=1d&lang=ja`;
-  let res;
-  try{
-    res = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-      headers: {'User-Agent':'Mozilla/5.0'}
-    });
-  }catch(e){
-    // CORSエラーの場合はv2エンドポイントを試す
-    const url2 = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(query)}?interval=1d&range=1d`;
-    res = await fetch(url2, {signal: AbortSignal.timeout(10000)});
-  }
+  const res = await fetch(`${STOCK_PROXY}?ticker=${encodeURIComponent(query)}`, {signal: AbortSignal.timeout(12000)});
   if(!res.ok) throw new Error('HTTP '+res.status);
-  const data = await res.json();
-  const result = data?.chart?.result?.[0];
-  if(!result) throw new Error('no result');
-  const meta = result.meta;
-  const price = meta.regularMarketPrice || meta.previousClose;
-  const prevClose = meta.previousClose || price;
-  const changePct = prevClose>0?(price-prevClose)/prevClose*100:0;
-  return {
-    ticker: query,
-    price,
-    currency: meta.currency||'JPY',
-    changePct,
-    longName: meta.longName||meta.shortName||query
-  };
+  const d = await res.json();
+  if(d.error) throw new Error(d.error);
+  return d;
 }
 
 // 株価取得（ticker利用）
