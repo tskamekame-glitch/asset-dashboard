@@ -1187,12 +1187,12 @@ async function amFetchViaAPI(query, isIndex){
     return await amFetchNAVFromMinkabu(query);
   }
 
-  // 日本株のティッカー変換：9984.T → 9984:TSE
+  // 日本株のティッカー変換：9984.T → symbol=9984&exchange=TYO
   let symbol = query;
   let exchange = '';
   if(query.endsWith('.T')){
     symbol = query.replace('.T','');
-    exchange = '&exchange=TSE';
+    exchange = '&exchange=TYO';
   }
 
   const url = `https://api.twelvedata.com/quote?symbol=${symbol}${exchange}&apikey=${TWELVE_DATA_KEY}`;
