@@ -1181,35 +1181,38 @@ function amIsIndexFund(account){
 // Claude API (web_search) 経由で株価 or 基準価額を取得
 const TWELVE_DATA_KEY='3bf15d860df44c599f8deb756f1af9b7';
 
-// ── 株式・ETF：Twelve Data API（CORS対応済み）──
+// ── 株式・ETF：Yahoo Finance v8 API ──
+// 日本株(.T)・米国株どちらも対応、CORS対応済み
 async function amFetchViaAPI(query, isIndex){
   if(isIndex) throw new Error('fund_manual');
 
-  // 日本株・米国株どちらにも対応
-  // Twelve Dataの日本株シンボル形式: 数字のみ（exchange=JPX）
-  let symbol = query;
-  let extraParam = '';
-  if(query.match(/^\d+\.T$/)){
-    // 9984.T → symbol=9984, exchange=JPX
-    symbol = query.replace('.T','');
-    extraParam = '&exchange=JPX&country=Japan';
+  // Yahoo Finance v8 Chart API
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(query)}?interval=1d&range=1d&lang=ja`;
+  let res;
+  try{
+    res = await fetch(url, {
+      signal: AbortSignal.timeout(10000),
+      headers: {'User-Agent':'Mozilla/5.0'}
+    });
+  }catch(e){
+    // CORSエラーの場合はv2エンドポイントを試す
+    const url2 = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(query)}?interval=1d&range=1d`;
+    res = await fetch(url2, {signal: AbortSignal.timeout(10000)});
   }
-
-  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}${extraParam}&apikey=${TWELVE_DATA_KEY}`;
-  const res = await fetch(url, {signal: AbortSignal.timeout(10000)});
   if(!res.ok) throw new Error('HTTP '+res.status);
-  const d = await res.json();
-  if(d.status==='error'||d.code) throw new Error(d.message||'not_found');
-  const price = parseFloat(d.close||d.price||0);
-  if(!price) throw new Error('no price');
-  const prevClose = parseFloat(d.previous_close||price);
+  const data = await res.json();
+  const result = data?.chart?.result?.[0];
+  if(!result) throw new Error('no result');
+  const meta = result.meta;
+  const price = meta.regularMarketPrice || meta.previousClose;
+  const prevClose = meta.previousClose || price;
   const changePct = prevClose>0?(price-prevClose)/prevClose*100:0;
   return {
     ticker: query,
     price,
-    currency: d.currency||'JPY',
+    currency: meta.currency||'JPY',
     changePct,
-    longName: d.name||query
+    longName: meta.longName||meta.shortName||query
   };
 }
 
@@ -1257,10 +1260,11 @@ async function amGetUSDJPY(){
   const cache=amGetPriceCache();
   if(cache['USDJPY']&&(Date.now()-cache['USDJPY'].ts)<AM_CACHE_TTL)return cache['USDJPY'].price;
   try{
-    const res=await fetch(`https://api.twelvedata.com/price?symbol=USD/JPY&apikey=${TWELVE_DATA_KEY}`,{signal:AbortSignal.timeout(8000)});
-    const d=await res.json();
-    const price=parseFloat(d.price||0);
-    if(price>0){const nc=amGetPriceCache();nc['USDJPY']={price,ts:Date.now()};amSetPriceCache(nc);return price;}
+    const d = await amFetchViaAPI('USDJPY=X', false);
+    if(d?.price>0){
+      const nc=amGetPriceCache();nc['USDJPY']={price:d.price,ts:Date.now()};amSetPriceCache(nc);
+      return d.price;
+    }
   }catch(e){}
   return 150;
 }
