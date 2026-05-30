@@ -1183,7 +1183,14 @@ function amIsIndexFund(account){
 const STOCK_PROXY = 'https://small-poetry-c9c2.tskamekame.workers.dev';
 
 async function amFetchViaAPI(query, isIndex){
-  if(isIndex) throw new Error('fund_manual');
+  if(isIndex){
+    // 投信モード：Cloudflare Worker経由でminkabu取得
+    const res = await fetch(`${STOCK_PROXY}?fund=${encodeURIComponent(query.fundName)}&units=${query.units}`, {signal: AbortSignal.timeout(15000)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d = await res.json();
+    if(d.error) throw new Error(d.error);
+    return d;
+  }
   const res = await fetch(`${STOCK_PROXY}?ticker=${encodeURIComponent(query)}`, {signal: AbortSignal.timeout(12000)});
   if(!res.ok) throw new Error('HTTP '+res.status);
   const d = await res.json();
@@ -1253,8 +1260,17 @@ async function amTestTicker(){
   // インデックスファンドモード
   if(!ticker && fundName){
     if(units<=0){preview.innerHTML='⚠️ 保有口数を入力してから「確認」を押してください';preview.style.color='var(--amber)';return;}
-    preview.innerHTML='<span style="color:var(--text3)">⚠️ 投資信託の基準価額は自動取得できません<br><span style="font-size:11px">証券会社アプリで評価額を確認し、上の「残高（円）」欄に直接入力してください<br>口数を登録しておくと次回手動更新が楽になります</span></span>';
-    preview.style.color='var(--text3)';
+    preview.innerHTML='<span style="color:var(--accent)">⏳ 基準価額を取得中...</span>';
+    const data=await amFetchIndexValue(fundName,units);
+    if(!data){
+      preview.innerHTML='❌ 取得失敗<br><span style="font-size:11px">ファンド名を正式名称で入力してください<br>例：「世界経済インデックスファンド」「eMAXIS Slim 全世界株式（オール・カントリー）」</span>';
+      preview.style.color='var(--danger)';return;
+    }
+    const sign=data.changePct>=0?'▲':'▼';
+    const col=data.changePct>=0?'#0f6e56':'#c0392b';
+    preview.innerHTML=`✅ <strong>${data.fundName}</strong><br>基準価額 ¥${Math.round(data.nav).toLocaleString()} × ${Number(units).toLocaleString()}口 ÷ 10,000 = <strong>¥${Math.round(data.totalValue).toLocaleString()}</strong>　<span style="color:${col}">${sign}${Math.abs(data.changePct).toFixed(2)}%</span>`;
+    preview.style.color='var(--text)';
+    document.getElementById('fAmount').value=Math.round(data.totalValue);
     return;
   }
 
@@ -1278,9 +1294,11 @@ async function amTestTicker(){
 }
 
 async function amUpdateAllPrices(){
-  // 株式（ticker+shares）のみ自動更新対象。投信は手動入力
-  const targets=amAccounts.filter(a=>a.ticker&&a.shares>0);
-  if(!targets.length){showToast('ティッカーと株数が設定された口座がありません。口座を編集してティッカー・株数を設定してください。',4000);return;}
+  // 株式（ticker+shares）と投信（fundName+units）両方対象
+  const stockTargets=amAccounts.filter(a=>a.ticker&&a.shares>0);
+  const fundTargets=amAccounts.filter(a=>!a.ticker&&a.fundName&&a.units>0);
+  const targets=[...stockTargets,...fundTargets];
+  if(!targets.length){showToast('更新対象がありません。口座を編集してティッカー（株式）またはファンド名＋口数（投信）を設定してください。',5000);return;}
   const btn=document.getElementById('amStockRefreshBtn');
   const icon=document.getElementById('amRefreshIcon');
   const text=document.getElementById('amRefreshText');
@@ -1293,7 +1311,8 @@ async function amUpdateAllPrices(){
     const idx=amAccounts.findIndex(a=>a.id===item.id);
     if(idx<0){failed++;continue;}
     const ts=new Date().toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const data=await amFetchPrice(item.ticker);
+    const data=item.ticker ? await amFetchPrice(item.ticker) : null;
+    const fundData=(!item.ticker&&item.fundName&&item.units>0) ? await amFetchIndexValue(item.fundName,item.units) : null;
     if(data){
       const rate=data.currency==='JPY'?1:usdJpy;
       const priceJPY=data.price*rate;
@@ -1301,6 +1320,13 @@ async function amUpdateAllPrices(){
       amAccounts[idx].lastPrice=Math.round(priceJPY);
       amAccounts[idx].lastPriceChange=data.changePct;
       amAccounts[idx].lastUpdated=ts;
+      amAccounts[idx].updated=todayStr();
+      updated++;
+    }else if(fundData){
+      amAccounts[idx].amount=Math.round(fundData.totalValue);
+      amAccounts[idx].lastPrice=Math.round(fundData.nav);
+      amAccounts[idx].lastPriceChange=fundData.changePct;
+      amAccounts[idx].lastUpdated=ts+(fundData.navDate?' ('+fundData.navDate+')':'');
       amAccounts[idx].updated=todayStr();
       updated++;
     }else{failed++;}
