@@ -1309,12 +1309,13 @@ async function amUpdateAllPrices(){
   const text=document.getElementById('amRefreshText');
   btn.disabled=true;icon.textContent='⏳';
   let updated=0,failed=0;
+  const failedNames=[];
   const usdJpy=await amGetUSDJPY();
   for(let i=0;i<targets.length;i++){
     const item=targets[i];
     text.textContent=`更新中... (${i+1}/${targets.length}) ${item.name.slice(0,14)}`;
     const idx=amAccounts.findIndex(a=>a.id===item.id);
-    if(idx<0){failed++;continue;}
+    if(idx<0){failed++;failedNames.push(item.name);continue;}
     const ts=new Date().toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     const data=item.ticker ? await amFetchPrice(item.ticker) : null;
     const fundData=(!item.ticker&&item.fundName&&item.units>0) ? await amFetchIndexValue(item.fundName,item.units) : null;
@@ -1334,14 +1335,26 @@ async function amUpdateAllPrices(){
       amAccounts[idx].lastUpdated=ts+(fundData.navDate?' ('+fundData.navDate+')':'');
       amAccounts[idx].updated=todayStr();
       updated++;
-    }else{failed++;}
+    }else{
+      failed++;
+      failedNames.push(item.name);
+    }
     await new Promise(r=>setTimeout(r,300));
   }
   amSaveToLocal();
   btn.disabled=false;icon.textContent='🔄';text.textContent='価格を一括更新（株式・投信）';
   const now=new Date().toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-  document.getElementById('amLastUpdate').textContent=`最終更新: ${now}　✅ ${updated}件${failed>0?'　❌ '+failed+'件失敗':''}`;
-  showToast(`✓ ${updated}件の評価額を更新しました${failed>0?' ('+failed+'件失敗)':''}`,3000);
+  const lastUpdateEl=document.getElementById('amLastUpdate');
+  if(failed>0){
+    lastUpdateEl.innerHTML=`最終更新: ${now}　✅ ${updated}件${failed>0?`　❌ ${failed}件失敗`:''}
+      <div style="margin-top:6px;padding:8px 10px;background:rgba(192,57,43,0.08);border-radius:8px;text-align:left">
+        <div style="font-size:11px;color:var(--danger);font-weight:600;margin-bottom:4px">❌ 取得失敗した銘柄：</div>
+        ${failedNames.map(n=>`<div style="font-size:11px;color:var(--text2);padding:2px 0">・${n}</div>`).join('')}
+      </div>`;
+  }else{
+    lastUpdateEl.textContent=`最終更新: ${now}　✅ ${updated}件更新`;
+  }
+  showToast(`✓ ${updated}件更新${failed>0?' / ❌'+failed+'件失敗':''}`,3000);
   amRender();refreshHome();
 }
 
