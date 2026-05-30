@@ -601,11 +601,15 @@ tr:last-child td{border-bottom:none}
       <button class="filter-btn" data-f="3m" onclick="setFilter('3m')">3ヶ月</button>
     </div>
     <div class="card" id="lineCard" style="display:none"><div class="card-head"><h2>総資産推移</h2></div><div class="chart-container"><canvas id="lineChart"></canvas></div></div>
+    <div class="card" id="compareCard" style="display:none">
+      <div class="card-head"><h2>📊 期間比較・増減分析</h2></div>
+      <div id="compareBody" style="padding:0 0 8px"></div>
+    </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>証券・投資 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
     <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div></div>
     <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
-    <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前月比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
+    <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前回比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
     <div style="display:none;margin-bottom:12px" id="exportBar">
       <button class="btn-accent" style="width:100%;border-radius:10px;padding:12px" onclick="exportAllCSV()">↓ 全期間データをCSVで書き出し（バックアップ）</button>
     </div>
@@ -1762,11 +1766,96 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','barCard','donutCard','securitiesCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','barCard','donutCard','securitiesCard','pensionCard','commentCard','tableCard','compareCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();renderCompare();}
+}
+
+function renderCompare(){
+  const el=document.getElementById('compareBody');
+  if(snapshots.length<2){el.innerHTML='<div style="padding:16px;color:var(--text3);font-size:13px">データが2件以上になると比較が表示されます。</div>';return;}
+  const latest=snapshots[snapshots.length-1];
+
+  // 比較対象を探す
+  function findSnapshot(targetDate){
+    // targetDateに最も近いスナップショットを返す
+    return snapshots.slice(0,-1).reduce((best,s)=>{
+      const d=Math.abs(new Date(s.date)-new Date(targetDate));
+      const bd=Math.abs(new Date(best.date)-new Date(targetDate));
+      return d<bd?s:best;
+    },snapshots[0]);
+  }
+
+  const latestDate=new Date(latest.date);
+  const prevMonthDate=new Date(latestDate);prevMonthDate.setMonth(prevMonthDate.getMonth()-1);
+  const yearAgoDate=new Date(latestDate);yearAgoDate.setFullYear(yearAgoDate.getFullYear()-1);
+
+  const prevSnap=snapshots[snapshots.length-2]; // 前回
+  const monthSnap=findSnapshot(prevMonthDate.toISOString().slice(0,10)); // 前月
+  const yearSnap=findSnapshot(yearAgoDate.toISOString().slice(0,10)); // 1年前
+
+  function diffSection(label, snap){
+    if(!snap||snap.date===latest.date)return'';
+    const diff=latest.total-snap.total;
+    const pct=snap.total>0?diff/snap.total*100:0;
+    const col=diff>=0?'var(--green)':'var(--danger)';
+    const sign=diff>=0?'＋':'';
+
+    // カテゴリ別増減
+    const allCats=[...new Set([...Object.keys(latest.cats),...Object.keys(snap.cats)])];
+    const catRows=allCats.map(cat=>{
+      const d=(latest.cats[cat]||0)-(snap.cats[cat]||0);
+      return{cat,diff:d};
+    }).filter(c=>Math.abs(c.diff)>1000).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+
+    // 口座別増減（accountsがある場合）
+    let accountRows=[];
+    if(latest.accounts&&snap.accounts){
+      const allNames=[...new Set([...latest.accounts.map(a=>a.name),...snap.accounts.map(a=>a.name)])];
+      accountRows=allNames.map(name=>{
+        const la=latest.accounts.find(a=>a.name===name);
+        const sa=snap.accounts.find(a=>a.name===name);
+        const lv=la?la.amount:0,sv=sa?sa.amount:0;
+        return{name,cat:la?.cat||sa?.cat||'',diff:lv-sv,isNew:!sa,isGone:!la};
+      }).filter(a=>Math.abs(a.diff)>1000||a.isNew||a.isGone).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,10);
+    }
+
+    const catHtml=catRows.map(c=>{
+      const col=c.diff>=0?'var(--green)':'var(--danger)';
+      const sign=c.diff>=0?'＋':'';
+      return`<div style="display:flex;justify-content:space-between;padding:6px 16px;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--text2)">${c.cat}</span><span style="color:${col};font-weight:600;font-variant-numeric:tabular-nums">${sign}${Math.round(c.diff).toLocaleString()}円</span></div>`;
+    }).join('');
+
+    const acctHtml=accountRows.map(a=>{
+      const col=a.isNew?'var(--accent)':a.isGone?'var(--text3)':a.diff>=0?'var(--green)':'var(--danger)';
+      const sign=a.diff>=0?'＋':'';
+      const tag=a.isNew?'<span style="font-size:10px;background:rgba(24,95,165,0.1);color:var(--accent);border-radius:4px;padding:1px 5px;margin-left:4px">NEW</span>':a.isGone?'<span style="font-size:10px;background:var(--bg2);color:var(--text3);border-radius:4px;padding:1px 5px;margin-left:4px">消滅</span>':'';
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 16px;border-bottom:0.5px solid var(--border);font-size:12px"><span style="color:var(--text2);flex:1">${a.name}${tag}<br><span style="font-size:10px;color:var(--text3)">${a.cat}</span></span><span style="color:${col};font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${a.isGone?'消滅':sign+Math.round(a.diff).toLocaleString()+'円'}</span></div>`;
+    }).join('');
+
+    return`<div style="margin-bottom:4px">
+      <div style="padding:12px 16px 8px;background:var(--bg2);border-bottom:0.5px solid var(--border)">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${label}（${snap.date}）との比較</div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font-size:20px;font-weight:700;color:${col}">${sign}${Math.round(diff).toLocaleString()}円</span>
+          <span style="font-size:13px;color:${col}">${sign}${pct.toFixed(1)}%</span>
+        </div>
+      </div>
+      ${catHtml?`<div style="padding:8px 16px 4px;font-size:11px;color:var(--text3);font-weight:600">カテゴリ別</div>${catHtml}`:''}
+      ${acctHtml?`<div style="padding:8px 16px 4px;font-size:11px;color:var(--text3);font-weight:600">口座・銘柄別（上位10件）</div>${acctHtml}`:''}
+    </div>`;
+  }
+
+  el.innerHTML=`
+    <div style="padding:10px 16px;font-size:12px;color:var(--text3)">最新: ${latest.date} ／ 総資産 ${trFmt(latest.total)}</div>
+    <div style="border-top:0.5px solid var(--border)">
+      ${diffSection('前回',prevSnap)}
+      ${monthSnap&&monthSnap.date!==prevSnap.date?diffSection('前月',monthSnap):''}
+      ${yearSnap&&yearSnap.date!==prevSnap.date&&yearSnap.date!==monthSnap?.date?diffSection('1年前',yearSnap):''}
+    </div>
+  `;
 }
 function trRenderFileList(){
   document.getElementById('fileList').innerHTML=snapshots.map(s=>`<div class="file-item"><div><div class="fname">📄 ${s.filename}</div><div class="fmeta">${s.date} ・ ${trFmt(s.total)}</div></div><button class="file-del" onclick="removeSnapshot('${s.date}')">✕</button></div>`).join('');
