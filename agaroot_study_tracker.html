@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アガルート学習トラッカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f2ed; --surface: #fffefb; --border: #e0dbd3;
+  --text: #1a1814; --muted: #7a756e; --accent: #2d4a3e;
+}
+body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 0 0 80px; }
+
+header { background: var(--accent); color: #fff; padding: 18px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.header-inner { max-width: 920px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.header-title { font-size: 17px; font-weight: 700; flex: 1; }
+.header-sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+.total-progress { display: flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 12px; }
+.total-bar-wrap { width: 90px; height: 5px; background: rgba(255,255,255,0.2); border-radius: 100px; overflow: hidden; }
+.total-bar-fill { height: 100%; background: #7ecba8; border-radius: 100px; transition: width 0.4s; }
+.total-label { opacity: 0.85; white-space: nowrap; }
+.reset-btn { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.8); font-family: 'Noto Sans JP', sans-serif; font-size: 11px; padding: 4px 10px; border-radius: 100px; cursor: pointer; }
+
+main { max-width: 920px; margin: 0 auto; padding: 20px 14px 0; }
+
+.week-banner { border-radius: 14px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.week-banner.on-track { background: #e8f0ee; color: #1e3d32; }
+.week-banner.behind { background: #fde8d8; color: #7a2e10; }
+.week-banner.ahead { background: #e8ecf5; color: #1e2a45; }
+.week-banner-icon { font-size: 28px; }
+.week-banner-body { flex: 1; }
+.week-banner-title { font-size: 15px; font-weight: 700; }
+.week-banner-sub { font-size: 11px; margin-top: 3px; opacity: 0.8; }
+.week-pct-big { font-family: 'DM Mono', monospace; font-size: 26px; font-weight: 700; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+.tab { display: flex; align-items: center; gap: 5px; padding: 7px 13px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s; }
+.tab:hover { border-color: var(--accent); color: var(--text); }
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tab-count { font-family: 'DM Mono', monospace; font-size: 10px; opacity: 0.75; }
+.tab-icon { font-size: 14px; }
+
+.section { display: none; }
+.section.visible { display: block; }
+
+.section-hero { border-radius: 14px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+.hero-weekly { background: #e8ecf5; color: #1e2a45; }
+.hero-chosashi { background: #ece8f0; color: #2e1e40; }
+.hero-ryosoku { background: #e8f0ee; color: #1e3d32; }
+.hero-schedule { background: #f0ede5; color: #3d3520; }
+.section-icon { font-size: 24px; }
+.section-prog-wrap { flex: 1; }
+.section-title { font-size: 16px; font-weight: 700; }
+.section-prog-bar { height: 7px; background: rgba(0,0,0,0.1); border-radius: 100px; overflow: hidden; margin-top: 5px; }
+.section-prog-fill { height: 100%; border-radius: 100px; transition: width 0.4s; }
+.section-prog-text { font-size: 11px; opacity: 0.75; font-family: 'DM Mono', monospace; }
+
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.cat-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden; transition: box-shadow 0.2s; }
+.cat-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+.cat-header { display: flex; align-items: center; gap: 7px; padding: 9px 13px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; background: #faf9f6; }
+.cat-header-icon { font-size: 14px; }
+.cat-count { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); font-weight: 400; }
+.cat-items { padding: 6px; }
+
+.item { display: flex; align-items: flex-start; gap: 9px; padding: 7px 9px; border-radius: 8px; cursor: pointer; transition: background 0.15s; user-select: none; }
+.item:hover { background: #f5f2ed; }
+.item.checked { background: #f0f7f4; }
+.checkbox { width: 18px; height: 18px; min-width: 18px; border: 2px solid #c8c3bc; border-radius: 5px; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+.item.checked .checkbox { background: var(--accent); border-color: var(--accent); }
+.checkmark { display: none; }
+.item.checked .checkmark { display: block; }
+.checkmark svg { display: block; }
+.item-body { flex: 1; }
+.item-name { font-size: 12px; font-weight: 500; line-height: 1.4; color: var(--text); }
+.item.checked .item-name { text-decoration: line-through; color: var(--muted); }
+.item-meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+.badge-tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; margin-top: 3px; }
+.badge-open { background: #e8f0ee; color: #1e3d32; }
+.badge-wait { background: #f0ede5; color: #3d3520; }
+.badge-key  { background: #fde8d8; color: #7a2e10; }
+
+.cat-progress { display: flex; align-items: center; gap: 7px; padding: 4px 13px 9px; }
+.mini-bar { flex: 1; height: 3px; background: var(--border); border-radius: 100px; overflow: hidden; }
+.mini-bar-fill { height: 100%; border-radius: 100px; transition: width 0.4s; }
+.mini-pct { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); min-width: 26px; text-align: right; }
+
+/* 週間カレンダー */
+.weekly-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 14px; }
+.day-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 7px 3px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.day-card:hover { border-color: var(--accent); }
+.day-card.done { background: #e8f0ee; border-color: #3d8c6e; }
+.day-card.today { border-color: var(--accent); border-width: 2px; }
+.day-name { font-size: 9px; color: var(--muted); font-weight: 500; }
+.day-num { font-size: 14px; font-weight: 700; margin: 2px 0; font-family: 'DM Mono', monospace; }
+.day-check { font-size: 14px; }
+.day-card.done .day-check::after { content: '✅'; }
+.day-card:not(.done) .day-check::after { content: '⬜'; }
+
+/* 学習ログ */
+.study-log { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.study-log h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+.log-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
+.log-label { font-size: 11px; color: var(--muted); min-width: 70px; }
+.log-input { flex: 1; min-width: 100px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 7px; padding: 5px 9px; font-size: 12px; font-family: 'Noto Sans JP', sans-serif; color: var(--text); }
+.log-input:focus { outline: none; border-color: var(--accent); }
+.log-btn { background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 100px; font-family: 'Noto Sans JP', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; }
+.log-history { margin-top: 10px; }
+.log-entry { display: flex; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 7px; background: var(--bg); margin-bottom: 4px; font-size: 11px; }
+.log-date { font-family: 'DM Mono', monospace; color: var(--muted); min-width: 65px; }
+.log-content { flex: 1; }
+.log-delete { color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 3px; }
+.log-delete:hover { color: #c0392b; }
+
+/* スケジュールタブ */
+.sched-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.sched-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden; }
+.sched-card-header { padding: 10px 14px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.sched-m1 { background: #e8f0ee; color: #1e3d32; }
+.sched-m2 { background: #ece8f0; color: #2e1e40; }
+.sched-m3 { background: #e8ecf5; color: #1e2a45; }
+.sched-m4 { background: #f0ede5; color: #3d3520; }
+.sched-m5 { background: #f0e8ea; color: #401e24; }
+.sched-m6 { background: #e8f5f0; color: #0f3d2a; }
+.sched-body { padding: 10px 14px; }
+.sched-week { margin-bottom: 10px; }
+.sched-week-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+.sched-item { display: flex; align-items: flex-start; gap: 7px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.sched-item:last-child { border-bottom: none; }
+.sched-dot { width: 6px; height: 6px; min-width: 6px; border-radius: 50%; margin-top: 5px; }
+.dot-chosashi { background: #7052a8; }
+.dot-ryosoku  { background: #3d8c6e; }
+.dot-other    { background: #b07d2e; }
+.sched-text { font-size: 11.5px; line-height: 1.5; }
+.sched-sub { font-size: 10px; color: var(--muted); }
+
+.celebrate { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999; align-items: center; justify-content: center; }
+.celebrate.show { display: flex; }
+.celebrate-card { background: var(--surface); border-radius: 20px; padding: 32px 24px; text-align: center; max-width: 280px; }
+.celebrate-emoji { font-size: 40px; margin-bottom: 12px; }
+.celebrate-title { font-size: 18px; font-weight: 700; margin-bottom: 7px; }
+.celebrate-sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+.celebrate-btn { background: var(--accent); color: #fff; border: none; padding: 9px 22px; border-radius: 100px; font-family: 'Noto Sans JP', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-title">📚 アガルート 学習トラッカー</div>
+      <div class="header-sub">土地家屋調査士・測量士補 2027年合格目標</div>
+    </div>
+    <div class="total-progress">
+      <div class="total-bar-wrap"><div class="total-bar-fill" id="totalFill" style="width:0%"></div></div>
+      <span class="total-label" id="totalLabel">0 / 0</span>
+    </div>
+    <button class="reset-btn" onclick="resetAll()">リセット</button>
+  </div>
+</header>
+
+<main>
+  <div id="weekBanner" class="week-banner on-track">
+    <div class="week-banner-icon" id="bannerIcon">📖</div>
+    <div class="week-banner-body">
+      <div class="week-banner-title" id="bannerTitle">学習スケジュール確認中...</div>
+      <div class="week-banner-sub" id="bannerSub">今週の進捗を確認してください</div>
+    </div>
+    <div class="week-pct-big" id="bannerPct">--%</div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="sections"></div>
+</main>
+
+<div class="celebrate" id="celebrate">
+  <div class="celebrate-card">
+    <div class="celebrate-emoji">🎓</div>
+    <div class="celebrate-title">フェーズ完了！</div>
+    <div class="celebrate-sub">素晴らしい！次のフェーズに進みましょう。</div>
+    <button class="celebrate-btn" onclick="document.getElementById('celebrate').classList.remove('show')">次へ</button>
+  </div>
+</div>
+
+<script>
+// ===== スケジュールデータ =====
+const SCHEDULE = [
+  {
+    period: '2026年6月', cls: 'sched-m1', icon: '📖',
+    weeks: [
+      { title: '6月1〜14日（講義公開前）', items: [
+        { text: '導入講義（公開分）を全て視聴', sub: '試験全体像と学習の進め方を把握', cat: 'chosashi' },
+        { text: '土地家屋調査士法（17章）視聴完了', sub: '最初の科目。短期で完了を目指す', cat: 'chosashi' },
+        { text: 'TOKERUKUNアプリを使い始める', sub: 'スマホで隙間時間に択一演習', cat: 'chosashi' },
+      ]},
+      { title: '6月15日〜（測量士補公開！）', items: [
+        { text: '★測量士補 講義スタート（6/15公開）', sub: 'マイページで確認して即視聴開始', cat: 'ryosoku' },
+        { text: '測量士補 第1章：測量法・基準点測量', sub: '1日1〜2章のペースで進める', cat: 'ryosoku' },
+        { text: '民法 第1章〜5章 視聴', sub: '測量士補と並行して進める', cat: 'chosashi' },
+      ]},
+    ]
+  },
+  {
+    period: '2026年7月', cls: 'sched-m2', icon: '📐',
+    weeks: [
+      { title: '7月前半', items: [
+        { text: '測量士補 地形測量・写真測量・GIS', sub: '計算問題は繰り返し練習', cat: 'ryosoku' },
+        { text: '民法 第6章〜15章 視聴（契約・不法行為）', sub: '不動産登記法の前提として重要', cat: 'chosashi' },
+        { text: 'TOKERUKUN 民法過去問を開始', sub: 'インプットしたらすぐ過去問', cat: 'chosashi' },
+      ]},
+      { title: '7月後半（退職前ラストスパート）', items: [
+        { text: '測量士補 応用測量・路線測量', sub: '計算問題の解き方を体得する', cat: 'ryosoku' },
+        { text: '民法 第16章〜30章 視聴（物権・担保）', sub: '担保物権は不動産登記法と直結', cat: 'chosashi' },
+        { text: '退職前に教習所の入所手続き完了', sub: '柏南 or MKA柏に問い合わせ', cat: 'other' },
+      ]},
+    ]
+  },
+  {
+    period: '2026年8〜9月', cls: 'sched-m3', icon: '🚁',
+    weeks: [
+      { title: '8月（有給消化・ドローン集中）', items: [
+        { text: 'ドローン二等国家資格 学科講習（10h）', sub: 'JDO柏校 or 流山IC校で受講', cat: 'other' },
+        { text: 'ドローン 実地講習（10h）受講', sub: 'スクールで実機操作を習得', cat: 'other' },
+        { text: '隙間時間：測量士補の過去問を進める', sub: 'TOKERUKUNで毎日10問以上', cat: 'ryosoku' },
+      ]},
+      { title: '9月（ドローン試験・転職準備）', items: [
+        { text: 'ドローン 指定試験機関 学科試験・受験', sub: 'DIPS2.0から事前申請が必要', cat: 'other' },
+        { text: '二等無人航空機操縦士 資格取得！', sub: '技能証明申請 → 証明書受取', cat: 'other' },
+        { text: '土地家屋調査士補助 求人リサーチ開始', sub: '「UAV測量」対応事務所を優先', cat: 'other' },
+        { text: '民法 全163章 視聴完了', sub: '9月末までに民法を終わらせる', cat: 'chosashi' },
+      ]},
+    ]
+  },
+  {
+    period: '2026年10〜12月', cls: 'sched-m4', icon: '🚗',
+    weeks: [
+      { title: '10月（合宿免許）', items: [
+        { text: '10/1 那須自動車学校 入校', sub: '合宿免許わかばで仮申込済', cat: 'other' },
+        { text: '合宿卒業 → 本免学科試験受験', sub: '幕張免許センターで受験', cat: 'other' },
+        { text: '不動産登記法 第1章〜30章 視聴開始', sub: '合宿後から本格インプット', cat: 'chosashi' },
+      ]},
+      { title: '11〜12月', items: [
+        { text: '測量士補 過去問 3周完了', sub: '合格ライン：28問中18問正解', cat: 'ryosoku' },
+        { text: '不動産登記法 第31章〜100章 視聴', sub: '毎日2〜3章ペースで継続', cat: 'chosashi' },
+        { text: '土地家屋調査士補助 転職活動・面接', sub: 'ドローン測量対応事務所に応募', cat: 'other' },
+      ]},
+    ]
+  },
+  {
+    period: '2027年1〜4月', cls: 'sched-m5', icon: '📝',
+    weeks: [
+      { title: '1月（測量士補 出願！）', items: [
+        { text: '★測量士補 願書提出（1月中旬）', sub: '提出期間を絶対に見逃さない！', cat: 'ryosoku' },
+        { text: '不動産登記法 全290章 視聴完了', sub: '1月末までに全インプット終了', cat: 'chosashi' },
+        { text: '定規の使い方講座 視聴完了', sub: '記述式に必須。図面作成の基本', cat: 'chosashi' },
+      ]},
+      { title: '2〜4月', items: [
+        { text: '測量士補 直前対策・模試', sub: '5月試験まで毎日過去問を回す', cat: 'ryosoku' },
+        { text: '中山式複素数計算 講座 完了', sub: '座標計算の最短ルートを習得', cat: 'chosashi' },
+        { text: '記述式過去問（土地・建物）開始', sub: 'TOKERUKUN＋テキストで演習', cat: 'chosashi' },
+      ]},
+    ]
+  },
+  {
+    period: '2027年5〜10月', cls: 'sched-m6', icon: '🏆',
+    weeks: [
+      { title: '5月（測量士補 本番！）', items: [
+        { text: '★測量士補 試験受験（5月）', sub: '合格で土地家屋調査士 午前免除確定！', cat: 'ryosoku' },
+        { text: '測量士補 合格発表を確認', sub: '合格証明書を取得し午前免除申請へ', cat: 'ryosoku' },
+      ]},
+      { title: '6〜9月（直前対策）', items: [
+        { text: '実践答練 3科目（民法・不登法・書式）', sub: '弱点の洗い出しと補強', cat: 'chosashi' },
+        { text: '記述式（土地・建物）仕上げ', sub: '時間内に正確に解ける精度まで', cat: 'chosashi' },
+        { text: '土地家屋調査士試験 願書提出（8月）', sub: '7〜8月提出。午前免除申請も忘れずに', cat: 'chosashi' },
+        { text: '直前予想模試 完了', sub: '本番1ヶ月前に総仕上げ', cat: 'chosashi' },
+      ]},
+      { title: '10月（本番！）', items: [
+        { text: '★土地家屋調査士 筆記試験（10月）', sub: '午前免除・午後の部のみで勝負！', cat: 'chosashi' },
+        { text: '合格発表（翌年1月）→ 口述試験', sub: '筆記合格後に口述試験（1月中旬）', cat: 'chosashi' },
+        { text: '🎓 土地家屋調査士 合格！', sub: 'アガルート全額返金特典の申請', cat: 'chosashi' },
+      ]},
+    ]
+  },
+];
+
+// ===== チェックリストデータ =====
+const PHASES = [
+  { id: 'weekly', label: '週次記録', icon: '📅', heroClass: 'hero-weekly', barColor: '#4a6db5', type: 'weekly' },
+  { id: 'schedule', label: '学習スケジュール', icon: '🗓', heroClass: 'hero-schedule', barColor: '#b07d2e', type: 'schedule' },
+  {
+    id: 'chosashi', label: '土地家屋調査士', icon: '📐', heroClass: 'hero-chosashi', barColor: '#7052a8',
+    categories: [
+      { name: '導入講義', icon: '🎯', items: [
+        { name: '導入講義（公開分）視聴完了', meta: '試験全体像・学習の進め方を把握', badge: 'open' },
+      ]},
+      { name: '入門総合講義', icon: '📖', items: [
+        { name: '土地家屋調査士法（17章）視聴完了', meta: '最初の科目。目安：1〜2日で完了', badge: 'open' },
+        { name: '民法（163章）視聴完了', meta: '不動産登記法の前提。目安：2〜3ヶ月', badge: 'open' },
+        { name: '不動産登記法（290章）視聴完了', meta: '試験の核心科目。目安：3〜4ヶ月', badge: 'open' },
+      ]},
+      { name: '過去問・演習', icon: '✏️', items: [
+        { name: 'TOKERUKUN 毎日起動習慣をつけた', meta: '隙間時間10分でも毎日続けることが大切', badge: 'open' },
+        { name: '民法 択一過去問 1周完了', meta: 'インプット後すぐ取り組む。目安：7月', badge: 'open' },
+        { name: '不動産登記法 択一過去問 1周完了', meta: '過去22年分。目安：2026年末〜2027年初', badge: 'open' },
+        { name: '定規の使い方講座 完了', meta: '記述式試験で必須。目安：2027年1月', badge: 'open' },
+        { name: '中山式複素数計算 完了', meta: '座標計算の最短ルート。目安：2027年2月', badge: 'open' },
+        { name: '記述式過去問（土地）開始', meta: '定規習得後に取り組む。目安：2027年2月', badge: 'open' },
+        { name: '記述式過去問（建物）開始', meta: '土地と並行して進める', badge: 'open' },
+      ]},
+      { name: '直前対策（2027年夏〜）', icon: '🔥', items: [
+        { name: '実践答練 3科目完了', meta: '弱点補強・時間配分の練習', badge: 'wait' },
+        { name: '直前予想模試 完了', meta: '本番1ヶ月前の総仕上げ', badge: 'wait' },
+        { name: '土地家屋調査士試験 願書提出（2027年8月）', meta: '午前免除申請も同時に行う', badge: 'key' },
+        { name: '★ 土地家屋調査士 筆記試験受験（2027年10月）', meta: '午後の部のみ。全ての準備の集大成', badge: 'key' },
+      ]},
+    ]
+  },
+  {
+    id: 'ryosoku', label: '測量士補', icon: '📏', heroClass: 'hero-ryosoku', barColor: '#3d8c6e',
+    categories: [
+      { name: '学習', icon: '📋', items: [
+        { name: '★ 測量士補 講義公開確認（6/15）', meta: 'アガルートマイページで確認', badge: 'key' },
+        { name: '測量士補 全講義視聴完了', meta: '6/15公開後すぐスタート。目安：8月末', badge: 'open' },
+        { name: '測量士補 過去問 1周完了', meta: 'TOKERUKUNで演習。目安：10月', badge: 'open' },
+        { name: '測量士補 過去問 3周完了', meta: '合格ライン：28問中18問。目安：2027年4月', badge: 'open' },
+      ]},
+      { name: '出願・試験（2027年）', icon: '📝', items: [
+        { name: '★ 測量士補 願書提出（2027年1月中旬）', meta: '提出期間を絶対に見逃さない！カレンダー登録必須', badge: 'key' },
+        { name: '測量士補 直前模試・総仕上げ', meta: '試験1ヶ月前から集中的に', badge: 'wait' },
+        { name: '★ 測量士補 試験受験（2027年5月）', meta: '合格で土地家屋調査士試験 午前免除確定！', badge: 'key' },
+        { name: '測量士補 合格！午前免除申請', meta: '合格証明書取得 → 土地家屋調査士願書と同時申請', badge: 'wait' },
+      ]},
+    ]
+  },
+];
+
+// ===== ストレージ =====
+const state = {};
+PHASES.filter(p => p.categories).forEach(p => {
+  p.categories.forEach((c, ci) => {
+    c.items.forEach((_, ii) => {
+      const k = `ag-${p.id}-${ci}-${ii}`;
+      try { state[k] = JSON.parse(localStorage.getItem(k) || 'false'); } catch { state[k] = false; }
+    });
+  });
+});
+function save(k) { try { localStorage.setItem(k, JSON.stringify(state[k])); } catch{} }
+
+// ===== 週次 =====
+function getWeekDays() {
+  const today = new Date(); const dow = today.getDay();
+  const mon = new Date(today); mon.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  return Array.from({length: 7}, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return d; });
+}
+function dateKey(d) { return `study-day-${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+function isDayDone(d) { try { return JSON.parse(localStorage.getItem(dateKey(d)) || 'false'); } catch { return false; } }
+function toggleDay(d) { const k = dateKey(d); try { localStorage.setItem(k, JSON.stringify(!isDayDone(d))); } catch {} buildWeekly(); updateBanner(); }
+function getWeekDoneCount() { return getWeekDays().filter(d => isDayDone(d)).length; }
+
+// ===== ログ =====
+function getLogs() { try { return JSON.parse(localStorage.getItem('study-logs') || '[]'); } catch { return []; } }
+function saveLogs(l) { try { localStorage.setItem('study-logs', JSON.stringify(l)); } catch {} }
+function addLog() {
+  const d = document.getElementById('logDate'), c = document.getElementById('logContent'), h = document.getElementById('logHours');
+  if (!d||!c) return;
+  if (!d.value || !c.value.trim()) { alert('日付と内容を入力してください'); return; }
+  const logs = getLogs(); logs.unshift({ id: Date.now(), date: d.value, content: c.value.trim(), hours: h.value||'1' });
+  saveLogs(logs.slice(0,50)); c.value = ''; renderLogs();
+}
+function deleteLog(id) { saveLogs(getLogs().filter(l => l.id !== id)); renderLogs(); }
+function renderLogs() {
+  const el = document.getElementById('logHistory'); if (!el) return;
+  const logs = getLogs();
+  el.innerHTML = logs.length === 0 ? '<div style="font-size:11px;color:var(--muted);padding:6px">まだ記録がありません</div>'
+    : logs.slice(0,15).map(l => `<div class="log-entry"><span class="log-date">${l.date}</span><span class="log-content">${l.content}（${l.hours}h）</span><span class="log-delete" onclick="deleteLog(${l.id})">✕</span></div>`).join('');
+}
+
+// ===== バナー =====
+function updateBanner() {
+  const done = getWeekDoneCount(), target = 5;
+  const pct = Math.round(done / target * 100);
+  const b = document.getElementById('weekBanner'), i = document.getElementById('bannerIcon');
+  const t = document.getElementById('bannerTitle'), s = document.getElementById('bannerSub'), p = document.getElementById('bannerPct');
+  p.textContent = Math.min(pct,100) + '%';
+  if (done >= target) { b.className='week-banner ahead'; i.textContent='🏆'; t.textContent='今週の目標達成！'; s.textContent=`週${done}日学習 — 素晴らしいペースです！`; }
+  else if (done >= 3) { b.className='week-banner on-track'; i.textContent='✅'; t.textContent='スケジュール通り'; s.textContent=`今週${done}日学習 — あと${target-done}日で週目標達成`; }
+  else if (done >= 1) { b.className='week-banner behind'; i.textContent='⚠️'; t.textContent='やや遅れ気味'; s.textContent=`今週${done}日学習 — 週5日ペースを目指しましょう`; }
+  else { b.className='week-banner behind'; i.textContent='📖'; t.textContent='今週はまだ学習記録なし'; s.textContent='今日から記録をつけてみましょう！'; }
+}
+
+// ===== 進捗 =====
+function getProgress(id) { const ks = Object.keys(state).filter(k=>k.startsWith(`ag-${id}-`)); return {done:ks.filter(k=>state[k]).length, total:ks.length}; }
+function getCatProg(id,ci) { const ks = Object.keys(state).filter(k=>k.startsWith(`ag-${id}-${ci}-`)); return {done:ks.filter(k=>state[k]).length, total:ks.length}; }
+function getTotalProg() { const ks = Object.keys(state); return {done:ks.filter(k=>state[k]).length, total:ks.length}; }
+function pct(d,t) { return t ? Math.round(d/t*100) : 0; }
+
+function updateAll() {
+  const tot = getTotalProg();
+  document.getElementById('totalFill').style.width = pct(tot.done,tot.total) + '%';
+  document.getElementById('totalLabel').textContent = `${tot.done} / ${tot.total}`;
+  PHASES.filter(p=>p.categories).forEach(p => {
+    const pg = getProgress(p.id);
+    const f = document.getElementById(`sfill-${p.id}`), tx = document.getElementById(`stext-${p.id}`);
+    if(f) f.style.width = pct(pg.done,pg.total)+'%';
+    if(tx) tx.textContent = `${pg.done} / ${pg.total} 完了`;
+    const tab = document.getElementById(`tab-${p.id}`);
+    if(tab){ const c=tab.querySelector('.tab-count'); if(c) c.textContent=`${pg.done}/${pg.total}`; }
+    p.categories.forEach((_,ci) => {
+      const cp=getCatProg(p.id,ci);
+      const mf=document.getElementById(`mfill-${p.id}-${ci}`), mp=document.getElementById(`mpct-${p.id}-${ci}`), cc=document.getElementById(`ccount-${p.id}-${ci}`);
+      if(mf) mf.style.width=pct(cp.done,cp.total)+'%';
+      if(mp) mp.textContent=pct(cp.done,cp.total)+'%';
+      if(cc) cc.textContent=`${cp.done}/${cp.total}`;
+    });
+  });
+}
+
+function toggle(k) {
+  state[k] = !state[k]; save(k);
+  document.querySelector(`[data-key="${k}"]`)?.classList.toggle('checked', state[k]);
+  updateAll();
+}
+
+// ===== 週間カレンダー =====
+function buildWeekly() {
+  const el = document.getElementById('weeklyCalendar'); if(!el) return;
+  const days = getWeekDays(), today = new Date();
+  const dn = ['月','火','水','木','金','土','日'];
+  el.innerHTML = days.map((d,i) => {
+    const isToday = d.toDateString()===today.toDateString(), done=isDayDone(d);
+    return `<div class="day-card ${done?'done':''} ${isToday?'today':''}" onclick="toggleDay(new Date(${d.getFullYear()},${d.getMonth()},${d.getDate()}))">
+      <div class="day-name">${dn[i]}</div><div class="day-num">${d.getDate()}</div><div class="day-check"></div></div>`;
+  }).join('');
+  const ld = document.getElementById('logDate');
+  if(ld && !ld.value){ const t=new Date(); ld.value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
+}
+
+// ===== UI構築 =====
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('visible'));
+  document.getElementById(`tab-${id}`)?.classList.add('active');
+  document.getElementById(`sec-${id}`)?.classList.add('visible');
+}
+
+function buildScheduleSection() {
+  const catMap = { chosashi: 'dot-chosashi', ryosoku: 'dot-ryosoku', other: 'dot-other' };
+  return `
+    <div class="section-hero hero-schedule">
+      <div class="section-icon">🗓</div>
+      <div class="section-prog-wrap">
+        <div class="section-title">月別おすすめ学習スケジュール</div>
+        <div class="section-prog-text">各月の学習内容の目安です。参考にして進めてください</div>
+      </div>
+    </div>
+    <div class="sched-grid">
+      ${SCHEDULE.map(m => `
+        <div class="sched-card">
+          <div class="sched-card-header ${m.cls}">${m.icon} ${m.period}</div>
+          <div class="sched-body">
+            ${m.weeks.map(w => `
+              <div class="sched-week">
+                <div class="sched-week-title">${w.title}</div>
+                ${w.items.map(item => `
+                  <div class="sched-item">
+                    <div class="sched-dot ${catMap[item.cat] || 'dot-other'}"></div>
+                    <div>
+                      <div class="sched-text">${item.text}</div>
+                      <div class="sched-sub">${item.sub}</div>
+                    </div>
+                  </div>`).join('')}
+              </div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);padding:4px 2px;display:flex;gap:14px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7052a8;margin-right:4px;vertical-align:middle"></span>土地家屋調査士</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3d8c6e;margin-right:4px;vertical-align:middle"></span>測量士補</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#b07d2e;margin-right:4px;vertical-align:middle"></span>その他（免許・ドローン等）</span>
+    </div>`;
+}
+
+function buildUI() {
+  const tabsEl = document.getElementById('tabs'), secsEl = document.getElementById('sections');
+  PHASES.forEach((p, pi) => {
+    const pg = p.categories ? getProgress(p.id) : {done:0,total:0};
+    const tab = document.createElement('button');
+    tab.className = 'tab' + (pi===0?' active':'');
+    tab.id = `tab-${p.id}`; tab.onclick = () => switchTab(p.id);
+    const cnt = p.categories ? `<span class="tab-count">${pg.done}/${pg.total}</span>` : '';
+    tab.innerHTML = `<span class="tab-icon">${p.icon}</span>${p.label}${cnt}`;
+    tabsEl.appendChild(tab);
+
+    const sec = document.createElement('div');
+    sec.className = 'section' + (pi===0?' visible':'');
+    sec.id = `sec-${p.id}`;
+
+    if (p.type === 'weekly') {
+      sec.innerHTML = `
+        <div class="section-hero hero-weekly"><div class="section-icon">📅</div>
+          <div class="section-prog-wrap"><div class="section-title">今週の学習記録</div>
+            <div class="section-prog-text">学習した日をタップしてチェック（週5日目標）</div></div></div>
+        <div class="weekly-grid" id="weeklyCalendar"></div>
+        <div class="study-log">
+          <h3>📝 学習メモを記録</h3>
+          <div class="log-row"><span class="log-label">日付</span><input type="date" id="logDate" class="log-input" style="max-width:140px"></div>
+          <div class="log-row"><span class="log-label">学習内容</span><input type="text" id="logContent" class="log-input" placeholder="例：土地家屋調査士法 1〜5章視聴"></div>
+          <div class="log-row"><span class="log-label">時間（h）</span><input type="number" id="logHours" class="log-input" style="max-width:70px" value="1" min="0.5" step="0.5"><button class="log-btn" onclick="addLog()">記録する</button></div>
+          <div class="log-history" id="logHistory"></div>
+        </div>`;
+    } else if (p.type === 'schedule') {
+      sec.innerHTML = buildScheduleSection();
+    } else {
+      const badgeMap = { open:['badge-open','受講可'], wait:['badge-wait','後半以降'], key:['badge-key','重要'] };
+      sec.innerHTML = `
+        <div class="section-hero ${p.heroClass}">
+          <div class="section-icon">${p.icon}</div>
+          <div class="section-prog-wrap">
+            <div class="section-title">${p.label}</div>
+            <div class="section-prog-text" id="stext-${p.id}">${pg.done} / ${pg.total} 完了</div>
+            <div class="section-prog-bar"><div class="section-prog-fill" id="sfill-${p.id}" style="width:${pct(pg.done,pg.total)}%;background:${p.barColor};"></div></div>
+          </div>
+        </div>
+        <div class="cat-grid">
+          ${p.categories.map((cat,ci) => {
+            const cp = getCatProg(p.id,ci);
+            return `<div class="cat-card">
+              <div class="cat-header"><span class="cat-header-icon">${cat.icon}</span>${cat.name}<span class="cat-count" id="ccount-${p.id}-${ci}">${cp.done}/${cp.total}</span></div>
+              <div class="cat-items">
+                ${cat.items.map((item,ii) => {
+                  const k=`ag-${p.id}-${ci}-${ii}`, checked=state[k];
+                  const [bc,bt]=badgeMap[item.badge]||['badge-open',''];
+                  return `<div class="item ${checked?'checked':''}" data-key="${k}" onclick="toggle('${k}')">
+                    <div class="checkbox"><span class="checkmark"><svg width="10" height="8" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7.5L10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                    <div class="item-body"><div class="item-name">${item.name}</div><div class="item-meta">${item.meta}</div><span class="badge-tag ${bc}">${bt}</span></div>
+                  </div>`;
+                }).join('')}
+              </div>
+              <div class="cat-progress"><div class="mini-bar"><div class="mini-bar-fill" id="mfill-${p.id}-${ci}" style="width:${pct(cp.done,cp.total)}%;background:${p.barColor};"></div></div><span class="mini-pct" id="mpct-${p.id}-${ci}">${pct(cp.done,cp.total)}%</span></div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+    secsEl.appendChild(sec);
+  });
+  buildWeekly(); renderLogs(); updateBanner();
+}
+
+function resetAll() {
+  if (!confirm('すべての記録をリセットしますか？')) return;
+  Object.keys(state).forEach(k => { state[k]=false; try{localStorage.removeItem(k);}catch{} });
+  try{localStorage.removeItem('study-logs');}catch{}
+  getWeekDays().forEach(d => { try{localStorage.removeItem(dateKey(d));}catch{} });
+  document.querySelectorAll('.item').forEach(el=>el.classList.remove('checked'));
+  updateAll(); buildWeekly(); renderLogs(); updateBanner();
+}
+
+buildUI(); updateAll();
+</script>
+</body>
+</html>
