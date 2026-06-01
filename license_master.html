@@ -221,6 +221,7 @@ svg { font-family: 'DM Mono', monospace; }
     <div class="header-badges">
       <span class="hbadge" id="hTotalH">0h / 1000h</span>
       <span class="hbadge" id="hTodo">TODO 0/0</span>
+      <span class="hbadge" id="syncStatus">☁️ 接続中...</span>
     </div>
     <button class="reset-btn-sm" onclick="resetAll()">リセット</button>
   </div>
@@ -308,9 +309,93 @@ function pct(d,t) { return t ? Math.round(d/t*100) : 0; }
 function getWeekKey(ds) { const d=new Date(ds),dow=d.getDay(),m=new Date(d); m.setDate(d.getDate()-(dow===0?6:dow-1)); return fmtDate(m); }
 function getWeekLabel(ds) { const d=new Date(ds); return `${d.getMonth()+1}/${d.getDate()}週`; }
 
+// ============================================================
+// ===== クラウド同期（Google Apps Script）=====
+// ============================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw-HiU1Tc_hxJkjwRYkDclGMeaptUHF4724Q-4F0VSLlN0Cj6zCBe4cbZbYrkqF_Lr6/exec';
+
+// ローカルキャッシュ（高速表示用）
+const cache = {};
+
+async function cloudGet(key) {
+  // まずキャッシュを返す
+  if (cache[key] !== undefined) return cache[key];
+  // ローカルストレージのフォールバック
+  try { const v = localStorage.getItem(key); if(v) { cache[key]=JSON.parse(v); return cache[key]; } } catch{}
+  return null;
+}
+
+async function cloudSet(key, value) {
+  // キャッシュ＆ローカル即時更新
+  cache[key] = value;
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch{}
+  // バックグラウンドでGASに保存
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({key, value: JSON.stringify(value)})
+    });
+  } catch(e) { console.warn('GAS sync failed:', e); }
+}
+
+async function cloudRemove(key) {
+  delete cache[key];
+  try { localStorage.removeItem(key); } catch{}
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({key, value: '__DELETE__'})
+    });
+  } catch(e) { console.warn('GAS sync failed:', e); }
+}
+
+// 起動時にGASから全データを取得してキャッシュに反映
+async function syncFromCloud() {
+  showSyncStatus('☁️ 同期中...');
+  try {
+    const res = await fetch(`${GAS_URL}?key=__ALL__`);
+    const data = await res.json();
+    if (data && data.all) {
+      data.all.forEach(row => {
+        if (row.value === '__DELETE__') { delete cache[row.key]; try{localStorage.removeItem(row.key);}catch{} }
+        else {
+          try {
+            const v = JSON.parse(row.value);
+            cache[row.key] = v;
+            try{localStorage.setItem(row.key, row.value);}catch{}
+          } catch{}
+        }
+      });
+    }
+    showSyncStatus('✅ 同期完了');
+    setTimeout(()=>showSyncStatus(''),2000);
+    // UI再描画
+    loadAllState();
+    renderDashboard();
+    buildWeekly();
+    updateBanner();
+    updateTodoTabs();
+    updateTodoHeader();
+    updateAgTabs();
+  } catch(e) {
+    showSyncStatus('⚠️ オフライン（ローカル表示）');
+    setTimeout(()=>showSyncStatus(''),3000);
+  }
+}
+
+function showSyncStatus(msg) {
+  let el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.textContent = msg;
+}
+
 // ===== ログストレージ =====
-function getLogs() { try{return JSON.parse(localStorage.getItem('study-logs-v2')||'[]');}catch{return[];} }
-function saveLogs(l) { try{localStorage.setItem('study-logs-v2',JSON.stringify(l));}catch{} }
+function getLogs() {
+  const v = cache['study-logs-v2'];
+  if (v !== undefined) return Array.isArray(v) ? v : [];
+  try{ const ls=localStorage.getItem('study-logs-v2'); return ls?JSON.parse(ls):[]; }catch{return[];}
+}
+function saveLogs(l) { cloudSet('study-logs-v2', l); }
 
 // ===== 週カレンダー共通 =====
 function getWeekDays() {
@@ -318,9 +403,34 @@ function getWeekDays() {
   return Array.from({length:7},(_,i)=>{const d=new Date(m);d.setDate(m.getDate()+i);return d;});
 }
 function dateKey(d) { return `study-day-${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
-function isDayDone(d) { try{return JSON.parse(localStorage.getItem(dateKey(d))||'false');}catch{return false;} }
-function toggleDay(d) { try{localStorage.setItem(dateKey(d),JSON.stringify(!isDayDone(d)));}catch{} buildWeekly(); updateBanner(); }
+function isDayDone(d) {
+  const v = cache[dateKey(d)];
+  if (v !== undefined) return !!v;
+  try{return JSON.parse(localStorage.getItem(dateKey(d))||'false');}catch{return false;}
+}
+function toggleDay(d) {
+  const newVal = !isDayDone(d);
+  cloudSet(dateKey(d), newVal);
+  cache[dateKey(d)] = newVal;
+  buildWeekly(); updateBanner();
+}
 function getWeekDoneCount() { return getWeekDays().filter(d=>isDayDone(d)).length; }
+
+// 全stateをキャッシュから再ロード
+function loadAllState() {
+  PHASES.filter(p=>p.categories).forEach(p=>{
+    p.categories.forEach((c,ci)=>c.items.forEach((_,ii)=>{
+      const k=`ag-${p.id}-${ci}-${ii}`;
+      const v=cache[k];
+      agState[k]=(v!==undefined)?!!v:false;
+    }));
+  });
+  TODO_DATA.forEach(s=>s.categories.forEach((c,ci)=>c.items.forEach((item,ii)=>{
+    const k=`td-${s.id}-${ci}-${ii}`;
+    const v=cache[k];
+    todoState[k]=(v!==undefined)?!!v:(item.badge==='done');
+  })));
+}
 
 // ============================================================
 // ===== ダッシュボード =====
@@ -577,7 +687,7 @@ PHASES.filter(p=>p.categories).forEach(p=>{
     try{agState[k]=JSON.parse(localStorage.getItem(k)||'false');}catch{agState[k]=false;}
   }));
 });
-function agSave(k){try{localStorage.setItem(k,JSON.stringify(agState[k]));}catch{}}
+function agSave(k){ cloudSet(k, agState[k]); }
 function agGetProg(id){const ks=Object.keys(agState).filter(k=>k.startsWith(`ag-${id}-`));return{done:ks.filter(k=>agState[k]).length,total:ks.length};}
 function agGetCatProg(id,ci){const ks=Object.keys(agState).filter(k=>k.startsWith(`ag-${id}-${ci}-`));return{done:ks.filter(k=>agState[k]).length,total:ks.length};}
 
@@ -717,11 +827,11 @@ const TODO_DATA=[
 ];
 
 const todoState={};
-TODO_DATA.forEach(s=>s.categories.forEach((c,ci)=>c.items.forEach((_,ii)=>{
+TODO_DATA.forEach(s=>s.categories.forEach((c,ci)=>c.items.forEach((item,ii)=>{
   const k=`td-${s.id}-${ci}-${ii}`;
-  try{todoState[k]=JSON.parse(localStorage.getItem(k)||JSON.stringify(_.badge==='done'));}catch{todoState[k]=_.badge==='done';}
+  try{todoState[k]=JSON.parse(localStorage.getItem(k)||JSON.stringify(item.badge==='done'));}catch{todoState[k]=item.badge==='done';}
 })));
-function todoSave(k){try{localStorage.setItem(k,JSON.stringify(todoState[k]));}catch{}}
+function todoSave(k){ cloudSet(k, todoState[k]); }
 
 function todoGetProg(id){const ks=Object.keys(todoState).filter(k=>k.startsWith(`td-${id}-`));return{done:ks.filter(k=>todoState[k]).length,total:ks.length};}
 function todoGetCatProg(id,ci){const ks=Object.keys(todoState).filter(k=>k.startsWith(`td-${id}-${ci}-`));return{done:ks.filter(k=>todoState[k]).length,total:ks.length};}
@@ -797,12 +907,17 @@ function switchMain(id){
 // ============================================================
 // ===== リセット =====
 // ============================================================
-function resetAll(){
+async function resetAll(){
   if(!confirm('全ての記録（学習ログ・チェック・TODO）をリセットしますか？'))return;
-  Object.keys(agState).forEach(k=>{agState[k]=false;try{localStorage.removeItem(k);}catch{}});
-  Object.keys(todoState).forEach(k=>{todoState[k]=false;try{localStorage.removeItem(k);}catch{}});
-  try{localStorage.removeItem('study-logs-v2');}catch{}
-  getWeekDays().forEach(d=>{try{localStorage.removeItem(dateKey(d));}catch{}});
+  const allKeys = [
+    ...Object.keys(agState),
+    ...Object.keys(todoState),
+    'study-logs-v2',
+    ...getWeekDays().map(d=>dateKey(d))
+  ];
+  Object.keys(agState).forEach(k=>{agState[k]=false;});
+  Object.keys(todoState).forEach(k=>{todoState[k]=false;});
+  allKeys.forEach(k=>{ delete cache[k]; try{localStorage.removeItem(k);}catch{} cloudRemove(k); });
   document.querySelectorAll('.item').forEach(el=>el.classList.remove('checked'));
   renderDashboard(); buildWeekly(); updateBanner(); updateTodoTabs(); updateTodoHeader(); updateAgTabs();
 }
@@ -816,6 +931,8 @@ buildAgUI();
 buildTodoUI();
 renderDashboard();
 updateTodoHeader();
+// クラウドから最新データを取得して反映
+syncFromCloud();
 </script>
 </body>
 </html>
