@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>土地家屋調査士 転職プラン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f2ed; --surface: #fffefb; --border: #e0dbd3;
+  --text: #1a1814; --muted: #7a756e; --accent: #2d4a3e;
+  --green: #3d8c6e; --purple: #7052a8; --orange: #b07d2e; --red: #a84255; --blue: #4a6db5;
+}
+body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 0 0 80px; }
+
+/* ===== ヘッダー ===== */
+header { background: var(--accent); color: #fff; padding: 16px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.header-inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.header-title { font-size: 17px; font-weight: 700; flex: 1; }
+.header-sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+.header-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.hbadge { font-family: 'DM Mono', monospace; font-size: 11px; background: rgba(255,255,255,0.15); padding: 3px 10px; border-radius: 100px; white-space: nowrap; }
+
+/* ===== メインタブ ===== */
+.main-tabs { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 58px; z-index: 90; }
+.main-tabs-inner { max-width: 960px; margin: 0 auto; display: flex; overflow-x: auto; }
+.main-tab { padding: 12px 18px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; font-family: 'Noto Sans JP', sans-serif; background: none; border-top: none; border-left: none; border-right: none; transition: all 0.2s; }
+.main-tab:hover { color: var(--text); }
+.main-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+
+main { max-width: 960px; margin: 0 auto; padding: 20px 14px 0; }
+.page { display: none; }
+.page.visible { display: block; }
+
+/* ===== 共通カード ===== */
+.card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.card-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+
+/* ===== サマリグリッド ===== */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.sum-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 13px 15px; }
+.sum-label { font-size: 10px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+.sum-value { font-size: 24px; font-weight: 700; font-family: 'DM Mono', monospace; line-height: 1; }
+.sum-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.sum-card.hl { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sum-card.hl .sum-label, .sum-card.hl .sum-sub { color: rgba(255,255,255,0.7); }
+
+/* ===== 進捗比較 ===== */
+.compare-grid { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 16px; }
+@media(max-width:480px){ .compare-grid{grid-template-columns:1fr;} .compare-div{display:none;} }
+.compare-div { background: var(--border); }
+.compare-label { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+.compare-pct { font-family: 'DM Mono', monospace; font-size: 30px; font-weight: 700; line-height: 1; margin-bottom: 7px; }
+.compare-bar-wrap { height: 11px; background: var(--bg); border-radius: 100px; overflow: hidden; margin-bottom: 5px; }
+.compare-bar-fill { height: 100%; border-radius: 100px; transition: width 0.6s ease; }
+.compare-meta { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; line-height: 1.8; }
+.gap-banner { margin-top: 12px; padding: 9px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; text-align: center; }
+.gap-ahead  { background: #e8f0ee; color: #1e3d32; }
+.gap-behind { background: #fde8d8; color: #7a2e10; }
+.gap-equal  { background: #e8ecf5; color: #1e2a45; }
+.milestone-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.milestone { font-size: 10px; padding: 2px 9px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted); background: var(--bg); }
+.milestone.reached { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ===== グラフ ===== */
+.sub-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.sub-tab { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s; }
+.sub-tab:hover { border-color: var(--accent); color: var(--text); }
+.sub-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sub-section { display: none; }
+.sub-section.visible { display: block; }
+.chart-wrap { overflow-x: auto; }
+.bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-bottom: 24px; position: relative; min-width: 300px; }
+.bar-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 26px; }
+.bar-fill { width: 100%; border-radius: 5px 5px 0 0; transition: height 0.4s; cursor: pointer; position: relative; min-height: 2px; }
+.bar-fill::after { content: attr(data-val); position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 9px; font-family: 'DM Mono', monospace; color: var(--text); white-space: nowrap; opacity: 0; transition: opacity 0.2s; }
+.bar-fill:hover::after { opacity: 1; }
+.bar-label { font-size: 9px; color: var(--muted); margin-top: 4px; text-align: center; white-space: nowrap; }
+.bar-grid { position: absolute; top: 0; left: 0; right: 0; bottom: 24px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.bar-grid-line { border-top: 1px dashed var(--border); width: 100%; position: relative; }
+.bar-grid-val { position: absolute; left: 0; top: -7px; font-size: 8px; font-family: 'DM Mono', monospace; color: var(--muted); }
+.line-chart-wrap { width: 100%; overflow-x: auto; }
+svg { font-family: 'DM Mono', monospace; }
+
+/* ===== ログ入力 ===== */
+.log-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
+.log-label { font-size: 11px; color: var(--muted); min-width: 70px; }
+.log-input { flex: 1; min-width: 100px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 7px; padding: 5px 9px; font-size: 12px; font-family: 'Noto Sans JP', sans-serif; color: var(--text); }
+.log-input:focus { outline: none; border-color: var(--accent); }
+.log-btn { background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 100px; font-family: 'Noto Sans JP', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.log-btn:hover { opacity: 0.85; }
+.log-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+.log-table th { text-align: left; padding: 5px 7px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.log-table td { padding: 6px 7px; border-bottom: 1px solid var(--border); }
+.log-table tr:last-child td { border-bottom: none; }
+.log-table tr:hover td { background: var(--bg); }
+.td-del { cursor: pointer; color: var(--muted); font-size: 12px; text-align: center; }
+.td-del:hover { color: var(--red); }
+.badge-cat { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; }
+.cat-chosashi { background: #ece8f0; color: var(--purple); }
+.cat-ryosoku  { background: #e8f0ee; color: var(--green); }
+.cat-other    { background: #f0ede5; color: var(--orange); }
+
+/* ===== 週カレンダー ===== */
+.weekly-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 12px; }
+.day-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 6px 3px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.day-card:hover { border-color: var(--accent); }
+.day-card.done { background: #e8f0ee; border-color: #3d8c6e; }
+.day-card.today { border-color: var(--accent); border-width: 2px; }
+.day-name { font-size: 9px; color: var(--muted); font-weight: 500; }
+.day-num { font-size: 13px; font-weight: 700; margin: 2px 0; font-family: 'DM Mono', monospace; }
+.day-check { font-size: 13px; }
+.day-card.done .day-check::after { content: '✅'; }
+.day-card:not(.done) .day-check::after { content: '⬜'; }
+.week-banner { border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+.week-banner.on-track { background: #e8f0ee; color: #1e3d32; }
+.week-banner.behind { background: #fde8d8; color: #7a2e10; }
+.week-banner.ahead { background: #e8ecf5; color: #1e2a45; }
+.wb-icon { font-size: 24px; }
+.wb-body { flex: 1; }
+.wb-title { font-size: 14px; font-weight: 700; }
+.wb-sub { font-size: 11px; margin-top: 2px; opacity: 0.8; }
+.wb-pct { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 700; }
+
+/* ===== TODOリスト ===== */
+.todo-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.todo-tab { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s; }
+.todo-tab:hover { border-color: var(--accent); color: var(--text); }
+.todo-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.todo-tab-count { font-family: 'DM Mono', monospace; font-size: 10px; opacity: 0.75; }
+.todo-section { display: none; }
+.todo-section.visible { display: block; }
+.todo-hero { border-radius: 12px; padding: 13px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+.hero-now    { background: #e8f0ee; color: #1e3d32; }
+.hero-study  { background: #ece8f0; color: #2e1e40; }
+.hero-drone  { background: #e8ecf5; color: #1e2a45; }
+.hero-camp   { background: #f0ede5; color: #3d3520; }
+.hero-career { background: #f0e8ea; color: #401e24; }
+.th-icon { font-size: 22px; }
+.th-wrap { flex: 1; }
+.th-title { font-size: 15px; font-weight: 700; }
+.th-bar { height: 7px; background: rgba(0,0,0,0.1); border-radius: 100px; overflow: hidden; margin-top: 5px; }
+.th-bar-fill { height: 100%; border-radius: 100px; transition: width 0.4s; }
+.th-text { font-size: 11px; opacity: 0.75; font-family: 'DM Mono', monospace; }
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.cat-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+.cat-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.06); }
+.cat-head { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; background: #faf9f6; }
+.cat-cnt { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); font-weight: 400; }
+.cat-items { padding: 6px; }
+.item { display: flex; align-items: flex-start; gap: 9px; padding: 7px 9px; border-radius: 8px; cursor: pointer; transition: background 0.15s; user-select: none; }
+.item:hover { background: #f5f2ed; }
+.item.checked { background: #f0f7f4; }
+.checkbox { width: 18px; height: 18px; min-width: 18px; border: 2px solid #c8c3bc; border-radius: 5px; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+.item.checked .checkbox { background: var(--accent); border-color: var(--accent); }
+.checkmark { display: none; }
+.item.checked .checkmark { display: block; }
+.item-body { flex: 1; }
+.item-name { font-size: 12px; font-weight: 500; line-height: 1.4; }
+.item.checked .item-name { text-decoration: line-through; color: var(--muted); }
+.item-point { font-size: 10.5px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+.badge { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; margin-top: 3px; }
+.badge-done   { background: #d1f0e3; color: #0f6e56; }
+.badge-urgent { background: #fde8d8; color: #8c3a10; }
+.badge-now    { background: #e8f0ee; color: #1e3d32; }
+.badge-aug    { background: #ece8f0; color: #2e1e40; }
+.badge-oct    { background: #e8ecf5; color: #1e2a45; }
+.badge-later  { background: #f0ede5; color: #3d3520; }
+.cat-prog { display: flex; align-items: center; gap: 7px; padding: 4px 12px 8px; }
+.mini-bar { flex: 1; height: 3px; background: var(--border); border-radius: 100px; overflow: hidden; }
+.mini-bar-fill { height: 100%; border-radius: 100px; transition: width 0.4s; }
+.mini-pct { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); min-width: 26px; text-align: right; }
+.reset-btn-sm { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.8); font-family: 'Noto Sans JP', sans-serif; font-size: 11px; padding: 4px 10px; border-radius: 100px; cursor: pointer; }
+.total-progress { display: flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 11px; }
+.total-bar-wrap { width: 80px; height: 5px; background: rgba(255,255,255,0.2); border-radius: 100px; overflow: hidden; }
+.total-bar-fill { height: 100%; background: #7ecba8; border-radius: 100px; transition: width 0.4s; }
+
+/* ===== 学習チェックリスト ===== */
+.ag-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.ag-tab { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s; }
+.ag-tab:hover { border-color: var(--accent); color: var(--text); }
+.ag-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ag-tab-cnt { font-family: 'DM Mono', monospace; font-size: 10px; opacity: 0.75; }
+.ag-section { display: none; }
+.ag-section.visible { display: block; }
+.ag-hero { border-radius: 12px; padding: 13px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+.hero-weekly  { background: #e8ecf5; color: #1e2a45; }
+.hero-chosashi{ background: #ece8f0; color: #2e1e40; }
+.hero-ryosoku { background: #e8f0ee; color: #1e3d32; }
+.hero-schedule{ background: #f0ede5; color: #3d3520; }
+.badge-tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; margin-top: 3px; }
+.badge-open { background: #e8f0ee; color: #1e3d32; }
+.badge-wait { background: #f0ede5; color: #3d3520; }
+.badge-key  { background: #fde8d8; color: #7a2e10; }
+.sched-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; }
+.sched-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+.sched-head { padding: 9px 13px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.sm1{background:#e8f0ee;color:#1e3d32} .sm2{background:#ece8f0;color:#2e1e40} .sm3{background:#e8ecf5;color:#1e2a45}
+.sm4{background:#f0ede5;color:#3d3520} .sm5{background:#f0e8ea;color:#401e24} .sm6{background:#e8f5f0;color:#0f3d2a}
+.sched-body { padding: 9px 13px; }
+.sched-week { margin-bottom: 9px; }
+.sched-week-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.sched-item { display: flex; align-items: flex-start; gap: 7px; padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.sched-item:last-child { border-bottom: none; }
+.sched-dot { width: 6px; height: 6px; min-width: 6px; border-radius: 50%; margin-top: 5px; }
+.dot-c { background: var(--purple); } .dot-r { background: var(--green); } .dot-o { background: var(--orange); }
+.sched-text { font-size: 11px; line-height: 1.5; }
+.sched-sub { font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-title">🏠 土地家屋調査士 転職プラン</div>
+      <div class="header-sub">2027年合格目標｜ドローン・免許・転職 一括管理</div>
+    </div>
+    <div class="header-badges">
+      <span class="hbadge" id="hTotalH">0h / 1000h</span>
+      <span class="hbadge" id="hTodo">TODO 0/0</span>
+    </div>
+    <button class="reset-btn-sm" onclick="resetAll()">リセット</button>
+  </div>
+</header>
+
+<!-- メインタブ -->
+<div class="main-tabs">
+  <div class="main-tabs-inner">
+    <button class="main-tab active" onclick="switchMain('dashboard')" id="mtab-dashboard">📊 ダッシュボード</button>
+    <button class="main-tab" onclick="switchMain('tracker')" id="mtab-tracker">📚 学習チェック</button>
+    <button class="main-tab" onclick="switchMain('todo')" id="mtab-todo">✅ TODO</button>
+  </div>
+</div>
+
+<main>
+
+<!-- ===== PAGE: ダッシュボード ===== -->
+<div class="page visible" id="page-dashboard">
+
+  <div class="summary-grid" id="summaryGrid"></div>
+  <div class="card" id="progressCard"></div>
+
+  <div class="sub-tabs">
+    <button class="sub-tab active" onclick="switchSub('daily')" id="stab-daily">📅 日次</button>
+    <button class="sub-tab" onclick="switchSub('weekly')" id="stab-weekly">📆 週次</button>
+    <button class="sub-tab" onclick="switchSub('cumul')" id="stab-cumul">📈 累積</button>
+    <button class="sub-tab" onclick="switchSub('logentry')" id="stab-logentry">📝 ログ入力</button>
+  </div>
+
+  <div class="sub-section visible" id="sub-daily">
+    <div class="card"><div class="card-title">直近30日の日次学習時間</div><div class="chart-wrap"><div class="bar-chart" id="dailyChart"></div></div></div>
+  </div>
+  <div class="sub-section" id="sub-weekly">
+    <div class="card"><div class="card-title">週次学習時間（直近12週）</div><div class="chart-wrap"><div class="bar-chart" id="weeklyChart"></div></div></div>
+    <div class="card"><div class="card-title">週次 科目別内訳</div><div class="chart-wrap" id="weekCatChart"></div></div>
+  </div>
+  <div class="sub-section" id="sub-cumul">
+    <div class="card"><div class="card-title">累積学習時間 vs 目標ペース</div><div class="line-chart-wrap" id="cumulChart"></div></div>
+  </div>
+  <div class="sub-section" id="sub-logentry">
+    <div class="card">
+      <div class="card-title">📝 学習ログを追加</div>
+      <div class="log-row"><span class="log-label">日付</span><input type="date" id="logDate" class="log-input" style="max-width:150px"></div>
+      <div class="log-row"><span class="log-label">学習内容</span><input type="text" id="logContent" class="log-input" placeholder="例：土地家屋調査士法 1〜5章視聴"></div>
+      <div class="log-row">
+        <span class="log-label">科目</span>
+        <select id="logCat" class="log-input" style="max-width:180px">
+          <option value="chosashi">土地家屋調査士</option>
+          <option value="ryosoku">測量士補</option>
+          <option value="other">その他（ドローン等）</option>
+        </select>
+      </div>
+      <div class="log-row"><span class="log-label">時間（h）</span><input type="number" id="logHours" class="log-input" style="max-width:80px" value="1" min="0.5" step="0.5"><button class="log-btn" onclick="addLog()">追加する</button></div>
+    </div>
+    <div class="card"><div class="card-title">📋 学習ログ履歴</div><div id="logTableWrap"></div></div>
+  </div>
+</div>
+
+<!-- ===== PAGE: 学習チェック ===== -->
+<div class="page" id="page-tracker">
+  <div class="ag-tabs" id="agTabs"></div>
+  <div id="agSections"></div>
+</div>
+
+<!-- ===== PAGE: TODO ===== -->
+<div class="page" id="page-todo">
+  <div class="todo-tabs" id="todoTabs"></div>
+  <div id="todoSections"></div>
+</div>
+
+</main>
+
+<script>
+// ============================================================
+// ===== 共通ユーティリティ =====
+// ============================================================
+const GOAL = 1000;
+const TARGET_DATE = new Date('2027-10-17');
+const START_DATE  = new Date('2026-06-01');
+
+function fmtDate(d) { const dt=new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }
+function today() { return fmtDate(new Date()); }
+function parseH(v) { return parseFloat(v)||0; }
+function pct(d,t) { return t ? Math.round(d/t*100) : 0; }
+function getWeekKey(ds) { const d=new Date(ds),dow=d.getDay(),m=new Date(d); m.setDate(d.getDate()-(dow===0?6:dow-1)); return fmtDate(m); }
+function getWeekLabel(ds) { const d=new Date(ds); return `${d.getMonth()+1}/${d.getDate()}週`; }
+
+// ===== ログストレージ =====
+function getLogs() { try{return JSON.parse(localStorage.getItem('study-logs-v2')||'[]');}catch{return[];} }
+function saveLogs(l) { try{localStorage.setItem('study-logs-v2',JSON.stringify(l));}catch{} }
+
+// ===== 週カレンダー共通 =====
+function getWeekDays() {
+  const t=new Date(),dow=t.getDay(),m=new Date(t); m.setDate(t.getDate()-(dow===0?6:dow-1));
+  return Array.from({length:7},(_,i)=>{const d=new Date(m);d.setDate(m.getDate()+i);return d;});
+}
+function dateKey(d) { return `study-day-${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+function isDayDone(d) { try{return JSON.parse(localStorage.getItem(dateKey(d))||'false');}catch{return false;} }
+function toggleDay(d) { try{localStorage.setItem(dateKey(d),JSON.stringify(!isDayDone(d)));}catch{} buildWeekly(); updateBanner(); }
+function getWeekDoneCount() { return getWeekDays().filter(d=>isDayDone(d)).length; }
+
+// ============================================================
+// ===== ダッシュボード =====
+// ============================================================
+function calcSummary() {
+  const logs=getLogs();
+  const total=logs.reduce((s,l)=>s+parseH(l.hours),0);
+  const td=today();
+  const todayH=logs.filter(l=>l.date===td).reduce((s,l)=>s+parseH(l.hours),0);
+  const wk=getWeekKey(td);
+  const weekH=logs.filter(l=>getWeekKey(l.date)===wk).reduce((s,l)=>s+parseH(l.hours),0);
+  const mo=td.slice(0,7);
+  const monthH=logs.filter(l=>l.date.startsWith(mo)).reduce((s,l)=>s+parseH(l.hours),0);
+  const days=new Set(logs.map(l=>l.date)).size;
+  const avgPerDay=days>0?(total/days).toFixed(1):0;
+  const daysLeft=Math.max(0,Math.ceil((TARGET_DATE-new Date())/86400000));
+  const needed=Math.max(0,GOAL-total);
+  const dailyNeeded=daysLeft>0?(needed/daysLeft).toFixed(1):0;
+  return{total,todayH,weekH,monthH,days,avgPerDay,daysLeft,dailyNeeded};
+}
+
+function renderSummary() {
+  const s=calcSummary();
+  const totalDays=Math.ceil((TARGET_DATE-START_DATE)/86400000);
+  const elapsed=Math.max(0,Math.ceil((new Date()-START_DATE)/86400000));
+  const dayPct=Math.min(100,elapsed/totalDays*100);
+  const hourPct=Math.min(100,s.total/GOAL*100);
+  const diff=(hourPct-dayPct).toFixed(1);
+  const diffNum=parseFloat(diff);
+  let gCls,gMsg;
+  if(diffNum>2){gCls='gap-ahead';gMsg=`✅ 学習が日数より ${diff}% 先行しています！このペースを維持しましょう`;}
+  else if(diffNum<-2){gCls='gap-behind';gMsg=`⚠️ 日数より学習が ${Math.abs(diff)}% 遅れています。1日${s.dailyNeeded}h を目標に！`;}
+  else{gCls='gap-equal';gMsg=`📊 学習ペースは日数進捗とほぼ一致しています`;}
+
+  document.getElementById('summaryGrid').innerHTML=`
+    <div class="sum-card hl"><div class="sum-label">総学習時間</div><div class="sum-value">${s.total.toFixed(1)}<span style="font-size:13px">h</span></div><div class="sum-sub">目標の ${hourPct.toFixed(1)}%</div></div>
+    <div class="sum-card"><div class="sum-label">今日</div><div class="sum-value">${s.todayH.toFixed(1)}<span style="font-size:13px">h</span></div><div class="sum-sub">本日</div></div>
+    <div class="sum-card"><div class="sum-label">今週</div><div class="sum-value">${s.weekH.toFixed(1)}<span style="font-size:13px">h</span></div><div class="sum-sub">週次</div></div>
+    <div class="sum-card"><div class="sum-label">今月</div><div class="sum-value">${s.monthH.toFixed(1)}<span style="font-size:13px">h</span></div><div class="sum-sub">月間</div></div>
+    <div class="sum-card"><div class="sum-label">1日平均</div><div class="sum-value">${s.avgPerDay}<span style="font-size:13px">h</span></div><div class="sum-sub">${s.days}日間</div></div>
+    <div class="sum-card"><div class="sum-label">必要ペース</div><div class="sum-value">${s.dailyNeeded}<span style="font-size:13px">h</span></div><div class="sum-sub">残り${s.daysLeft}日</div></div>`;
+
+  document.getElementById('progressCard').innerHTML=`
+    <div class="card-title">📊 進捗比較：学習時間 vs 日数（6/1〜試験日）</div>
+    <div class="compare-grid">
+      <div>
+        <div class="compare-label">🎯 学習時間の進捗</div>
+        <div class="compare-pct" style="color:var(--accent)">${hourPct.toFixed(1)}<span style="font-size:14px">%</span></div>
+        <div class="compare-bar-wrap"><div class="compare-bar-fill" style="width:${hourPct.toFixed(1)}%;background:linear-gradient(90deg,var(--green),var(--accent))"></div></div>
+        <div class="compare-meta">${s.total.toFixed(1)}h 完了 / 残り ${Math.max(0,GOAL-s.total).toFixed(1)}h</div>
+      </div>
+      <div class="compare-div"></div>
+      <div>
+        <div class="compare-label">📅 日数の進捗</div>
+        <div class="compare-pct" style="color:var(--blue)">${dayPct.toFixed(1)}<span style="font-size:14px">%</span></div>
+        <div class="compare-bar-wrap"><div class="compare-bar-fill" style="width:${dayPct.toFixed(1)}%;background:linear-gradient(90deg,var(--blue),#6a9fd8)"></div></div>
+        <div class="compare-meta">経過 ${elapsed}日 / 全 ${totalDays}日 | 残り ${s.daysLeft}日</div>
+      </div>
+    </div>
+    <div class="gap-banner ${gCls}">${gMsg}</div>
+    <div class="milestone-row">${[100,200,300,500,700,1000].map(m=>`<span class="milestone ${s.total>=m?'reached':''}">${m}h${s.total>=m?' ✓':''}</span>`).join('')}</div>`;
+
+  // ヘッダーバッジ更新
+  document.getElementById('hTotalH').textContent=`${s.total.toFixed(1)}h / 1000h`;
+}
+
+function renderBarChart(id,data,maxVal) {
+  const el=document.getElementById(id); if(!el) return;
+  const gl=4;
+  const grid=Array.from({length:gl+1},(_,i)=>`<div class="bar-grid-line"><span class="bar-grid-val">${(maxVal*(gl-i)/gl).toFixed(1)}h</span></div>`).join('');
+  el.innerHTML=`<div class="bar-grid">${grid}</div>`+data.map(d=>{
+    const h=maxVal>0?Math.max(d.val/maxVal*140,d.val>0?4:0):0;
+    return `<div class="bar-col"><div class="bar-fill" style="height:${h}px;background:${d.isToday?'var(--orange)':d.color};" data-val="${d.val}h"></div><div class="bar-label">${d.label}</div></div>`;
+  }).join('');
+}
+
+function renderDaily() {
+  const logs=getLogs(); const byDate={};
+  logs.forEach(l=>{byDate[l.date]=(byDate[l.date]||0)+parseH(l.hours);});
+  const dates=[]; for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);dates.push(fmtDate(d));}
+  const vals=dates.map(d=>byDate[d]||0);
+  renderBarChart('dailyChart',dates.map((d,i)=>({label:new Date(d).getDate()+(new Date(d).getDate()===1?`/${new Date(d).getMonth()+1}`:''),val:vals[i],color:'var(--accent)',isToday:d===today()})),Math.max(...vals,2));
+}
+
+function renderWeekly() {
+  const logs=getLogs(); const byWeek={},byWeekCat={};
+  logs.forEach(l=>{const wk=getWeekKey(l.date);byWeek[wk]=(byWeek[wk]||0)+parseH(l.hours);if(!byWeekCat[wk])byWeekCat[wk]={chosashi:0,ryosoku:0,other:0};byWeekCat[wk][l.cat||'other']=(byWeekCat[wk][l.cat||'other']||0)+parseH(l.hours);});
+  const weeks=[]; for(let i=11;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i*7);weeks.push(getWeekKey(fmtDate(d)));}
+  const vals=weeks.map(w=>byWeek[w]||0);
+  renderBarChart('weeklyChart',weeks.map((w,i)=>({label:getWeekLabel(w),val:vals[i],color:'var(--blue)',isToday:false})),Math.max(...vals,5));
+  // 積み上げ
+  const cats=['chosashi','ryosoku','other'],colors={chosashi:'var(--purple)',ryosoku:'var(--green)',other:'var(--orange)'},labels={chosashi:'土地家屋調査士',ryosoku:'測量士補',other:'その他'};
+  const maxV=Math.max(...weeks.map(w=>Object.values(byWeekCat[w]||{}).reduce((a,b)=>a+b,0)),2);
+  const bars=weeks.map(w=>{const d=byWeekCat[w]||{};const segs=cats.map(c=>`<div style="height:${maxV>0?(d[c]||0)/maxV*110:0}px;background:${colors[c]};width:100%;min-height:${(d[c]||0)>0?2:0}px;"></div>`).reverse().join('');return `<div class="bar-col"><div style="display:flex;flex-direction:column;justify-content:flex-end;height:110px;width:100%;border-radius:5px 5px 0 0;overflow:hidden;">${segs}</div><div class="bar-label">${getWeekLabel(w)}</div></div>`;}).join('');
+  const legend=cats.map(c=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);margin-right:10px"><span style="width:9px;height:9px;border-radius:2px;background:${colors[c]};display:inline-block"></span>${labels[c]}</span>`).join('');
+  document.getElementById('weekCatChart').innerHTML=`<div style="display:flex;align-items:flex-end;gap:4px;height:134px;padding-bottom:24px;min-width:300px;">${bars}</div><div style="margin-top:6px;">${legend}</div>`;
+}
+
+function renderCumul() {
+  const logs=getLogs().sort((a,b)=>a.date.localeCompare(b.date));
+  const el=document.getElementById('cumulChart'); if(!el) return;
+  if(logs.length===0){el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:30px">まだ学習ログがありません</div>';return;}
+  const sd=new Date(logs[0].date),ed=TARGET_DATE,totalDays=Math.ceil((ed-sd)/86400000);
+  const byDate={};logs.forEach(l=>{byDate[l.date]=(byDate[l.date]||0)+parseH(l.hours);});
+  const actual=[];let cum=0;Object.keys(byDate).sort().forEach(d=>{cum+=byDate[d];actual.push({d,h:cum});});
+  const W=680,H=220,P={t:18,r:22,b:32,l:44};
+  const gW=W-P.l-P.r,gH=H-P.t-P.b,maxHv=Math.max(GOAL,cum+10);
+  const xP=ds=>{const d=new Date(ds);return P.l+(Math.ceil((d-sd)/86400000)/totalDays)*gW;};
+  const yP=h=>P.t+gH-(h/maxHv)*gH;
+  const grid=[0,200,400,600,800,1000].map(v=>`<line x1="${P.l}" y1="${yP(v)}" x2="${W-P.r}" y2="${yP(v)}" stroke="#e0dbd3" stroke-dasharray="3,3"/><text x="${P.l-3}" y="${yP(v)+4}" font-size="9" fill="#7a756e" text-anchor="end">${v}</text>`).join('');
+  const goalLine=`<line x1="${P.l}" y1="${yP(0)}" x2="${W-P.r}" y2="${yP(GOAL)}" stroke="#3d8c6e" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.5"/><text x="${W-P.r+2}" y="${yP(GOAL)+4}" font-size="9" fill="#3d8c6e">目標</text>`;
+  let pathD='';actual.forEach((pt,i)=>{const x=xP(pt.d),y=yP(pt.h);pathD+=i===0?`M ${x} ${y}`:`L ${x} ${y}`;});
+  const actPath=actual.length>0?`<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:'';
+  const dots=actual.map(pt=>`<circle cx="${xP(pt.d)}" cy="${yP(pt.h)}" r="3" fill="var(--accent)"><title>${pt.d}: ${pt.h.toFixed(1)}h</title></circle>`).join('');
+  const td=today();const todayLine=new Date(td)>=sd?`<line x1="${xP(td)}" y1="${P.t}" x2="${xP(td)}" y2="${H-P.b}" stroke="var(--orange)" stroke-width="1" stroke-dasharray="4,3"/><text x="${xP(td)}" y="${P.t-4}" font-size="9" fill="var(--orange)" text-anchor="middle">今日</text>`:'';
+  const mls=[];let mc=new Date(sd);mc.setDate(1);mc.setMonth(mc.getMonth()+1);while(mc<=ed){const ds=fmtDate(mc);if(new Date(ds)>=sd&&new Date(ds)<=ed)mls.push(`<text x="${xP(ds)}" y="${H-P.b+13}" font-size="9" fill="#7a756e" text-anchor="middle">${mc.getMonth()+1}月</text>`);mc.setMonth(mc.getMonth()+1);}
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;min-width:280px">${grid}${goalLine}${todayLine}${actPath}${dots}${mls.join('')}<rect x="${P.l}" y="${P.t}" width="${gW}" height="${gH}" fill="none" stroke="#e0dbd3"/></svg>
+  <div style="display:flex;gap:14px;margin-top:6px;font-size:10px;color:var(--muted);">
+    <span><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="var(--accent)" stroke-width="2.5"/></svg> 実績</span>
+    <span><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,2"/></svg> 目標</span>
+    <span><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="var(--orange)" stroke-width="1" stroke-dasharray="3,2"/></svg> 今日</span>
+  </div>`;
+}
+
+function renderLogTable() {
+  const logs=getLogs().slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const el=document.getElementById('logTableWrap'); if(!el) return;
+  const cl={chosashi:'土地家屋調査士',ryosoku:'測量士補',other:'その他'};
+  const cc={chosashi:'cat-chosashi',ryosoku:'cat-ryosoku',other:'cat-other'};
+  if(logs.length===0){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px">まだ記録がありません</div>';return;}
+  el.innerHTML=`<table class="log-table"><thead><tr><th>日付</th><th>内容</th><th>科目</th><th style="text-align:right">時間</th><th></th></tr></thead><tbody>${logs.map(l=>`<tr><td style="font-family:'DM Mono',monospace;white-space:nowrap">${l.date}</td><td>${l.content}</td><td><span class="badge-cat ${cc[l.cat||'other']}">${cl[l.cat||'other']}</span></td><td style="font-family:'DM Mono',monospace;text-align:right;font-weight:700">${parseH(l.hours).toFixed(1)}h</td><td class="td-del" onclick="deleteLog(${l.id})">✕</td></tr>`).join('')}</tbody></table>`;
+}
+
+function addLog() {
+  const d=document.getElementById('logDate'),c=document.getElementById('logContent'),h=document.getElementById('logHours'),cat=document.getElementById('logCat');
+  if(!d||!c) return; if(!d.value||!c.value.trim()){alert('日付と内容を入力してください');return;}
+  const logs=getLogs(); logs.unshift({id:Date.now(),date:d.value,content:c.value.trim(),hours:parseFloat(h.value)||1,cat:cat.value});
+  saveLogs(logs); c.value=''; renderDashboard();
+}
+function deleteLog(id) { if(!confirm('このログを削除しますか?'))return; saveLogs(getLogs().filter(l=>l.id!==id)); renderDashboard(); }
+
+function switchSub(id) {
+  document.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sub-section').forEach(s=>s.classList.remove('visible'));
+  document.getElementById(`stab-${id}`)?.classList.add('active');
+  document.getElementById(`sub-${id}`)?.classList.add('visible');
+  if(id==='weekly') renderWeekly();
+  if(id==='cumul') renderCumul();
+  if(id==='logentry') renderLogTable();
+}
+
+function renderDashboard() { renderSummary(); renderDaily(); renderLogTable(); }
+
+// ============================================================
+// ===== 週次バナー =====
+// ============================================================
+function updateBanner() {
+  const done=getWeekDoneCount(),target=5;
+  const p=Math.round(done/target*100);
+  const b=document.getElementById('weekBanner'),i=document.getElementById('wbIcon'),t=document.getElementById('wbTitle'),s=document.getElementById('wbSub'),pEl=document.getElementById('wbPct');
+  if(!b) return;
+  pEl.textContent=Math.min(p,100)+'%';
+  if(done>=target){b.className='week-banner ahead';i.textContent='🏆';t.textContent='今週の目標達成！';s.textContent=`週${done}日学習 — 素晴らしい！`;}
+  else if(done>=3){b.className='week-banner on-track';i.textContent='✅';t.textContent='スケジュール通り';s.textContent=`今週${done}日 — あと${target-done}日で目標達成`;}
+  else if(done>=1){b.className='week-banner behind';i.textContent='⚠️';t.textContent='やや遅れ気味';s.textContent=`今週${done}日 — 週5日ペースを目指して`;}
+  else{b.className='week-banner behind';i.textContent='📖';t.textContent='今週まだ記録なし';s.textContent='今日から記録をつけましょう！';}
+}
+
+function buildWeekly() {
+  const el=document.getElementById('weeklyCalendar'); if(!el) return;
+  const days=getWeekDays(),tday=new Date();
+  const dn=['月','火','水','木','金','土','日'];
+  el.innerHTML=days.map((d,i)=>`<div class="day-card ${isDayDone(d)?'done':''} ${d.toDateString()===tday.toDateString()?'today':''}" onclick="toggleDay(new Date(${d.getFullYear()},${d.getMonth()},${d.getDate()}))"><div class="day-name">${dn[i]}</div><div class="day-num">${d.getDate()}</div><div class="day-check"></div></div>`).join('');
+}
+
+// ============================================================
+// ===== 学習チェックリスト (TRACKER) =====
+// ============================================================
+const SCHEDULE=[
+  {period:'2026年6月',cls:'sm1',icon:'📖',weeks:[
+    {title:'6月1〜14日',items:[{text:'導入講義（公開分）全て視聴',sub:'試験全体像を把握',cat:'c'},{text:'土地家屋調査士法（17章）視聴',sub:'最初の科目。数日で完了',cat:'c'},{text:'TOKERUKUNアプリ開始',sub:'隙間時間に択一演習',cat:'c'}]},
+    {title:'6月15日〜',items:[{text:'★測量士補 講義スタート（6/15公開）',sub:'マイページで確認して即視聴',cat:'r'},{text:'測量士補 第1章：測量法・基準点',sub:'1日1〜2章ペースで',cat:'r'},{text:'民法 第1〜5章視聴',sub:'測量士補と並行',cat:'c'}]}
+  ]},
+  {period:'2026年7月',cls:'sm2',icon:'📐',weeks:[
+    {title:'7月前半',items:[{text:'測量士補 地形・写真・GIS測量',sub:'計算問題は繰り返し練習',cat:'r'},{text:'民法 第6〜15章（契約・不法行為）',sub:'不動産登記法の前提として重要',cat:'c'},{text:'TOKERUKUN 民法過去問開始',sub:'インプットしたらすぐ過去問',cat:'c'}]},
+    {title:'7月後半（退職前）',items:[{text:'測量士補 応用・路線測量',sub:'計算問題の解き方を体得',cat:'r'},{text:'民法 第16〜30章（物権・担保）',sub:'担保物権は不動産登記法と直結',cat:'c'},{text:'教習所入所手続き完了',sub:'柏南 or MKA柏に問い合わせ',cat:'o'}]}
+  ]},
+  {period:'2026年8〜9月',cls:'sm3',icon:'🚁',weeks:[
+    {title:'8月（有給・ドローン集中）',items:[{text:'ドローン二等 学科講習（10h）',sub:'JDO柏校 or 流山IC校',cat:'o'},{text:'ドローン 実地講習（10h）',sub:'スクールで実機操作を習得',cat:'o'},{text:'隙間時間：測量士補過去問',sub:'TOKERUKUNで毎日10問以上',cat:'r'}]},
+    {title:'9月',items:[{text:'ドローン 学科試験・受験',sub:'DIPS2.0から事前申請が必要',cat:'o'},{text:'二等無人航空機操縦士 取得！',sub:'技能証明申請 → 証明書受取',cat:'o'},{text:'民法 全163章 視聴完了',sub:'9月末までに民法を終わらせる',cat:'c'}]}
+  ]},
+  {period:'2026年10〜12月',cls:'sm4',icon:'🚗',weeks:[
+    {title:'10月（合宿免許）',items:[{text:'10/1 那須自動車学校 入校',sub:'合宿免許わかばで仮申込済',cat:'o'},{text:'合宿卒業 → 本免学科試験',sub:'幕張免許センターで受験',cat:'o'},{text:'不動産登記法 第1〜30章視聴',sub:'合宿後から本格インプット',cat:'c'}]},
+    {title:'11〜12月',items:[{text:'測量士補 過去問3周完了',sub:'合格ライン：28問中18問',cat:'r'},{text:'不動産登記法 第31〜100章',sub:'毎日2〜3章ペースで継続',cat:'c'},{text:'土地家屋調査士補助 転職活動',sub:'ドローン測量対応事務所に応募',cat:'o'}]}
+  ]},
+  {period:'2027年1〜4月',cls:'sm5',icon:'📝',weeks:[
+    {title:'1月（測量士補 出願！）',items:[{text:'★測量士補 願書提出（1月中旬）',sub:'提出期間を絶対に見逃さない！',cat:'r'},{text:'不動産登記法 全290章 視聴完了',sub:'1月末までに全インプット終了',cat:'c'},{text:'定規の使い方講座 完了',sub:'記述式に必須。図面作成の基本',cat:'c'}]},
+    {title:'2〜4月',items:[{text:'測量士補 直前対策・模試',sub:'5月試験まで毎日過去問を回す',cat:'r'},{text:'中山式複素数計算 完了',sub:'座標計算の最短ルート',cat:'c'},{text:'記述式過去問（土地・建物）開始',sub:'TOKERUKUNで演習',cat:'c'}]}
+  ]},
+  {period:'2027年5〜10月',cls:'sm6',icon:'🏆',weeks:[
+    {title:'5月（測量士補 本番！）',items:[{text:'★測量士補 試験受験（5月）',sub:'合格で午前免除確定！',cat:'r'},{text:'測量士補 合格発表確認',sub:'合格証明書取得→午前免除申請',cat:'r'}]},
+    {title:'6〜10月（直前・本番）',items:[{text:'実践答練 3科目完了',sub:'弱点の洗い出しと補強',cat:'c'},{text:'土地家屋調査士試験 願書提出（8月）',sub:'午前免除申請も忘れずに',cat:'c'},{text:'直前予想模試 完了',sub:'本番1ヶ月前に総仕上げ',cat:'c'},{text:'★土地家屋調査士 筆記試験（10月）',sub:'午後の部のみ。全準備の集大成！',cat:'c'}]}
+  ]}
+];
+
+const PHASES=[
+  {id:'agweekly',label:'週次記録',icon:'📅',heroClass:'hero-weekly',barColor:'#4a6db5',type:'weekly'},
+  {id:'schedule',label:'スケジュール',icon:'🗓',heroClass:'hero-schedule',barColor:'#b07d2e',type:'schedule'},
+  {id:'chosashi',label:'土地家屋調査士',icon:'📐',heroClass:'hero-chosashi',barColor:'#7052a8',
+    categories:[
+      {name:'導入講義',icon:'🎯',items:[{name:'導入講義（公開分）視聴完了',meta:'試験全体像・学習の進め方を把握',badge:'open'}]},
+      {name:'入門総合講義',icon:'📖',items:[
+        {name:'土地家屋調査士法（17章）視聴完了',meta:'最初の科目。目安：1〜2日',badge:'open'},
+        {name:'民法（163章）視聴完了',meta:'不動産登記法の前提。目安：2〜3ヶ月',badge:'open'},
+        {name:'不動産登記法（290章）視聴完了',meta:'試験の核心科目。目安：3〜4ヶ月',badge:'open'}
+      ]},
+      {name:'過去問・演習',icon:'✏️',items:[
+        {name:'TOKERUKUN 毎日起動習慣をつけた',meta:'隙間時間10分でも毎日続けることが大切',badge:'open'},
+        {name:'民法 択一過去問 1周完了',meta:'インプット後すぐ。目安：7月',badge:'open'},
+        {name:'不動産登記法 択一過去問 1周完了',meta:'過去22年分。目安：2026年末〜2027年初',badge:'open'},
+        {name:'定規の使い方講座 完了',meta:'記述式試験で必須。目安：2027年1月',badge:'open'},
+        {name:'中山式複素数計算 完了',meta:'座標計算の最短ルート。目安：2027年2月',badge:'open'},
+        {name:'記述式過去問（土地）開始',meta:'定規習得後に取り組む',badge:'open'},
+        {name:'記述式過去問（建物）開始',meta:'土地と並行して進める',badge:'open'}
+      ]},
+      {name:'直前対策（2027年夏〜）',icon:'🔥',items:[
+        {name:'実践答練 3科目完了',meta:'弱点補強・時間配分の練習',badge:'wait'},
+        {name:'直前予想模試 完了',meta:'本番1ヶ月前の総仕上げ',badge:'wait'},
+        {name:'土地家屋調査士試験 願書提出（2027年8月）',meta:'午前免除申請も同時に行う',badge:'key'},
+        {name:'★土地家屋調査士 筆記試験（2027年10月）',meta:'午後の部のみ。全ての準備の集大成',badge:'key'}
+      ]}
+    ]},
+  {id:'ryosoku',label:'測量士補',icon:'📏',heroClass:'hero-ryosoku',barColor:'#3d8c6e',
+    categories:[
+      {name:'学習',icon:'📋',items:[
+        {name:'★測量士補 講義公開確認（6/15）',meta:'アガルートマイページで確認',badge:'key'},
+        {name:'測量士補 全講義視聴完了',meta:'6/15公開後すぐスタート。目安：8月末',badge:'open'},
+        {name:'測量士補 過去問 1周完了',meta:'TOKERUKUNで演習。目安：10月',badge:'open'},
+        {name:'測量士補 過去問 3周完了',meta:'合格ライン：28問中18問。目安：2027年4月',badge:'open'}
+      ]},
+      {name:'出願・試験',icon:'📝',items:[
+        {name:'★測量士補 願書提出（2027年1月中旬）',meta:'提出期間を絶対に見逃さない！カレンダー登録必須',badge:'key'},
+        {name:'測量士補 直前模試・総仕上げ',meta:'試験1ヶ月前から集中的に',badge:'wait'},
+        {name:'★測量士補 試験受験（2027年5月）',meta:'合格で土地家屋調査士試験 午前免除確定！',badge:'key'},
+        {name:'測量士補 合格！午前免除申請',meta:'合格証明書取得 → 土地家屋調査士願書と同時申請',badge:'wait'}
+      ]}
+    ]}
+];
+
+const agState={};
+PHASES.filter(p=>p.categories).forEach(p=>{
+  p.categories.forEach((c,ci)=>c.items.forEach((_,ii)=>{
+    const k=`ag-${p.id}-${ci}-${ii}`;
+    try{agState[k]=JSON.parse(localStorage.getItem(k)||'false');}catch{agState[k]=false;}
+  }));
+});
+function agSave(k){try{localStorage.setItem(k,JSON.stringify(agState[k]));}catch{}}
+function agGetProg(id){const ks=Object.keys(agState).filter(k=>k.startsWith(`ag-${id}-`));return{done:ks.filter(k=>agState[k]).length,total:ks.length};}
+function agGetCatProg(id,ci){const ks=Object.keys(agState).filter(k=>k.startsWith(`ag-${id}-${ci}-`));return{done:ks.filter(k=>agState[k]).length,total:ks.length};}
+
+function agToggle(k){
+  agState[k]=!agState[k]; agSave(k);
+  document.querySelector(`[data-key="${k}"]`)?.classList.toggle('checked',agState[k]);
+  updateAgTabs();
+}
+function updateAgTabs(){
+  PHASES.filter(p=>p.categories).forEach(p=>{
+    const pg=agGetProg(p.id);
+    const tab=document.getElementById(`agtab-${p.id}`);
+    if(tab){const c=tab.querySelector('.ag-tab-cnt');if(c)c.textContent=`${pg.done}/${pg.total}`;}
+    const sf=document.getElementById(`agsfill-${p.id}`),st=document.getElementById(`agstext-${p.id}`);
+    if(sf)sf.style.width=pct(pg.done,pg.total)+'%';
+    if(st)st.textContent=`${pg.done} / ${pg.total} 完了`;
+    p.categories.forEach((_,ci)=>{
+      const cp=agGetCatProg(p.id,ci);
+      const mf=document.getElementById(`agmf-${p.id}-${ci}`),mp=document.getElementById(`agmp-${p.id}-${ci}`),cc=document.getElementById(`agcc-${p.id}-${ci}`);
+      if(mf)mf.style.width=pct(cp.done,cp.total)+'%';
+      if(mp)mp.textContent=pct(cp.done,cp.total)+'%';
+      if(cc)cc.textContent=`${cp.done}/${cp.total}`;
+    });
+  });
+}
+
+function switchAgTab(id){
+  document.querySelectorAll('.ag-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.ag-section').forEach(s=>s.classList.remove('visible'));
+  document.getElementById(`agtab-${id}`)?.classList.add('active');
+  document.getElementById(`agsec-${id}`)?.classList.add('visible');
+  if(id==='agweekly'){buildWeekly();updateBanner();}
+}
+
+function buildAgUI(){
+  const tabsEl=document.getElementById('agTabs'),secsEl=document.getElementById('agSections');
+  const bm={open:['badge-open','受講可'],wait:['badge-wait','後半以降'],key:['badge-key','重要']};
+  const catDotMap={chosashi:'dot-c',ryosoku:'dot-r',other:'dot-o'};
+  PHASES.forEach((p,pi)=>{
+    const pg=p.categories?agGetProg(p.id):{done:0,total:0};
+    const tab=document.createElement('button');
+    tab.className='ag-tab'+(pi===0?' active':''); tab.id=`agtab-${p.id}`; tab.onclick=()=>switchAgTab(p.id);
+    tab.innerHTML=`${p.icon} ${p.label}${p.categories?`<span class="ag-tab-cnt">${pg.done}/${pg.total}</span>`:''}`;
+    tabsEl.appendChild(tab);
+    const sec=document.createElement('div');
+    sec.className='ag-section'+(pi===0?' visible':''); sec.id=`agsec-${p.id}`;
+    if(p.type==='weekly'){
+      sec.innerHTML=`<div class="ag-hero hero-weekly"><div class="th-icon">📅</div><div class="th-wrap"><div class="th-title">今週の学習記録</div><div class="th-text">学習した日をタップ（週5日目標）</div></div></div>
+      <div id="weekBanner" class="week-banner on-track"><div class="wb-icon" id="wbIcon">📖</div><div class="wb-body"><div class="wb-title" id="wbTitle">確認中...</div><div class="wb-sub" id="wbSub"></div></div><div class="wb-pct" id="wbPct">0%</div></div>
+      <div class="weekly-grid" id="weeklyCalendar"></div>`;
+    } else if(p.type==='schedule'){
+      const cmap={c:'dot-c',r:'dot-r',o:'dot-o'};
+      sec.innerHTML=`<div class="ag-hero hero-schedule"><div class="th-icon">🗓</div><div class="th-wrap"><div class="th-title">月別おすすめ学習スケジュール</div><div class="th-text">各月の学習内容の目安</div></div></div>
+      <div class="sched-grid">${SCHEDULE.map(m=>`<div class="sched-card"><div class="sched-head ${m.cls}">${m.icon} ${m.period}</div><div class="sched-body">${m.weeks.map(w=>`<div class="sched-week"><div class="sched-week-title">${w.title}</div>${w.items.map(it=>`<div class="sched-item"><div class="sched-dot ${cmap[it.cat]||'dot-o'}"></div><div><div class="sched-text">${it.text}</div><div class="sched-sub">${it.sub}</div></div></div>`).join('')}</div>`).join('')}</div></div>`).join('')}</div>
+      <div style="font-size:10px;color:var(--muted);padding:4px 2px;display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--purple);margin-right:3px;vertical-align:middle"></span>土地家屋調査士</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:3px;vertical-align:middle"></span>測量士補</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--orange);margin-right:3px;vertical-align:middle"></span>その他</span>
+      </div>`;
+    } else {
+      sec.innerHTML=`<div class="ag-hero ${p.heroClass}"><div class="th-icon">${p.icon}</div><div class="th-wrap"><div class="th-title">${p.label}</div><div class="th-text" id="agstext-${p.id}">${pg.done} / ${pg.total} 完了</div><div class="th-bar"><div class="th-bar-fill" id="agsfill-${p.id}" style="width:${pct(pg.done,pg.total)}%;background:${p.barColor}"></div></div></div></div>
+      <div class="cat-grid">${p.categories.map((cat,ci)=>{
+        const cp=agGetCatProg(p.id,ci);
+        return `<div class="cat-card"><div class="cat-head"><span>${cat.icon}</span>${cat.name}<span class="cat-cnt" id="agcc-${p.id}-${ci}">${cp.done}/${cp.total}</span></div>
+        <div class="cat-items">${cat.items.map((item,ii)=>{const k=`ag-${p.id}-${ci}-${ii}`;const[bc,bt]=bm[item.badge]||['badge-open',''];return `<div class="item ${agState[k]?'checked':''}" data-key="${k}" onclick="agToggle('${k}')"><div class="checkbox"><span class="checkmark"><svg width="10" height="8" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7.5L10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="item-body"><div class="item-name">${item.name}</div><div class="item-point">${item.meta}</div><span class="badge-tag ${bc}">${bt}</span></div></div>`;}).join('')}</div>
+        <div class="cat-prog"><div class="mini-bar"><div class="mini-bar-fill" id="agmf-${p.id}-${ci}" style="width:${pct(cp.done,cp.total)}%;background:${p.barColor}"></div></div><span class="mini-pct" id="agmp-${p.id}-${ci}">${pct(cp.done,cp.total)}%</span></div></div>`;
+      }).join('')}</div>`;
+    }
+    secsEl.appendChild(sec);
+  });
+  buildWeekly(); updateBanner();
+}
+
+// ============================================================
+// ===== TODO =====
+// ============================================================
+const TODO_DATA=[
+  {id:'tnow',label:'今すぐ',icon:'⚡',heroClass:'hero-now',barColor:'#3d8c6e',categories:[
+    {name:'アガルート申込',icon:'📚',items:[
+      {name:'アガルート 無料体験申込',point:'20日間無料・約10.5時間の講義見放題',badge:'done',badgeText:'✅ 完了'},
+      {name:'アガルート ダブル合格カリキュラム/フル 正式申込',point:'税込492,800円・12回払いで月々41,067円',badge:'done',badgeText:'✅ 完了'}
+    ]},
+    {name:'ドローンスクール確認',icon:'🚁',items:[
+      {name:'JDO柏校 お問合せ送信',point:'国家資格（二等）登録講習機関か確認',badge:'done',badgeText:'✅ 完了'},
+      {name:'JDO柏校 返信確認・国家資格対応確認',point:'未対応なら流山IC校（Drone Safety License）も検討',badge:'urgent',badgeText:'🔥 次のアクション'},
+      {name:'ドローンスクール 8〜9月の受講日程を予約',point:'JDO柏校 or 流山IC校で集中受講',badge:'now',badgeText:'今すぐ'}
+    ]}
+  ]},
+  {id:'tstudy',label:'〜7月末',icon:'📖',heroClass:'hero-study',barColor:'#7052a8',categories:[
+    {name:'土地家屋調査士 学習',icon:'📐',items:[
+      {name:'6/15 測量士補講義スタートを確認',point:'マイページで公開を確認して即開始',badge:'now',badgeText:'6/15'},
+      {name:'毎日オンライン学習を継続（週5日目標）',point:'仕事後・休日に学習。平日1h＋休日2hが目安',badge:'now',badgeText:'進行中'},
+      {name:'土地家屋調査士法（17章）視聴完了',point:'最初の科目。導入後すぐ着手',badge:'now',badgeText:'進行中'},
+      {name:'民法 第1〜15章視聴',point:'測量士補と並行して進める',badge:'now',badgeText:'進行中'}
+    ]},
+    {name:'自動車教習所',icon:'🚗',items:[
+      {name:'教習所を決定・入所申込',point:'柏南 or MKA柏に電話確認・入所',badge:'urgent',badgeText:'🔥 今月中に'},
+      {name:'教習所 通い開始',point:'仕事後・休日に技能教習を進める',badge:'now',badgeText:'今すぐ'}
+    ]}
+  ]},
+  {id:'tdrone',label:'8〜9月',icon:'🚁',heroClass:'hero-drone',barColor:'#4a6db5',categories:[
+    {name:'ドローン国家資格取得',icon:'🎯',items:[
+      {name:'学科講習（オンライン10時間）受講',point:'二等無人航空機操縦士 初学者コース',badge:'aug',badgeText:'8〜9月'},
+      {name:'実地講習（10時間）受講',point:'スクールで実機操作を習得',badge:'aug',badgeText:'8〜9月'},
+      {name:'修了審査 合格',point:'スクールの審査合格で指定試験機関の実技免除',badge:'aug',badgeText:'8〜9月'},
+      {name:'指定試験機関 学科試験・受験',point:'DIPS2.0から事前申請が必要',badge:'aug',badgeText:'8〜9月'},
+      {name:'二等無人航空機操縦士 資格取得！',point:'技能証明申請 → 証明書受取',badge:'aug',badgeText:'8〜9月'}
+    ]},
+    {name:'合宿免許 準備',icon:'🚗',items:[
+      {name:'那須自動車学校 本申込書類送付',point:'仮申込済（合宿免許わかば）→ 本申込手続き',badge:'aug',badgeText:'8月中に'},
+      {name:'合宿免許 持ち物・住民票など準備',point:'住民票（本籍地記載）・印鑑・眼鏡など',badge:'aug',badgeText:'9月末まで'}
+    ]}
+  ]},
+  {id:'tcamp',label:'10月',icon:'🚗',heroClass:'hero-camp',barColor:'#b07d2e',categories:[
+    {name:'合宿免許（那須自動車学校）',icon:'🏫',items:[
+      {name:'合宿免許 仮申込（那須自動車学校）',point:'10月1日入校・合宿免許わかばで仮申込済',badge:'done',badgeText:'✅ 完了'},
+      {name:'10/1 入校・合宿スタート',point:'栃木県那須塩原市。JR西那須野駅から車10分',badge:'oct',badgeText:'10/1〜'},
+      {name:'技能・学科教習 全過程修了',point:'最短14〜15日で卒業検定。延長保証+4泊・+8時限',badge:'oct',badgeText:'10月'},
+      {name:'卒業検定 合格・教習所卒業',point:'10月15日前後に卒業予定',badge:'oct',badgeText:'10月中旬'},
+      {name:'運転免許センターで本免学科試験 合格',point:'千葉県：幕張の免許センターで受験',badge:'oct',badgeText:'10月中旬〜'},
+      {name:'普通自動車免許（AT限定）取得！',point:'免許証交付',badge:'oct',badgeText:'10月'}
+    ]}
+  ]},
+  {id:'tcareer',label:'10月〜',icon:'🏢',heroClass:'hero-career',barColor:'#a84255',categories:[
+    {name:'転職活動',icon:'💼',items:[
+      {name:'土地家屋調査士補助 求人リサーチ開始',point:'「UAV測量」「ドローン測量」対応事務所を優先',badge:'later',badgeText:'10月〜'},
+      {name:'履歴書・職務経歴書 作成',point:'ドローン国家資格・学習中の土地家屋調査士も記載',badge:'later',badgeText:'10月〜'},
+      {name:'応募・面接',point:'ドローン測量を活用している事務所への転職が目標',badge:'later',badgeText:'随時'},
+      {name:'土地家屋調査士補助として転職！',point:'目標：ドローン測量に取り組む事務所',badge:'later',badgeText:'目標'}
+    ]},
+    {name:'測量士補・土地家屋調査士 試験',icon:'📝',items:[
+      {name:'測量士補 2027年1月 願書提出',point:'2027年5月試験・合格で午前免除',badge:'later',badgeText:'2027年1月'},
+      {name:'測量士補 2027年5月 試験・合格',point:'28問中18問以上正解で合格',badge:'later',badgeText:'2027年5月'},
+      {name:'土地家屋調査士 2027年10月 筆記試験',point:'測量士補合格で午前免除。午後の部に集中',badge:'later',badgeText:'2027年10月'}
+    ]}
+  ]}
+];
+
+const todoState={};
+TODO_DATA.forEach(s=>s.categories.forEach((c,ci)=>c.items.forEach((_,ii)=>{
+  const k=`td-${s.id}-${ci}-${ii}`;
+  try{todoState[k]=JSON.parse(localStorage.getItem(k)||JSON.stringify(_.badge==='done'));}catch{todoState[k]=_.badge==='done';}
+})));
+function todoSave(k){try{localStorage.setItem(k,JSON.stringify(todoState[k]));}catch{}}
+
+function todoGetProg(id){const ks=Object.keys(todoState).filter(k=>k.startsWith(`td-${id}-`));return{done:ks.filter(k=>todoState[k]).length,total:ks.length};}
+function todoGetCatProg(id,ci){const ks=Object.keys(todoState).filter(k=>k.startsWith(`td-${id}-${ci}-`));return{done:ks.filter(k=>todoState[k]).length,total:ks.length};}
+
+function todoToggle(k){
+  todoState[k]=!todoState[k]; todoSave(k);
+  document.querySelector(`[data-td-key="${k}"]`)?.classList.toggle('checked',todoState[k]);
+  updateTodoHeader(); updateTodoTabs();
+}
+
+function updateTodoTabs(){
+  TODO_DATA.forEach(s=>{
+    const pg=todoGetProg(s.id);
+    const tab=document.getElementById(`ttab-${s.id}`);
+    if(tab){const c=tab.querySelector('.todo-tab-count');if(c)c.textContent=`${pg.done}/${pg.total}`;}
+    const sf=document.getElementById(`thfill-${s.id}`),st=document.getElementById(`thtext-${s.id}`);
+    if(sf)sf.style.width=pct(pg.done,pg.total)+'%';
+    if(st)st.textContent=`${pg.done} / ${pg.total} 完了`;
+    s.categories.forEach((_,ci)=>{
+      const cp=todoGetCatProg(s.id,ci);
+      const mf=document.getElementById(`tmf-${s.id}-${ci}`),mp=document.getElementById(`tmp-${s.id}-${ci}`),cc=document.getElementById(`tcc-${s.id}-${ci}`);
+      if(mf)mf.style.width=pct(cp.done,cp.total)+'%';
+      if(mp)mp.textContent=pct(cp.done,cp.total)+'%';
+      if(cc)cc.textContent=`${cp.done}/${cp.total}`;
+    });
+  });
+}
+
+function updateTodoHeader(){
+  const allKeys=Object.keys(todoState);
+  const done=allKeys.filter(k=>todoState[k]).length;
+  document.getElementById('hTodo').textContent=`TODO ${done}/${allKeys.length}`;
+}
+
+function switchTodoTab(id){
+  document.querySelectorAll('.todo-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.todo-section').forEach(s=>s.classList.remove('visible'));
+  document.getElementById(`ttab-${id}`)?.classList.add('active');
+  document.getElementById(`tsec-${id}`)?.classList.add('visible');
+}
+
+function buildTodoUI(){
+  const tabsEl=document.getElementById('todoTabs'),secsEl=document.getElementById('todoSections');
+  TODO_DATA.forEach((s,si)=>{
+    const pg=todoGetProg(s.id);
+    const tab=document.createElement('button');
+    tab.className='todo-tab'+(si===0?' active':''); tab.id=`ttab-${s.id}`; tab.onclick=()=>switchTodoTab(s.id);
+    tab.innerHTML=`${s.icon} ${s.label}<span class="todo-tab-count">${pg.done}/${pg.total}</span>`;
+    tabsEl.appendChild(tab);
+    const sec=document.createElement('div');
+    sec.className='todo-section'+(si===0?' visible':''); sec.id=`tsec-${s.id}`;
+    sec.innerHTML=`<div class="todo-hero ${s.heroClass}"><div class="th-icon">${s.icon}</div><div class="th-wrap"><div class="th-title">${s.label}</div><div class="th-text" id="thtext-${s.id}">${pg.done} / ${pg.total} 完了</div><div class="th-bar"><div class="th-bar-fill" id="thfill-${s.id}" style="width:${pct(pg.done,pg.total)}%;background:${s.barColor}"></div></div></div></div>
+    <div class="cat-grid">${s.categories.map((cat,ci)=>{
+      const cp=todoGetCatProg(s.id,ci);
+      return `<div class="cat-card"><div class="cat-head"><span>${cat.icon}</span>${cat.name}<span class="cat-cnt" id="tcc-${s.id}-${ci}">${cp.done}/${cp.total}</span></div>
+      <div class="cat-items">${cat.items.map((item,ii)=>{const k=`td-${s.id}-${ci}-${ii}`;return `<div class="item ${todoState[k]?'checked':''}" data-td-key="${k}" onclick="todoToggle('${k}')"><div class="checkbox"><span class="checkmark"><svg width="10" height="8" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7.5L10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="item-body"><div class="item-name">${item.name}</div><div class="item-point">${item.point}</div><span class="badge badge-${item.badge}">${item.badgeText}</span></div></div>`;}).join('')}</div>
+      <div class="cat-prog"><div class="mini-bar"><div class="mini-bar-fill" id="tmf-${s.id}-${ci}" style="width:${pct(cp.done,cp.total)}%;background:${s.barColor}"></div></div><span class="mini-pct" id="tmp-${s.id}-${ci}">${pct(cp.done,cp.total)}%</span></div></div>`;
+    }).join('')}</div>`;
+    secsEl.appendChild(sec);
+  });
+}
+
+// ============================================================
+// ===== メインタブ切替 =====
+// ============================================================
+function switchMain(id){
+  document.querySelectorAll('.main-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('visible'));
+  document.getElementById(`mtab-${id}`)?.classList.add('active');
+  document.getElementById(`page-${id}`)?.classList.add('visible');
+}
+
+// ============================================================
+// ===== リセット =====
+// ============================================================
+function resetAll(){
+  if(!confirm('全ての記録（学習ログ・チェック・TODO）をリセットしますか？'))return;
+  Object.keys(agState).forEach(k=>{agState[k]=false;try{localStorage.removeItem(k);}catch{}});
+  Object.keys(todoState).forEach(k=>{todoState[k]=false;try{localStorage.removeItem(k);}catch{}});
+  try{localStorage.removeItem('study-logs-v2');}catch{}
+  getWeekDays().forEach(d=>{try{localStorage.removeItem(dateKey(d));}catch{}});
+  document.querySelectorAll('.item').forEach(el=>el.classList.remove('checked'));
+  renderDashboard(); buildWeekly(); updateBanner(); updateTodoTabs(); updateTodoHeader(); updateAgTabs();
+}
+
+// ============================================================
+// ===== 初期化 =====
+// ============================================================
+const ld=document.getElementById('logDate');
+if(ld){const t=new Date();ld.value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
+buildAgUI();
+buildTodoUI();
+renderDashboard();
+updateTodoHeader();
+</script>
+</body>
+</html>
