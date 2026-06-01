@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学習ダッシュボード</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f2ed; --surface: #fffefb; --border: #e0dbd3;
+  --text: #1a1814; --muted: #7a756e; --accent: #2d4a3e;
+  --green: #3d8c6e; --purple: #7052a8; --orange: #b07d2e; --red: #a84255; --blue: #4a6db5;
+}
+body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 0 0 60px; }
+
+header { background: var(--accent); color: #fff; padding: 16px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.header-inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.header-title { font-size: 17px; font-weight: 700; flex: 1; }
+.header-sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+main { max-width: 960px; margin: 0 auto; padding: 20px 14px 0; }
+
+/* サマリカード */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.sum-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+.sum-label { font-size: 10px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.sum-value { font-size: 26px; font-weight: 700; font-family: 'DM Mono', monospace; line-height: 1; }
+.sum-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+.sum-card.highlight { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sum-card.highlight .sum-label { color: rgba(255,255,255,0.7); }
+.sum-card.highlight .sum-sub { color: rgba(255,255,255,0.7); }
+
+/* 目標進捗バー */
+.goal-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.goal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.goal-title { font-size: 13px; font-weight: 700; }
+.goal-pct { font-size: 22px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--accent); }
+.goal-bar-wrap { height: 14px; background: var(--bg); border-radius: 100px; overflow: hidden; margin-bottom: 8px; }
+.goal-bar-fill { height: 100%; border-radius: 100px; transition: width 0.5s ease; background: linear-gradient(90deg, var(--green), var(--accent)); }
+.goal-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+.goal-milestone { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.milestone { font-size: 10px; padding: 3px 10px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted); background: var(--bg); }
+.milestone.reached { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* タブ */
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab { display: flex; align-items: center; gap: 5px; padding: 7px 13px; border-radius: 100px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); font-family: 'Noto Sans JP', sans-serif; transition: all 0.2s; }
+.tab:hover { border-color: var(--accent); color: var(--text); }
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.section { display: none; }
+.section.visible { display: block; }
+
+/* グラフエリア */
+.chart-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.chart-title { font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+.chart-wrap { overflow-x: auto; }
+
+/* バーグラフ */
+.bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-bottom: 24px; position: relative; min-width: 300px; }
+.bar-col { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 28px; }
+.bar-fill { width: 100%; border-radius: 5px 5px 0 0; transition: height 0.4s ease; cursor: pointer; position: relative; min-height: 2px; }
+.bar-fill:hover { opacity: 0.8; }
+.bar-fill::after { content: attr(data-val); position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 9px; font-family: 'DM Mono', monospace; color: var(--text); white-space: nowrap; opacity: 0; transition: opacity 0.2s; }
+.bar-fill:hover::after { opacity: 1; }
+.bar-label { font-size: 9px; color: var(--muted); margin-top: 5px; text-align: center; white-space: nowrap; }
+.bar-grid { position: absolute; top: 0; left: 0; right: 0; bottom: 24px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.bar-grid-line { border-top: 1px dashed var(--border); width: 100%; position: relative; }
+.bar-grid-val { position: absolute; left: 0; top: -8px; font-size: 8px; font-family: 'DM Mono', monospace; color: var(--muted); }
+
+/* 折れ線グラフ（SVG） */
+.line-chart-wrap { width: 100%; overflow-x: auto; }
+
+/* ログ入力 */
+.log-section { background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+.log-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+.log-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
+.log-label { font-size: 11px; color: var(--muted); min-width: 70px; }
+.log-input { flex: 1; min-width: 100px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 7px; padding: 6px 10px; font-size: 12px; font-family: 'Noto Sans JP', sans-serif; color: var(--text); }
+.log-input:focus { outline: none; border-color: var(--accent); }
+.log-btn { background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 100px; font-family: 'Noto Sans JP', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.log-btn:hover { opacity: 0.85; }
+.log-btn.del { background: var(--bg); color: var(--muted); border: 1.5px solid var(--border); font-weight: 400; padding: 5px 12px; }
+
+/* ログ履歴 */
+.log-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+.log-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.log-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+.log-table tr:last-child td { border-bottom: none; }
+.log-table tr:hover td { background: var(--bg); }
+.td-del { cursor: pointer; color: var(--muted); font-size: 13px; text-align: center; }
+.td-del:hover { color: var(--red); }
+.badge-cat { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; }
+.cat-chosashi { background: #ece8f0; color: var(--purple); }
+.cat-ryosoku  { background: #e8f0ee; color: var(--green); }
+.cat-other    { background: #f0ede5; color: var(--orange); }
+
+/* 累積グラフSVG */
+svg { font-family: 'DM Mono', monospace; }
+
+/* 進捗比較 */
+.compare-grid { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 16px; }
+@media(max-width:480px){ .compare-grid { grid-template-columns: 1fr; } .compare-divider { display:none; } }
+.compare-divider { background: var(--border); }
+.compare-label { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.compare-pct-big { font-family: 'DM Mono', monospace; font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
+.compare-bar-wrap { height: 12px; background: var(--bg); border-radius: 100px; overflow: hidden; margin-bottom: 5px; }
+.compare-bar-fill { height: 100%; border-radius: 100px; transition: width 0.6s ease; }
+.compare-meta { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; line-height: 1.8; }
+.gap-banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; text-align: center; }
+.gap-ahead  { background: #e8f0ee; color: #1e3d32; }
+.gap-behind { background: #fde8d8; color: #7a2e10; }
+.gap-equal  { background: #e8ecf5; color: #1e2a45; }
+.milestone-row { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.milestone { font-size: 10px; padding: 2px 9px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted); background: var(--bg); }
+.milestone.reached { background: var(--accent); color: #fff; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-title">📊 学習ダッシュボード</div>
+      <div class="header-sub">土地家屋調査士・測量士補 2027年合格目標 | 目標1,000時間</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- サマリ -->
+  <div class="summary-grid" id="summaryGrid"></div>
+
+  <!-- 進捗比較カード -->
+  <div class="goal-card" id="progressCard"></div>
+
+  <!-- タブ -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('daily')" id="tab-daily">📅 日次グラフ</button>
+    <button class="tab" onclick="switchTab('weekly')" id="tab-weekly">📆 週次グラフ</button>
+    <button class="tab" onclick="switchTab('cumul')" id="tab-cumul">📈 累積グラフ</button>
+    <button class="tab" onclick="switchTab('log')" id="tab-log">📝 ログ入力・履歴</button>
+  </div>
+
+  <!-- 日次グラフ -->
+  <div class="section visible" id="sec-daily">
+    <div class="chart-card">
+      <div class="chart-title">直近30日の日次学習時間</div>
+      <div class="chart-wrap"><div class="bar-chart" id="dailyChart"></div></div>
+    </div>
+  </div>
+
+  <!-- 週次グラフ -->
+  <div class="section" id="sec-weekly">
+    <div class="chart-card">
+      <div class="chart-title">週次学習時間（直近12週）</div>
+      <div class="chart-wrap"><div class="bar-chart" id="weeklyChart"></div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">週次 科目別内訳</div>
+      <div class="chart-wrap" id="weekCatChart"></div>
+    </div>
+  </div>
+
+  <!-- 累積グラフ -->
+  <div class="section" id="sec-cumul">
+    <div class="chart-card">
+      <div class="chart-title">累積学習時間 vs 目標ペース</div>
+      <div class="line-chart-wrap" id="cumulChart"></div>
+    </div>
+  </div>
+
+  <!-- ログ入力・履歴 -->
+  <div class="section" id="sec-log">
+    <div class="log-section">
+      <h3>📝 学習ログを追加</h3>
+      <div class="log-row">
+        <span class="log-label">日付</span>
+        <input type="date" id="logDate" class="log-input" style="max-width:150px">
+      </div>
+      <div class="log-row">
+        <span class="log-label">学習内容</span>
+        <input type="text" id="logContent" class="log-input" placeholder="例：土地家屋調査士法 1〜5章視聴">
+      </div>
+      <div class="log-row">
+        <span class="log-label">科目</span>
+        <select id="logCat" class="log-input" style="max-width:180px">
+          <option value="chosashi">土地家屋調査士</option>
+          <option value="ryosoku">測量士補</option>
+          <option value="other">その他（ドローン等）</option>
+        </select>
+      </div>
+      <div class="log-row">
+        <span class="log-label">時間（h）</span>
+        <input type="number" id="logHours" class="log-input" style="max-width:80px" value="1" min="0.5" step="0.5">
+        <button class="log-btn" onclick="addLog()">追加する</button>
+      </div>
+    </div>
+    <div class="log-section">
+      <h3>📋 学習ログ履歴</h3>
+      <div id="logTableWrap"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ===== ストレージ =====
+const GOAL = 1000;
+const TARGET_DATE = new Date('2027-10-17'); // 試験日
+
+function getLogs() { try { return JSON.parse(localStorage.getItem('study-logs-v2') || '[]'); } catch { return []; } }
+function saveLogs(l) { try { localStorage.setItem('study-logs-v2', JSON.stringify(l)); } catch {} }
+
+// ===== ユーティリティ =====
+function fmtDate(d) {
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function today() { return fmtDate(new Date()); }
+function parseH(v) { return parseFloat(v) || 0; }
+
+function getWeekKey(dateStr) {
+  const d = new Date(dateStr);
+  const dow = d.getDay(); const mon = new Date(d);
+  mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return fmtDate(mon);
+}
+
+function getWeekLabel(dateStr) {
+  const d = new Date(dateStr);
+  return `${d.getMonth()+1}/${d.getDate()}週`;
+}
+
+// ===== サマリ計算 =====
+function calcSummary() {
+  const logs = getLogs();
+  const total = logs.reduce((s,l) => s + parseH(l.hours), 0);
+  const todayStr = today();
+  const todayH = logs.filter(l => l.date === todayStr).reduce((s,l) => s + parseH(l.hours), 0);
+  const weekKey = getWeekKey(todayStr);
+  const weekH = logs.filter(l => getWeekKey(l.date) === weekKey).reduce((s,l) => s + parseH(l.hours), 0);
+  const monthStr = todayStr.slice(0,7);
+  const monthH = logs.filter(l => l.date.startsWith(monthStr)).reduce((s,l) => s + parseH(l.hours), 0);
+
+  const days = new Set(logs.map(l => l.date)).size;
+  const avgPerDay = days > 0 ? (total / days).toFixed(1) : 0;
+
+  const now = new Date();
+  const daysLeft = Math.ceil((TARGET_DATE - now) / 86400000);
+  const needed = Math.max(0, GOAL - total);
+  const dailyNeeded = daysLeft > 0 ? (needed / daysLeft).toFixed(1) : 0;
+
+  return { total, todayH, weekH, monthH, days, avgPerDay, daysLeft, dailyNeeded };
+}
+
+function renderSummary() {
+  const s = calcSummary();
+
+  // ===== 日数進捗計算 =====
+  const START_DATE = new Date('2026-06-01'); // 学習スタート日
+  const totalPeriodDays = Math.ceil((TARGET_DATE - START_DATE) / 86400000); // 全期間
+  const elapsedDays = Math.max(0, Math.ceil((new Date() - START_DATE) / 86400000)); // 経過日数
+  const dayPct = Math.min(100, (elapsedDays / totalPeriodDays * 100));
+  const daysLeft = Math.max(0, Math.ceil((TARGET_DATE - new Date()) / 86400000));
+
+  // ===== 学習時間進捗計算 =====
+  const hourPct = Math.min(100, (s.total / GOAL * 100));
+
+  // 進捗差分
+  const diff = (hourPct - dayPct).toFixed(1);
+  const diffNum = parseFloat(diff);
+  let gapCls, gapMsg;
+  if (diffNum > 2)       { gapCls='gap-ahead';  gapMsg=`✅ 学習が日数より ${diff}% 先行しています！このペースを維持しましょう`; }
+  else if (diffNum < -2) { gapCls='gap-behind'; gapMsg=`⚠️ 日数より学習が ${Math.abs(diff)}% 遅れています。1日${s.dailyNeeded}h を目標に！`; }
+  else                   { gapCls='gap-equal';  gapMsg=`📊 学習ペースは日数進捗とほぼ一致しています`; }
+
+  // ===== サマリカード =====
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="sum-card highlight">
+      <div class="sum-label">総学習時間</div>
+      <div class="sum-value">${s.total.toFixed(1)}<span style="font-size:14px">h</span></div>
+      <div class="sum-sub">目標1,000hの ${hourPct.toFixed(1)}%</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">今日</div>
+      <div class="sum-value">${s.todayH.toFixed(1)}<span style="font-size:14px">h</span></div>
+      <div class="sum-sub">本日の学習時間</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">今週</div>
+      <div class="sum-value">${s.weekH.toFixed(1)}<span style="font-size:14px">h</span></div>
+      <div class="sum-sub">週次学習時間</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">今月</div>
+      <div class="sum-value">${s.monthH.toFixed(1)}<span style="font-size:14px">h</span></div>
+      <div class="sum-sub">月間学習時間</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">1日平均</div>
+      <div class="sum-value">${s.avgPerDay}<span style="font-size:14px">h</span></div>
+      <div class="sum-sub">${s.days}日間の平均</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">必要ペース</div>
+      <div class="sum-value">${s.dailyNeeded}<span style="font-size:14px">h</span></div>
+      <div class="sum-sub">残り${daysLeft}日・1日あたり</div>
+    </div>`;
+
+  // ===== 進捗比較カード =====
+  const milestones = [100, 200, 300, 500, 700, 1000];
+  document.getElementById('progressCard').innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:14px">📊 進捗比較：学習時間 vs 日数</div>
+    <div class="compare-grid">
+
+      <!-- 学習時間進捗 -->
+      <div>
+        <div class="compare-label">🎯 学習時間の進捗</div>
+        <div class="compare-pct-big" style="color:var(--accent)">${hourPct.toFixed(1)}<span style="font-size:16px">%</span></div>
+        <div class="compare-bar-wrap">
+          <div class="compare-bar-fill" style="width:${hourPct.toFixed(1)}%;background:linear-gradient(90deg,var(--green),var(--accent))"></div>
+        </div>
+        <div class="compare-meta">
+          ${s.total.toFixed(1)}h 完了 / 残り ${Math.max(0,GOAL-s.total).toFixed(1)}h<br>
+          目標：1,000時間（2027年10月試験）
+        </div>
+      </div>
+
+      <div class="compare-divider"></div>
+
+      <!-- 日数進捗 -->
+      <div>
+        <div class="compare-label">📅 日数の進捗（6/1〜試験日）</div>
+        <div class="compare-pct-big" style="color:var(--blue)">${dayPct.toFixed(1)}<span style="font-size:16px">%</span></div>
+        <div class="compare-bar-wrap">
+          <div class="compare-bar-fill" style="width:${dayPct.toFixed(1)}%;background:linear-gradient(90deg,var(--blue),#6a9fd8)"></div>
+        </div>
+        <div class="compare-meta">
+          経過 ${elapsedDays}日 / 全期間 ${totalPeriodDays}日<br>
+          残り ${daysLeft}日（2027年10月17日 試験日）
+        </div>
+      </div>
+    </div>
+
+    <div class="gap-banner ${gapCls}">${gapMsg}</div>
+
+    <div class="milestone-row">
+      ${milestones.map(m => `<span class="milestone ${s.total >= m ? 'reached' : ''}">${m}h${s.total >= m ? ' ✓' : ''}</span>`).join('')}
+    </div>`;
+}
+
+// ===== 日次グラフ =====
+function renderDaily() {
+  const logs = getLogs();
+  const byDate = {};
+  logs.forEach(l => { byDate[l.date] = (byDate[l.date] || 0) + parseH(l.hours); });
+
+  const dates = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    dates.push(fmtDate(d));
+  }
+
+  const vals = dates.map(d => byDate[d] || 0);
+  const maxVal = Math.max(...vals, 2);
+  renderBarChart('dailyChart', dates.map((d,i) => ({
+    label: new Date(d).getDate() + (new Date(d).getDate() === 1 ? `/${new Date(d).getMonth()+1}` : ''),
+    val: vals[i],
+    color: vals[i] === 0 ? '#e0dbd3' : 'var(--accent)',
+    isToday: d === today()
+  })), maxVal);
+}
+
+// ===== 週次グラフ =====
+function renderWeekly() {
+  const logs = getLogs();
+  const byWeek = {}, byWeekCat = {};
+  logs.forEach(l => {
+    const wk = getWeekKey(l.date);
+    byWeek[wk] = (byWeek[wk] || 0) + parseH(l.hours);
+    if (!byWeekCat[wk]) byWeekCat[wk] = { chosashi:0, ryosoku:0, other:0 };
+    byWeekCat[wk][l.cat || 'other'] = (byWeekCat[wk][l.cat || 'other'] || 0) + parseH(l.hours);
+  });
+
+  const weeks = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i * 7);
+    weeks.push(getWeekKey(fmtDate(d)));
+  }
+
+  const vals = weeks.map(w => byWeek[w] || 0);
+  const maxVal = Math.max(...vals, 5);
+  renderBarChart('weeklyChart', weeks.map((w,i) => ({
+    label: getWeekLabel(w),
+    val: vals[i],
+    color: vals[i] === 0 ? '#e0dbd3' : 'var(--blue)',
+    isToday: false
+  })), maxVal);
+
+  // 科目別内訳（積み上げ）
+  renderStackedChart('weekCatChart', weeks, byWeekCat);
+}
+
+// ===== バーグラフ描画 =====
+function renderBarChart(id, data, maxVal) {
+  const el = document.getElementById(id); if (!el) return;
+  const gridLines = 4;
+  const gridHTML = Array.from({length: gridLines+1}, (_,i) => {
+    const v = (maxVal * (gridLines - i) / gridLines).toFixed(1);
+    return `<div class="bar-grid-line"><span class="bar-grid-val">${v}h</span></div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="bar-grid">${gridHTML}</div>` +
+    data.map(d => {
+      const h = maxVal > 0 ? Math.max(d.val / maxVal * 140, d.val > 0 ? 4 : 0) : 0;
+      const color = d.isToday ? 'var(--orange)' : d.color;
+      return `<div class="bar-col">
+        <div class="bar-fill" style="height:${h}px;background:${color};" data-val="${d.val}h"></div>
+        <div class="bar-label">${d.label}</div>
+      </div>`;
+    }).join('');
+}
+
+// ===== 積み上げバー =====
+function renderStackedChart(id, weeks, byWeekCat) {
+  const el = document.getElementById(id); if (!el) return;
+  const cats = ['chosashi', 'ryosoku', 'other'];
+  const colors = { chosashi: 'var(--purple)', ryosoku: 'var(--green)', other: 'var(--orange)' };
+  const labels = { chosashi: '土地家屋調査士', ryosoku: '測量士補', other: 'その他' };
+  const maxVal = Math.max(...weeks.map(w => Object.values(byWeekCat[w]||{}).reduce((a,b)=>a+b,0)), 2);
+
+  const bars = weeks.map(w => {
+    const d = byWeekCat[w] || {};
+    const total = cats.reduce((s,c) => s + (d[c]||0), 0);
+    const segs = cats.map(c => `<div style="height:${maxVal>0?(d[c]||0)/maxVal*120:0}px;background:${colors[c]};width:100%;min-height:${(d[c]||0)>0?2:0}px;"></div>`).reverse().join('');
+    return `<div class="bar-col"><div style="display:flex;flex-direction:column;justify-content:flex-end;height:120px;width:100%;border-radius:5px 5px 0 0;overflow:hidden;">${segs}</div><div class="bar-label">${getWeekLabel(w)}</div></div>`;
+  }).join('');
+
+  const legend = cats.map(c => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);margin-right:12px"><span style="width:10px;height:10px;border-radius:3px;background:${colors[c]};display:inline-block"></span>${labels[c]}</span>`).join('');
+
+  el.innerHTML = `<div style="display:flex;align-items:flex-end;gap:4px;height:144px;padding-bottom:24px;min-width:300px;">${bars}</div><div style="margin-top:8px;">${legend}</div>`;
+}
+
+// ===== 累積グラフ（SVG） =====
+function renderCumul() {
+  const logs = getLogs().sort((a,b) => a.date.localeCompare(b.date));
+  const el = document.getElementById('cumulChart'); if (!el) return;
+
+  if (logs.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:40px">まだ学習ログがありません</div>';
+    return;
+  }
+
+  const startDate = new Date(logs[0].date);
+  const endDate = TARGET_DATE;
+  const totalDays = Math.ceil((endDate - startDate) / 86400000);
+
+  // 実績データ
+  const byDate = {};
+  logs.forEach(l => { byDate[l.date] = (byDate[l.date] || 0) + parseH(l.hours); });
+  const actual = [];
+  let cum = 0;
+  const allDates = Object.keys(byDate).sort();
+  allDates.forEach(d => { cum += byDate[d]; actual.push({ d, h: cum }); });
+
+  // 目標ライン（始点→終点）
+  const W = 700, H = 240, PAD = { t:20, r:20, b:36, l:48 };
+  const gW = W - PAD.l - PAD.r, gH = H - PAD.t - PAD.b;
+  const maxH_val = Math.max(GOAL, cum + 10);
+
+  function xPos(dateStr) {
+    const d = new Date(dateStr);
+    const dayOffset = Math.ceil((d - startDate) / 86400000);
+    return PAD.l + (dayOffset / totalDays) * gW;
+  }
+  function yPos(h) { return PAD.t + gH - (h / maxH_val) * gH; }
+
+  // グリッド
+  const gridLines = [0, 200, 400, 600, 800, 1000];
+  const gridSVG = gridLines.map(v => {
+    const y = yPos(v);
+    return `<line x1="${PAD.l}" y1="${y}" x2="${W-PAD.r}" y2="${y}" stroke="#e0dbd3" stroke-dasharray="3,3"/>
+            <text x="${PAD.l-4}" y="${y+4}" font-size="9" fill="#7a756e" text-anchor="end">${v}</text>`;
+  }).join('');
+
+  // 目標ライン
+  const goalLine = `<line x1="${PAD.l}" y1="${yPos(0)}" x2="${W-PAD.r}" y2="${yPos(GOAL)}" stroke="#3d8c6e" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.5"/>
+    <text x="${W-PAD.r+2}" y="${yPos(GOAL)+4}" font-size="9" fill="#3d8c6e">目標</text>`;
+
+  // 実績ライン
+  let pathD = '';
+  actual.forEach((pt, i) => {
+    const x = xPos(pt.d), y = yPos(pt.h);
+    pathD += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
+  });
+  const actualPath = actual.length > 0 ? `<path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>` : '';
+
+  // 点
+  const dots = actual.map(pt =>
+    `<circle cx="${xPos(pt.d)}" cy="${yPos(pt.h)}" r="3" fill="var(--accent)"><title>${pt.d}: ${pt.h.toFixed(1)}h</title></circle>`
+  ).join('');
+
+  // 今日の縦線
+  const todayStr = today();
+  const todayLine = new Date(todayStr) >= startDate ?
+    `<line x1="${xPos(todayStr)}" y1="${PAD.t}" x2="${xPos(todayStr)}" y2="${H-PAD.b}" stroke="var(--orange)" stroke-width="1" stroke-dasharray="4,3"/>
+     <text x="${xPos(todayStr)}" y="${PAD.t-4}" font-size="9" fill="var(--orange)" text-anchor="middle">今日</text>` : '';
+
+  // 月ラベル（X軸）
+  const monthLabels = [];
+  let cur = new Date(startDate);
+  cur.setDate(1); cur.setMonth(cur.getMonth()+1);
+  while (cur <= endDate) {
+    const ds = fmtDate(cur);
+    if (new Date(ds) >= startDate && new Date(ds) <= endDate) {
+      monthLabels.push(`<text x="${xPos(ds)}" y="${H-PAD.b+14}" font-size="9" fill="#7a756e" text-anchor="middle">${cur.getMonth()+1}月</text>`);
+    }
+    cur.setMonth(cur.getMonth()+1);
+  }
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;min-width:300px">
+    ${gridSVG}${goalLine}${todayLine}${actualPath}${dots}${monthLabels.join('')}
+    <text x="${PAD.l}" y="${H-2}" font-size="9" fill="#7a756e">${fmtDate(startDate)}</text>
+    <text x="${W-PAD.r}" y="${H-2}" font-size="9" fill="#7a756e" text-anchor="end">2027/10</text>
+    <rect x="${PAD.l}" y="${PAD.t}" width="${gW}" height="${gH}" fill="none" stroke="#e0dbd3"/>
+  </svg>
+  <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:var(--muted);">
+    <span><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--accent)" stroke-width="2.5"/></svg> 実績累積</span>
+    <span><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4,2"/></svg> 目標ライン</span>
+    <span><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--orange)" stroke-width="1" stroke-dasharray="3,2"/></svg> 今日</span>
+  </div>`;
+}
+
+// ===== ログテーブル =====
+function renderLogTable() {
+  const logs = getLogs().slice().sort((a,b) => b.date.localeCompare(a.date));
+  const el = document.getElementById('logTableWrap'); if(!el) return;
+  const catLabel = { chosashi:'土地家屋調査士', ryosoku:'測量士補', other:'その他' };
+  const catCls   = { chosashi:'cat-chosashi', ryosoku:'cat-ryosoku', other:'cat-other' };
+  if (logs.length === 0) { el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px">まだ記録がありません</div>'; return; }
+  el.innerHTML = `<table class="log-table">
+    <thead><tr><th>日付</th><th>内容</th><th>科目</th><th style="text-align:right">時間</th><th></th></tr></thead>
+    <tbody>${logs.map(l => `<tr>
+      <td style="font-family:'DM Mono',monospace;white-space:nowrap">${l.date}</td>
+      <td>${l.content}</td>
+      <td><span class="badge-cat ${catCls[l.cat||'other']}">${catLabel[l.cat||'other']}</span></td>
+      <td style="font-family:'DM Mono',monospace;text-align:right;font-weight:700">${parseH(l.hours).toFixed(1)}h</td>
+      <td class="td-del" onclick="deleteLog(${l.id})">✕</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ===== ログ操作 =====
+function addLog() {
+  const d=document.getElementById('logDate'), c=document.getElementById('logContent');
+  const h=document.getElementById('logHours'), cat=document.getElementById('logCat');
+  if(!d||!c) return;
+  if(!d.value||!c.value.trim()){alert('日付と内容を入力してください');return;}
+  const logs=getLogs();
+  logs.unshift({id:Date.now(), date:d.value, content:c.value.trim(), hours:parseFloat(h.value)||1, cat:cat.value});
+  saveLogs(logs); c.value='';
+  renderAll();
+}
+function deleteLog(id) {
+  if(!confirm('このログを削除しますか？'))return;
+  saveLogs(getLogs().filter(l=>l.id!==id));
+  renderAll();
+}
+
+// ===== タブ切替 =====
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('visible'));
+  document.getElementById(`tab-${id}`)?.classList.add('active');
+  document.getElementById(`sec-${id}`)?.classList.add('visible');
+  if(id==='daily') renderDaily();
+  if(id==='weekly') renderWeekly();
+  if(id==='cumul') renderCumul();
+  if(id==='log') renderLogTable();
+}
+
+// ===== 全体更新 =====
+function renderAll() {
+  renderSummary();
+  renderDaily();
+  renderLogTable();
+}
+
+// ===== 初期化 =====
+const ld = document.getElementById('logDate');
+if(ld){ const t=new Date(); ld.value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
+renderAll();
+</script>
+</body>
+</html>
