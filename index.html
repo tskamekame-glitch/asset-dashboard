@@ -606,8 +606,9 @@ tr:last-child td{border-bottom:none}
       <div class="card-head"><h2>📊 期間比較・増減分析</h2></div>
       <div id="compareBody" style="padding:0 0 8px"></div>
     </div>
-    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>証券・投資 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
-    <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
+    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 証券・個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
+    <div class="card" id="toushinCard" style="display:none"><div class="card-head"><h2>📊 投資信託 推移</h2></div><div class="chart-container"><canvas id="toushinChart"></canvas></div></div>
+    <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
     <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div></div>
     <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
     <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前回比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
@@ -785,7 +786,8 @@ tr:last-child td{border-bottom:none}
       <div class="field"><label>カテゴリ</label>
         <select id="fCat">
           <option value="銀行">🏦 銀行</option>
-          <option value="証券">📈 証券・投資</option>
+          <option value="証券">📈 証券・個別株</option>
+          <option value="投信">📊 投資信託・インデックス</option>
           <option value="現金">💵 現金・財布</option>
           <option value="不動産">🏠 不動産</option>
           <option value="年金">🧓 年金・iDeCo</option>
@@ -1018,8 +1020,8 @@ function refreshHome(){
 const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const SHEET_NAME='資産管理データ';
-const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
-const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
+const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#E24B4A','投信':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
+const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','投信':'📊','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
 const CAT_MAP_FROM_PF={'証券':'証券','証券-JP':'証券','証券-インド':'証券','証券-高配当':'証券','証券-個別':'証券','銀行':'銀行','年金':'年金','仮想通貨':'仮想通貨','その他':'その他','米国インデックス':'証券','日本インデックス':'証券','インド':'証券','高配当株':'証券','個別株':'証券','銀行キープ':'銀行'};
 
 let amAccounts=[];
@@ -1103,7 +1105,7 @@ function openAddModal(defaultCat){
   setTimeout(()=>document.getElementById('fName').focus(),300);
 }
 function amToggleStockFields(cat){
-  document.getElementById('fStockFields').style.display=(cat==='証券'||cat==='仮想通貨'||cat==='年金')?'block':'none';
+  document.getElementById('fStockFields').style.display=(cat==='証券'||cat==='投信'||cat==='仮想通貨'||cat==='年金')?'block':'none';
 }
 function amSwitchPriceMode(mode){
   const isIndex=mode==='index';
@@ -1780,7 +1782,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','summaryLineCard','barCard','donutCard','securitiesCard','pensionCard','commentCard','tableCard','compareCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','summaryLineCard','barCard','donutCard','securitiesCard','toushinCard','pensionCard','commentCard','tableCard','compareCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
@@ -1900,9 +1902,10 @@ function trRenderCharts(){
   chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map((_,i)=>TR_CAT_COLORS[i%TR_CAT_COLORS.length]),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.label+': '+trFmt(ctx.raw)+' ('+((ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0))*100).toFixed(1)+'%)'}},datalabels:{color:'#fff',font:{size:11,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return p<5?'':p+'%';}}},cutout:'55%'},plugins:[ChartDataLabels]});
   trDestroyChart('summaryLine');
   // カテゴリ合計推移グラフ（5系列）
-  const indexCats=['証券','仮想通貨']; // インデックス（年金除く）
+  const indexCats=['投信']; // 投資信託カテゴリ
   const pensionCats=['年金'];
   const bankCats=['銀行','現金'];
+  const stockCats=['証券','仮想通貨'];
   // 個別銘柄：証券カテゴリの口座ごと（合計ではなく銘柄別は証券グラフに任せる）
   const summaryDatasets=[
     {
@@ -1914,32 +1917,25 @@ function trRenderCharts(){
     {
       label:'銀行・現金',
       data:filtered.map(s=>bankCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
-      borderColor:'#0F6E56',borderWidth:2,borderDash:[],
+      borderColor:'#0F6E56',borderWidth:2,
       backgroundColor:'transparent',fill:false,tension:0.3
     },
     {
-      label:'インデックス（年金除く）',
-      data:filtered.map(s=>{
-        if(!s.accounts)return indexCats.reduce((sum,c)=>sum+(s.cats[c]||0),0);
-        return s.accounts.filter(a=>indexCats.includes(a.cat)&&!pensionCats.includes(a.cat)).reduce((sum,a)=>sum+a.amount,0);
-      }),
-      borderColor:'#BA7517',borderWidth:2,borderDash:[],
+      label:'投資信託',
+      data:filtered.map(s=>indexCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
+      borderColor:'#BA7517',borderWidth:2,
       backgroundColor:'transparent',fill:false,tension:0.3
     },
     {
       label:'年金・iDeCo',
       data:filtered.map(s=>pensionCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
-      borderColor:'#533C89',borderWidth:2,borderDash:[],
+      borderColor:'#D4537E',borderWidth:2,
       backgroundColor:'transparent',fill:false,tension:0.3
     },
     {
-      label:'個別銘柄',
-      data:filtered.map(s=>{
-        if(!s.accounts)return 0;
-        // 証券カテゴリのうちティッカーや株式っぽい名前のもの（暫定：証券合計 - インデックス名含むもの）
-        return s.accounts.filter(a=>a.cat==='証券'&&!['eMAXIS','SBI','世界経済','ひふみ','たわら','iTrust'].some(k=>a.name.includes(k))).reduce((sum,a)=>sum+a.amount,0);
-      }),
-      borderColor:'#D4537E',borderWidth:2,borderDash:[],
+      label:'個別株・証券',
+      data:filtered.map(s=>stockCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
+      borderColor:'#E24B4A',borderWidth:2,
       backgroundColor:'transparent',fill:false,tension:0.3
     }
   ];
@@ -1959,6 +1955,7 @@ function trRenderCharts(){
     plugins:[ChartDataLabels]
   });
   trRenderCategoryChart('証券','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
+  trRenderCategoryChart('投信','toushinChart','toushinCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
 }
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
