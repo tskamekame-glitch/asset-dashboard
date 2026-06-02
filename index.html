@@ -1959,7 +1959,7 @@ function trRenderCharts(){
   trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
 }
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
-  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName).map(a=>a.name):[]))];
+  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName&&!a.name.includes('預り金')).map(a=>a.name):[]))];
   const card=document.getElementById(cardId);if(!accountNames.length){card.style.display='none';return;}card.style.display='block';
   const colors=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780'];
   // 合計ラインなし・銘柄別のみ
