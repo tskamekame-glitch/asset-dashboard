@@ -1894,7 +1894,7 @@ function trRenderCharts(){
   const tickColor=isDark?'#636366':'#9b9b97';
   trDestroyChart('line');
   const showLabels=labels.length<=8;const ptRadius=labels.length>15?2:5;
-  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[{label:'総資産',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:ptRadius,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:45,maxTicksLimit:8},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[{label:'総資産',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:ptRadius,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:9},maxTicksLimit:6},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:9},maxRotation:45,maxTicksLimit:8},grid:{display:false}}},layout:{padding:{top:8,right:24,left:4}}},plugins:[ChartDataLabels]});
   trDestroyChart('bar');
   chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
   trDestroyChart('donut');
@@ -1951,7 +1951,7 @@ function trRenderCharts(){
     },scales:{
       y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
       x:{ticks:{color:tickColor,font:{size:10},maxRotation:45,maxTicksLimit:8},grid:{display:false}}
-    },layout:{padding:{top:8,right:8}}},
+    },layout:{padding:{top:8,right:24,left:4}}},
     plugins:[ChartDataLabels]
   });
   trRenderCategoryChart('証券','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
@@ -1967,7 +1967,7 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
   trDestroyChart(canvasId);const canvas=document.getElementById(canvasId);canvas.height=200+Math.ceil(datasets.length/2)*30;
   const pr=labels.length>15?2:4;
   datasets.forEach(ds=>{ds.pointRadius=pr;});
-  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true},onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:45,maxTicksLimit:8},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true},onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:9},maxTicksLimit:6},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:9},maxRotation:45,maxTicksLimit:8},grid:{display:false}}},layout:{padding:{top:8,right:24,left:4}}},plugins:[ChartDataLabels]});
 }
 function renderComment(){
   const filtered=getFiltered();const el=document.getElementById('commentBody');
