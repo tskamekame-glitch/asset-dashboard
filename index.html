@@ -1592,7 +1592,10 @@ function trRenderCharts(){
   trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
 }
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
-  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName).map(a=>a.name):[]))];
+  // 証券グラフから除外する口座名（投信カテゴリに移動済みのもの）
+  const EXCLUDE_FROM_SEC=['オルカンPayPay','インド(SBI)','全世界PayPay','インドSBI','全世界インデックス'];
+  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName&&!EXCLUDE_FROM_SEC.some(ex=>a.name.includes(ex)||ex.includes(a.name))).map(a=>a.name):[]))];
+
   const card=document.getElementById(cardId);if(!accountNames.length){card.style.display='none';return;}card.style.display='block';
   const colors=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780'];
   // 口座別ラインは最初は非表示（凡例クリックで表示）
