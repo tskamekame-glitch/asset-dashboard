@@ -825,7 +825,8 @@ tr:last-child td{border-bottom:none}
       <div class="field"><label>カテゴリ</label>
         <select id="fCat" onchange="amToggleStockFields()">
           <option value="銀行">🏦 銀行</option>
-          <option value="証券">📈 証券・投資</option>
+          <option value="証券">📈 証券・個別株</option>
+          <option value="投信">📊 投信・インデックス</option>
           <option value="現金">💵 現金・財布</option>
           <option value="不動産">🏠 不動産</option>
           <option value="年金">🧓 年金・iDeCo</option>
@@ -1025,9 +1026,9 @@ function refreshHome(){
 const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const SHEET_NAME='資産管理データ';
-const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
-const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
-const CAT_MAP_FROM_PF={'証券':'証券','証券-JP':'証券','証券-インド':'証券','証券-高配当':'証券','証券-個別':'証券','銀行':'銀行','年金':'年金','仮想通貨':'仮想通貨','その他':'その他','米国インデックス':'証券','日本インデックス':'証券','インド':'証券','高配当株':'証券','個別株':'証券','銀行キープ':'銀行'};
+const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','投信':'#2980b9','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
+const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','投信':'📊','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
+const CAT_MAP_FROM_PF={'証券':'証券','証券-JP':'投信','証券-インド':'投信','証券-高配当':'証券','証券-個別':'証券','銀行':'銀行','年金':'年金','仮想通貨':'仮想通貨','その他':'その他','米国インデックス':'投信','日本インデックス':'投信','インド':'投信','高配当株':'証券','個別株':'証券','銀行キープ':'銀行'};
 
 let amAccounts=[];
 let amEditId=null;
@@ -1209,7 +1210,17 @@ function amCalcAmount(){
   }
 }
 function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
-function amLoadFromLocal(){try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}}
+function amLoadFromLocal(){
+  try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}
+  // マイグレーション：オルカン系をその他→投信に変換
+  let migrated=false;
+  amAccounts.forEach(a=>{
+    if(a.cat==='その他'&&(a.name.includes('オルカン')||a.name.includes('インデックス')||a.name.includes('eMAXIS')||a.name.includes('投信')||a.name.includes('ファンド'))){
+      a.cat='投信';migrated=true;
+    }
+  });
+  if(migrated)amSaveToLocal();
+}
 function amExportCSV(){
   if(!amAccounts.length){showToast('口座データがありません');return;}
   const rows=[['id','口座名','カテゴリ','残高','メモ','更新日']];
