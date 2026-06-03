@@ -798,7 +798,7 @@ tr:last-child td{border-bottom:none}
     <div class="sheet-body">
       <div class="field"><label>口座名</label><input type="text" id="fName" placeholder="例: ゆうちょ銀行 普通" autocomplete="off"></div>
       <div class="field"><label>カテゴリ</label>
-        <select id="fCat">
+        <select id="fCat" onchange="amToggleStockFields()">
           <option value="銀行">🏦 銀行</option>
           <option value="証券">📈 証券・投資</option>
           <option value="現金">💵 現金・財布</option>
@@ -809,6 +809,16 @@ tr:last-child td{border-bottom:none}
         </select>
       </div>
       <div class="field"><label>残高（円）</label><input type="number" id="fAmount" placeholder="例: 500000" inputmode="numeric"></div>
+      <div class="field" id="fStockFields" style="display:none">
+        <label>株式自動計算</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="number" id="fShares" placeholder="株数" inputmode="numeric" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-width:80px" oninput="amCalcAmount()">
+          <span style="color:var(--text3);font-size:16px">×</span>
+          <input type="number" id="fPrice" placeholder="株価（円）" inputmode="numeric" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-width:80px" oninput="amCalcAmount()">
+          <span style="color:var(--text3);font-size:13px">=</span>
+          <span id="fCalcResult" style="font-size:13px;font-weight:600;color:var(--green);min-width:60px"></span>
+        </div>
+      </div>
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
     </div>
     <div class="sheet-btns">
@@ -1026,7 +1036,7 @@ function amRender(){
   const catGroups={};amAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
   document.getElementById('accountSections').innerHTML=Object.entries(catGroups).map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
-    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>`<div class="account-row"><div class="acct-info"><div class="acct-name">${esc(a.name)}</div>${a.note?`<div class="acct-note">${esc(a.note)}</div>`:''}</div><div class="acct-right"><span class="acct-amount">${fmt(a.amount)}</span>${daysSince(a.updated)>=30?`<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ ${daysSince(a.updated)}日未更新</span>`:''}<span class="row-btns"><button class="icon-btn" onclick="openEditModal(${a.id})">編集</button><button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')">削除</button></span></div></div>`).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
+    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>`<div class="account-row"><div class="acct-info"><div class="acct-name">${esc(a.name)}</div>${(a.note?`<div class="acct-note">${esc(a.note)}</div>`:'')+(a.shares>0&&a.price>0?`<div class="acct-note" style="color:var(--green)">${Number(a.shares).toLocaleString()}株 × ¥${Number(a.price).toLocaleString()}</div>`:a.shares>0?`<div class="acct-note">${Number(a.shares).toLocaleString()}株</div>`:'')}</div><div class="acct-right"><span class="acct-amount">${fmt(a.amount)}</span>${daysSince(a.updated)>=30?`<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ ${daysSince(a.updated)}日未更新</span>`:''}<span class="row-btns"><button class="icon-btn" onclick="openEditModal(${a.id})">編集</button><button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')">削除</button></span></div></div>`).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
   }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
 }
 function toggleSection(id){document.getElementById(id).classList.toggle('collapsed')}
@@ -1037,6 +1047,10 @@ function openAddModal(defaultCat){
   document.getElementById('fCat').value=defaultCat||'銀行';
   document.getElementById('fAmount').value='';
   document.getElementById('fNote').value='';
+  document.getElementById('fShares').value='';
+  document.getElementById('fPrice').value='';
+  document.getElementById('fCalcResult').textContent='';
+  amToggleStockFields();
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fName').focus(),300);
 }
@@ -1049,6 +1063,10 @@ function openEditModal(id){
   document.getElementById('fCat').value=a.cat;
   document.getElementById('fAmount').value=a.amount;
   document.getElementById('fNote').value=a.note||'';
+  document.getElementById('fShares').value=a.shares||'';
+  document.getElementById('fPrice').value=a.price||'';
+  document.getElementById('fCalcResult').textContent='';
+  amToggleStockFields();
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fAmount').focus(),300);
 }
@@ -1059,8 +1077,10 @@ async function saveAccount(){
   const amount=parseFloat(document.getElementById('fAmount').value)||0;
   const note=document.getElementById('fNote').value.trim();
   if(!name){document.getElementById('fName').focus();return;}
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,amount,note,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,amount,note,updated:todayStr()});}
+  const shares=parseFloat(document.getElementById('fShares').value)||0;
+  const price=parseFloat(document.getElementById('fPrice').value)||0;
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,amount,note,shares,price,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,amount,note,shares,price,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
 }
 function confirmDelete(id,name){amDeleteId=id;document.getElementById('confirmName').textContent=name;document.getElementById('confirmBg').classList.add('open')}
@@ -1068,6 +1088,24 @@ function closeConfirm(){document.getElementById('confirmBg').classList.remove('o
 document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();};
 document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===document.getElementById('sheetBg'))closeSheet()});
 document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
+function amToggleStockFields(){
+  const cat=document.getElementById('fCat').value;
+  const sf=document.getElementById('fStockFields');
+  if(sf)sf.style.display=(cat==='証券')?'block':'none';
+  if(cat!=='証券'){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
+}
+function amCalcAmount(){
+  const shares=parseFloat(document.getElementById('fShares').value)||0;
+  const price=parseFloat(document.getElementById('fPrice').value)||0;
+  const result=document.getElementById('fCalcResult');
+  if(shares>0&&price>0){
+    const total=Math.round(shares*price);
+    document.getElementById('fAmount').value=total;
+    if(result)result.textContent='¥'+total.toLocaleString('ja-JP');
+  }else{
+    if(result)result.textContent='';
+  }
+}
 function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
 function amLoadFromLocal(){try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}}
 function amExportCSV(){
