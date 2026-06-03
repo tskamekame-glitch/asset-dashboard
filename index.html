@@ -364,6 +364,17 @@ tr:last-child td{border-bottom:none}
 .cd.sel{border-color:var(--text)}
 .cat-modal-acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
 .empty-msg{padding:2rem;font-size:14px;color:var(--text3);text-align:center}
+/* インライン編集 */
+.acct-inline-edit{background:var(--bg2);border-top:0.5px solid var(--border);padding:10px 14px;display:none;gap:8px;flex-direction:column}
+.acct-inline-edit.open{display:flex}
+.inline-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.inline-inp{flex:1;min-width:80px;padding:8px 10px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;-webkit-appearance:none}
+.inline-inp:focus{border-color:var(--accent)}
+.inline-label{font-size:11px;color:var(--text3);white-space:nowrap}
+.inline-calc{font-size:12px;font-weight:600;color:var(--green);min-width:60px}
+.inline-btns{display:flex;gap:6px;justify-content:flex-end}
+.inline-save{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.inline-cancel{background:var(--bg2);border:0.5px solid var(--border2);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit}
 
 
 /* FIRE SIMULATOR */
@@ -1050,10 +1061,88 @@ function amRender(){
   const catGroups={};amAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
   document.getElementById('accountSections').innerHTML=Object.entries(catGroups).map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
-    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>`<div class="account-row"><div class="acct-info"><div class="acct-name">${esc(a.name)}</div>${(a.note?`<div class="acct-note">${esc(a.note)}</div>`:'')+(a.shares>0&&a.price>0?`<div class="acct-note" style="color:var(--green)">${Number(a.shares).toLocaleString()}株 × ¥${Number(a.price).toLocaleString()}</div>`:a.shares>0?`<div class="acct-note">${Number(a.shares).toLocaleString()}株</div>`:'')}</div><div class="acct-right"><span class="acct-amount">${fmt(a.amount)}</span>${daysSince(a.updated)>=30?`<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ ${daysSince(a.updated)}日未更新</span>`:''}<span class="row-btns"><button class="icon-btn" onclick="openEditModal(${a.id})">編集</button><button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')">削除</button></span></div></div>`).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
+    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>{
+      const hasStock=a.shares>0||a.price>0;
+      const stockInfo=a.shares>0&&a.price>0?`<div class="acct-note" style="color:var(--green)">${Number(a.shares).toLocaleString()}株 × ¥${Number(a.price).toLocaleString()}</div>`:a.shares>0?`<div class="acct-note">${Number(a.shares).toLocaleString()}株</div>`:'';
+      const staleAlert=daysSince(a.updated)>=30?`<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ ${daysSince(a.updated)}日未更新</span>`:'';
+      return`<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0">
+        <div style="display:flex;align-items:center;padding:13px 16px;gap:10px">
+          <div class="acct-info" style="flex:1;min-width:0">
+            <div class="acct-name">${esc(a.name)}</div>
+            ${a.note?`<div class="acct-note">${esc(a.note)}</div>`:''}
+            ${stockInfo}
+          </div>
+          <div class="acct-right">
+            <span class="acct-amount">${fmt(a.amount)}</span>
+            ${staleAlert}
+            <span class="row-btns">
+              <button class="icon-btn" onclick="amToggleInline(${a.id})">編集</button>
+              <button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')">削除</button>
+            </span>
+          </div>
+        </div>
+        <div class="acct-inline-edit" id="inline-${a.id}">
+          <div class="inline-row">
+            <span class="inline-label">残高（円）</span>
+            <input class="inline-inp" id="il-amount-${a.id}" type="number" inputmode="numeric" value="${a.amount}" placeholder="残高">
+          </div>
+          ${a.cat==='証券'?`<div class="inline-row">
+            <span class="inline-label">株数</span>
+            <input class="inline-inp" id="il-shares-${a.id}" type="number" inputmode="numeric" value="${a.shares||''}" placeholder="株数" oninput="amInlineCalc(${a.id})" style="max-width:100px">
+            <span class="inline-label">×　株価</span>
+            <input class="inline-inp" id="il-price-${a.id}" type="number" inputmode="numeric" value="${a.price||''}" placeholder="株価" oninput="amInlineCalc(${a.id})" style="max-width:110px">
+            <span class="inline-calc" id="il-calc-${a.id}">${a.shares>0&&a.price>0?'= '+fmt(a.shares*a.price):''}</span>
+          </div>`:''}
+          <div class="inline-btns">
+            <button class="inline-cancel" onclick="amToggleInline(${a.id})">キャンセル</button>
+            <button class="inline-save" onclick="amInlineSave(${a.id})">保存</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
   }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
 }
 function toggleSection(id){document.getElementById(id).classList.toggle('collapsed')}
+function amToggleInline(id){
+  const el=document.getElementById('inline-'+id);
+  if(!el)return;
+  // 他を閉じる
+  document.querySelectorAll('.acct-inline-edit.open').forEach(e=>{if(e.id!=='inline-'+id)e.classList.remove('open');});
+  el.classList.toggle('open');
+  if(el.classList.contains('open')){
+    const inp=document.getElementById('il-amount-'+id);
+    if(inp)setTimeout(()=>inp.focus(),100);
+  }
+}
+function amInlineCalc(id){
+  const shares=parseFloat(document.getElementById('il-shares-'+id)?.value)||0;
+  const price=parseFloat(document.getElementById('il-price-'+id)?.value)||0;
+  const calc=document.getElementById('il-calc-'+id);
+  const amountInp=document.getElementById('il-amount-'+id);
+  if(shares>0&&price>0){
+    const total=Math.round(shares*price);
+    if(amountInp)amountInp.value=total;
+    if(calc)calc.textContent='= '+fmt(total);
+  }else{
+    if(calc)calc.textContent='';
+  }
+}
+async function amInlineSave(id){
+  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  const amountEl=document.getElementById('il-amount-'+id);
+  const sharesEl=document.getElementById('il-shares-'+id);
+  const priceEl=document.getElementById('il-price-'+id);
+  const newAmount=parseFloat(amountEl?.value)||0;
+  const newShares=parseFloat(sharesEl?.value)||0;
+  const newPrice=parseFloat(priceEl?.value)||0;
+  a.amount=newAmount;
+  if(sharesEl)a.shares=newShares;
+  if(priceEl)a.price=newPrice;
+  a.updated=todayStr();
+  document.getElementById('inline-'+id).classList.remove('open');
+  amRender();await amSaveToSheet();refreshHome();
+  showToast('✓ 更新しました');
+}
 function openAddModal(defaultCat){
   amEditId=null;
   document.getElementById('sheetTitle').textContent='口座を追加';
