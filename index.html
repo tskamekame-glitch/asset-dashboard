@@ -998,7 +998,7 @@ function refreshHome(){
     document.getElementById('hbadge-portfolio').textContent=pf.length>0?done+'/'+pf.length+'件 購入済み':'データなし';
   }catch(e){}
   try{
-    const ts=JSON.parse(localStorage.getItem('todo_kb_v4')||'{}');
+    const ts=JSON.parse(localStorage.getItem('todo_kb_v3')||'{}');
     const cats=ts.categories||[];const chk=ts.checked||{};
     let t=0,dn=0;cats.forEach(c=>c.items.forEach(i=>{t++;if(chk[i.id])dn++;}));
     const rem=t-dn;
@@ -1178,14 +1178,13 @@ function amIsIndexFund(account){
   return false;
 }
 
-// Claude API (web_search) 経由で株価 or 基準価額を取得
-// ── 株式・ETF：Claude API (web_search) 経由で株価取得 ──
+// Claude API (web_search) 経由で株価取得
 async function amFetchViaAPI(query, isIndex){
   if(isIndex) throw new Error('fund_manual');
 
-  const prompt = `Current stock price for: ${query}
-(.T = Tokyo Stock Exchange. e.g. 9984.T=SoftBank Group, 9434.T=SoftBank, 7203.T=Toyota)
-Return ONLY this JSON, no other text:
+  const prompt = `Search for the current stock price of ${query}.
+(.T suffix = Tokyo Stock Exchange. e.g. 9984.T=SoftBank Group, 9434.T=SoftBank, 7203.T=Toyota, AAPL=Apple)
+After searching, reply with ONLY this JSON object and nothing else (no markdown, no explanation):
 {"ticker":"${query}","price":1234.5,"currency":"JPY","changePct":0.5,"longName":"Company Name"}`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1196,35 +1195,71 @@ Return ONLY this JSON, no other text:
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      tools: [{"type":"web_search_20250305","name":"web_search"}],
+      max_tokens: 500,
+      tools: [{"type":"web_search_20250305","name":"web_search","max_uses":2}],
       messages: [{"role":"user","content": prompt}]
     })
   });
-  if(!res.ok) throw new Error('API '+res.status);
+  if(!res.ok){
+    const errText = await res.text().catch(()=>'');
+    throw new Error('API '+res.status+' '+errText.slice(0,100));
+  }
   const data = await res.json();
-  const textBlock = data.content?.find(b=>b.type==='text');
-  if(!textBlock) throw new Error('no text');
-  const match = textBlock.text.match(/\{[\s\S]*?\}/);
-  if(!match) throw new Error('no JSON');
+  // レスポンスにweb_search_tool_resultが含まれる場合もtextブロックを探す
+  const allBlocks = data.content || [];
+  // textブロックを全て結合してJSONを探す
+  const fullText = allBlocks
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+  if(!fullText) throw new Error('no text block in response');
+  const match = fullText.match(/\{[\s\S]*?"price"\s*:\s*[\d.]+[\s\S]*?\}/);
+  if(!match) throw new Error('no JSON found in: '+fullText.slice(0,200));
   const d = JSON.parse(match[0]);
   if(d.error) throw new Error(d.error);
+  if(!d.price || isNaN(d.price)) throw new Error('invalid price: '+d.price);
   return d;
 }
 
-// 株価取得（ticker利用）
+// 株価取得（ticker利用）— Claude API → Yahoo Finance フォールバック
 async function amFetchPrice(ticker){
   if(!ticker)return null;
   const cache=amGetPriceCache();
   const now=Date.now();
   if(cache[ticker]&&(now-cache[ticker].ts)<AM_CACHE_TTL)return cache[ticker];
+  // 1st: Claude API (web_search)
   try{
     const result = await amFetchViaAPI(ticker, false);
     if(result.error) throw new Error(result.error);
     const entry={price:result.price,currency:result.currency||'JPY',changePct:result.changePct||0,longName:result.longName||ticker,ts:now};
     const nc=amGetPriceCache();nc[ticker]=entry;amSetPriceCache(nc);
     return entry;
-  }catch(e){console.warn('株価取得失敗:',ticker,e.message);return null;}
+  }catch(e){
+    console.warn('Claude API株価取得失敗:',ticker,e.message,'→ Yahoo Financeにフォールバック');
+  }
+  // 2nd: Yahoo Finance (allorigins proxy) フォールバック
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res=await fetch(proxy,{signal:AbortSignal.timeout(8000)});
+    if(!res.ok)throw new Error('YF fetch '+res.status);
+    const outer=await res.json();
+    const data=JSON.parse(outer.contents);
+    const result=data?.chart?.result?.[0];
+    if(!result)throw new Error('no YF result');
+    const meta=result.meta;
+    const price=meta.regularMarketPrice||meta.previousClose;
+    const currency=meta.currency||'JPY';
+    const prevClose=meta.previousClose||price;
+    const changePct=prevClose>0?(price-prevClose)/prevClose*100:0;
+    const longName=meta.longName||meta.shortName||ticker;
+    const entry={price,currency,changePct,longName,ts:now};
+    const nc=amGetPriceCache();nc[ticker]=entry;amSetPriceCache(nc);
+    return entry;
+  }catch(e2){
+    console.warn('Yahoo Finance株価取得も失敗:',ticker,e2.message);
+    return null;
+  }
 }
 
 // インデックスファンド評価額取得（ファンド名+口数）
@@ -1255,13 +1290,27 @@ async function amFetchIndexValue(fundName, units){
 async function amGetUSDJPY(){
   const cache=amGetPriceCache();
   if(cache['USDJPY']&&(Date.now()-cache['USDJPY'].ts)<AM_CACHE_TTL)return cache['USDJPY'].price;
+  // Claude API
   try{
     const d = await amFetchViaAPI('USDJPY=X', false);
     if(d?.price>0){
       const nc=amGetPriceCache();nc['USDJPY']={price:d.price,ts:Date.now()};amSetPriceCache(nc);
       return d.price;
     }
-  }catch(e){}
+  }catch(e){console.warn('USDJPY Claude API失敗:',e.message);}
+  // Yahoo Finance フォールバック
+  try{
+    const url='https://query1.finance.yahoo.com/v8/finance/chart/USDJPY%3DX?interval=1d&range=1d';
+    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res=await fetch(proxy,{signal:AbortSignal.timeout(6000)});
+    const outer=await res.json();
+    const data=JSON.parse(outer.contents);
+    const price=data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    if(price>0){
+      const nc=amGetPriceCache();nc['USDJPY']={price,ts:Date.now()};amSetPriceCache(nc);
+      return price;
+    }
+  }catch(e2){console.warn('USDJPY YF失敗:',e2.message);}
   return 150;
 }
 
@@ -1331,7 +1380,7 @@ async function amUpdateAllPrices(){
   btn.disabled=false;icon.textContent='🔄';text.textContent='価格を一括更新（株式・投信）';
   const now=new Date().toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
   document.getElementById('amLastUpdate').textContent=`最終更新: ${now}　✅ ${updated}件${failed>0?'　❌ '+failed+'件失敗':''}`;
-  showToast(`✓ ${updated}件の評価額を更新しました${failed>0?' ('+failed+'件失敗)':''}`,3000);
+  showToast(`✓ ${updated}件の評価額を更新しました${failed>0?' ('+failed+'件取得失敗)':''}`,3000);
   amRender();refreshHome();
 }
 
@@ -1850,39 +1899,9 @@ const TODO_DEFS=[
 {id:'tax_sb',label:'税金対応②｜ソフトバンク株（9434）売却分',color:'#854F0B',bg:'#FAEEDA',items:[{id:'ts1',text:'社内コンプライアンスにインサイダー規制・売却可能期間を確認'},{id:'ts2',text:'取得単価を確認（持株会事務局 or みずほ証券の取引履歴）'},{id:'ts3',text:'みずほ証券から「年間取引報告書」が届く（来年1月）→ 保存する'},{id:'ts4',text:'e-Tax or 税務署で確定申告（来年2月16日〜3月15日）'},{id:'ts5',text:'納税：売却益 × 20.315% を納付（来年5月頃）'}]},
 {id:'nisa',label:'NISA口座開設後すぐ（最優先）',color:'#0F6E56',bg:'#E1F5EE',items:[{id:'n1',text:'OliveカードでeMAXIS Slim 米国株式(S&P500) 月10万円クレカ積立設定'},{id:'n2',text:'eMAXIS Slim 米国株式(S&P500) 成長投資枠で一括240万円購入'},{id:'n3',text:'スシロー 成長投資枠で約80〜90万円購入'},{id:'n4',text:'ドンキホーテ 成長投資枠で約80〜90万円購入'}]},
 {id:'card',label:'未利用クレジットカード解約',color:'#993556',bg:'#FBEAF0',items:[{id:'c1',text:'保有中のクレジットカードを全てリストアップする'},{id:'c2',text:'直近1年間利用していないカードを選別する'},{id:'c3',text:'年会費が発生しているカードを優先的に解約する'},{id:'c4',text:'ポイント残高を確認・使い切ってから解約する'},{id:'c5',text:'解約対象カードに紐付いている定期支払いを他カードへ変更する'},{id:'c6',text:'各カード会社に解約の電話 or アプリで手続きをする'}]},
-{id:'phone',label:'携帯番号変更の届け出',color:'#5F5E5A',bg:'#F1EFE8',items:[{id:'ph1',text:'【最優先】SBI証券 - 電話番号変更'},{id:'ph2',text:'【最優先】野村証券 - 電話番号変更'},{id:'ph3',text:'【最優先】みずほ証券 - 電話番号変更'},{id:'ph4',text:'【最優先】三井住友銀行（Olive）- 電話番号変更'},{id:'ph5',text:'【最優先】PayPay銀行 - 電話番号変更'},{id:'ph6',text:'確定拠出年金（DC）運営会社 - 電話番号変更'},{id:'ph7',text:'生命保険・損害保険各社 - 電話番号変更'},{id:'ph8',text:'Amazon・楽天・Yahoo! - アカウント設定で電話番号変更'},{id:'ph9',text:'マイナポータル・e-Tax - オンライン変更'},{id:'ph10',text:'勤務先（緊急連絡先）- 人事部に変更届'}]},
-{id:'taishoku_company',label:'🏢 退職：会社への手続き',color:'#185FA5',bg:'#E6F1FB',items:[
-  {id:'rc1',text:'退職届の提出（退職希望日の1〜2ヶ月前）／人事部・上長'},
-  {id:'rc2',text:'退職日・有給消化・引き継ぎスケジュールの確定'},
-  {id:'rc3',text:'源泉徴収票の発行依頼（給与＋SO行使益含む）／人事・給与担当'},
-  {id:'rc4',text:'社会保険喪失証明書の発行依頼（退職日当日または前日に受取）'},
-  {id:'rc5',text:'雇用保険被保険者証・年金手帳（基礎年金番号通知書）の受取'},
-  {id:'rc6',text:'SBKK持株会の脱退手続き・株式移管先（みずほ証券）の指定'},
-  {id:'rc7',text:'SBKKストックオプション：退職後のインサイダー規制解除日をコンプライアンス部門に書面で確認'},
-  {id:'rc8',text:'SBIベネフィット確定拠出年金：退職後6ヶ月以内にiDeCoへ移換（SBIベネフィット 0120-56-2930）'},
-  {id:'rc9',text:'会社メアド登録サービスを個人メアドへ変更（証券・銀行・各種サブスク）→ 退職前に完了'},
-  {id:'rc10',text:'貸与品（PC・スマホ・社員証）の返却・通勤定期の払い戻し（柏駅JR/東武窓口 or Suicaアプリ）'}
-]},
-{id:'taishoku_gov',label:'🏛 退職：役所・国家機関の手続き',color:'#0F6E56',bg:'#E1F5EE',items:[
-  {id:'rg1',text:'健康保険の切り替え（退職後14日以内）：任意継続→協会けんぽ千葉支部（郵送/オンライン）or 国保→柏市役所 保険年金課'},
-  {id:'rg2',text:'国民年金への切り替え（退職後14日以内）：柏市役所 保険年金課 or 柏年金事務所（柏市柏1-7-1 柏ビル6F / 04-7165-3381）'},
-  {id:'rg3',text:'雇用保険（失業給付）の申請：ハローワーク柏（柏市柏下65-1 ウィルビル3F / 04-7165-1551）離職票が届き次第すぐ'},
-  {id:'rg4',text:'住民税の確認：退職後に柏市から納付書が郵送。大きい金額のため資金を確保しておく'},
-  {id:'rg5',text:'マイナポータルの情報更新（電話番号・住所）：myna.go.jp またはスマホアプリ'},
-  {id:'rg6',text:'e-Tax利用者識別番号の確認・取得：etax.nta.go.jp（マイナンバーカードがあればそのままログイン可）'},
-  {id:'rg7',text:'確定申告（翌年2/16〜3/15）：給与所得＋SBKK譲渡所得を合算 e-Tax推奨 / 柏税務署（ウィルビル4〜6F / 04-7165-0611）'}
-]},
-{id:'taishoku_finance',label:'💳 退職：金融機関・生活インフラ切り替え',color:'#993556',bg:'#FBEAF0',items:[
-  {id:'rf1',text:'SBI証券・野村証券・みずほ証券：連絡先・住所を個人情報に更新'},
-  {id:'rf2',text:'三井住友銀行・PayPay銀行：連絡先・住所を更新'},
-  {id:'rf3',text:'SBIベネフィット確定拠出年金 → 個人型iDeCo（SBI証券）への移換手続き（退職後6ヶ月以内）'},
-  {id:'rf4',text:'みずほ証券でSBKK株の保有数・取得単価を確認し、売却可能時期（インサイダー解除後）を把握'},
-  {id:'rf5',text:'SBKK株売却後：みずほ証券の年間取引報告書を保管（翌年1月頃届く）'},
-  {id:'rf6',text:'会社のグループ保険・生命保険の切り替え：各保険会社コールセンターへ退職前に確認'},
-  {id:'rf7',text:'退職所得の源泉徴収票・SBKK取得原価書類をまとめて保管（確定申告の必須書類）'}
-]}
+{id:'phone',label:'携帯番号変更の届け出',color:'#5F5E5A',bg:'#F1EFE8',items:[{id:'ph1',text:'【最優先】SBI証券 - 電話番号変更'},{id:'ph2',text:'【最優先】野村証券 - 電話番号変更'},{id:'ph3',text:'【最優先】みずほ証券 - 電話番号変更'},{id:'ph4',text:'【最優先】三井住友銀行（Olive）- 電話番号変更'},{id:'ph5',text:'【最優先】PayPay銀行 - 電話番号変更'},{id:'ph6',text:'確定拠出年金（DC）運営会社 - 電話番号変更'},{id:'ph7',text:'生命保険・損害保険各社 - 電話番号変更'},{id:'ph8',text:'Amazon・楽天・Yahoo! - アカウント設定で電話番号変更'},{id:'ph9',text:'マイナポータル・e-Tax - オンライン変更'},{id:'ph10',text:'勤務先（緊急連絡先）- 人事部に変更届'}]}
 ];
-const TODO_KEY='todo_kb_v4';
+const TODO_KEY='todo_kb_v3';
 let todoState=todoLoadState();
 let todoEditMeta={catId:null,itemId:null};
 function todoLoadState(){try{const s=localStorage.getItem(TODO_KEY);if(s)return JSON.parse(s);}catch(e){}return{categories:JSON.parse(JSON.stringify(TODO_DEFS)),checked:{}};}
