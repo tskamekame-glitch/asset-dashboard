@@ -1093,14 +1093,14 @@ function openAddModal(defaultCat){
   document.getElementById('fTickerPreview').textContent='SBG: 9984.T　ソフトバンク: 9434.T　トヨタ: 7203.T　米国株: AAPL';
   document.getElementById('fTickerPreview').style.color='var(--text3)';
   amSwitchPriceMode('stock');
-  amToggleStockFields(defaultCat||'銀行', null);
+  amToggleStockFields(defaultCat||'銀行',null);
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fName').focus(),300);
 }
 function amToggleStockFields(cat, account){
-  // 証券・年金・仮想通貨カテゴリ、またはすでにticker/fundNameが登録済みの口座は表示
-  const show=(cat==='証券'||cat==='仮想通貨'||cat==='年金')||(account&&(account.ticker||account.fundName||account.units>0));
-  document.getElementById('fStockFields').style.display=show?'block':'none';
+  const byCat=(cat==='証券'||cat==='仮想通貨'||cat==='年金');
+  const byData=account&&(account.ticker||account.fundName||account.units>0);
+  document.getElementById('fStockFields').style.display=(byCat||byData)?'block':'none';
 }
 function amSwitchPriceMode(mode){
   const isIndex=mode==='index';
@@ -1115,14 +1115,13 @@ function amSwitchPriceMode(mode){
     :'SBG: 9984.T　ソフトバンク: 9434.T　トヨタ: 7203.T　Apple: AAPL';
   document.getElementById('fTickerPreview').style.color='var(--text3)';
 }
-document.getElementById('fCat').addEventListener('change',e=>amToggleStockFields(e.target.value, null));
+document.getElementById('fCat').addEventListener('change',e=>amToggleStockFields(e.target.value,null));
 function openAddModalCat(cat){openAddModal(cat)}
 function openEditModal(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
   amEditId=id;
   document.getElementById('sheetTitle').textContent='口座を編集';
   document.getElementById('fName').value=a.name;
-  // catが空の場合は「その他」にフォールバック
   const cat=a.cat||'その他';
   document.getElementById('fCat').value=cat;
   document.getElementById('fAmount').value=a.amount;
@@ -1131,17 +1130,16 @@ function openEditModal(id){
   document.getElementById('fShares').value=a.shares||'';
   document.getElementById('fFundName').value=a.fundName||'';
   document.getElementById('fUnits').value=a.units||'';
-  // ticker優先でモード判定（fundNameがあれば投信モード）
+  // fundNameがあってtickerがなければ投信モード
   const mode=(a.fundName&&!a.ticker)?'index':'stock';
   amSwitchPriceMode(mode);
-  // ticker/fundNameが登録済みならプレビューに表示
   if(a.ticker||a.fundName||a.lastUpdated){
     const label=a.ticker?('登録済み: '+a.ticker):a.lastUpdated?('前回更新: '+a.lastUpdated):'ファンド登録済み';
     document.getElementById('fTickerPreview').textContent=label;
     document.getElementById('fTickerPreview').style.color='var(--text3)';
   }
-  // accountオブジェクトを渡してticker/fundName有りなら必ず表示
-  amToggleStockFields(cat, a);
+  // accountオブジェクトを渡してfundName/ticker登録済みなら必ず表示
+  amToggleStockFields(cat,a);
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fAmount').focus(),300);
 }
@@ -1168,8 +1166,7 @@ document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===do
 document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
 // ============================================================
 // 資産管理 — 価格自動取得
-// Claude API web_search マルチターン対応
-// 株式・ETF・投資信託すべて対応
+// Claude API web_search マルチターン対応（株式・投信両対応）
 // ============================================================
 const AM_PRICE_CACHE_KEY='am_price_cache';
 const AM_CACHE_TTL=3600000;
@@ -1177,43 +1174,38 @@ const AM_CACHE_TTL=3600000;
 function amGetPriceCache(){try{return JSON.parse(localStorage.getItem(AM_PRICE_CACHE_KEY)||'{}')}catch(e){return{}}}
 function amSetPriceCache(c){try{localStorage.setItem(AM_PRICE_CACHE_KEY,JSON.stringify(c))}catch(e){}}
 
-// Claude API web_search マルチターン呼び出し
-// stop_reason=tool_use → tool_resultを返して最終テキストを取得
+// マルチターン呼び出し: stop_reason=tool_use → tool_resultを返して最終textを取得
 async function amCallClaudeWithSearch(userPrompt){
   const API='https://api.anthropic.com/v1/messages';
   const HDR={'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'};
   const TOOLS=[{"type":"web_search_20250305","name":"web_search","max_uses":2}];
   let messages=[{role:'user',content:userPrompt}];
   for(let turn=0;turn<4;turn++){
-    const res=await fetch(API,{method:'POST',headers:HDR,body:JSON.stringify({
-      model:'claude-haiku-4-5-20251001',max_tokens:400,tools:TOOLS,messages
-    })});
+    const res=await fetch(API,{method:'POST',headers:HDR,
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:400,tools:TOOLS,messages})});
     if(!res.ok){const e=await res.text();throw new Error('API '+res.status+': '+e.slice(0,120));}
     const data=await res.json();
     const blocks=data.content||[];
-    // textブロックがあれば即返す
     const tb=blocks.find(b=>b.type==='text');
     if(tb&&tb.text&&tb.text.trim())return tb.text;
-    // tool_useならtool_resultを組み立てて次ターン
     if(data.stop_reason==='tool_use'){
       messages.push({role:'assistant',content:blocks});
       const results=blocks.filter(b=>b.type==='tool_use').map(b=>({type:'tool_result',tool_use_id:b.id,content:'Search completed.'}));
-      if(!results.length)throw new Error('tool_use block missing');
+      if(!results.length)throw new Error('no tool_use blocks');
       messages.push({role:'user',content:results});
       continue;
     }
     break;
   }
-  throw new Error('no text returned after multi-turn');
+  throw new Error('no text after multi-turn');
 }
 
-// 株価・ETF取得（ticker例: 9434.T / AAPL）
+// 株価・ETF取得
 async function amFetchPrice(ticker){
   if(!ticker)return null;
   const cache=amGetPriceCache();const now=Date.now();
   if(cache[ticker]&&(now-cache[ticker].ts)<AM_CACHE_TTL)return cache[ticker];
-  const prompt=`Search the web for the latest stock price of "${ticker}".
-Return ONLY a JSON object, no markdown or explanation:
+  const prompt=`Search the web for the current stock price of "${ticker}". Return ONLY a JSON object (no markdown):
 {"price":1234.5,"currency":"JPY","changePct":0.5,"longName":"Company Name"}`;
   try{
     const text=await amCallClaudeWithSearch(prompt);
@@ -1227,7 +1219,7 @@ Return ONLY a JSON object, no markdown or explanation:
   }catch(e){console.warn('株価取得失敗:',ticker,e.message);return null;}
 }
 
-// 投資信託の基準価額取得（ファンド名で検索）
+// 投資信託の基準価額取得
 async function amFetchFundNav(fundName, units){
   if(!fundName||units<=0)return null;
   const cacheKey='FUND:'+fundName;
@@ -1235,9 +1227,9 @@ async function amFetchFundNav(fundName, units){
   if(cache[cacheKey]&&(now-cache[cacheKey].ts)<AM_CACHE_TTL&&cache[cacheKey].nav)
     return{...cache[cacheKey],totalValue:Math.round(cache[cacheKey].nav*units/10000)};
   const prompt=`Search the web for the latest NAV (基準価額) of this Japanese investment trust: "${fundName}"
-Return ONLY a JSON object, no markdown or explanation:
-{"nav":12345,"navDate":"2025-01-20","fundName":"正式ファンド名"}
-nav is the price per 10000 units in JPY integers. Use the most recent date available.`;
+Return ONLY a JSON object (no markdown):
+{"nav":12345,"navDate":"2025-01-20","fundName":"正式名称"}
+nav = price per 10000 units in JPY (integer).`;
   try{
     const text=await amCallClaudeWithSearch(prompt);
     const m=text.match(/\{[^{}]*"nav"\s*:\s*[\d.]+[^{}]*\}/);
@@ -1255,10 +1247,10 @@ async function amGetUSDJPY(){
   const cache=amGetPriceCache();
   if(cache['USDJPY']&&(Date.now()-cache['USDJPY'].ts)<AM_CACHE_TTL)return cache['USDJPY'].price;
   try{
-    const text=await amCallClaudeWithSearch('Search for the current USD/JPY exchange rate. Return ONLY JSON: {"price":150.5}');
+    const text=await amCallClaudeWithSearch('Search for current USD/JPY rate. Return ONLY JSON: {"price":150.5}');
     const m=text.match(/\{[^{}]*"price"\s*:\s*[\d.]+[^{}]*\}/);
     if(m){const d=JSON.parse(m[0]);if(d.price>0){const nc=amGetPriceCache();nc['USDJPY']={price:d.price,ts:Date.now()};amSetPriceCache(nc);return d.price;}}
-  }catch(e){console.warn('USDJPY取得失敗:',e.message);}
+  }catch(e){}
   return 150;
 }
 
@@ -1292,7 +1284,7 @@ async function amTestFund(){
   preview.innerHTML='<span style="color:var(--accent)">⏳ 基準価額を取得中...</span>';
   const result=await amFetchFundNav(fundName,units);
   if(!result||!result.totalValue){
-    preview.innerHTML='❌ 取得失敗<br><span style="font-size:11px">ファンド名を正式名称で入力（例: eMAXIS Slim 米国株式（S&P500））</span>';
+    preview.innerHTML='❌ 取得失敗<br><span style="font-size:11px">ファンド名を正式名称で（例: eMAXIS Slim 米国株式（S&P500））</span>';
     preview.style.color='var(--danger)';return;
   }
   preview.innerHTML=`✅ 基準価額: <strong>¥${Math.round(result.nav).toLocaleString()}</strong>　評価額: <strong>¥${result.totalValue.toLocaleString()}</strong>（${units.toLocaleString()}口）${result.navDate?' <span style="color:var(--text3)">'+result.navDate+'</span>':''}`;
@@ -1303,9 +1295,8 @@ async function amTestFund(){
 async function amUpdateAllPrices(){
   const stockTargets=amAccounts.filter(a=>a.ticker&&a.shares>0);
   const fundTargets=amAccounts.filter(a=>!a.ticker&&a.fundName&&a.units>0);
-  const allTargets=[...stockTargets,...fundTargets];
-  if(!allTargets.length){
-    showToast('更新対象がありません。株式はティッカー＋株数、投信はファンド名＋口数を口座に設定してください。',5000);return;
+  if(!stockTargets.length&&!fundTargets.length){
+    showToast('更新対象がありません。株式はティッカー＋株数、投信はファンド名＋口数を設定してください。',5000);return;
   }
   const btn=document.getElementById('amStockRefreshBtn');
   const icon=document.getElementById('amRefreshIcon');
@@ -1336,7 +1327,7 @@ async function amUpdateAllPrices(){
     const item=fundTargets[i];
     text.textContent=`投信 ${i+1}/${fundTargets.length}: ${item.name.slice(0,12)}`;
     const idx=amAccounts.findIndex(a=>a.id===item.id);if(idx<0){failed++;continue;}
-    const result=await amFetchFundNav(item.fundName||item.name, item.units);
+    const result=await amFetchFundNav(item.fundName||item.name,item.units);
     if(result&&result.totalValue>0){
       amAccounts[idx].amount=result.totalValue;
       amAccounts[idx].lastPrice=result.nav;
