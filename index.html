@@ -1489,7 +1489,19 @@ let snapshots=[];let activeFilter='all';let chartInstances={};
 function trFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP')}
 function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP')}
 function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}}
-function trLoadFromStorage(){try{snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snapshots=[];}}
+function trLoadFromStorage(){
+  try{snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snapshots=[];}
+  const TOUSHI_NAMES=['オルカンPayPay','全世界PayPay','インド(SBI)','全世界インデックス','eMAXIS','オルカン','iTrust'];
+  snapshots.forEach(s=>{
+    if(s.accounts)s.accounts.forEach(a=>{
+      if((a.cat==='証券'||a.cat==='その他')&&TOUSHI_NAMES.some(n=>a.name.includes(n))){
+        if(s.cats[a.cat])s.cats[a.cat]=Math.max(0,(s.cats[a.cat]||0)-a.amount);
+        a.cat='投信';
+        s.cats['投信']=(s.cats['投信']||0)+a.amount;
+      }
+    });
+  });
+}
 function getFiltered(){
   if(activeFilter==='all')return snapshots;
   const months=activeFilter==='6m'?6:activeFilter==='1y'?12:3;
@@ -1510,6 +1522,11 @@ function trParseCSV(text,filename){
   const rows=[];
   for(let i=1;i<lines.length;i++){const cols=[];let cur='',inQ=false;for(const ch of lines[i]){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur);cur='';}else{cur+=ch;}}cols.push(cur);if(cols.length>=4&&cols[1])rows.push({name:cols[1]||'',cat:cols[2]||'その他',amount:parseFloat(cols[3])||0,updated:cols[5]||''});}
   if(!rows.length){alert('有効なデータがありませんでした: '+filename);return;}
+  // カテゴリ正規化：投信相当の口座を証券→投信に変換
+  const TOUSHI_NAMES=['オルカンPayPay','全世界PayPay','インド(SBI)','全世界インデックス','eMAXIS','オルカン','iTrust','PayPayポイント'];
+  rows.forEach(r=>{
+    if((r.cat==='証券'||r.cat==='その他')&&TOUSHI_NAMES.some(n=>r.name.includes(n))){r.cat='投信';}
+  });
   let dateStr='';const m=filename.match(/(\d{4}-\d{2}-\d{2})/);
   if(m){dateStr=m[1];}else{const dates=rows.map(r=>r.updated).filter(Boolean).sort();dateStr=dates[dates.length-1]||new Date().toISOString().slice(0,10);}
   const existing=snapshots.findIndex(s=>s.date===dateStr);
