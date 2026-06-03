@@ -522,10 +522,24 @@ tr:last-child td{border-bottom:none}
   <div class="phead">
     <div class="phead-inner">
       <h1>💰 資産管理</h1>
-      <button class="btn-accent" id="btnHeaderAdd" onclick="openAddModal()">＋ 追加</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="sync-status" id="syncStatus" style="display:none"><span class="sync-dot" id="syncDot"></span><span id="syncText" style="font-size:11px"></span></div>
+        <button class="btn-accent" id="btnHeaderAdd" onclick="openAddModal()">＋ 追加</button>
+      </div>
     </div>
   </div>
-  <div class="page-inner" id="managerMain">
+  <!-- ログイン画面 -->
+  <div id="managerLogin" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;padding:2rem;text-align:center">
+    <div style="font-size:48px;margin-bottom:14px">💰</div>
+    <h2 style="font-size:20px;font-weight:600;margin-bottom:8px">資産管理ツール</h2>
+    <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">Googleアカウントでログインすると<br>MacとiPhoneでデータが自動同期されます</p>
+    <button style="display:flex;align-items:center;gap:10px;background:var(--bg);border:0.5px solid var(--border2);border-radius:24px;padding:12px 24px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;color:var(--text)" onclick="signIn()">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Googleでログイン
+    </button>
+    <button style="margin-top:12px;background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:inherit;text-decoration:underline" onclick="useOffline()">ログインせずに使う（このデバイスのみ）</button>
+  </div>
+  <div class="page-inner" id="managerMain" style="display:none">
     <div id="reminderBanner"></div>
     <div id="totalCard"></div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
@@ -997,8 +1011,8 @@ function refreshHome(){
 // ============================================================
 // ASSET MANAGER
 // ============================================================
-const CLIENT_ID='';
-const SCOPES='';
+const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
+const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const SHEET_NAME='資産管理データ';
 const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
 const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
@@ -1173,21 +1187,88 @@ function importFromPortfolio(){
     amRender();amSaveToSheet();showToast(`✓ PF反映：${updated}件更新、${added}件追加`,3000);refreshHome();
   }catch(e){showToast('反映に失敗しました')}
 }
-// ローカル保存のみ（Google連携なし）
 async function amSaveToSheet(){
-  amSaveToLocal();
+  if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
+  setSyncStatus('syncing','保存中...');
+  try{
+    const values=[['id','name','cat','amount','note','shares','price','updated'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated])];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:H${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:H1000`});
+    amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
+  }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
 function useOffline(){
-  amIsOnline=false;
-  amLoadFromLocal();amRender();refreshHome();
+  amIsOnline=false;localStorage.setItem('assetGoogleMode','offline');
+  amLoadFromLocal();amShowMain();amRender();refreshHome();
+}
+function amShowMain(){
+  document.getElementById('managerLogin').style.display='none';
+  document.getElementById('managerMain').style.display='block';
+  document.getElementById('btnHeaderAdd').style.display='block';
+}
+function amShowLogin(){
+  document.getElementById('managerLogin').style.display='flex';
+  document.getElementById('managerMain').style.display='none';
+}
+function setSyncStatus(state,text){
+  const dot=document.getElementById('syncDot'),txt=document.getElementById('syncText'),st=document.getElementById('syncStatus');
+  st.style.display='flex';
+  dot.className='sync-dot '+(state==='ok'?'ok':state==='syncing'?'syncing':'');
+  txt.textContent=text;
+}
+async function amFindOrCreateSheet(){
+  try{
+    const res=await gapi.client.request({path:'https://www.googleapis.com/drive/v3/files',params:{q:`name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,fields:'files(id,name)'}});
+    if(res.result.files&&res.result.files.length>0){amSpreadsheetId=res.result.files[0].id;}
+    else{const create=await gapi.client.sheets.spreadsheets.create({resource:{properties:{title:SHEET_NAME},sheets:[{properties:{title:'accounts'}}]}});amSpreadsheetId=create.result.spreadsheetId;}
+  }catch(e){console.error(e);}
+}
+async function amLoadFromSheet(){
+  if(!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:H1000'});
+    const rows=res.result.values||[];
+    amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr()}));
+    amSaveToLocal();amRender();
+  }catch(e){amLoadFromLocal();amRender();}
+}
+async function onSignedIn(){
+  amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
+  amShowMain();setSyncStatus('syncing','同期中...');
+  await amFindOrCreateSheet();await amLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+}
+function signIn(){amTokenClient.requestAccessToken({prompt:'consent'});}
+function signOut(){
+  const token=gapi.client.getToken();
+  if(token)google.accounts.oauth2.revoke(token.access_token);
+  gapi.client.setToken('');localStorage.removeItem('assetGoogleMode');
+  amIsOnline=false;amSpreadsheetId=null;amShowLogin();
+  document.getElementById('syncStatus').style.display='none';
 }
 function amMaybeInit(){
-  // Google連携なし・直接オフラインモードで起動
-  amLoadFromLocal();amRender();refreshHome();
+  const saved=localStorage.getItem('assetGoogleMode');
+  if(saved==='offline'){useOffline();return;}
+  if(saved==='online'){amTokenClient.requestAccessToken({prompt:''});}
+  else{amShowLogin();}
 }
 window.addEventListener('load',()=>{
-  // Google連携なし・直接localStorageから読み込み
-  amMaybeInit();
+  const s1=document.createElement('script');s1.src='https://apis.google.com/js/api.js';
+  s1.onload=()=>gapi.load('client',async()=>{
+    await gapi.client.init({discoveryDocs:['https://sheets.googleapis.com/$discovery/rest?version=v4']});
+    amGapiInited=true;
+    if(amGisInited)amMaybeInit();
+  });
+  document.head.appendChild(s1);
+  const s2=document.createElement('script');s2.src='https://accounts.google.com/gsi/client';
+  s2.onload=()=>{
+    amTokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:CLIENT_ID,scope:SCOPES,
+      callback:async(resp)=>{if(!resp.error)await onSignedIn();}
+    });
+    amGisInited=true;
+    if(amGapiInited)amMaybeInit();
+  };
+  document.head.appendChild(s2);
 });
 
 // ============================================================
