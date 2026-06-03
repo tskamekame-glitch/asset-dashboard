@@ -1062,40 +1062,36 @@ function amRender(){
   document.getElementById('accountSections').innerHTML=Object.entries(catGroups).map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
     return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>{
-      const hasStock=a.shares>0||a.price>0;
-      const stockInfo=a.shares>0&&a.price>0?`<div class="acct-note" style="color:var(--green)">${Number(a.shares).toLocaleString()}株 × ¥${Number(a.price).toLocaleString()}</div>`:a.shares>0?`<div class="acct-note">${Number(a.shares).toLocaleString()}株</div>`:'';
       const staleAlert=daysSince(a.updated)>=30?`<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ ${daysSince(a.updated)}日未更新</span>`:'';
-      return`<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0">
-        <div style="display:flex;align-items:center;padding:13px 16px;gap:10px">
-          <div class="acct-info" style="flex:1;min-width:0">
+      const isStock=a.cat==='証券';
+      return`<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">
+        <div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">
+          <div style="flex:1;min-width:0">
             <div class="acct-name">${esc(a.name)}</div>
             ${a.note?`<div class="acct-note">${esc(a.note)}</div>`:''}
-            ${stockInfo}
+            <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">
+              ${isStock?`
+              <input id="il-shares-${a.id}" type="number" inputmode="numeric" value="${a.shares||''}" placeholder="株数"
+                style="width:90px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none"
+                oninput="amInlineCalc(${a.id})">
+              <span style="color:var(--text3);font-size:13px">×</span>
+              <input id="il-price-${a.id}" type="number" inputmode="numeric" value="${a.price||''}" placeholder="株価"
+                style="width:100px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none"
+                oninput="amInlineCalc(${a.id})">
+              <span style="color:var(--text3);font-size:13px">=</span>
+              <span id="il-calc-${a.id}" style="font-size:13px;font-weight:600;color:var(--green)">${a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price)):''}</span>
+              `:`
+              <input id="il-amount-${a.id}" type="number" inputmode="numeric" value="${a.amount||''}" placeholder="残高（円）"
+                style="width:150px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none"
+                oninput="">
+              `}
+              <button onclick="amInlineSave(${a.id})" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">更新</button>
+            </div>
           </div>
-          <div class="acct-right">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
             <span class="acct-amount">${fmt(a.amount)}</span>
             ${staleAlert}
-            <span class="row-btns">
-              <button class="icon-btn" onclick="amToggleInline(${a.id})">編集</button>
-              <button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')">削除</button>
-            </span>
-          </div>
-        </div>
-        <div class="acct-inline-edit" id="inline-${a.id}">
-          <div class="inline-row">
-            <span class="inline-label">残高（円）</span>
-            <input class="inline-inp" id="il-amount-${a.id}" type="number" inputmode="numeric" value="${a.amount}" placeholder="残高">
-          </div>
-          ${a.cat==='証券'?`<div class="inline-row">
-            <span class="inline-label">株数</span>
-            <input class="inline-inp" id="il-shares-${a.id}" type="number" inputmode="numeric" value="${a.shares||''}" placeholder="株数" oninput="amInlineCalc(${a.id})" style="max-width:100px">
-            <span class="inline-label">×　株価</span>
-            <input class="inline-inp" id="il-price-${a.id}" type="number" inputmode="numeric" value="${a.price||''}" placeholder="株価" oninput="amInlineCalc(${a.id})" style="max-width:110px">
-            <span class="inline-calc" id="il-calc-${a.id}">${a.shares>0&&a.price>0?'= '+fmt(a.shares*a.price):''}</span>
-          </div>`:''}
-          <div class="inline-btns">
-            <button class="inline-cancel" onclick="amToggleInline(${a.id})">キャンセル</button>
-            <button class="inline-save" onclick="amInlineSave(${a.id})">保存</button>
+            <button class="icon-btn danger" onclick="confirmDelete(${a.id},'${esc(a.name)}')" style="font-size:12px;padding:4px 10px">削除</button>
           </div>
         </div>
       </div>`;
@@ -1118,28 +1114,26 @@ function amInlineCalc(id){
   const shares=parseFloat(document.getElementById('il-shares-'+id)?.value)||0;
   const price=parseFloat(document.getElementById('il-price-'+id)?.value)||0;
   const calc=document.getElementById('il-calc-'+id);
-  const amountInp=document.getElementById('il-amount-'+id);
   if(shares>0&&price>0){
-    const total=Math.round(shares*price);
-    if(amountInp)amountInp.value=total;
-    if(calc)calc.textContent='= '+fmt(total);
+    if(calc)calc.textContent=fmt(Math.round(shares*price));
   }else{
     if(calc)calc.textContent='';
   }
 }
 async function amInlineSave(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
-  const amountEl=document.getElementById('il-amount-'+id);
   const sharesEl=document.getElementById('il-shares-'+id);
   const priceEl=document.getElementById('il-price-'+id);
-  const newAmount=parseFloat(amountEl?.value)||0;
-  const newShares=parseFloat(sharesEl?.value)||0;
-  const newPrice=parseFloat(priceEl?.value)||0;
-  a.amount=newAmount;
-  if(sharesEl)a.shares=newShares;
-  if(priceEl)a.price=newPrice;
+  const amountEl=document.getElementById('il-amount-'+id);
+  if(sharesEl&&priceEl){
+    const shares=parseFloat(sharesEl.value)||0;
+    const price=parseFloat(priceEl.value)||0;
+    a.shares=shares;a.price=price;
+    if(shares>0&&price>0)a.amount=Math.round(shares*price);
+  }else if(amountEl){
+    a.amount=parseFloat(amountEl.value)||0;
+  }
   a.updated=todayStr();
-  document.getElementById('inline-'+id).classList.remove('open');
   amRender();await amSaveToSheet();refreshHome();
   showToast('✓ 更新しました');
 }
