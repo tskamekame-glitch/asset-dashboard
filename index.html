@@ -1060,7 +1060,9 @@ function amRender(){
   const maxAmt=Math.max(...Object.values(cats),1);
   document.getElementById('amBarChart').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`<div class="bar-row"><span class="bar-label">${cat}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(amt/maxAmt*100)}%;background:${AM_CAT_COLORS[cat]||'#888'}"></div></div><span class="bar-val">${fmt(amt)}</span></div>`).join('')||'<p style="text-align:center;color:var(--text3);font-size:13px">口座を追加してください</p>';
   const catGroups={};amAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
-  document.getElementById('accountSections').innerHTML=Object.entries(catGroups).map(([cat,accts])=>{
+  const CAT_ORDER=['銀行','証券','投信','年金','現金','不動産','仮想通貨','その他'];
+  const sortedCatEntries=[...CAT_ORDER.filter(c=>catGroups[c]),...Object.keys(catGroups).filter(c=>!CAT_ORDER.includes(c))].map(c=>[c,catGroups[c]]);
+  document.getElementById('accountSections').innerHTML=sortedCatEntries.map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
     return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>{
       const stale=daysSince(a.updated)>=30;
@@ -1571,10 +1573,10 @@ function trRenderCharts(){
   ]},options:{responsive:true,plugins:{
     legend:{display:true,position:'bottom',labels:{font:{size:11},padding:12,boxWidth:12,usePointStyle:true}},
     tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),afterBody:items=>{if(items.length===2){const diff=items[0].raw-items[1].raw;const sign=diff>=0?'＋':'';return['差分: '+sign+Math.round(diff/10000).toLocaleString()+'万円'];}return [];}}},
-    datalabels:{display:ctx=>ctx.datasetIndex===0&&(ctx.dataIndex===0||ctx.dataIndex===totals.length-1),align:'top',anchor:'end',color:'#185FA5',font:{size:10,weight:'600'},formatter:v=>'¥'+Math.round(v/10000)+'万'}
-  },scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+    datalabels:{display:false}
+  },scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
   trDestroyChart('bar');
-  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:ctx=>ctx.datasetIndex===allCats.length-1,anchor:'end',align:'top',color:isDark?'#aeaeb2':'#6b6b68',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.chart.data.datasets.reduce((s,ds)=>s+(ds.data[ctx.dataIndex]||0),0);return'¥'+Math.round(t/10000)+'万';}}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
   trDestroyChart('donut');
   const latest=filtered[filtered.length-1];const catEntries=Object.entries(latest.cats).sort((a,b)=>b[1]-a[1]);
   chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map((_,i)=>TR_CAT_COLORS[i%TR_CAT_COLORS.length]),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.label+': '+trFmt(ctx.raw)+' ('+((ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0))*100).toFixed(1)+'%)'}},datalabels:{color:'#fff',font:{size:11,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return p<5?'':p+'%';}}},cutout:'55%'},plugins:[ChartDataLabels]});
@@ -1585,16 +1587,27 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
   const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName).map(a=>a.name):[]))];
   const card=document.getElementById(cardId);if(!accountNames.length){card.style.display='none';return;}card.style.display='block';
   const colors=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780'];
-  const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{if(!s.accounts)return 0;const acct=s.accounts.find(a=>a.name===name&&a.cat===catName);return acct?acct.amount:0;}),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:2,pointRadius:4,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3}));
-  datasets.unshift({label:catName+'合計',data:filtered.map(s=>{if(!s.accounts)return s.cats[catName]||0;return s.accounts.filter(a=>a.cat===catName).reduce((sum,a)=>sum+a.amount,0);}),borderColor:isDark?'#fff':'#333',backgroundColor:'transparent',borderWidth:2.5,borderDash:[5,3],pointRadius:5,pointBackgroundColor:isDark?'#fff':'#333',fill:false,tension:0.3});
-  trDestroyChart(canvasId);const canvas=document.getElementById(canvasId);
-  const minW=Math.max(300, labels.length*52);
-  const containerW=canvas.parentElement?canvas.parentElement.clientWidth||300:300;
-  const needsScroll=minW>containerW;
-  canvas.style.width=needsScroll?minW+'px':'100%';
-  canvas.style.minWidth='100%';
-  canvas.height=200+Math.ceil(datasets.length/2)*30;
-  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:false,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true},onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},datalabels:{align:'top',anchor:'end',color:ctx=>datasets[ctx.datasetIndex].borderColor,font:{size:9,weight:'600'},formatter:v=>v>0?'¥'+Math.round(v/10000)+'万':'',display:ctx=>ctx.datasetIndex===0}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+  const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{if(!s.accounts)return 0;const acct=s.accounts.find(a=>a.name===name&&a.cat===catName);return acct?acct.amount:0;}),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:2,pointRadius:3,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3}));
+  datasets.unshift({label:catName+'合計',data:filtered.map(s=>{if(!s.accounts)return s.cats[catName]||0;return s.accounts.filter(a=>a.cat===catName).reduce((sum,a)=>sum+a.amount,0);}),borderColor:isDark?'#fff':'#333',backgroundColor:'transparent',borderWidth:2.5,borderDash:[5,3],pointRadius:4,pointBackgroundColor:isDark?'#fff':'#333',fill:false,tension:0.3});
+  trDestroyChart(canvasId);
+  const canvas=document.getElementById(canvasId);
+  canvas.style.width='100%';canvas.style.minWidth='';
+  const legendRows=Math.ceil(datasets.length/2);
+  canvas.style.height=(220+legendRows*28)+'px';
+  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true},
+        onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},
+      datalabels:{display:false}
+    },
+    scales:{
+      y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
+      x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
+    },
+    layout:{padding:{top:8,right:8}}
+  },plugins:[ChartDataLabels]});
 }
 function renderComment(){
   const filtered=getFiltered();const el=document.getElementById('commentBody');
