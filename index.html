@@ -202,7 +202,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .filter-bar{display:flex;gap:6px;margin-bottom:10px}
 .filter-btn{background:var(--bg);border:0.5px solid var(--border2);border-radius:16px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text2);font-family:inherit}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.chart-container{padding:8px 0 12px;height:220px;width:100%;overflow:hidden;position:relative}
+.chart-container{padding:8px 8px 12px;min-height:200px}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{padding:10px 12px;text-align:right;color:var(--text3);font-weight:500;font-size:11px;border-bottom:0.5px solid var(--border);white-space:nowrap}
@@ -348,11 +348,11 @@ tr:last-child td{border-bottom:none}
 #fire-scope .hero h1 { font-size: clamp(20px,5vw,30px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 6px; }
 #fire-scope .hero p { font-size: 13px; color: var(--text2); line-height: 1.6; }
 #fire-scope .tabs { display: flex; margin: 1.25rem 0 1rem; border: 0.5px solid var(--border2); border-radius: 12px; overflow: hidden; }
-#fire-scope .tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--bg); color: var(--text2); border: none; font-family: inherit; -webkit-tap-highlight-color: transparent; }
+#fire-scope .tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--text2); border: none; font-family: inherit; -webkit-tap-highlight-color: transparent; }
 #fire-scope .tab.active { background: var(--accent); color: #fff; }
 #fire-scope .tab:first-child { border-right: 0.5px solid var(--border2); }
 #fire-scope .container { max-width: 560px; margin: 0 auto; padding: 0 1rem 4rem; }
-#fire-scope .card { background: var(--bg); border: 0.5px solid var(--border2); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
+#fire-scope .card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
 #fire-scope .card-head { padding: 12px 16px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; }
 #fire-scope .card-head h2 { font-size: 12px; font-weight: 500; color: var(--text2); }
 #fire-scope .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
@@ -360,12 +360,12 @@ tr:last-child td{border-bottom:none}
 #fire-scope .field-list { padding: 6px 0; }
 #fire-scope .field-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; border-bottom: 0.5px solid var(--border); }
 #fire-scope .field-row:last-child { border-bottom: none; }
-#fire-scope .field-label { font-size: 14px; color: var(--text); flex: 1; line-height: 1.4; font-weight: 500; }
-#fire-scope .field-sub { font-size: 11px; color: var(--text3); margin-top: 2px; font-weight: 400; }
+#fire-scope .field-label { font-size: 14px; color: var(--text2); flex: 1; line-height: 1.4; }
+#fire-scope .field-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
 #fire-scope .field-input-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-#fire-scope .field-unit { font-size: 12px; color: var(--text2); white-space: nowrap; }
-#fire-scope .field-input { width: 88px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; color: var(--text); font-size: 16px; font-weight: 600; text-align: right; padding: 8px 10px; outline: none; -webkit-appearance: none; appearance: none; font-family: inherit; }
-#fire-scope .field-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(24,95,165,0.15); }
+#fire-scope .field-unit { font-size: 12px; color: var(--text3); white-space: nowrap; }
+#fire-scope .field-input { width: 88px; background: var(--surface2); border: 0.5px solid var(--border2); border-radius: 10px; color: var(--text); font-size: 16px; font-weight: 500; text-align: right; padding: 7px 9px; outline: none; -webkit-appearance: none; appearance: none; font-family: inherit; }
+#fire-scope .field-input:focus { border-color: var(--accent); }
 #fire-scope .field-input::-webkit-inner-spin-button, #fire-scope .field-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #fire-scope .field-input[type=number] { -moz-appearance: textfield; }
 #fire-scope .hint-box { background: rgba(167,139,250,0.08); border: 0.5px solid rgba(167,139,250,0.25); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-size: 12px; color: #c4b5fd; line-height: 1.7; }
@@ -375,7 +375,7 @@ tr:last-child td{border-bottom:none}
 #fire-scope .results { display: none; }
 #fire-scope .results.visible { display: block; }
 #fire-scope .compare-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-#fire-scope .compare-card { background: var(--bg); border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px 14px; }
+#fire-scope .compare-card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px 14px; }
 #fire-scope .compare-card.family { border-color: rgba(167,139,250,0.4); }
 #fire-scope .compare-title { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
 #fire-scope .compare-title.family { color: #c4b5fd; }
@@ -390,7 +390,7 @@ tr:last-child td{border-bottom:none}
 #fire-scope .verdict-card.warn .verdict-title { color: var(--amber); }
 #fire-scope .verdict-card.ng   .verdict-title { color: var(--red); }
 #fire-scope .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-#fire-scope .metric-card { background: var(--bg); border: 0.5px solid var(--border2); border-radius: 12px; padding: 13px 14px; }
+#fire-scope .metric-card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 12px; padding: 13px 14px; }
 #fire-scope .metric-card .mlabel { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
 #fire-scope .metric-card .mvalue { font-size: 18px; font-weight: 600; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
 #fire-scope .metric-card .msub { font-size: 11px; color: var(--text3); }
@@ -399,7 +399,7 @@ tr:last-child td{border-bottom:none}
 #fire-scope .val-ng { color: var(--red); }
 #fire-scope .val-blue { color: var(--accent); }
 #fire-scope .val-purple { color: var(--purple); }
-#fire-scope .chart-card { background: var(--bg); border: 0.5px solid var(--border2); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+#fire-scope .chart-card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
 #fire-scope .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
 #fire-scope .chart-title { font-size: 12px; color: var(--text2); font-weight: 500; }
 #fire-scope .chart-legend { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -601,17 +601,11 @@ tr:last-child td{border-bottom:none}
       <button class="filter-btn" data-f="3m" onclick="setFilter('3m')">3ヶ月</button>
     </div>
     <div class="card" id="lineCard" style="display:none"><div class="card-head"><h2>総資産推移</h2></div><div class="chart-container"><canvas id="lineChart"></canvas></div></div>
-    <div class="card" id="summaryLineCard" style="display:none"><div class="card-head"><h2>カテゴリ合計推移</h2><div style="font-size:11px;color:var(--text3);margin-top:2px">資産合計・銀行・インデックス・年金・個別銘柄</div></div><div class="chart-container"><canvas id="summaryLineChart"></canvas></div></div>
-    <div class="card" id="compareCard" style="display:none">
-      <div class="card-head"><h2>📊 期間比較・増減分析</h2></div>
-      <div id="compareBody" style="padding:0 0 8px"></div>
-    </div>
-    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 証券・個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
-    <div class="card" id="toushinCard" style="display:none"><div class="card-head"><h2>📊 投資信託 推移</h2></div><div class="chart-container"><canvas id="toushinChart"></canvas></div></div>
-    <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
+    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>証券・投資 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
+    <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
     <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div></div>
     <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
-    <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前回比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
+    <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前月比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
     <div style="display:none;margin-bottom:12px" id="exportBar">
       <button class="btn-accent" style="width:100%;border-radius:10px;padding:12px" onclick="exportAllCSV()">↓ 全期間データをCSVで書き出し（バックアップ）</button>
     </div>
@@ -786,8 +780,7 @@ tr:last-child td{border-bottom:none}
       <div class="field"><label>カテゴリ</label>
         <select id="fCat">
           <option value="銀行">🏦 銀行</option>
-          <option value="証券">📈 証券・個別株</option>
-          <option value="投信">📊 投資信託・インデックス</option>
+          <option value="証券">📈 証券・投資</option>
           <option value="現金">💵 現金・財布</option>
           <option value="不動産">🏠 不動産</option>
           <option value="年金">🧓 年金・iDeCo</option>
@@ -1005,7 +998,7 @@ function refreshHome(){
     document.getElementById('hbadge-portfolio').textContent=pf.length>0?done+'/'+pf.length+'件 購入済み':'データなし';
   }catch(e){}
   try{
-    const ts=JSON.parse(localStorage.getItem('todo_kb_v3')||'{}');
+    const ts=JSON.parse(localStorage.getItem('todo_kb_v4')||'{}');
     const cats=ts.categories||[];const chk=ts.checked||{};
     let t=0,dn=0;cats.forEach(c=>c.items.forEach(i=>{t++;if(chk[i.id])dn++;}));
     const rem=t-dn;
@@ -1020,8 +1013,8 @@ function refreshHome(){
 const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const SHEET_NAME='資産管理データ';
-const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#E24B4A','投信':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
-const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','投信':'📊','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
+const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
+const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
 const CAT_MAP_FROM_PF={'証券':'証券','証券-JP':'証券','証券-インド':'証券','証券-高配当':'証券','証券-個別':'証券','銀行':'銀行','年金':'年金','仮想通貨':'仮想通貨','その他':'その他','米国インデックス':'証券','日本インデックス':'証券','インド':'証券','高配当株':'証券','個別株':'証券','銀行キープ':'銀行'};
 
 let amAccounts=[];
@@ -1105,7 +1098,7 @@ function openAddModal(defaultCat){
   setTimeout(()=>document.getElementById('fName').focus(),300);
 }
 function amToggleStockFields(cat){
-  document.getElementById('fStockFields').style.display=(cat==='証券'||cat==='投信'||cat==='仮想通貨'||cat==='年金')?'block':'none';
+  document.getElementById('fStockFields').style.display=(cat==='証券'||cat==='仮想通貨'||cat==='年金')?'block':'none';
 }
 function amSwitchPriceMode(mode){
   const isIndex=mode==='index';
@@ -1186,21 +1179,35 @@ function amIsIndexFund(account){
 }
 
 // Claude API (web_search) 経由で株価 or 基準価額を取得
-// ── 株式・ETF：Cloudflare Workers経由でYahoo Finance取得（CORSなし）──
-const STOCK_PROXY = 'https://small-poetry-c9c2.tskamekame.workers.dev';
-
+// ── 株式・ETF：Claude API (web_search) 経由で株価取得 ──
 async function amFetchViaAPI(query, isIndex){
-  if(isIndex){
-    // 投信モード：Cloudflare Worker経由でminkabu取得
-    const res = await fetch(`${STOCK_PROXY}?fund=${encodeURIComponent(query.fundName)}&units=${query.units}`, {signal: AbortSignal.timeout(15000)});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const d = await res.json();
-    if(d.error) throw new Error(d.error);
-    return d;
-  }
-  const res = await fetch(`${STOCK_PROXY}?ticker=${encodeURIComponent(query)}`, {signal: AbortSignal.timeout(12000)});
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const d = await res.json();
+  if(isIndex) throw new Error('fund_manual');
+
+  const prompt = `Current stock price for: ${query}
+(.T = Tokyo Stock Exchange. e.g. 9984.T=SoftBank Group, 9434.T=SoftBank, 7203.T=Toyota)
+Return ONLY this JSON, no other text:
+{"ticker":"${query}","price":1234.5,"currency":"JPY","changePct":0.5,"longName":"Company Name"}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      tools: [{"type":"web_search_20250305","name":"web_search"}],
+      messages: [{"role":"user","content": prompt}]
+    })
+  });
+  if(!res.ok) throw new Error('API '+res.status);
+  const data = await res.json();
+  const textBlock = data.content?.find(b=>b.type==='text');
+  if(!textBlock) throw new Error('no text');
+  const match = textBlock.text.match(/\{[\s\S]*?\}/);
+  if(!match) throw new Error('no JSON');
+  const d = JSON.parse(match[0]);
   if(d.error) throw new Error(d.error);
   return d;
 }
@@ -1267,17 +1274,8 @@ async function amTestTicker(){
   // インデックスファンドモード
   if(!ticker && fundName){
     if(units<=0){preview.innerHTML='⚠️ 保有口数を入力してから「確認」を押してください';preview.style.color='var(--amber)';return;}
-    preview.innerHTML='<span style="color:var(--accent)">⏳ 基準価額を取得中...</span>';
-    const data=await amFetchIndexValue(fundName,units);
-    if(!data){
-      preview.innerHTML='❌ 取得失敗<br><span style="font-size:11px">ファンド名を正式名称で入力してください<br>例：「世界経済インデックスファンド」「eMAXIS Slim 全世界株式（オール・カントリー）」</span>';
-      preview.style.color='var(--danger)';return;
-    }
-    const sign=data.changePct>=0?'▲':'▼';
-    const col=data.changePct>=0?'#0f6e56':'#c0392b';
-    preview.innerHTML=`✅ <strong>${data.fundName}</strong><br>基準価額 ¥${Math.round(data.nav).toLocaleString()} × ${Number(units).toLocaleString()}口 ÷ 10,000 = <strong>¥${Math.round(data.totalValue).toLocaleString()}</strong>　<span style="color:${col}">${sign}${Math.abs(data.changePct).toFixed(2)}%</span>`;
-    preview.style.color='var(--text)';
-    document.getElementById('fAmount').value=Math.round(data.totalValue);
+    preview.innerHTML='<span style="color:var(--text3)">⚠️ 投資信託の基準価額は自動取得できません<br><span style="font-size:11px">証券会社アプリで評価額を確認し、上の「残高（円）」欄に直接入力してください<br>口数を登録しておくと次回手動更新が楽になります</span></span>';
+    preview.style.color='var(--text3)';
     return;
   }
 
@@ -1301,26 +1299,22 @@ async function amTestTicker(){
 }
 
 async function amUpdateAllPrices(){
-  // 株式（ticker+shares）と投信（fundName+units）両方対象
-  const stockTargets=amAccounts.filter(a=>a.ticker&&a.shares>0);
-  const fundTargets=amAccounts.filter(a=>!a.ticker&&a.fundName&&a.units>0);
-  const targets=[...stockTargets,...fundTargets];
-  if(!targets.length){showToast('更新対象がありません。口座を編集してティッカー（株式）またはファンド名＋口数（投信）を設定してください。',5000);return;}
+  // 株式（ticker+shares）のみ自動更新対象。投信は手動入力
+  const targets=amAccounts.filter(a=>a.ticker&&a.shares>0);
+  if(!targets.length){showToast('ティッカーと株数が設定された口座がありません。口座を編集してティッカー・株数を設定してください。',4000);return;}
   const btn=document.getElementById('amStockRefreshBtn');
   const icon=document.getElementById('amRefreshIcon');
   const text=document.getElementById('amRefreshText');
   btn.disabled=true;icon.textContent='⏳';
   let updated=0,failed=0;
-  const failedNames=[];
   const usdJpy=await amGetUSDJPY();
   for(let i=0;i<targets.length;i++){
     const item=targets[i];
     text.textContent=`更新中... (${i+1}/${targets.length}) ${item.name.slice(0,14)}`;
     const idx=amAccounts.findIndex(a=>a.id===item.id);
-    if(idx<0){failed++;failedNames.push(item.name);continue;}
+    if(idx<0){failed++;continue;}
     const ts=new Date().toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const data=item.ticker ? await amFetchPrice(item.ticker) : null;
-    const fundData=(!item.ticker&&item.fundName&&item.units>0) ? await amFetchIndexValue(item.fundName,item.units) : null;
+    const data=await amFetchPrice(item.ticker);
     if(data){
       const rate=data.currency==='JPY'?1:usdJpy;
       const priceJPY=data.price*rate;
@@ -1330,33 +1324,14 @@ async function amUpdateAllPrices(){
       amAccounts[idx].lastUpdated=ts;
       amAccounts[idx].updated=todayStr();
       updated++;
-    }else if(fundData){
-      amAccounts[idx].amount=Math.round(fundData.totalValue);
-      amAccounts[idx].lastPrice=Math.round(fundData.nav);
-      amAccounts[idx].lastPriceChange=fundData.changePct;
-      amAccounts[idx].lastUpdated=ts+(fundData.navDate?' ('+fundData.navDate+')':'');
-      amAccounts[idx].updated=todayStr();
-      updated++;
-    }else{
-      failed++;
-      failedNames.push(item.name);
-    }
+    }else{failed++;}
     await new Promise(r=>setTimeout(r,300));
   }
   amSaveToLocal();
   btn.disabled=false;icon.textContent='🔄';text.textContent='価格を一括更新（株式・投信）';
   const now=new Date().toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-  const lastUpdateEl=document.getElementById('amLastUpdate');
-  if(failed>0){
-    lastUpdateEl.innerHTML=`最終更新: ${now}　✅ ${updated}件${failed>0?`　❌ ${failed}件失敗`:''}
-      <div style="margin-top:6px;padding:8px 10px;background:rgba(192,57,43,0.08);border-radius:8px;text-align:left">
-        <div style="font-size:11px;color:var(--danger);font-weight:600;margin-bottom:4px">❌ 取得失敗した銘柄：</div>
-        ${failedNames.map(n=>`<div style="font-size:11px;color:var(--text2);padding:2px 0">・${n}</div>`).join('')}
-      </div>`;
-  }else{
-    lastUpdateEl.textContent=`最終更新: ${now}　✅ ${updated}件更新`;
-  }
-  showToast(`✓ ${updated}件更新${failed>0?' / ❌'+failed+'件失敗':''}`,3000);
+  document.getElementById('amLastUpdate').textContent=`最終更新: ${now}　✅ ${updated}件${failed>0?'　❌ '+failed+'件失敗':''}`;
+  showToast(`✓ ${updated}件の評価額を更新しました${failed>0?' ('+failed+'件失敗)':''}`,3000);
   amRender();refreshHome();
 }
 
@@ -1782,96 +1757,11 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','summaryLineCard','barCard','donutCard','securitiesCard','toushinCard','pensionCard','commentCard','tableCard','compareCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','barCard','donutCard','securitiesCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();renderCompare();}
-}
-
-function renderCompare(){
-  const el=document.getElementById('compareBody');
-  if(snapshots.length<2){el.innerHTML='<div style="padding:16px;color:var(--text3);font-size:13px">データが2件以上になると比較が表示されます。</div>';return;}
-  const latest=snapshots[snapshots.length-1];
-
-  // 比較対象を探す
-  function findSnapshot(targetDate){
-    // targetDateに最も近いスナップショットを返す
-    return snapshots.slice(0,-1).reduce((best,s)=>{
-      const d=Math.abs(new Date(s.date)-new Date(targetDate));
-      const bd=Math.abs(new Date(best.date)-new Date(targetDate));
-      return d<bd?s:best;
-    },snapshots[0]);
-  }
-
-  const latestDate=new Date(latest.date);
-  const prevMonthDate=new Date(latestDate);prevMonthDate.setMonth(prevMonthDate.getMonth()-1);
-  const yearAgoDate=new Date(latestDate);yearAgoDate.setFullYear(yearAgoDate.getFullYear()-1);
-
-  const prevSnap=snapshots[snapshots.length-2]; // 前回
-  const monthSnap=findSnapshot(prevMonthDate.toISOString().slice(0,10)); // 前月
-  const yearSnap=findSnapshot(yearAgoDate.toISOString().slice(0,10)); // 1年前
-
-  function diffSection(label, snap){
-    if(!snap||snap.date===latest.date)return'';
-    const diff=latest.total-snap.total;
-    const pct=snap.total>0?diff/snap.total*100:0;
-    const col=diff>=0?'var(--green)':'var(--danger)';
-    const sign=diff>=0?'＋':'';
-
-    // カテゴリ別増減
-    const allCats=[...new Set([...Object.keys(latest.cats),...Object.keys(snap.cats)])];
-    const catRows=allCats.map(cat=>{
-      const d=(latest.cats[cat]||0)-(snap.cats[cat]||0);
-      return{cat,diff:d};
-    }).filter(c=>Math.abs(c.diff)>1000).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
-
-    // 口座別増減（accountsがある場合）
-    let accountRows=[];
-    if(latest.accounts&&snap.accounts){
-      const allNames=[...new Set([...latest.accounts.map(a=>a.name),...snap.accounts.map(a=>a.name)])];
-      accountRows=allNames.map(name=>{
-        const la=latest.accounts.find(a=>a.name===name);
-        const sa=snap.accounts.find(a=>a.name===name);
-        const lv=la?la.amount:0,sv=sa?sa.amount:0;
-        return{name,cat:la?.cat||sa?.cat||'',diff:lv-sv,isNew:!sa,isGone:!la};
-      }).filter(a=>Math.abs(a.diff)>1000||a.isNew||a.isGone).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,10);
-    }
-
-    const catHtml=catRows.map(c=>{
-      const col=c.diff>=0?'var(--green)':'var(--danger)';
-      const sign=c.diff>=0?'＋':'';
-      return`<div style="display:flex;justify-content:space-between;padding:6px 16px;border-bottom:0.5px solid var(--border);font-size:13px"><span style="color:var(--text2)">${c.cat}</span><span style="color:${col};font-weight:600;font-variant-numeric:tabular-nums">${sign}${Math.round(c.diff).toLocaleString()}円</span></div>`;
-    }).join('');
-
-    const acctHtml=accountRows.map(a=>{
-      const col=a.isNew?'var(--accent)':a.isGone?'var(--text3)':a.diff>=0?'var(--green)':'var(--danger)';
-      const sign=a.diff>=0?'＋':'';
-      const tag=a.isNew?'<span style="font-size:10px;background:rgba(24,95,165,0.1);color:var(--accent);border-radius:4px;padding:1px 5px;margin-left:4px">NEW</span>':a.isGone?'<span style="font-size:10px;background:var(--bg2);color:var(--text3);border-radius:4px;padding:1px 5px;margin-left:4px">消滅</span>':'';
-      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 16px;border-bottom:0.5px solid var(--border);font-size:12px"><span style="color:var(--text2);flex:1">${a.name}${tag}<br><span style="font-size:10px;color:var(--text3)">${a.cat}</span></span><span style="color:${col};font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${a.isGone?'消滅':sign+Math.round(a.diff).toLocaleString()+'円'}</span></div>`;
-    }).join('');
-
-    return`<div style="margin-bottom:4px">
-      <div style="padding:12px 16px 8px;background:var(--bg2);border-bottom:0.5px solid var(--border)">
-        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${label}（${snap.date}）との比較</div>
-        <div style="display:flex;align-items:baseline;gap:10px">
-          <span style="font-size:20px;font-weight:700;color:${col}">${sign}${Math.round(diff).toLocaleString()}円</span>
-          <span style="font-size:13px;color:${col}">${sign}${pct.toFixed(1)}%</span>
-        </div>
-      </div>
-      ${catHtml?`<div style="padding:8px 16px 4px;font-size:11px;color:var(--text3);font-weight:600">カテゴリ別</div>${catHtml}`:''}
-      ${acctHtml?`<div style="padding:8px 16px 4px;font-size:11px;color:var(--text3);font-weight:600">口座・銘柄別（上位10件）</div>${acctHtml}`:''}
-    </div>`;
-  }
-
-  el.innerHTML=`
-    <div style="padding:10px 16px;font-size:12px;color:var(--text3)">最新: ${latest.date} ／ 総資産 ${trFmt(latest.total)}</div>
-    <div style="border-top:0.5px solid var(--border)">
-      ${diffSection('前回',prevSnap)}
-      ${monthSnap&&monthSnap.date!==prevSnap.date?diffSection('前月',monthSnap):''}
-      ${yearSnap&&yearSnap.date!==prevSnap.date&&yearSnap.date!==monthSnap?.date?diffSection('1年前',yearSnap):''}
-    </div>
-  `;
+  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
 }
 function trRenderFileList(){
   document.getElementById('fileList').innerHTML=snapshots.map(s=>`<div class="file-item"><div><div class="fname">📄 ${s.filename}</div><div class="fmeta">${s.date} ・ ${trFmt(s.total)}</div></div><button class="file-del" onclick="removeSnapshot('${s.date}')">✕</button></div>`).join('');
@@ -1893,81 +1783,23 @@ function trRenderCharts(){
   const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
   const tickColor=isDark?'#636366':'#9b9b97';
   trDestroyChart('line');
-  const showLabels=labels.length<=8;const ptRadius=labels.length>15?2:5;
-  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[{label:'総資産',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:ptRadius,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>Math.round(v/10000)+'万',color:tickColor,font:{size:9},maxTicksLimit:5},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:9},maxRotation:45,maxTicksLimit:8},grid:{display:false}}},layout:{padding:{top:8,right:16,left:0,bottom:0}}},plugins:[ChartDataLabels]});
+  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[{label:'総資産',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},datalabels:{align:'top',anchor:'end',color:'#185FA5',font:{size:10,weight:'600'},formatter:v=>'¥'+Math.round(v/10000)+'万'}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
   trDestroyChart('bar');
-  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>Math.round(v/10000)+'万',color:tickColor,font:{size:9},maxTicksLimit:5},grid:{color:gridColor}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
+  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:ctx=>ctx.datasetIndex===allCats.length-1,anchor:'end',align:'top',color:isDark?'#aeaeb2':'#6b6b68',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.chart.data.datasets.reduce((s,ds)=>s+(ds.data[ctx.dataIndex]||0),0);return'¥'+Math.round(t/10000)+'万';}}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
   trDestroyChart('donut');
   const latest=filtered[filtered.length-1];const catEntries=Object.entries(latest.cats).sort((a,b)=>b[1]-a[1]);
   chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map((_,i)=>TR_CAT_COLORS[i%TR_CAT_COLORS.length]),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.label+': '+trFmt(ctx.raw)+' ('+((ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0))*100).toFixed(1)+'%)'}},datalabels:{color:'#fff',font:{size:11,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return p<5?'':p+'%';}}},cutout:'55%'},plugins:[ChartDataLabels]});
-  trDestroyChart('summaryLine');
-  // カテゴリ合計推移グラフ（5系列）
-  const indexCats=['投信']; // 投資信託カテゴリ
-  const pensionCats=['年金'];
-  const bankCats=['銀行','現金'];
-  const stockCats=['証券','仮想通貨'];
-  // 個別銘柄：証券カテゴリの口座ごと（合計ではなく銘柄別は証券グラフに任せる）
-  const summaryDatasets=[
-    {
-      label:'資産合計',
-      data:filtered.map(s=>s.total),
-      borderColor:'#185FA5',borderWidth:2.5,borderDash:[],
-      backgroundColor:'rgba(24,95,165,0.06)',fill:false,tension:0.3
-    },
-    {
-      label:'銀行・現金',
-      data:filtered.map(s=>bankCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
-      borderColor:'#0F6E56',borderWidth:2,
-      backgroundColor:'transparent',fill:false,tension:0.3
-    },
-    {
-      label:'投資信託',
-      data:filtered.map(s=>indexCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
-      borderColor:'#BA7517',borderWidth:2,
-      backgroundColor:'transparent',fill:false,tension:0.3
-    },
-    {
-      label:'年金・iDeCo',
-      data:filtered.map(s=>pensionCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
-      borderColor:'#D4537E',borderWidth:2,
-      backgroundColor:'transparent',fill:false,tension:0.3
-    },
-    {
-      label:'個別株・証券',
-      data:filtered.map(s=>stockCats.reduce((sum,c)=>sum+(s.cats[c]||0),0)),
-      borderColor:'#E24B4A',borderWidth:2,
-      backgroundColor:'transparent',fill:false,tension:0.3
-    }
-  ];
-  const pr2=labels.length>15?2:4;
-  summaryDatasets.forEach(ds=>{ds.pointRadius=pr2;ds.pointBackgroundColor=ds.borderColor;});
-  chartInstances['summaryLine']=new Chart(document.getElementById('summaryLineChart'),{
-    type:'line',
-    data:{labels,datasets:summaryDatasets},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{
-      legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true}},
-      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},
-      datalabels:{display:false}
-    },scales:{
-      y:{ticks:{callback:v=>Math.round(v/10000)+'万',color:tickColor,font:{size:9},maxTicksLimit:5},grid:{color:gridColor}},
-      x:{ticks:{color:tickColor,font:{size:10},maxRotation:45,maxTicksLimit:8},grid:{display:false}}
-    },layout:{padding:{top:8,right:16,left:0,bottom:0}}},
-    plugins:[ChartDataLabels]
-  });
   trRenderCategoryChart('証券','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
-  trRenderCategoryChart('投信','toushinChart','toushinCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
 }
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
-  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName&&!a.name.includes('預り金')).map(a=>a.name):[]))];
+  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts?s.accounts.filter(a=>a.cat===catName).map(a=>a.name):[]))];
   const card=document.getElementById(cardId);if(!accountNames.length){card.style.display='none';return;}card.style.display='block';
   const colors=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780'];
-  // 合計ラインなし・銘柄別のみ
   const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{if(!s.accounts)return 0;const acct=s.accounts.find(a=>a.name===name&&a.cat===catName);return acct?acct.amount:0;}),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:2,pointRadius:4,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3}));
+  datasets.unshift({label:catName+'合計',data:filtered.map(s=>{if(!s.accounts)return s.cats[catName]||0;return s.accounts.filter(a=>a.cat===catName).reduce((sum,a)=>sum+a.amount,0);}),borderColor:isDark?'#fff':'#333',backgroundColor:'transparent',borderWidth:2.5,borderDash:[5,3],pointRadius:5,pointBackgroundColor:isDark?'#fff':'#333',fill:false,tension:0.3});
   trDestroyChart(canvasId);const canvas=document.getElementById(canvasId);canvas.height=200+Math.ceil(datasets.length/2)*30;
-  const pr=labels.length>15?2:4;
-  datasets.forEach(ds=>{ds.pointRadius=pr;});
-  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true},onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},datalabels:{display:false}},scales:{y:{ticks:{callback:v=>Math.round(v/10000)+'万',color:tickColor,font:{size:9},maxTicksLimit:5},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:9},maxRotation:45,maxTicksLimit:8},grid:{display:false}}},layout:{padding:{top:8,right:16,left:0,bottom:0}}},plugins:[ChartDataLabels]});
+  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:12,usePointStyle:true},onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},datalabels:{align:'top',anchor:'end',color:ctx=>datasets[ctx.datasetIndex].borderColor,font:{size:9,weight:'600'},formatter:v=>v>0?'¥'+Math.round(v/10000)+'万':'',display:ctx=>ctx.datasetIndex===0}},scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:45},grid:{display:false}}},layout:{padding:{top:24}}},plugins:[ChartDataLabels]});
 }
 function renderComment(){
   const filtered=getFiltered();const el=document.getElementById('commentBody');
@@ -2018,9 +1850,39 @@ const TODO_DEFS=[
 {id:'tax_sb',label:'税金対応②｜ソフトバンク株（9434）売却分',color:'#854F0B',bg:'#FAEEDA',items:[{id:'ts1',text:'社内コンプライアンスにインサイダー規制・売却可能期間を確認'},{id:'ts2',text:'取得単価を確認（持株会事務局 or みずほ証券の取引履歴）'},{id:'ts3',text:'みずほ証券から「年間取引報告書」が届く（来年1月）→ 保存する'},{id:'ts4',text:'e-Tax or 税務署で確定申告（来年2月16日〜3月15日）'},{id:'ts5',text:'納税：売却益 × 20.315% を納付（来年5月頃）'}]},
 {id:'nisa',label:'NISA口座開設後すぐ（最優先）',color:'#0F6E56',bg:'#E1F5EE',items:[{id:'n1',text:'OliveカードでeMAXIS Slim 米国株式(S&P500) 月10万円クレカ積立設定'},{id:'n2',text:'eMAXIS Slim 米国株式(S&P500) 成長投資枠で一括240万円購入'},{id:'n3',text:'スシロー 成長投資枠で約80〜90万円購入'},{id:'n4',text:'ドンキホーテ 成長投資枠で約80〜90万円購入'}]},
 {id:'card',label:'未利用クレジットカード解約',color:'#993556',bg:'#FBEAF0',items:[{id:'c1',text:'保有中のクレジットカードを全てリストアップする'},{id:'c2',text:'直近1年間利用していないカードを選別する'},{id:'c3',text:'年会費が発生しているカードを優先的に解約する'},{id:'c4',text:'ポイント残高を確認・使い切ってから解約する'},{id:'c5',text:'解約対象カードに紐付いている定期支払いを他カードへ変更する'},{id:'c6',text:'各カード会社に解約の電話 or アプリで手続きをする'}]},
-{id:'phone',label:'携帯番号変更の届け出',color:'#5F5E5A',bg:'#F1EFE8',items:[{id:'ph1',text:'【最優先】SBI証券 - 電話番号変更'},{id:'ph2',text:'【最優先】野村証券 - 電話番号変更'},{id:'ph3',text:'【最優先】みずほ証券 - 電話番号変更'},{id:'ph4',text:'【最優先】三井住友銀行（Olive）- 電話番号変更'},{id:'ph5',text:'【最優先】PayPay銀行 - 電話番号変更'},{id:'ph6',text:'確定拠出年金（DC）運営会社 - 電話番号変更'},{id:'ph7',text:'生命保険・損害保険各社 - 電話番号変更'},{id:'ph8',text:'Amazon・楽天・Yahoo! - アカウント設定で電話番号変更'},{id:'ph9',text:'マイナポータル・e-Tax - オンライン変更'},{id:'ph10',text:'勤務先（緊急連絡先）- 人事部に変更届'}]}
+{id:'phone',label:'携帯番号変更の届け出',color:'#5F5E5A',bg:'#F1EFE8',items:[{id:'ph1',text:'【最優先】SBI証券 - 電話番号変更'},{id:'ph2',text:'【最優先】野村証券 - 電話番号変更'},{id:'ph3',text:'【最優先】みずほ証券 - 電話番号変更'},{id:'ph4',text:'【最優先】三井住友銀行（Olive）- 電話番号変更'},{id:'ph5',text:'【最優先】PayPay銀行 - 電話番号変更'},{id:'ph6',text:'確定拠出年金（DC）運営会社 - 電話番号変更'},{id:'ph7',text:'生命保険・損害保険各社 - 電話番号変更'},{id:'ph8',text:'Amazon・楽天・Yahoo! - アカウント設定で電話番号変更'},{id:'ph9',text:'マイナポータル・e-Tax - オンライン変更'},{id:'ph10',text:'勤務先（緊急連絡先）- 人事部に変更届'}]},
+{id:'taishoku_company',label:'🏢 退職：会社への手続き',color:'#185FA5',bg:'#E6F1FB',items:[
+  {id:'rc1',text:'退職届の提出（退職希望日の1〜2ヶ月前）／人事部・上長'},
+  {id:'rc2',text:'退職日・有給消化・引き継ぎスケジュールの確定'},
+  {id:'rc3',text:'源泉徴収票の発行依頼（給与＋SO行使益含む）／人事・給与担当'},
+  {id:'rc4',text:'社会保険喪失証明書の発行依頼（退職日当日または前日に受取）'},
+  {id:'rc5',text:'雇用保険被保険者証・年金手帳（基礎年金番号通知書）の受取'},
+  {id:'rc6',text:'SBKK持株会の脱退手続き・株式移管先（みずほ証券）の指定'},
+  {id:'rc7',text:'SBKKストックオプション：退職後のインサイダー規制解除日をコンプライアンス部門に書面で確認'},
+  {id:'rc8',text:'SBIベネフィット確定拠出年金：退職後6ヶ月以内にiDeCoへ移換（SBIベネフィット 0120-56-2930）'},
+  {id:'rc9',text:'会社メアド登録サービスを個人メアドへ変更（証券・銀行・各種サブスク）→ 退職前に完了'},
+  {id:'rc10',text:'貸与品（PC・スマホ・社員証）の返却・通勤定期の払い戻し（柏駅JR/東武窓口 or Suicaアプリ）'}
+]},
+{id:'taishoku_gov',label:'🏛 退職：役所・国家機関の手続き',color:'#0F6E56',bg:'#E1F5EE',items:[
+  {id:'rg1',text:'健康保険の切り替え（退職後14日以内）：任意継続→協会けんぽ千葉支部（郵送/オンライン）or 国保→柏市役所 保険年金課'},
+  {id:'rg2',text:'国民年金への切り替え（退職後14日以内）：柏市役所 保険年金課 or 柏年金事務所（柏市柏1-7-1 柏ビル6F / 04-7165-3381）'},
+  {id:'rg3',text:'雇用保険（失業給付）の申請：ハローワーク柏（柏市柏下65-1 ウィルビル3F / 04-7165-1551）離職票が届き次第すぐ'},
+  {id:'rg4',text:'住民税の確認：退職後に柏市から納付書が郵送。大きい金額のため資金を確保しておく'},
+  {id:'rg5',text:'マイナポータルの情報更新（電話番号・住所）：myna.go.jp またはスマホアプリ'},
+  {id:'rg6',text:'e-Tax利用者識別番号の確認・取得：etax.nta.go.jp（マイナンバーカードがあればそのままログイン可）'},
+  {id:'rg7',text:'確定申告（翌年2/16〜3/15）：給与所得＋SBKK譲渡所得を合算 e-Tax推奨 / 柏税務署（ウィルビル4〜6F / 04-7165-0611）'}
+]},
+{id:'taishoku_finance',label:'💳 退職：金融機関・生活インフラ切り替え',color:'#993556',bg:'#FBEAF0',items:[
+  {id:'rf1',text:'SBI証券・野村証券・みずほ証券：連絡先・住所を個人情報に更新'},
+  {id:'rf2',text:'三井住友銀行・PayPay銀行：連絡先・住所を更新'},
+  {id:'rf3',text:'SBIベネフィット確定拠出年金 → 個人型iDeCo（SBI証券）への移換手続き（退職後6ヶ月以内）'},
+  {id:'rf4',text:'みずほ証券でSBKK株の保有数・取得単価を確認し、売却可能時期（インサイダー解除後）を把握'},
+  {id:'rf5',text:'SBKK株売却後：みずほ証券の年間取引報告書を保管（翌年1月頃届く）'},
+  {id:'rf6',text:'会社のグループ保険・生命保険の切り替え：各保険会社コールセンターへ退職前に確認'},
+  {id:'rf7',text:'退職所得の源泉徴収票・SBKK取得原価書類をまとめて保管（確定申告の必須書類）'}
+]}
 ];
-const TODO_KEY='todo_kb_v3';
+const TODO_KEY='todo_kb_v4';
 let todoState=todoLoadState();
 let todoEditMeta={catId:null,itemId:null};
 function todoLoadState(){try{const s=localStorage.getItem(TODO_KEY);if(s)return JSON.parse(s);}catch(e){}return{categories:JSON.parse(JSON.stringify(TODO_DEFS)),checked:{}};}
