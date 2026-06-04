@@ -582,8 +582,22 @@ tr:last-child td{border-bottom:none}
       <div class="pf-header-label">INVESTMENT TRACKER</div>
       <h2>投資ポートフォリオ管理</h2>
     </div>
+
+    <!-- 目標 vs 現状 円グラフ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:500">🎯 目標配分</div>
+        <canvas id="pf-donut-target" height="140"></canvas>
+        <div id="pf-legend-target" style="margin-top:6px;text-align:left;font-size:10px;line-height:1.8;padding:0 4px"></div>
+      </div>
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:500">📊 現状配分</div>
+        <canvas id="pf-donut-actual" height="140"></canvas>
+        <div id="pf-legend-actual" style="margin-top:6px;text-align:left;font-size:10px;line-height:1.8;padding:0 4px"></div>
+      </div>
+    </div>
     <div class="pf-sum-grid four" style="grid-template-columns:1fr 1fr">
-      <div class="s-card c-total"><div class="s-label">総額（目標）</div><div class="s-amount" id="pf-sum-total">—</div><div class="s-sub">3,000万円</div></div>
+      <div class="s-card c-total"><div class="s-label">総額（目標）</div><div class="s-amount" id="pf-sum-total">—</div><div class="s-sub">3,500万円</div></div>
       <div class="s-card c-done"><div class="s-label">✅ 購入済み</div><div class="s-amount" id="pf-sum-done">—</div><div class="s-sub">投資完了</div></div>
       <div class="s-card c-nisa"><div class="s-label">⏳ NISA待ち</div><div class="s-amount" id="pf-sum-nisa">—</div><div class="s-sub">開設後に購入</div></div>
       <div class="s-card c-pending"><div class="s-label">🔲 未購入</div><div class="s-amount" id="pf-sum-pending">—</div><div class="s-sub">銀行キープ中</div></div>
@@ -831,12 +845,12 @@ tr:last-child td{border-bottom:none}
       <div class="field"><label>カテゴリ</label>
         <select id="fCat" onchange="amToggleStockFields()">
           <option value="銀行">🏦 銀行</option>
-          <option value="証券">📈 証券・個別株</option>
-          <option value="投信">📊 投信・インデックス</option>
-          <option value="現金">💵 現金・財布</option>
-          <option value="不動産">🏠 不動産</option>
+          <option value="全世界インデックス">🌍 全世界インデックス</option>
+          <option value="日本インデックス">🗾 日本インデックス</option>
+          <option value="インドインデックス">🇮🇳 インドインデックス</option>
+          <option value="高配当">💎 高配当</option>
+          <option value="個別株">📈 個別株</option>
           <option value="年金">🧓 年金・iDeCo</option>
-          <option value="仮想通貨">₿ 仮想通貨</option>
           <option value="その他">📁 その他</option>
         </select>
       </div>
@@ -876,11 +890,11 @@ tr:last-child td{border-bottom:none}
     <div class="form-row">
       <div class="form-group"><label class="form-label">カテゴリ</label>
         <select class="form-select" id="pf-f-category">
-          <option value="証券">📈 証券（米国インデックス）</option>
-          <option value="証券-JP">📈 証券（日本インデックス）</option>
-          <option value="証券-インド">📈 証券（インド）</option>
-          <option value="証券-高配当">📈 証券（高配当株）</option>
-          <option value="証券-個別">📈 証券（個別株）</option>
+          <option value="全世界インデックス">🌍 全世界インデックス</option>
+          <option value="日本インデックス">🗾 日本インデックス</option>
+          <option value="インドインデックス">🇮🇳 インドインデックス</option>
+          <option value="高配当">💎 高配当</option>
+          <option value="個別株">📈 個別株</option>
           <option value="銀行">🏦 銀行キープ</option>
           <option value="年金">🧓 年金・iDeCo</option>
           <option value="その他">📁 その他</option>
@@ -1012,7 +1026,7 @@ function refreshHome(){
     }
   }catch(e){}
   try{
-    const pf=JSON.parse(localStorage.getItem('portfolio_v4')||'[]');
+    const pf=JSON.parse(localStorage.getItem(PF_KEY)||'[]');
     const done=pf.filter(d=>d.status==='done'||d.status==='done-credit').length;
     document.getElementById('hbadge-portfolio').textContent=pf.length>0?done+'/'+pf.length+'件 購入済み':'データなし';
   }catch(e){}
@@ -1032,9 +1046,9 @@ function refreshHome(){
 const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const SHEET_NAME='資産管理データ';
-const AM_CAT_COLORS={'銀行':'#185FA5','証券':'#0F6E56','投信':'#2980b9','現金':'#BA7517','不動産':'#533C89','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780'};
-const AM_CAT_EMOJI={'銀行':'🏦','証券':'📈','投信':'📊','現金':'💵','不動産':'🏠','年金':'🧓','仮想通貨':'₿','その他':'📁'};
-const CAT_MAP_FROM_PF={'証券':'証券','証券-JP':'投信','証券-インド':'投信','証券-高配当':'証券','証券-個別':'証券','銀行':'銀行','年金':'年金','仮想通貨':'仮想通貨','その他':'その他','米国インデックス':'投信','日本インデックス':'投信','インド':'投信','高配当株':'証券','個別株':'証券','銀行キープ':'銀行'};
+const AM_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
+const AM_CAT_EMOJI={'銀行':'🏦','全世界インデックス':'🌍','日本インデックス':'🗾','インドインデックス':'🇮🇳','高配当':'💎','個別株':'📈','年金':'🧓','その他':'📁'};
+const CAT_MAP_FROM_PF={'全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株','銀行':'銀行','年金':'年金','その他':'その他','証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス','証券-高配当':'高配当','証券-個別':'個別株','銀行キープ':'銀行'};
 
 let amAccounts=[];
 let amEditId=null;
@@ -1066,14 +1080,14 @@ function amRender(){
   const maxAmt=Math.max(...Object.values(cats),1);
   document.getElementById('amBarChart').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`<div class="bar-row"><span class="bar-label">${cat}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(amt/maxAmt*100)}%;background:${AM_CAT_COLORS[cat]||'#888'}"></div></div><span class="bar-val">${fmt(amt)}</span></div>`).join('')||'<p style="text-align:center;color:var(--text3);font-size:13px">口座を追加してください</p>';
   const catGroups={};amAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
-  const CAT_ORDER=['銀行','証券','投信','年金','現金','不動産','仮想通貨','その他'];
+  const CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
   const sortedCatEntries=[...CAT_ORDER.filter(c=>catGroups[c]),...Object.keys(catGroups).filter(c=>!CAT_ORDER.includes(c))].map(c=>[c,catGroups[c]]);
   document.getElementById('accountSections').innerHTML=sortedCatEntries.map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
     return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>{
       const stale=daysSince(a.updated)>=30;
       const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
-      const isStock=a.cat==='証券';
+      const isStock=a.cat==='個別株';
       const sharesVal=a.shares||'';
       const priceVal=a.price||'';
       const amountVal=a.amount||'';
@@ -1202,8 +1216,8 @@ document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===
 function amToggleStockFields(){
   const cat=document.getElementById('fCat').value;
   const sf=document.getElementById('fStockFields');
-  if(sf)sf.style.display=(cat==='証券')?'block':'none';
-  if(cat!=='証券'){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
+  if(sf)sf.style.display=(cat==='個別株'||cat==='高配当')?'block':'none';
+  if(cat!=='個別株'&&cat!=='高配当'){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
 }
 function amCalcAmount(){
   const shares=parseFloat(document.getElementById('fShares').value)||0;
@@ -1279,14 +1293,14 @@ function sendToTrend(){
 }
 function importFromPortfolio(){
   try{
-    const pfRaw=localStorage.getItem('portfolio_v4');if(!pfRaw){showToast('PFデータが見つかりません');return;}
+    const pfRaw=localStorage.getItem(PF_KEY);if(!pfRaw){showToast('PFデータが見つかりません');return;}
     const pfData=JSON.parse(pfRaw);
     const active=pfData.filter(d=>d.status==='done'||d.status==='done-credit'||d.status==='sell');
     if(!active.length){showToast('反映できるデータがありません');return;}
     let updated=0,added=0;
     active.forEach(pf=>{
       const amount=pf.value>0?pf.value:pf.lump>0?pf.lump:0;if(amount===0)return;
-      const cat=CAT_MAP_FROM_PF[pf.category]||'証券';
+      const cat=CAT_MAP_FROM_PF[pf.category]||'個別株';
       const ex=amAccounts.find(a=>a.name===pf.name);
       if(ex){ex.amount=amount;ex.cat=cat;ex.updated=todayStr();updated++;}
       else{const maxId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id)):0;amAccounts.push({id:maxId+1+added,name:pf.name,cat,amount,note:pf.memo||'',updated:todayStr()});added++;}
@@ -1381,33 +1395,59 @@ window.addEventListener('load',()=>{
 // ============================================================
 // PORTFOLIO TRACKER
 // ============================================================
-const PF_KEY='portfolio_v4';
-const PF_CAT_COLORS={'証券':'#0F6E56','証券-JP':'#185FA5','証券-インド':'#EF9F27','証券-高配当':'#8B5CF6','証券-個別':'#E24B4A','銀行':'#185FA5','年金':'#D4537E','仮想通貨':'#D85A30','その他':'#888780','米国インデックス':'#378ADD','日本インデックス':'#1D9E75','インド':'#EF9F27','高配当株':'#8B5CF6','個別株':'#E24B4A','銀行キープ':'#64748b'};
+const PF_KEY='portfolio_v5';
+const PF_CAT_COLORS={'全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','銀行':'#185FA5','年金':'#D4537E','その他':'#888780'};
+
+// PFカテゴリ → 目標配分カテゴリへのマッピング
+const PF_TO_ALLOC={'全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株','銀行':'その他','年金':'その他','その他':'その他'};
+
+// 目標配分（%）
+const PF_TARGET_ALLOC={'全世界インデックス':30,'日本インデックス':30,'インドインデックス':10,'高配当':10,'個別株':20};
+const PF_ALLOC_COLORS={'全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A'};
 const PF_STATUS_CONFIG={'done':{label:'✅ 購入済み（特定口座）',cls:'done',cardCls:'status-done',dotCls:'done',textCls:'done'},'done-credit':{label:'✅ クレカ積立 設定済み',cls:'done',cardCls:'status-done',dotCls:'done',textCls:'done'},'nisa-wait':{label:'⏳ NISA開設後に一括購入予定',cls:'nisa',cardCls:'status-nisa',dotCls:'nisa',textCls:'nisa'},'nisa-credit':{label:'⏳ NISA開設後にクレカ積立切替予定',cls:'nisa',cardCls:'status-nisa',dotCls:'nisa',textCls:'nisa'},'pending':{label:'🔲 未購入（銀行キープ中）',cls:'pending',cardCls:'status-pending',dotCls:'pending',textCls:'pending'},'sell':{label:'🔴 保有中・売却予定',cls:'sell',cardCls:'status-sell',dotCls:'sell',textCls:'sell'}};
 let pfData=[];let pfCurrentTab='all';let pfEditingId=null;
 function pfUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2)}
 function pfFmt(n){if(!n)return'¥0';if(n>=10000000)return'¥'+(n/10000000).toFixed(1)+'千万';if(n>=10000)return'¥'+(n/10000).toFixed(0)+'万';return'¥'+n.toLocaleString()}
 function pfFmtFull(n){return'¥'+Number(n||0).toLocaleString()}
 function pfGetGroup(s){if(s==='done'||s==='done-credit'||s==='sell')return'done';if(s==='nisa-wait'||s==='nisa-credit')return'nisa-wait';return'pending';}
-function pfLoadData(){try{const r=localStorage.getItem(PF_KEY);pfData=r?JSON.parse(r):[];}catch(e){pfData=[];}if(pfData.length===0)pfLoadDefaults();}
+function pfLoadData(){
+  try{
+    // v5キーを優先、なければv4をマイグレーション
+    const r5=localStorage.getItem(PF_KEY);
+    if(r5){pfData=JSON.parse(r5);}
+    else{
+      const r4=localStorage.getItem('portfolio_v4');
+      if(r4){
+        const old=JSON.parse(r4);
+        // カテゴリをv5体系に変換
+        const catConv={'証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス','証券-高配当':'高配当','証券-個別':'個別株','銀行キープ':'銀行','米国インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インド':'インドインデックス','高配当株':'高配当','個別株':'個別株','銀行':'銀行','年金':'年金','その他':'その他'};
+        pfData=old.map(d=>({...d,category:catConv[d.category]||d.category}));
+        pfSaveData();
+      }else{pfData=[];}
+    }
+  }catch(e){pfData=[];}
+  if(pfData.length===0)pfLoadDefaults();
+}
 function pfSaveData(){localStorage.setItem(PF_KEY,JSON.stringify(pfData));}
 function pfLoadDefaults(){
   pfData=[
-    {id:pfUID(),name:'eMAXIS Slim 米国株式（S&P500）',category:'証券',status:'done-credit',lump:0,monthly:40000,value:0,shares:0,memo:'クレカ積立✅ 設定済み・NISA開設後につみたて枠に切替予定'},
-    {id:pfUID(),name:'eMAXIS Slim 国内株式（TOPIX）',category:'証券-JP',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,memo:'クレカ積立✅ 設定済み'},
-    {id:pfUID(),name:'eMAXIS インド株式インデックス',category:'証券-インド',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'クレカ積立✅ 設定済み'},
-    {id:pfUID(),name:'SBI日本高配当株式ファンド',category:'証券-高配当',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'クレカ積立✅ 設定済み'},
-    {id:pfUID(),name:'iTrustインド株式',category:'証券-インド',status:'done',lump:1500000,monthly:0,value:1500000,shares:0,memo:'特定口座✅ 一括購入済み'},
-    {id:pfUID(),name:'ソフトバンク（9434）36,000株',category:'証券-高配当',status:'sell',lump:8028000,monthly:0,value:8028000,shares:36000,memo:'保有中・株価推移見て売却予定'},
-    {id:pfUID(),name:'eMAXIS Slim 米国株式（S&P500）一括',category:'証券',status:'nisa-wait',lump:7680000,monthly:0,value:0,shares:0,memo:'NISA成長投資枠・NISA開設後に購入'},
-    {id:pfUID(),name:'eMAXIS Slim 国内株式（TOPIX）一括',category:'証券-JP',status:'nisa-wait',lump:5760000,monthly:0,value:0,shares:0,memo:'NISA成長投資枠'},
-    {id:pfUID(),name:'SBG（9984）280株',category:'証券-個別',status:'nisa-wait',lump:1673280,monthly:0,value:0,shares:280,memo:'NISA成長投資枠2026年'},
-    {id:pfUID(),name:'NISA成長投資枠キープ（三井住友銀行）',category:'銀行',status:'pending',lump:7200000,monthly:0,value:0,shares:0,memo:'240万×3年分'},
-    {id:pfUID(),name:'クレカ積立キープ（銀行）',category:'銀行',status:'pending',lump:3600000,monthly:0,value:0,shares:0,memo:'月10万×36ヶ月分'},
+    // 個別株
+    {id:pfUID(),name:'SBG（野村持ち株）',category:'個別株',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'野村持ち株経由'},
+    {id:pfUID(),name:'SBKK（みずほストック）',category:'高配当',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'みずほストックプラン'},
+    {id:pfUID(),name:'SBKK（野村持ち株）',category:'高配当',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'野村持ち株経由'},
+    // 全世界インデックス
+    {id:pfUID(),name:'全世界インデックス（SBI確定拠出）',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'SBI DC口座'},
+    {id:pfUID(),name:'PayPayポイント',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPayポイント運用'},
+    {id:pfUID(),name:'全世界PayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPay証券'},
+    {id:pfUID(),name:'オルカンPayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPay証券'},
+    // インド
+    {id:pfUID(),name:'インド(SBI)',category:'インドインデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'SBI証券'},
+    // 日本インデックス
+    {id:pfUID(),name:'TOPIX100・インデックス（DC年金）',category:'日本インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'DC年金口座'},
   ];pfSaveData();
 }
 function pfRender(){
-  const total=30000000;
+  const total=35000000;
   const doneAmt=pfData.filter(d=>pfGetGroup(d.status)==='done').reduce((s,d)=>s+Number(d.lump||0)+Number(d.monthly||0)*12,0);
   const nisaAmt=pfData.filter(d=>pfGetGroup(d.status)==='nisa-wait').reduce((s,d)=>s+Number(d.lump||0),0);
   const pendAmt=pfData.filter(d=>pfGetGroup(d.status)==='pending').reduce((s,d)=>s+Number(d.lump||0),0);
@@ -1420,7 +1460,75 @@ function pfRender(){
   document.getElementById('pf-pct-done').textContent=pfFmt(doneAmt)+' ('+dPct.toFixed(0)+'%)';
   document.getElementById('pf-pct-nisa').textContent=pfFmt(nisaAmt)+' ('+nPct.toFixed(0)+'%)';
   document.getElementById('pf-pct-pending').textContent=pfFmt(pendAmt)+' ('+pPct.toFixed(0)+'%)';
+  pfRenderDonutCharts();
   pfRenderList();
+}
+
+// 円グラフ描画（目標 vs 現状）
+let pfChartTarget=null,pfChartActual=null;
+function pfRenderDonutCharts(){
+  // ---- 目標 ----
+  const tLabels=Object.keys(PF_TARGET_ALLOC);
+  const tData=Object.values(PF_TARGET_ALLOC);
+  const tColors=tLabels.map(k=>PF_ALLOC_COLORS[k]||'#888');
+
+  // ---- 現状：評価額(value)優先、なければlump金額で集計 ----
+  const actual={};
+  tLabels.forEach(k=>actual[k]=0);
+  pfData.forEach(d=>{
+    const allocKey=PF_TO_ALLOC[d.category]||null;
+    if(!allocKey||!tLabels.includes(allocKey))return;
+    const v=Number(d.value||0)||Number(d.lump||0);
+    actual[allocKey]=(actual[allocKey]||0)+v;
+  });
+  const aTotal=Object.values(actual).reduce((s,v)=>s+v,0);
+  const aData=tLabels.map(k=>actual[k]||0);
+  const aLabels=tLabels.map((k,i)=>k);
+
+  const chartCfg=(labels,data,colors,isMoney)=>({
+    type:'doughnut',
+    data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:1,borderColor:'var(--bg)'}]},
+    options:{
+      responsive:true,cutout:'65%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>{
+          const val=ctx.parsed;
+          const sum=ctx.dataset.data.reduce((a,b)=>a+b,0);
+          const pct=sum>0?(val/sum*100).toFixed(0):'0';
+          return isMoney?pfFmt(val)+' ('+pct+'%)':val+'% ';
+        }}}
+      }
+    }
+  });
+
+  // 目標チャート
+  const ctxT=document.getElementById('pf-donut-target');
+  if(ctxT){
+    if(pfChartTarget){pfChartTarget.destroy();}
+    pfChartTarget=new Chart(ctxT,chartCfg(tLabels,tData,tColors,false));
+    document.getElementById('pf-legend-target').innerHTML=tLabels.map((l,i)=>
+      `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${tColors[i]};flex-shrink:0"></span><span>${l} ${tData[i]}%</span></span>`
+    ).join('');
+  }
+
+  // 現状チャート
+  const ctxA=document.getElementById('pf-donut-actual');
+  if(ctxA){
+    if(pfChartActual){pfChartActual.destroy();}
+    if(aTotal>0){
+      pfChartActual=new Chart(ctxA,chartCfg(aLabels,aData,tColors,true));
+      document.getElementById('pf-legend-actual').innerHTML=aLabels.map((l,i)=>{
+        const pct=aTotal>0?(aData[i]/aTotal*100).toFixed(0):'0';
+        return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${tColors[i]};flex-shrink:0"></span><span>${l} ${pct}%</span></span>`;
+      }).join('');
+    }else{
+      // データなし表示
+      const ctx2=ctxA.getContext('2d');
+      ctx2.clearRect(0,0,ctxA.width,ctxA.height);
+      document.getElementById('pf-legend-actual').innerHTML='<span style="color:var(--text3);font-size:11px">評価額・購入額を入力すると表示されます</span>';
+    }
+  }
 }
 function pfRenderList(){
   const filtered=pfCurrentTab==='all'?pfData:pfData.filter(d=>pfGetGroup(d.status)===pfCurrentTab);
