@@ -583,6 +583,20 @@ tr:last-child td{border-bottom:none}
       <h2>投資ポートフォリオ管理</h2>
     </div>
 
+    <!-- 目標 vs 現状 金額ヘッダー -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+      <div style="background:linear-gradient(135deg,#0f6e56,#185fa5);border-radius:10px;padding:10px 12px;color:#fff">
+        <div style="font-size:10px;opacity:0.8;margin-bottom:3px">🎯 目標運用金額</div>
+        <div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.5px">¥3,500万</div>
+        <div style="font-size:10px;opacity:0.7;margin-top:2px">目標ポートフォリオ総額</div>
+      </div>
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--text2);margin-bottom:3px">📊 実際の運用金額</div>
+        <div id="pf-actual-amount" style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.5px;color:var(--accent)">集計中…</div>
+        <div id="pf-actual-sub" style="font-size:10px;color:var(--text3);margin-top:2px">資産管理より自動集計</div>
+      </div>
+    </div>
+
     <!-- 目標 vs 現状 円グラフ -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
       <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center">
@@ -1121,6 +1135,10 @@ function amRender(){
       return html;
     }).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
   }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
+  // PFパネルが表示中なら現状配分グラフも自動更新
+  if(currentTab==='portfolio'&&typeof pfRenderDonutCharts==='function'){
+    try{pfRenderDonutCharts();}catch(e){}
+  }
 }
 function toggleSection(id){document.getElementById(id).classList.toggle('collapsed')}
 function amToggleInline(id){
@@ -1472,18 +1490,79 @@ function pfRenderDonutCharts(){
   const tData=Object.values(PF_TARGET_ALLOC);
   const tColors=tLabels.map(k=>PF_ALLOC_COLORS[k]||'#888');
 
-  // ---- 現状：評価額(value)優先、なければlump金額で集計 ----
+  // ---- 現状：資産管理（assetAccounts）から自動集計 ----
+  // 資産管理カテゴリ → 目標配分カテゴリへのマッピング
+  const AM_TO_ALLOC={
+    '全世界インデックス':'全世界インデックス',
+    '日本インデックス':'日本インデックス',
+    'インドインデックス':'インドインデックス',
+    '高配当':'高配当',
+    '個別株':'個別株',
+    // 旧カテゴリ名も引き続きサポート
+    '証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス',
+    '証券-高配当':'高配当','証券-個別':'個別株',
+    '投信':'全世界インデックス',
+  };
+  let amRaw=[];
+  try{amRaw=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){}
+
   const actual={};
   tLabels.forEach(k=>actual[k]=0);
-  pfData.forEach(d=>{
-    const allocKey=PF_TO_ALLOC[d.category]||null;
+  let amTotalAll=0;
+
+  amRaw.forEach(a=>{
+    const amount=Number(a.amount||0);
+    amTotalAll+=amount;
+    const allocKey=AM_TO_ALLOC[a.cat]||null;
     if(!allocKey||!tLabels.includes(allocKey))return;
-    const v=Number(d.value||0)||Number(d.lump||0);
-    actual[allocKey]=(actual[allocKey]||0)+v;
+    actual[allocKey]=(actual[allocKey]||0)+amount;
   });
+
   const aTotal=Object.values(actual).reduce((s,v)=>s+v,0);
   const aData=tLabels.map(k=>actual[k]||0);
   const aLabels=tLabels.map((k,i)=>k);
+  // 資産管理にデータがない場合はPFデータにフォールバック
+  const useFallback=(aTotal===0);
+  if(useFallback){
+    tLabels.forEach(k=>actual[k]=0);
+    pfData.forEach(d=>{
+      const allocKey=PF_TO_ALLOC[d.category]||null;
+      if(!allocKey||!tLabels.includes(allocKey))return;
+      const v=Number(d.value||0)||Number(d.lump||0);
+      actual[allocKey]=(actual[allocKey]||0)+v;
+    });
+    const fbTotal=Object.values(actual).reduce((s,v)=>s+v,0);
+    tLabels.forEach((k,i)=>aData[i]=actual[k]||0);
+  }
+
+  // ---- 実際の運用金額をヘッダーに反映 ----
+  const TARGET=35000000;
+  // 運用対象カテゴリの合計（銀行・年金・その他は除く）
+  const investCats=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株'];
+  const investTotal=amRaw.reduce((s,a)=>{
+    return investCats.includes(a.cat)?s+Number(a.amount||0):s;
+  },0);
+  const displayTotal=useFallback
+    ? aData.reduce((s,v)=>s+v,0)  // フォールバック時はPF集計値
+    : investTotal;
+  const progress=TARGET>0?Math.min(100,(displayTotal/TARGET)*100):0;
+  const diff=displayTotal-TARGET;
+  const elAmt=document.getElementById('pf-actual-amount');
+  const elSub=document.getElementById('pf-actual-sub');
+  if(elAmt){
+    elAmt.textContent=displayTotal>=10000000
+      ? '¥'+(displayTotal/10000000).toFixed(2)+'千万'
+      : '¥'+Math.round(displayTotal).toLocaleString('ja-JP');
+    // 達成率に応じて色を変える
+    elAmt.style.color=progress>=100?'var(--green)':progress>=70?'var(--accent)':'var(--amber)';
+  }
+  if(elSub){
+    const pctStr=progress.toFixed(0)+'%達成';
+    const diffStr=diff>=0
+      ? '目標まで達成🎉'
+      : '目標まで残り¥'+Math.abs(Math.round(diff)).toLocaleString('ja-JP');
+    elSub.innerHTML=`<span style="font-weight:600">${pctStr}</span>　${diffStr}　<span style="opacity:0.7">${useFallback?'PFデータより':'資産管理より'}</span>`;
+  }
 
   const chartCfg=(labels,data,colors,isMoney)=>({
     type:'doughnut',
@@ -1516,17 +1595,21 @@ function pfRenderDonutCharts(){
   const ctxA=document.getElementById('pf-donut-actual');
   if(ctxA){
     if(pfChartActual){pfChartActual.destroy();}
-    if(aTotal>0){
+    const realTotal=aData.reduce((s,v)=>s+v,0);
+    if(realTotal>0){
       pfChartActual=new Chart(ctxA,chartCfg(aLabels,aData,tColors,true));
-      document.getElementById('pf-legend-actual').innerHTML=aLabels.map((l,i)=>{
-        const pct=aTotal>0?(aData[i]/aTotal*100).toFixed(0):'0';
-        return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${tColors[i]};flex-shrink:0"></span><span>${l} ${pct}%</span></span>`;
-      }).join('');
+      // 凡例：カテゴリ名 金額 (%)
+      document.getElementById('pf-legend-actual').innerHTML=
+        aLabels.map((l,i)=>{
+          const pct=realTotal>0?(aData[i]/realTotal*100).toFixed(0):'0';
+          return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${tColors[i]};flex-shrink:0"></span><span>${l} ${pct}%</span></span>`;
+        }).join('')+
+        `<div style="margin-top:4px;font-size:9px;color:var(--text3)">${useFallback?'※PFデータより集計':'※資産管理より自動集計'} 合計${pfFmt(realTotal)}</div>`;
     }else{
-      // データなし表示
-      const ctx2=ctxA.getContext('2d');
-      ctx2.clearRect(0,0,ctxA.width,ctxA.height);
-      document.getElementById('pf-legend-actual').innerHTML='<span style="color:var(--text3);font-size:11px">評価額・購入額を入力すると表示されます</span>';
+      // データなし
+      document.getElementById('pf-legend-actual').innerHTML=
+        '<div style="padding:8px 0"><div style="font-size:11px;color:var(--text3);text-align:center">資産管理に口座を登録すると<br>自動で表示されます</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">資産管理タブ → 口座追加<br>カテゴリを投資カテゴリに設定</div></div>';
     }
   }
 }
