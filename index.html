@@ -559,6 +559,7 @@ tr:last-child td{border-bottom:none}
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
       <button class="btn-sm" onclick="importFromPortfolio()" style="color:var(--accent);border-color:var(--accent)">📊 PF反映</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
+      <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
     </div>
     <div class="section" id="chartSection">
@@ -1251,36 +1252,51 @@ function amCalcAmount(){
 }
 function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
 // 口座名 → カテゴリ自動判定ルール（上から順にマッチ）
+// ============================================================
+// 口座名 → カテゴリ 自動判定ルール
+// 上から順にマッチ。最初にマッチしたものを採用。
+// ============================================================
 const AM_NAME_TO_CAT_RULES=[
-  // 個別株
-  {pat:/SBG|ソフトバンクグループ|9984/i, cat:'個別株'},
-  // 高配当（SBKKはソフトバンク株式会社＝高配当株）
-  {pat:/SBKK|ソフトバンク株式会社|9434/i, cat:'高配当'},
-  // 全世界インデックス
-  {pat:/全世界|オルカン|MSCI.*ACWI|eMAXIS.*Slim.*全世界|PayPay.*ポイント|ポイント.*運用|SBI.*確定拠出|全世界.*SBI|全世界.*PayPay|PayPay.*全世界/i, cat:'全世界インデックス'},
-  // 日本インデックス
-  {pat:/TOPIX|日経|日本.*インデックス|国内.*インデックス|インデックス.*DC|DC.*年金.*TOPIX|eMAXIS.*国内/i, cat:'日本インデックス'},
-  // インドインデックス
-  {pat:/インド|India/i, cat:'インドインデックス'},
-  // 高配当（一般）
-  {pat:/高配当|配当|dividend/i, cat:'高配当'},
-  // 年金
-  {pat:/iDeCo|イデコ|企業年金|確定給付|DB年金/i, cat:'年金'},
-  // 銀行
-  {pat:/銀行|ゆうちょ|UFJ|三菱|みずほ銀|三井住友銀|りそな|信金|信組|JAバンク|郵便局/i, cat:'銀行'},
+  // ── 個別株（最優先：SBGは必ず個別株）──
+  {pat:/SBG|ソフトバンクグループ|9984/,           cat:'個別株'},
+  // ── 高配当（SBKK＝ソフトバンク（株）は高配当扱い）──
+  {pat:/SBKK|みずほストック|野村持ち株.*SBKK|9434/,cat:'高配当'},
+  // ── 全世界インデックス ──
+  {pat:/全世界|オルカン|ｵﾙｶﾝ/,                   cat:'全世界インデックス'},
+  {pat:/PayPay.*ポイント|ポイント.*PayPay/,        cat:'全世界インデックス'},
+  {pat:/PayPay.*全世界|全世界.*PayPay/,            cat:'全世界インデックス'},
+  {pat:/PayPay.*オルカン|オルカン.*PayPay/,        cat:'全世界インデックス'},
+  {pat:/SBI.*確定拠出|確定拠出.*SBI/,              cat:'全世界インデックス'},
+  {pat:/eMAXIS.*Slim.*全世界|全世界.*eMAXIS/,      cat:'全世界インデックス'},
+  // ── 日本インデックス ──
+  {pat:/TOPIX/,                                    cat:'日本インデックス'},
+  {pat:/日本.*インデックス|国内.*インデックス/,    cat:'日本インデックス'},
+  {pat:/eMAXIS.*国内|国内.*eMAXIS/,               cat:'日本インデックス'},
+  {pat:/DC.*年金|年金.*DC|ＤＣ.*年金|年金.*ＤＣ/, cat:'日本インデックス'},
+  // ── インドインデックス ──
+  {pat:/インド|India|ｲﾝﾄﾞ/,                       cat:'インドインデックス'},
+  // ── 高配当（一般） ──
+  {pat:/高配当|配当/,                              cat:'高配当'},
+  // ── 年金・iDeCo ──
+  {pat:/iDeCo|ideco|イデコ|企業年金|確定給付/,    cat:'年金'},
+  // ── 銀行 ──
+  {pat:/銀行|ゆうちょ|UFJ|三菱|みずほ(?!スト)|三井住友銀|りそな|信金|信組/,cat:'銀行'},
 ];
 
+// 口座名からカテゴリを推定（マッチしなければ null）
 function amGuessCat(name){
+  if(!name)return null;
   for(const rule of AM_NAME_TO_CAT_RULES){
     if(rule.pat.test(name))return rule.cat;
   }
   return null;
 }
 
-// 旧カテゴリ名 → 新カテゴリ名マッピング
+// 旧カテゴリ名 → 新カテゴリ名
 const AM_OLD_CAT_MAP={
   '証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス',
-  '証券-高配当':'高配当','証券-個別':'個別株','投信':'全世界インデックス',
+  '証券-高配当':'高配当','証券-個別':'個別株',
+  '投信':'全世界インデックス',
   '現金':'銀行','不動産':'その他','仮想通貨':'その他','銀行キープ':'銀行',
 };
 const AM_VALID_CATS=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
@@ -1289,26 +1305,35 @@ function amLoadFromLocal(){
   try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}
   let migrated=false;
   amAccounts.forEach(a=>{
-    // 1. 旧カテゴリ名を新カテゴリ名に変換
+    // Step1: 口座名で強制マッピング（最優先）
+    const byName=amGuessCat(a.name);
+    if(byName){
+      if(a.cat!==byName){a.cat=byName;migrated=true;}
+      return; // 口座名で確定したのでStep2以降はスキップ
+    }
+    // Step2: 旧カテゴリ名を新カテゴリ名に変換
     if(AM_OLD_CAT_MAP[a.cat]){a.cat=AM_OLD_CAT_MAP[a.cat];migrated=true;}
-    // 2. 新カテゴリ体系に含まれないカテゴリは口座名から自動推定
-    if(!AM_VALID_CATS.includes(a.cat)){
-      const guessed=amGuessCat(a.name);
-      if(guessed){a.cat=guessed;migrated=true;}
-      else{a.cat='その他';migrated=true;}
-    }
-    // 3. 新カテゴリでも口座名で上書きできる特定銘柄を強制マッピング
-    const forced=amGuessCat(a.name);
-    if(forced&&forced!==a.cat&&
-       // 既に正しいカテゴリが設定されている場合は上書きしない
-       (a.cat==='その他'||AM_OLD_CAT_MAP[a.cat])){
-      a.cat=forced;migrated=true;
-    }
+    // Step3: それでも不明なカテゴリは「その他」に
+    if(!AM_VALID_CATS.includes(a.cat)){a.cat='その他';migrated=true;}
   });
   if(migrated)amSaveToLocal();
 }
+// 全口座のカテゴリを口座名から強制再判定
+function amReclassifyAll(){
+  let count=0;
+  amAccounts.forEach(a=>{
+    const byName=amGuessCat(a.name);
+    const newCat=byName||(AM_OLD_CAT_MAP[a.cat]||a.cat);
+    const validCat=AM_VALID_CATS.includes(newCat)?newCat:'その他';
+    if(a.cat!==validCat){a.cat=validCat;a.updated=todayStr();count++;}
+  });
+  amSaveToLocal();
+  amRender();
+  refreshHome();
+  if(typeof pfRenderDonutCharts==='function')try{pfRenderDonutCharts();}catch(e){}
+  showToast(count>0?`2713 ${count}4ef6306e30ab30c630b430ea3092518d52245b9a3057307e3057305f`:'カテゴリの変更はありませんでした',3000);
+}
 function amExportCSV(){
-  if(!amAccounts.length){showToast('口座データがありません');return;}
   const rows=[['id','口座名','カテゴリ','残高','メモ','更新日']];
   amAccounts.forEach(a=>rows.push([a.id,a.name,a.cat,a.amount,a.note||'',a.updated]));
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -2020,6 +2045,30 @@ function todoRender(){
 // ============================================================
 // INIT
 // ============================================================
+// 起動時に既存の資産管理データを新カテゴリ体系へ強制マイグレーション
+(function(){
+  try{
+    let accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    if(!accs.length)return;
+    let changed=false;
+    accs.forEach(a=>{
+      const before=a.cat;
+      // 口座名で判定できるものは必ず上書き
+      const byName=amGuessCat(a.name);
+      if(byName){
+        if(a.cat!==byName){a.cat=byName;changed=true;}
+      } else if(AM_OLD_CAT_MAP[a.cat]){
+        a.cat=AM_OLD_CAT_MAP[a.cat];changed=true;
+      } else if(!AM_VALID_CATS.includes(a.cat)){
+        a.cat='その他';changed=true;
+      }
+    });
+    if(changed){
+      localStorage.setItem('assetAccounts',JSON.stringify(accs));
+      console.log('[Migration] assetAccounts updated',accs.map(a=>a.name+'→'+a.cat));
+    }
+  }catch(e){console.error('[Migration error]',e);}
+})();
 pfLoadData();
 trLoadFromStorage();trRenderAll();
 todoRender();
