@@ -1693,6 +1693,11 @@ function pfNisaLoadSettings(){
     seichou2027:[
       {name:'SBG 280株',amount:1400000},
       {name:'ドンキ 200株',amount:170000}
+    ],
+    tsumitate27:[
+      {name:'S&P500',monthly:40000},
+      {name:'TOPIX',monthly:30000},
+      {name:'FANG+',monthly:30000}
     ]
   };
 }
@@ -1715,6 +1720,12 @@ function pfNisaCollect(){
     const n=r.querySelector('.nisa-name')?.value?.trim();
     const v=parseInt(r.querySelector('.nisa-val')?.value)||0;
     if(n)s.seichou2027.push({name:n,amount:v});
+  });
+  s.tsumitate27=[];
+  document.querySelectorAll('.nisa-tsumitate27-row').forEach(r=>{
+    const n=r.querySelector('.nisa-name')?.value?.trim();
+    const v=parseInt(r.querySelector('.nisa-val')?.value)||0;
+    if(n)s.tsumitate27.push({name:n,monthly:v});
   });
   pfNisaSaveSettings(s);
   pfNisaUpdateTotals(s);
@@ -1744,8 +1755,11 @@ function pfNisaUpdateTotals(s){
   upd('nisa-sg27-total','nisa-sg27-rem','nisa-sg27-bar',sg27,G,
     '使用：'+pfFmtFull(sg27),r=>'残り：'+pfFmtFull(r));
   // 2027つみたて（同設定）
-  upd('nisa-ts27-total','nisa-ts27-rem','nisa-ts27-bar',tsY,T,
-    '月間合計：'+pfFmtFull(tsM),r=>'残り：'+pfFmtFull(Math.max(0,T-tsY))+'/月');
+  const tsM27=(s.tsumitate27||s.tsumitate).reduce((a,d)=>a+Number(d.monthly||0),0);
+  const tsY27=tsM27*12;
+  upd('nisa-ts27-total','nisa-ts27-rem','nisa-ts27-bar',tsY27,T,
+    '月間合計：'+pfFmtFull(tsM27)+'（年'+pfFmtFull(tsY27)+'）',
+    r=>r===0?'✅ フル活用':'残り：'+pfFmtFull(r));
 }
 
 function pfNisaAddRow(group){
@@ -1809,9 +1823,10 @@ function pfRenderNisaSection(){
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div>
       <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
-      <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px;padding:5px 8px;background:var(--color-background-secondary);border-radius:6px">2026年と同設定継続</div>
-      ${bar('nisa-ts27-bar',(tsY/T)*100,'#185FA5')}
-      ${foot('nisa-ts27-total','nisa-ts27-rem','月間合計：'+pfFmtFull(tsM),T-tsY,'#185FA5')}
+      <div id="nisa-tsumitate27-rows">${mkRows(s.tsumitate,'tsumitate27','月')}</div>
+      ${addBtn('tsumitate27')}
+      ${bar('nisa-ts27-bar',(tsY27/T)*100,'#185FA5')}
+      ${foot('nisa-ts27-total','nisa-ts27-rem','月間合計：'+pfFmtFull(tsM27),T-tsY27,'#185FA5')}
     </div>
     <div>
       <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📈 成長枠（年240万上限）</div>
