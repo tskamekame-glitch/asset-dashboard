@@ -2389,9 +2389,8 @@ function slUID(){return Date.now().toString(36)+Math.random().toString(36).slice
 pfLoadData();
 trLoadFromStorage();trRenderAll();
 todoRender();
-slLoadData();
-setTimeout(()=>{slRender();},0);
 refreshHome();
+setTimeout(()=>{slLoadData();slRender();},0);
 
 // ===== FIRE SIMULATOR =====
 
