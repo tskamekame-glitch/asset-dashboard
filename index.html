@@ -1061,7 +1061,7 @@ function refreshHome(){
 const CLIENT_ID='817002613107-b4sfihrpt25rn6japskmcfbbj064isck.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const SHEET_NAME='資産管理データ';
-const AM_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
+const AM_CAT_COLORS={'銀行':'#185FA5','預り金':'#4A90D9','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
 const AM_CAT_EMOJI={'銀行':'🏦','全世界インデックス':'🌍','日本インデックス':'🗾','インドインデックス':'🇮🇳','高配当':'💎','個別株':'📈','年金':'🧓','その他':'📁'};
 const CAT_MAP_FROM_PF={'全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株','銀行':'銀行','年金':'年金','その他':'その他','証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス','証券-高配当':'高配当','証券-個別':'個別株','銀行キープ':'銀行'};
 
@@ -1292,6 +1292,8 @@ const AM_NAME_TO_CAT_RULES=[
   {pat:/高配当|配当/,                              cat:'高配当'},
   // ── 年金・iDeCo ──
   {pat:/iDeCo|ideco|イデコ|企業年金|確定給付/,    cat:'年金'},
+  // ── 預り金（証券口座の待機資金）──
+  {pat:/預り金|あずかりきん/,                      cat:'預り金'},
   // ── 銀行 ──
   {pat:/銀行|ゆうちょ|UFJ|三菱|みずほ(?!スト)|三井住友銀|りそな|信金|信組/,cat:'銀行'},
 ];
@@ -1312,7 +1314,7 @@ const AM_OLD_CAT_MAP={
   '投信':'全世界インデックス',
   '現金':'銀行','不動産':'その他','仮想通貨':'その他','銀行キープ':'銀行',
 };
-const AM_VALID_CATS=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
+const AM_VALID_CATS=['銀行','預り金','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
 
 function amLoadFromLocal(){
   try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}
@@ -1592,13 +1594,14 @@ function pfRenderDonutCharts(){
     'インドインデックス':'インドインデックス',
     '高配当':'高配当',
     '個別株':'個別株',
+    '預り金':'預り金',
     // 旧カテゴリ名も引き続きサポート
     '証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス',
     '証券-高配当':'高配当','証券-個別':'個別株',
     '投信':'全世界インデックス',
   };
   // 投資カテゴリ（銀行・年金・その他は除外）
-  const INVEST_ALLOC_KEYS=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株'];
+  const INVEST_ALLOC_KEYS=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','預り金'];
 
   let amRaw=[];
   try{amRaw=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){}
@@ -1620,6 +1623,7 @@ function pfRenderDonutCharts(){
 
   const actual={};
   tLabels.forEach(k=>actual[k]=0);
+  actual['預り金']=0; // 現状グラフ専用（目標には含まない）
   let amTotalAll=0;
 
   amRaw.forEach(a=>{
@@ -1628,13 +1632,16 @@ function pfRenderDonutCharts(){
     // 口座名で再推定（最優先）
     const _cat2=amGuessCat(a.name)||a.cat;
     let allocKey=AM_TO_ALLOC[_cat2]||null;
-    if(!allocKey||!tLabels.includes(allocKey))return;
+    if(!allocKey)return;
+    if(allocKey!=='預り金'&&!tLabels.includes(allocKey))return;
     actual[allocKey]=(actual[allocKey]||0)+amount;
   });
 
-  const aTotal=Object.values(actual).reduce((s,v)=>s+v,0);
-  const aData=tLabels.map(k=>actual[k]||0);
-  const aLabels=tLabels.map((k,i)=>k);
+  // 現状グラフ用：預り金を末尾に追加したラベル/データ/カラー
+  const aLabelsBase=[...tLabels];
+  const aLabels=actual['預り金']>0?[...aLabelsBase,'預り金']:aLabelsBase;
+  const aTotal=aLabels.reduce((s,k)=>s+(actual[k]||0),0);
+  const aData=aLabels.map(k=>actual[k]||0);
   // 資産管理にデータがない場合はPFデータにフォールバック
   const useFallback=(aTotal===0);
   if(useFallback){
@@ -1711,13 +1718,16 @@ function pfRenderDonutCharts(){
   if(ctxA){
     if(pfChartActual){pfChartActual.destroy();}
     const realTotal=aData.reduce((s,v)=>s+v,0);
+    // 現状グラフ用カラー（預り金はスチールブルー）
+    const ACTUAL_COLOR_MAP={...PF_ALLOC_COLORS,'預り金':'#4A90D9'};
+    const aColors=aLabels.map(l=>ACTUAL_COLOR_MAP[l]||'#888');
     if(realTotal>0){
-      pfChartActual=new Chart(ctxA,chartCfg(aLabels,aData,tColors,true));
-      // 凡例：カテゴリ名 金額 (%)
+      pfChartActual=new Chart(ctxA,chartCfg(aLabels,aData,aColors,true));
+      // 凡例：カテゴリ名 (%)
       document.getElementById('pf-legend-actual').innerHTML=
         aLabels.map((l,i)=>{
           const pct=realTotal>0?(aData[i]/realTotal*100).toFixed(0):'0';
-          return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${tColors[i]};flex-shrink:0"></span><span>${l} ${pct}%</span></span>`;
+          return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${aColors[i]};flex-shrink:0"></span><span>${l} ${pct}%</span></span>`;
         }).join('')+
         `<div style="margin-top:4px;font-size:9px;color:var(--text3)">${useFallback?'※PFデータより集計':'※資産管理より自動集計'} 合計${pfFmt(realTotal)}</div>`;
     }else{
