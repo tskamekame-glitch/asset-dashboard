@@ -1509,7 +1509,7 @@ window.addEventListener('load',()=>{
 // ============================================================
 // PORTFOLIO TRACKER
 // ============================================================
-const PF_KEY='portfolio_v5';
+const PF_KEY='portfolio_v6';
 const PF_CAT_COLORS={'全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','銀行':'#185FA5','年金':'#D4537E','その他':'#888780'};
 
 // PFカテゴリ → 目標配分カテゴリへのマッピング
@@ -1530,6 +1530,8 @@ function pfLoadData(){
     const r5=localStorage.getItem(PF_KEY);
     if(r5){pfData=JSON.parse(r5);}
     else{
+      const r5=localStorage.getItem('portfolio_v5');
+      if(!r5){
       const r4=localStorage.getItem('portfolio_v4');
       if(r4){
         const old=JSON.parse(r4);
@@ -1545,19 +1547,37 @@ function pfLoadData(){
 function pfSaveData(){localStorage.setItem(PF_KEY,JSON.stringify(pfData));}
 function pfLoadDefaults(){
   pfData=[
+    // ===== 購入済み・積立設定済み =====
     // 個別株
-    {id:pfUID(),name:'SBG（野村持ち株）',category:'個別株',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'野村持ち株経由'},
+    {id:pfUID(),name:'SBG 9984（野村証券）280株',category:'個別株',status:'done',lump:0,monthly:0,value:0,shares:280,memo:'野村証券保有中'},
     {id:pfUID(),name:'SBKK（みずほストック）',category:'高配当',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'みずほストックプラン'},
     {id:pfUID(),name:'SBKK（野村持ち株）',category:'高配当',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'野村持ち株経由'},
-    // 全世界インデックス
-    {id:pfUID(),name:'全世界インデックス（SBI確定拠出）',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'SBI DC口座'},
-    {id:pfUID(),name:'PayPayポイント',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPayポイント運用'},
+    {id:pfUID(),name:'スシロー 3563 100株（NISA成長）',category:'個別株',status:'done',lump:994000,monthly:0,value:994000,shares:100,memo:'NISA成長投資枠・2026/06/05購入'},
+    // 全世界インデックス（DC・PayPay）
+    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（SBI iDeCo）',category:'全世界インデックス',status:'done',lump:0,monthly:5000,value:0,shares:0,memo:'iDeCo 月5,000円'},
+    {id:pfUID(),name:'PayPayポイント運用',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPayポイント'},
     {id:pfUID(),name:'全世界PayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPay証券'},
     {id:pfUID(),name:'オルカンPayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPay証券'},
-    // インド
-    {id:pfUID(),name:'インド(SBI)',category:'インドインデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'SBI証券'},
-    // 日本インデックス
-    {id:pfUID(),name:'TOPIX100・インデックス（DC年金）',category:'日本インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'DC年金口座'},
+    // NISA つみたて投資枠（クレカ積立 月10万円）
+    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（NISAつみたて）',category:'全世界インデックス',status:'done-credit',lump:0,monthly:40000,value:0,shares:0,memo:'NISAつみたて枠 月40,000円 2026/7/7〜'},
+    {id:pfUID(),name:'eMAXIS Slim 国内株式TOPIX（NISAつみたて）',category:'日本インデックス',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,memo:'NISAつみたて枠 月30,000円 2026/7/7〜'},
+    {id:pfUID(),name:'iFreeNEXT FANG+（NISAつみたて）',category:'全世界インデックス',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,memo:'NISAつみたて枠 月30,000円 2026/7/7〜'},
+    // NISA 成長投資枠 一括
+    {id:pfUID(),name:'iFreeNEXT FANG+（NISA成長・一括）',category:'全世界インデックス',status:'done',lump:500000,monthly:0,value:500000,shares:0,memo:'NISA成長投資枠 2026/06/05購入'},
+    // 特定口座 一括
+    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（特定・一括）',category:'全世界インデックス',status:'done',lump:3600000,monthly:0,value:3600000,shares:0,memo:'特定口座 2026/06/05一括購入'},
+    {id:pfUID(),name:'eMAXIS Slim 国内株式日経平均（特定・一括）',category:'日本インデックス',status:'done',lump:3600000,monthly:0,value:3600000,shares:0,memo:'特定口座 2026/06/05一括購入'},
+    {id:pfUID(),name:'iFreeNEXT FANG+（特定・一括）',category:'全世界インデックス',status:'done',lump:1306010,monthly:0,value:1306010,shares:0,memo:'特定口座 2026/06/05一括購入'},
+    // インド（特定口座）
+    {id:pfUID(),name:'iTrustインド株式（特定・一括）',category:'インドインデックス',status:'done',lump:1500000,monthly:0,value:1500764,shares:0,memo:'特定口座 購入済み'},
+    {id:pfUID(),name:'eMAXIS インド株式インデックス（NISA成長・積立）',category:'インドインデックス',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'NISA成長投資枠 月10,000円'},
+    // 高配当（NISA成長・積立）
+    {id:pfUID(),name:'SBI日本高配当株式ファンド（NISA成長・積立）',category:'高配当',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'NISA成長投資枠 月10,000円'},
+    // 日本インデックス（DC年金）
+    {id:pfUID(),name:'TOPIX100インデックス（DC年金）',category:'日本インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'DC年金口座'},
+    // ===== 銀行キープ・未購入 =====
+    {id:pfUID(),name:'SBG 9984 280株（NISA成長・下落待ち）',category:'個別株',status:'pending',lump:1400000,monthly:0,value:0,shares:280,memo:'株価5,000円まで下落待ち・三井住友銀行キープ'},
+    {id:pfUID(),name:'ドンキ 7532（NISA成長・2027年）',category:'個別株',status:'pending',lump:170000,monthly:0,value:0,shares:200,memo:'2027年NISA成長枠'},
   ];pfSaveData();
 }
 function pfRender(){
