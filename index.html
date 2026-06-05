@@ -628,6 +628,10 @@ tr:last-child td{border-bottom:none}
         <div class="ps-row"><span class="ps-label">💡 追加予定</span><div class="ps-bar"><div class="ps-fill" id="pf-bar-extra" style="width:0%;background:#f59e0b"></div></div><span class="ps-val" id="pf-pct-extra">0%</span></div>
       </div>
     </div>
+
+    <!-- NISA枠サマリー -->
+    <div id="pf-nisa-section" style="margin:12px 0"></div>
+
     <div class="pf-tabs">
       <button class="pf-tab active" onclick="setPfTab('all')">すべて</button>
       <button class="pf-tab" onclick="setPfTab('done')">✅ 購入済み</button>
@@ -1670,7 +1674,165 @@ function pfRender(){
   document.getElementById('pf-pct-pending').textContent=pfFmt(pendAmt)+' ('+pPct.toFixed(0)+'%)';
   document.getElementById('pf-pct-extra').textContent=pfFmt(extraAmt)+' ('+ePct.toFixed(0)+'%)';
   pfRenderDonutCharts();
+  pfRenderNisaSection();
   pfRenderList();
+}
+
+function pfNisaLoadSettings(){
+  try{
+    const saved=localStorage.getItem('nisaSettings_v1');
+    if(saved)return JSON.parse(saved);
+  }catch(e){}
+  // デフォルト値
+  return {
+    tsumitate:{
+      sp500:40000, topix:30000, fang:30000
+    },
+    seichou2026:{
+      sushiro:994000, fangLump:500000, india:10000*12
+    },
+    seichou2027:{
+      sbg:1400000, donki:170000, other:0
+    }
+  };
+}
+function pfNisaSaveSettings(s){
+  try{localStorage.setItem('nisaSettings_v1',JSON.stringify(s));}catch(e){}
+}
+function pfNisaCalc(){
+  const s=pfNisaLoadSettings();
+  const T=1200000,G=2400000;
+  // つみたて枠
+  const tsMonthly=(Number(s.tsumitate.sp500||0)+Number(s.tsumitate.topix||0)+Number(s.tsumitate.fang||0));
+  const tsAnnual=tsMonthly*12;
+  const tsRem=T-tsAnnual;
+  // 成長枠2026
+  const sg26=Number(s.seichou2026.sushiro||0)+Number(s.seichou2026.fangLump||0)+Number(s.seichou2026.india||0);
+  const sg26Rem=G-sg26;
+  // 成長枠2027
+  const sg27=Number(s.seichou2027.sbg||0)+Number(s.seichou2027.donki||0)+Number(s.seichou2027.other||0);
+  const sg27Rem=G-sg27;
+  return {s,tsMonthly,tsAnnual,tsRem,sg26,sg26Rem,sg27,sg27Rem,T,G};
+}
+function pfNisaUpdate(){
+  const s=pfNisaLoadSettings();
+  // つみたて入力読み取り
+  ['sp500','topix','fang'].forEach(k=>{
+    const el=document.getElementById('nisa-ts-'+k);
+    if(el)s.tsumitate[k]=parseInt(el.value)||0;
+  });
+  // 成長2026
+  ['sushiro','fangLump','india'].forEach(k=>{
+    const el=document.getElementById('nisa-sg26-'+k);
+    if(el)s.seichou2026[k]=parseInt(el.value)||0;
+  });
+  // 成長2027
+  ['sbg','donki','other'].forEach(k=>{
+    const el=document.getElementById('nisa-sg27-'+k);
+    if(el)s.seichou2027[k]=parseInt(el.value)||0;
+  });
+  pfNisaSaveSettings(s);
+  pfNisaRefreshDisplay();
+}
+function pfNisaRefreshDisplay(){
+  const c=pfNisaCalc();
+  // つみたて合計
+  const tEl=document.getElementById('nisa-ts-total');
+  if(tEl)tEl.textContent='年間合計：'+pfFmtFull(c.tsAnnual);
+  const tRemEl=document.getElementById('nisa-ts-rem');
+  if(tRemEl){tRemEl.textContent='残り：'+pfFmtFull(c.tsRem);tRemEl.style.color=c.tsRem>=0?'var(--color-text-primary)':'#e74c3c';}
+  const tBarEl=document.getElementById('nisa-ts-bar');
+  if(tBarEl)tBarEl.style.width=Math.min(100,(c.tsAnnual/c.T)*100)+'%';
+  // 成長2026
+  const sg26El=document.getElementById('nisa-sg26-total');
+  if(sg26El)sg26El.textContent='合計：'+pfFmtFull(c.sg26);
+  const sg26RemEl=document.getElementById('nisa-sg26-rem');
+  if(sg26RemEl){sg26RemEl.textContent='残り：'+pfFmtFull(c.sg26Rem);sg26RemEl.style.color=c.sg26Rem>=0?'var(--color-text-primary)':'#e74c3c';}
+  const sg26BarEl=document.getElementById('nisa-sg26-bar');
+  if(sg26BarEl)sg26BarEl.style.width=Math.min(100,(c.sg26/c.G)*100)+'%';
+  // 成長2027
+  const sg27El=document.getElementById('nisa-sg27-total');
+  if(sg27El)sg27El.textContent='合計：'+pfFmtFull(c.sg27);
+  const sg27RemEl=document.getElementById('nisa-sg27-rem');
+  if(sg27RemEl){sg27RemEl.textContent='残り：'+pfFmtFull(c.sg27Rem);sg27RemEl.style.color=c.sg27Rem>=0?'var(--color-text-primary)':'#e74c3c';}
+  const sg27BarEl=document.getElementById('nisa-sg27-bar');
+  if(sg27BarEl)sg27BarEl.style.width=Math.min(100,(c.sg27/c.G)*100)+'%';
+}
+function pfRenderNisaSection(){
+  const el=document.getElementById('pf-nisa-section');
+  if(!el)return;
+  const c=pfNisaCalc();
+  const s=c.s;
+  function inp(id,val,ph){return`<input type="number" id="${id}" value="${val}" placeholder="${ph}" oninput="pfNisaUpdate()" style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:12px">`;}
+  function row(label,id,val,unit){return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="font-size:11px;color:var(--color-text-secondary);width:90px;flex-shrink:0">${label}</span>${inp(id,val,0)}<span style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap">${unit}</span></div>`;}
+  function bar(barId,pct,color){return`<div style="height:6px;background:var(--color-background-secondary);border-radius:3px;overflow:hidden;margin:6px 0"><div id="${barId}" style="height:100%;width:${Math.min(100,pct)}%;background:${color};border-radius:3px"></div></div>`;}
+
+  el.innerHTML=`
+<div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);letter-spacing:0.06em;margin-bottom:8px">NISA枠 年度別管理</div>
+
+<!-- 2026年 -->
+<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 14px;margin-bottom:10px">
+  <div style="font-size:13px;font-weight:600;margin-bottom:10px">2026年 NISA枠</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- つみたて枠 -->
+    <div>
+      <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
+      ${row('S&P500','nisa-ts-sp500',s.tsumitate.sp500,'円/月')}
+      ${row('TOPIX','nisa-ts-topix',s.tsumitate.topix,'円/月')}
+      ${row('FANG+','nisa-ts-fang',s.tsumitate.fang,'円/月')}
+      ${bar('nisa-ts-bar',(c.tsAnnual/c.T)*100,'#185FA5')}
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600">
+        <span id="nisa-ts-total">年間合計：${pfFmtFull(c.tsAnnual)}</span>
+        <span id="nisa-ts-rem" style="color:${c.tsRem>=0?'var(--color-text-primary)':'#e74c3c'}">残り：${pfFmtFull(c.tsRem)}</span>
+      </div>
+    </div>
+
+    <!-- 成長投資枠2026 -->
+    <div>
+      <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📈 成長枠（年240万上限）</div>
+      ${row('スシロー','nisa-sg26-sushiro',s.seichou2026.sushiro,'円')}
+      ${row('FANG+一括','nisa-sg26-fangLump',s.seichou2026.fangLump,'円')}
+      ${row('インド積立','nisa-sg26-india',s.seichou2026.india,'円')}
+      ${bar('nisa-sg26-bar',(c.sg26/c.G)*100,'#2ecc71')}
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600">
+        <span id="nisa-sg26-total">合計：${pfFmtFull(c.sg26)}</span>
+        <span id="nisa-sg26-rem" style="color:${c.sg26Rem>=0?'var(--color-text-primary)':'#e74c3c'}">残り：${pfFmtFull(c.sg26Rem)}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2027年 -->
+<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 14px;margin-bottom:10px">
+  <div style="font-size:13px;font-weight:600;margin-bottom:10px">2027年 NISA枠</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- つみたて枠2027（同設定） -->
+    <div>
+      <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">2026年と同設定継続</div>
+      ${bar('nisa-ts-bar27',(c.tsAnnual/c.T)*100,'#185FA5')}
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600">
+        <span>年間合計：${pfFmtFull(c.tsAnnual)}</span>
+        <span style="color:${c.tsRem>=0?'var(--color-text-primary)':'#e74c3c'}">残り：${pfFmtFull(c.tsRem)}</span>
+      </div>
+    </div>
+
+    <!-- 成長枠2027 -->
+    <div>
+      <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📈 成長枠（年240万上限）</div>
+      ${row('SBG 280株','nisa-sg27-sbg',s.seichou2027.sbg,'円')}
+      ${row('ドンキ 200株','nisa-sg27-donki',s.seichou2027.donki,'円')}
+      ${row('その他','nisa-sg27-other',s.seichou2027.other,'円')}
+      ${bar('nisa-sg27-bar',(c.sg27/c.G)*100,'#f59e0b')}
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600">
+        <span id="nisa-sg27-total">合計：${pfFmtFull(c.sg27)}</span>
+        <span id="nisa-sg27-rem" style="color:${c.sg27Rem>=0?'var(--color-text-primary)':'#e74c3c'}">残り：${pfFmtFull(c.sg27Rem)}</span>
+      </div>
+    </div>
+  </div>
+</div>`;
 }
 
 // 円グラフ描画（目標 vs 現状）
