@@ -1078,8 +1078,7 @@ function amShowMain(){
   document.getElementById('fab').classList.remove('hidden');
   if(currentTab!=='manager')document.getElementById('fab').classList.add('hidden');
 }
-function amShowLogin(){/* Google連携無効化 */}
-function setSyncStatus(state,text){/* Google連携無効化 */}
+
 function daysSince(ds){return Math.floor((new Date()-new Date(ds))/(864e5))}
 function amRenderReminder(){
   const el=document.getElementById('reminderBanner');if(!el)return;
@@ -1509,7 +1508,7 @@ window.addEventListener('load',()=>{
 // ============================================================
 // PORTFOLIO TRACKER
 // ============================================================
-const PF_KEY='portfolio_v6';
+const PF_KEY='portfolio_v8';
 const PF_CAT_COLORS={'全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','銀行':'#185FA5','年金':'#D4537E','その他':'#888780'};
 
 // PFカテゴリ → 目標配分カテゴリへのマッピング
@@ -1526,58 +1525,41 @@ function pfFmtFull(n){return'¥'+Number(n||0).toLocaleString()}
 function pfGetGroup(s){if(s==='done'||s==='done-credit'||s==='sell')return'done';if(s==='nisa-wait'||s==='nisa-credit')return'nisa-wait';return'pending';}
 function pfLoadData(){
   try{
-    // v5キーを優先、なければv4をマイグレーション
-    const r5=localStorage.getItem(PF_KEY);
-    if(r5){pfData=JSON.parse(r5);}
-    else{
-      const r5=localStorage.getItem('portfolio_v5');
-      if(!r5){
-      const r4=localStorage.getItem('portfolio_v4');
-      if(r4){
-        const old=JSON.parse(r4);
-        // カテゴリをv5体系に変換
-        const catConv={'証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス','証券-高配当':'高配当','証券-個別':'個別株','銀行キープ':'銀行','米国インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インド':'インドインデックス','高配当株':'高配当','個別株':'個別株','銀行':'銀行','年金':'年金','その他':'その他'};
-        pfData=old.map(d=>({...d,category:catConv[d.category]||d.category}));
-        pfSaveData();
-      }else{pfData=[];}
-    }
+    const r6=localStorage.getItem(PF_KEY);
+    if(r6){pfData=JSON.parse(r6);}
+    else{pfData=[];}
   }catch(e){pfData=[];}
   if(pfData.length===0)pfLoadDefaults();
 }
 function pfSaveData(){localStorage.setItem(PF_KEY,JSON.stringify(pfData));}
 function pfLoadDefaults(){
   pfData=[
-    // ===== 購入済み・積立設定済み =====
-    // 個別株
-    {id:pfUID(),name:'SBG 9984（野村証券）280株',category:'個別株',status:'done',lump:0,monthly:0,value:0,shares:280,memo:'野村証券保有中'},
-    {id:pfUID(),name:'SBKK（みずほストック）',category:'高配当',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'みずほストックプラン'},
-    {id:pfUID(),name:'SBKK（野村持ち株）',category:'高配当',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'野村持ち株経由'},
-    {id:pfUID(),name:'スシロー 3563 100株（NISA成長）',category:'個別株',status:'done',lump:994000,monthly:0,value:994000,shares:100,memo:'NISA成長投資枠・2026/06/05購入'},
-    // 全世界インデックス（DC・PayPay）
-    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（SBI iDeCo）',category:'全世界インデックス',status:'done',lump:0,monthly:5000,value:0,shares:0,memo:'iDeCo 月5,000円'},
-    {id:pfUID(),name:'PayPayポイント運用',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPayポイント'},
-    {id:pfUID(),name:'全世界PayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPay証券'},
-    {id:pfUID(),name:'オルカンPayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'PayPay証券'},
-    // NISA つみたて投資枠（クレカ積立 月10万円）
-    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（NISAつみたて）',category:'全世界インデックス',status:'done-credit',lump:0,monthly:40000,value:0,shares:0,memo:'NISAつみたて枠 月40,000円 2026/7/7〜'},
-    {id:pfUID(),name:'eMAXIS Slim 国内株式TOPIX（NISAつみたて）',category:'日本インデックス',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,memo:'NISAつみたて枠 月30,000円 2026/7/7〜'},
-    {id:pfUID(),name:'iFreeNEXT FANG+（NISAつみたて）',category:'全世界インデックス',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,memo:'NISAつみたて枠 月30,000円 2026/7/7〜'},
-    // NISA 成長投資枠 一括
-    {id:pfUID(),name:'iFreeNEXT FANG+（NISA成長・一括）',category:'全世界インデックス',status:'done',lump:500000,monthly:0,value:500000,shares:0,memo:'NISA成長投資枠 2026/06/05購入'},
-    // 特定口座 一括
-    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（特定・一括）',category:'全世界インデックス',status:'done',lump:3600000,monthly:0,value:3600000,shares:0,memo:'特定口座 2026/06/05一括購入'},
-    {id:pfUID(),name:'eMAXIS Slim 国内株式日経平均（特定・一括）',category:'日本インデックス',status:'done',lump:3600000,monthly:0,value:3600000,shares:0,memo:'特定口座 2026/06/05一括購入'},
-    {id:pfUID(),name:'iFreeNEXT FANG+（特定・一括）',category:'全世界インデックス',status:'done',lump:1306010,monthly:0,value:1306010,shares:0,memo:'特定口座 2026/06/05一括購入'},
-    // インド（特定口座）
-    {id:pfUID(),name:'iTrustインド株式（特定・一括）',category:'インドインデックス',status:'done',lump:1500000,monthly:0,value:1500764,shares:0,memo:'特定口座 購入済み'},
-    {id:pfUID(),name:'eMAXIS インド株式インデックス（NISA成長・積立）',category:'インドインデックス',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'NISA成長投資枠 月10,000円'},
-    // 高配当（NISA成長・積立）
-    {id:pfUID(),name:'SBI日本高配当株式ファンド（NISA成長・積立）',category:'高配当',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,memo:'NISA成長投資枠 月10,000円'},
-    // 日本インデックス（DC年金）
-    {id:pfUID(),name:'TOPIX100インデックス（DC年金）',category:'日本インデックス',status:'done',lump:0,monthly:0,value:0,shares:0,memo:'DC年金口座'},
-    // ===== 銀行キープ・未購入 =====
-    {id:pfUID(),name:'SBG 9984 280株（NISA成長・下落待ち）',category:'個別株',status:'pending',lump:1400000,monthly:0,value:0,shares:280,memo:'株価5,000円まで下落待ち・三井住友銀行キープ'},
-    {id:pfUID(),name:'ドンキ 7532（NISA成長・2027年）',category:'個別株',status:'pending',lump:170000,monthly:0,value:0,shares:200,memo:'2027年NISA成長枠'},
+    // ===== 個別株・高配当（保有済み） =====
+    {id:pfUID(),name:'SBG 9984（野村証券）',category:'個別株',status:'sell',lump:2090760,monthly:0,value:2090760,shares:280,price:7467,memo:'野村証券・一般預り 保有中'},
+    {id:pfUID(),name:'SBKK（みずほストック）',category:'高配当',status:'sell',lump:7873200,monthly:0,value:7873200,shares:1800,price:4374,memo:'みずほストックプラン・一般預り 保有中'},
+    {id:pfUID(),name:'SBKK（野村持ち株）',category:'高配当',status:'done',lump:842710,monthly:0,value:842710,shares:192,price:4389,memo:'野村持ち株経由'},
+    {id:pfUID(),name:'スシロー 3563（NISA成長）',category:'個別株',status:'done',lump:994000,monthly:0,value:994000,shares:100,price:9940,memo:'NISA成長投資枠 2026/06/05購入'},
+    // ===== インデックス（保有済み） =====
+    {id:pfUID(),name:'iTrustインド株式（特定）',category:'インドインデックス',status:'done',lump:1500000,monthly:0,value:1515558,shares:0,price:0,memo:'特定口座 評価額1,515,558円'},
+    {id:pfUID(),name:'インド(SBI) eMAXIS（積立）',category:'インドインデックス',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,price:0,memo:'NISA成長投資枠 月10,000円'},
+    {id:pfUID(),name:'全世界インデックス（SBI iDeCo）',category:'全世界インデックス',status:'done',lump:0,monthly:5000,value:1547466,shares:0,price:0,memo:'iDeCo 月5,000円 評価額1,547,466円'},
+    {id:pfUID(),name:'全世界PayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:538231,shares:0,price:0,memo:'PayPay証券 評価額538,231円'},
+    {id:pfUID(),name:'オルカンPayPay',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:50381,shares:0,price:0,memo:'PayPay証券 評価額50,381円'},
+    {id:pfUID(),name:'PayPayポイント運用',category:'全世界インデックス',status:'done',lump:0,monthly:0,value:276246,shares:0,price:0,memo:'PayPayポイント 評価額276,246円'},
+    {id:pfUID(),name:'TOPIX100インデックス（DC年金）',category:'日本インデックス',status:'done',lump:0,monthly:0,value:787800,shares:0,price:0,memo:'DC年金口座 評価額787,800円'},
+    // ===== 2026/06/05 本日購入 =====
+    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（特定・一括）',category:'全世界インデックス',status:'done',lump:3600000,monthly:0,value:3600000,shares:0,price:0,memo:'特定口座 2026/06/05購入'},
+    {id:pfUID(),name:'eMAXIS Slim 国内株式日経平均（特定・一括）',category:'日本インデックス',status:'done',lump:3600000,monthly:0,value:3600000,shares:0,price:0,memo:'特定口座 2026/06/05購入'},
+    {id:pfUID(),name:'iFreeNEXT FANG+（特定・一括）',category:'全世界インデックス',status:'done',lump:1306010,monthly:0,value:1306010,shares:0,price:0,memo:'特定口座 2026/06/05購入'},
+    {id:pfUID(),name:'iFreeNEXT FANG+（NISA成長・一括）',category:'全世界インデックス',status:'done',lump:500000,monthly:0,value:500000,shares:0,price:0,memo:'NISA成長投資枠 2026/06/05購入'},
+    // ===== NISAつみたて枠 クレカ積立（2026/7/7〜） =====
+    {id:pfUID(),name:'eMAXIS Slim 米国株式S&P500（NISAつみたて）',category:'全世界インデックス',status:'done-credit',lump:0,monthly:40000,value:0,shares:0,price:0,memo:'NISAつみたて枠 月40,000円 7/7〜'},
+    {id:pfUID(),name:'eMAXIS Slim 国内株式TOPIX（NISAつみたて）',category:'日本インデックス',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,price:0,memo:'NISAつみたて枠 月30,000円 7/7〜'},
+    {id:pfUID(),name:'iFreeNEXT FANG+（NISAつみたて）',category:'全世界インデックス',status:'done-credit',lump:0,monthly:30000,value:0,shares:0,price:0,memo:'NISAつみたて枠 月30,000円 7/7〜'},
+    {id:pfUID(),name:'SBI日本高配当株式ファンド（NISA成長・積立）',category:'高配当',status:'done-credit',lump:0,monthly:10000,value:0,shares:0,price:0,memo:'NISA成長投資枠 月10,000円'},
+    // ===== 未購入・待機中 =====
+    {id:pfUID(),name:'SBG 9984 280株（NISA成長・下落待ち）',category:'個別株',status:'pending',lump:1400000,monthly:0,value:0,shares:280,price:5000,memo:'株価5,000円まで下落待ち 三井住友銀行キープ'},
+    {id:pfUID(),name:'ドンキ 7532 200株（NISA成長・2027年）',category:'個別株',status:'pending',lump:170000,monthly:0,value:0,shares:200,price:854,memo:'2027年NISA成長枠'},
   ];pfSaveData();
 }
 function pfRender(){
@@ -1774,10 +1756,76 @@ function pfRenderList(){
     items.forEach(item=>{
       const sc=PF_STATUS_CONFIG[item.status]||PF_STATUS_CONFIG['pending'];
       const lump=Number(item.lump||0),monthly=Number(item.monthly||0),val=Number(item.value||0);
-      const gain=val>0&&lump>0?val-lump:null;
-      const gainPct=gain!==null&&lump>0?((gain/lump)*100).toFixed(1):null;
       const catColor=PF_CAT_COLORS[item.category]||'#888';
-      html+=`<div class="invest-card ${sc.cardCls}"><div class="card-top"><div class="card-left"><div class="fund-name">${item.name}</div><div class="fund-meta"><span class="status-badge sb-${sc.cls}">${sc.label}</span><span class="status-badge" style="background:${catColor}22;color:${catColor}">${item.category}</span>${monthly>0?'<span class="status-badge sb-done">クレカ積立</span>':''}${item.shares>0?`<span class="status-badge sb-pending">${Number(item.shares).toLocaleString()}株</span>`:''}</div></div><div class="card-right">${lump>0?`<div class="main-amount">${pfFmtFull(lump)}</div><div class="main-label">${item.status==='pending'?'キープ中':item.status.startsWith('done')?'購入額':'購入予定額'}</div>`:''}${monthly>0?`<div class="main-amount">${pfFmtFull(monthly)}</div><div class="main-label">/月</div>`:''}</div></div>${item.memo?`<div class="card-memo">${item.memo}</div>`:''}${val>0&&lump>0?`<div style="display:flex;gap:12px;margin-top:6px"><div><div style="font-size:10px;color:var(--text3)">評価額</div><div style="font-size:12px;font-variant-numeric:tabular-nums">${pfFmtFull(val)}</div></div>${gain!==null?`<div><div style="font-size:10px;color:var(--text3)">損益</div><div style="font-size:12px;font-variant-numeric:tabular-nums;color:${gain>=0?'var(--green)':'var(--danger)'}">${gain>=0?'+':''}${pfFmtFull(gain)}（${gainPct}%）</div></div>`:''}`:''}</div>${val>0&&lump>0?'</div>':''}<div class="status-indicator"><div class="si-dot ${sc.dotCls}"></div><span class="si-text ${sc.textCls}">${item.status==='done'?'特定口座で購入済み':item.status==='done-credit'?'クレカ積立 設定完了':item.status==='nisa-wait'?'NISA口座開設後に購入予定':item.status==='nisa-credit'?'NISA口座開設後にクレカ積立を切替':item.status==='sell'?'保有中・株価推移を見て売却予定':'三井住友銀行に預金中'}</span></div><div class="card-actions"><button class="action-btn" onclick="pfOpenModal('${item.id}')">編集</button></div></div>`;
+      const shares=Number(item.shares||0);const price=Number(item.price||0);
+      const calcVal=shares>0&&price>0?shares*price:0;
+      const displayVal=val>0?val:calcVal;
+      const cost=lump>0?lump:(shares>0&&price>0?calcVal:0);
+      const gain2=displayVal>0&&cost>0?displayVal-cost:null;
+      const gainPct2=gain2!==null&&cost>0?((gain2/cost)*100).toFixed(1):null;
+      html+=`<div class="invest-card ${sc.cardCls}">
+<div class="card-top">
+  <div class="card-left">
+    <div class="fund-name">${item.name}</div>
+    <div class="fund-meta">
+      <span class="status-badge sb-${sc.cls}">${sc.label}</span>
+      <span class="status-badge" style="background:${catColor}22;color:${catColor}">${item.category}</span>
+      ${monthly>0?'<span class="status-badge sb-done">クレカ積立</span>':''}
+      ${shares>0?`<span class="status-badge sb-pending">${shares.toLocaleString()}株</span>`:''}
+      ${price>0?`<span class="status-badge" style="background:#33333322;color:var(--text2)">@${price.toLocaleString()}円</span>`:''}
+    </div>
+  </div>
+  <div class="card-right">
+    ${lump>0?`<div class="main-amount">${pfFmtFull(lump)}</div><div class="main-label">${item.status==='pending'?'キープ中':'購入額'}</div>`:''}
+    ${monthly>0?`<div class="main-amount">${pfFmtFull(monthly)}</div><div class="main-label">/月</div>`:''}
+    ${lump===0&&monthly===0&&calcVal>0?`<div class="main-amount">${pfFmtFull(calcVal)}</div><div class="main-label">株数×株価</div>`:''}
+  </div>
+</div>
+${item.memo?`<div class="card-memo">${item.memo}</div>`:''}
+${displayVal>0?`<div style="display:flex;gap:16px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
+  <div><div style="font-size:10px;color:var(--text3)">評価額</div><div style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${pfFmtFull(displayVal)}</div></div>
+  ${gain2!==null?`<div><div style="font-size:10px;color:var(--text3)">損益</div><div style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:${gain2>=0?'var(--green)':'var(--danger)'}">${gain2>=0?'+':''}${pfFmtFull(gain2)}<span style="font-size:11px;margin-left:3px">(${gainPct2}%)</span></div></div>`:''}
+  ${shares>0&&price>0?`<div><div style="font-size:10px;color:var(--text3)">保有</div><div style="font-size:13px;font-variant-numeric:tabular-nums">${shares.toLocaleString()}株 × ¥${price.toLocaleString()}</div></div>`:''}
+</div>`:''}
+<div class="status-indicator"><div class="si-dot ${sc.dotCls}"></div><span class="si-text ${sc.textCls}">${item.status==='done'?'購入済み（特定/NISA）':item.status==='done-credit'?'クレカ積立 設定完了':item.status==='nisa-wait'?'NISA口座開設後に購入予定':item.status==='nisa-credit'?'NISA口座開設後にクレカ積立を切替':item.status==='sell'?'保有中・売却予定':'銀行キープ中'}</span></div>
+<div class="card-actions">
+  <button class="action-btn" onclick="pfOpenModal('${item.id}')">編集</button>
+  <button class="action-btn" onclick="pfToggleInline('${item.id}')" id="inline-btn-${item.id}">💰 金額更新</button>
+</div>
+<div id="inline-${item.id}" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+    ${shares>0?`
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">現在の株価（円）</div>
+      <input type="number" style="width:100%;padding:6px 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text1);font-size:13px" id="il-price-${item.id}" placeholder="株価" value="${price||''}" oninput="pfInlineCalc('${item.id}')">
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">株数</div>
+      <input type="number" style="width:100%;padding:6px 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text1);font-size:13px" id="il-shares-${item.id}" placeholder="株数" value="${shares||''}" oninput="pfInlineCalc('${item.id}')">
+    </div>
+    `:`
+    <div style="grid-column:1/-1">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">評価額（円）</div>
+      <input type="number" style="width:100%;padding:6px 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text1);font-size:13px" id="il-val-${item.id}" placeholder="現在の評価額" value="${displayVal||''}">
+    </div>
+    `}
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px">購入額（円）</div>
+      <input type="number" style="width:100%;padding:6px 8px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text1);font-size:13px" id="il-lump-${item.id}" placeholder="購入額" value="${lump||''}">
+    </div>
+    ${shares>0?`
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px" id="il-calc-label-${item.id}">評価額（自動計算）</div>
+      <div style="padding:6px 8px;background:var(--surface2,var(--bg));border:0.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--green)" id="il-calc-${item.id}">${displayVal>0?'¥'+displayVal.toLocaleString():'-'}</div>
+    </div>
+    `:''}
+  </div>
+  <div style="display:flex;gap:8px">
+    <button onclick="pfInlineSave('${item.id}')" style="flex:1;padding:7px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">保存</button>
+    <button onclick="pfToggleInline('${item.id}')" style="padding:7px 12px;background:none;border:0.5px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer;color:var(--text2)">閉じる</button>
+  </div>
+</div>
+</div>`;
     });html+='</div>';
   });
   list.innerHTML=html;
@@ -1787,7 +1835,37 @@ function setPfTab(tab){
   document.querySelectorAll('.pf-tab').forEach((t,i)=>t.classList.toggle('active',['all','done','nisa-wait','pending'][i]===tab));
   pfRenderList();
 }
-// 株数×株価で評価額を自動計算
+function pfToggleInline(id){
+  const el=document.getElementById('inline-'+id);
+  if(!el)return;
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+function pfInlineCalc(id){
+  const s=parseFloat(document.getElementById('il-shares-'+id)?.value)||0;
+  const p=parseFloat(document.getElementById('il-price-'+id)?.value)||0;
+  const calcEl=document.getElementById('il-calc-'+id);
+  if(calcEl){
+    if(s>0&&p>0){calcEl.textContent='¥'+(s*p).toLocaleString();}
+    else{calcEl.textContent='-';}
+  }
+}
+function pfInlineSave(id){
+  const idx=pfData.findIndex(d=>d.id===id);
+  if(idx<0)return;
+  const item=pfData[idx];
+  const sharesEl=document.getElementById('il-shares-'+id);
+  const priceEl=document.getElementById('il-price-'+id);
+  const valEl=document.getElementById('il-val-'+id);
+  const lumpEl=document.getElementById('il-lump-'+id);
+  if(sharesEl)item.shares=parseInt(sharesEl.value)||item.shares||0;
+  if(priceEl)item.price=parseInt(priceEl.value)||0;
+  if(item.shares>0&&item.price>0){item.value=item.shares*item.price;}
+  else if(valEl){item.value=parseInt(valEl.value)||item.value||0;}
+  if(lumpEl&&lumpEl.value)item.lump=parseInt(lumpEl.value)||item.lump||0;
+  pfData[idx]=item;
+  pfSaveData();pfRender();showToast('💰 金額を更新しました');
+}
+
 function pfCalcValue(){
   const shares=parseFloat(document.getElementById('pf-f-shares').value)||0;
   const price=parseFloat(document.getElementById('pf-f-price').value)||0;
