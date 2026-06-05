@@ -1554,7 +1554,7 @@ async function onSignedIn(){
   amShowMain();setSyncStatus('syncing','同期中...');
   await amFindOrCreateSheet();await amLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
 }
-function signIn(){amTokenClient.requestAccessToken({prompt:'consent'});}
+function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
   const token=gapi.client.getToken();
   if(token)google.accounts.oauth2.revoke(token.access_token);
@@ -1565,7 +1565,7 @@ function signOut(){
 function amMaybeInit(){
   const saved=localStorage.getItem('assetGoogleMode');
   if(saved==='offline'){useOffline();return;}
-  if(saved==='online'){amTokenClient.requestAccessToken({prompt:''});}
+  if(saved==='online'){if(amTokenClient)amTokenClient.requestAccessToken({prompt:''});else amShowLogin();}
   else{amShowLogin();}
 }
 window.addEventListener('load',()=>{
@@ -2591,7 +2591,7 @@ function slOpenModal(id=null){
       slCalc();
     }
   } else {
-    ['sl-f-name','sl-f-shares','sl-f-sell-price','sl-f-buy-price','sl-f-memo'].forEach(id=>document.getElementById(id).value='');
+    ['sl-f-name','sl-f-shares','sl-f-sell-price','sl-f-buy-price','sl-f-memo'].forEach(fid=>document.getElementById(fid).value='');
     document.getElementById('sl-f-date').value=today;
     document.getElementById('sl-f-cat').value='個別株';
     document.getElementById('sl-f-account').value='特定';
