@@ -1782,6 +1782,9 @@ function pfRenderNisaSection(){
   const tsY=tsM*12;
   const sg26=s.seichou2026.reduce((a,d)=>a+Number(d.amount||0),0);
   const sg27=s.seichou2027.reduce((a,d)=>a+Number(d.amount||0),0);
+  const ts27arr=s.tsumitate27||s.tsumitate;
+  const tsM27=ts27arr.reduce((a,d)=>a+Number(d.monthly||0),0);
+  const tsY27=tsM27*12;
 
   function mkRows(items,group,unit){
     return items.map(d=>`<div class="nisa-${group}-row" style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
