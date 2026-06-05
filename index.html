@@ -1233,7 +1233,7 @@ async function saveAccount(){
   const price=parseFloat(document.getElementById('fPrice').value)||0;
   if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,amount,note,shares,price,updated:todayStr()};}
   else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,amount,note,shares,price,updated:todayStr()});}
-  closeSheet();amRender();await amSaveToSheet();refreshHome();
+  closeSheet();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();
 }
 function amConfirmDelete(id){
   const a=amAccounts.find(x=>x.id===id);
@@ -1241,7 +1241,7 @@ function amConfirmDelete(id){
 }
 function confirmDelete(id,name){amDeleteId=id;document.getElementById('confirmName').textContent=name;document.getElementById('confirmBg').classList.add('open')}
 function closeConfirm(){document.getElementById('confirmBg').classList.remove('open')}
-document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();};
+document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();};
 document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===document.getElementById('sheetBg'))closeSheet()});
 document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
 function amToggleStockFields(){
@@ -1263,6 +1263,46 @@ function amCalcAmount(){
   }
 }
 function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
+
+// 資産管理 → PF 自動同期
+const AM_TO_PF_MAP=[
+  {amKey:'SBG',         pfKey:'SBG 9984（野村証券）'},
+  {amKey:'SBKK（みずほ', pfKey:'SBKK（みずほストック）'},
+  {amKey:'SBKK（野村',   pfKey:'SBKK（野村持ち株）'},
+  {amKey:'スシロー',      pfKey:'スシロー 3563（NISA成長）'},
+  {amKey:'iTrust',      pfKey:'iTrustインド株式（特定）'},
+  {amKey:'インド(SBI)',  pfKey:'インド(SBI) eMAXIS（積立）'},
+  {amKey:'全世界インデックス（SBI確定拠出）', pfKey:'全世界インデックス（SBI iDeCo）'},
+  {amKey:'全世界PayPay', pfKey:'全世界PayPay'},
+  {amKey:'オルカンPayPay',pfKey:'オルカンPayPay'},
+  {amKey:'PayPayポイント',pfKey:'PayPayポイント運用'},
+  {amKey:'TOPIX100',    pfKey:'TOPIX100インデックス（DC年金）'},
+  {amKey:'eMAXIS Slim 米国株式', pfKey:'eMAXIS Slim 米国株式S&P500（特定・一括）'},
+  {amKey:'eMAXIS Slim 国内株式', pfKey:'eMAXIS Slim 国内株式日経平均（特定・一括）'},
+  {amKey:'iFreeNEXT FANG', pfKey:'iFreeNEXT FANG+（特定・一括）'},
+];
+function pfSyncFromAM(){
+  if(!pfData||!pfData.length)return;
+  let changed=false;
+  amAccounts.forEach(acc=>{
+    const map=AM_TO_PF_MAP.find(m=>acc.name.includes(m.amKey));
+    if(!map)return;
+    const idx=pfData.findIndex(d=>d.name===map.pfKey);
+    if(idx<0)return;
+    const newVal=Math.round(acc.amount||0);
+    if(pfData[idx].value!==newVal){
+      pfData[idx].value=newVal;
+      // 株数・株価がある場合は株価も更新
+      if(acc.shares&&acc.price){
+        pfData[idx].shares=acc.shares;
+        pfData[idx].price=Math.round(acc.price);
+      }
+      changed=true;
+    }
+  });
+  if(changed){pfSaveData();if(currentTab==='portfolio')pfRender();}
+}
+
 // 口座名 → カテゴリ自動判定ルール（上から順にマッチ）
 // ============================================================
 // 口座名 → カテゴリ 自動判定ルール
@@ -1371,7 +1411,7 @@ function importCSV(e){
         if(ex){ex.amount=imp.amount;ex.cat=imp.cat;if(imp.note)ex.note=imp.note;ex.updated=imp.updated||todayStr();updated++;}
         else{const maxId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id)):0;amAccounts.push({id:maxId+added+1,...imp});added++;}
       });
-      amRender();await amSaveToSheet();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();
+      amRender();await amSaveToSheet();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();pfSyncFromAM();
     }else{showToast('有効なデータがありませんでした');}
     e.target.value='';
   };reader.readAsText(file,'UTF-8');
