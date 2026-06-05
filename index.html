@@ -1760,11 +1760,15 @@ function pfRenderNisaSection(){
   function mkRows(items,group,field){
     const unit=group.includes('tsumitate')?'月':'回';
     const cls='nisa-'+group+'-row';
-    return items.map(d=>`<div class="${cls}" style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap">
-      <input class="nisa-name" placeholder="銘柄名" value="${(d.name||'').replace(/"/g,'&quot;')}" oninput="pfNisaCollect()" style="flex:1;min-width:0;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);box-sizing:border-box">
-      <input class="nisa-val" type="number" value="${Number(d[field]||0)}" oninput="pfNisaCollect()" style="width:72px;min-width:0;padding:5px 4px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);box-sizing:border-box">
-      <span style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap">円/${unit}</span>
-      <button onclick="this.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 2px;line-height:1">×</button>
+    return items.map(d=>`<div class="${cls}" style="margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+        <input class="nisa-name" placeholder="銘柄名" value="${(d.name||'').replace(/"/g,'&quot;')}" oninput="pfNisaCollect()" style="flex:1;width:100%;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);box-sizing:border-box;min-width:0">
+        <button onclick="this.parentElement.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;flex-shrink:0">×</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input class="nisa-val" type="number" value="${Number(d[field]||0)}" oninput="pfNisaCollect()" style="flex:1;width:100%;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);box-sizing:border-box;min-width:0">
+        <span style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0">円/${unit}</span>
+      </div>
     </div>`).join('');
   }
   function addBtn(g){return`<button onclick="pfNisaAddRow('${g}')" style="font-size:11px;color:var(--color-text-secondary);background:none;border:0.5px dashed var(--color-border-tertiary);border-radius:6px;padding:3px 10px;cursor:pointer;width:100%;margin-bottom:6px">＋ 銘柄を追加</button>`;}
