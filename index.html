@@ -711,9 +711,12 @@ tr:last-child td{border-bottom:none}
 </div>
 <!-- 売却モーダル -->
 <div class="pf-modal-overlay" id="slModal" onclick="slCloseModalOutside(event)">
-  <div class="pf-modal-box">
-    <div class="pf-modal-header"><h3 id="slModalTitle">売却を記録</h3><button class="pf-modal-close" onclick="slCloseModal()">✕</button></div>
-    <div class="pf-modal-body">
+  <div class="pf-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="pf-modal-title" id="slModalTitle">売却を記録</div>
+      <button onclick="slCloseModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
+    <div>
       <div class="form-group"><label class="form-label">銘柄名 *</label><input class="form-input" id="sl-f-name" placeholder="例: SBG 9984、スシロー 3563"></div>
       <div class="form-group"><label class="form-label">カテゴリ</label><select class="form-input" id="sl-f-cat"><option value="個別株">個別株</option><option value="高配当">高配当</option><option value="全世界インデックス">全世界インデックス</option><option value="日本インデックス">日本インデックス</option><option value="インドインデックス">インドインデックス</option><option value="その他">その他</option></select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -735,8 +738,8 @@ tr:last-child td{border-bottom:none}
       </div>
       <div class="form-group" style="margin-top:10px"><label class="form-label">メモ</label><input class="form-input" id="sl-f-memo" placeholder="任意"></div>
     </div>
-    <div class="pf-modal-footer">
-      <div id="sl-delete-section" style="display:none;margin-bottom:10px"><button class="btn-danger" onclick="slDeleteEntry()">削除</button></div>
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+      <div id="sl-delete-section" style="display:none;margin-bottom:4px"><button class="btn-danger" onclick="slDeleteEntry()">削除</button></div>
       <button class="btn-accent" onclick="slSaveEntry()">保存</button>
     </div>
   </div>
@@ -2380,6 +2383,9 @@ function todoRender(){
     }
   }catch(e){console.error('[FixLocalStorage error]',e);}
 })();
+const SL_KEY='sellRecords_v1';
+let slData=[];let slEditingId=null;
+function slUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 pfLoadData();
 trLoadFromStorage();trRenderAll();
 todoRender();
@@ -2540,9 +2546,6 @@ function calcFamily(){
 // ============================================================
 // SELL (売却収支)
 // ============================================================
-const SL_KEY='sellRecords_v1';
-let slData=[];let slEditingId=null;
-function slUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function slFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP');}
 function slFmtSign(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP');}
 function slSaveData(){try{localStorage.setItem(SL_KEY,JSON.stringify(slData));}catch(e){}}
