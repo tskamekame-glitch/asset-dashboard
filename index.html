@@ -1746,8 +1746,8 @@ function pfNisaAddRow(group){
   const cls='nisa-'+group+'-row';
   const div=document.createElement('div');
   div.className=cls;
-  div.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:5px';
-  div.innerHTML=`<input class="nisa-name" placeholder="銘柄名" value="" oninput="pfNisaCollect()" style="flex:1;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)"><input class="nisa-val" type="number" placeholder="0" value="0" oninput="pfNisaCollect()" style="width:70px;padding:5px 6px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)"><span style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap">円/${unit}</span><button onclick="this.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 2px;line-height:1">×</button>`;
+  div.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap';
+  div.innerHTML=`<input class="nisa-name" placeholder="銘柄名" value="" oninput="pfNisaCollect()" style="flex:1;min-width:80px;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)"><input class="nisa-val" type="number" placeholder="0" value="0" oninput="pfNisaCollect()" style="width:70px;padding:5px 6px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)"><span style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap">円/${unit}</span><button onclick="this.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 2px;line-height:1">×</button>`;
   container.appendChild(div);
 }
 
@@ -1760,9 +1760,9 @@ function pfRenderNisaSection(){
   function mkRows(items,group,field){
     const unit=group.includes('tsumitate')?'月':'回';
     const cls='nisa-'+group+'-row';
-    return items.map(d=>`<div class="${cls}" style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-      <input class="nisa-name" placeholder="銘柄名" value="${(d.name||'').replace(/"/g,'&quot;')}" oninput="pfNisaCollect()" style="flex:1;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">
-      <input class="nisa-val" type="number" value="${Number(d[field]||0)}" oninput="pfNisaCollect()" style="width:70px;padding:5px 6px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">
+    return items.map(d=>`<div class="${cls}" style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap">
+      <input class="nisa-name" placeholder="銘柄名" value="${(d.name||'').replace(/"/g,'&quot;')}" oninput="pfNisaCollect()" style="flex:1;min-width:80px;padding:5px 8px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">
+      <input class="nisa-val" type="number" value="${Number(d[field]||0)}" oninput="pfNisaCollect()" style="width:80px;padding:5px 6px;font-size:12px;border:0.5px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary)">
       <span style="font-size:11px;color:var(--color-text-secondary);white-space:nowrap">円/${unit}</span>
       <button onclick="this.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 2px;line-height:1">×</button>
     </div>`).join('');
@@ -1779,7 +1779,7 @@ function pfRenderNisaSection(){
 <div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);letter-spacing:0.06em;margin-bottom:8px">NISA枠 年度別管理</div>
 <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 14px;margin-bottom:10px">
   <div style="font-size:13px;font-weight:600;margin-bottom:10px">2026年 NISA枠</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+  <div style="display:grid;grid-template-columns:1fr;gap:10px">
     <div>
       <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
       <div id="nisa-tsumitate-rows">${mkRows(s.tsumitate,'tsumitate','monthly')}</div>
@@ -1796,7 +1796,7 @@ function pfRenderNisaSection(){
 </div>
 <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 14px;margin-bottom:10px">
   <div style="font-size:13px;font-weight:600;margin-bottom:10px">2027年 NISA枠</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+  <div style="display:grid;grid-template-columns:1fr;gap:10px">
     <div>
       <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
       <div id="nisa-tsumitate27-rows">${mkRows(s.tsumitate27||s.tsumitate,'tsumitate27','monthly')}</div>
