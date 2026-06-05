@@ -2005,13 +2005,59 @@ const TODO_DEFS=[
 {id:'tax_sbg',label:'税金対応①｜SBG（9984）200株売却分',color:'#993C1D',bg:'#FAECE7',items:[{id:'t1',text:'野村証券から「年間取引報告書」が届く（来年1月）→ 保存する'},{id:'t2',text:'SBG取得原価の証明書類を保存（取得単価800円）'},{id:'t3',text:'売却益の計算：売却額約134万円 − 取得原価16万円 ＝ 約118万円'},{id:'t4',text:'e-Tax or 税務署で確定申告（来年2月16日〜3月15日）'},{id:'t5',text:'納税：売却益118万円 × 20.315% ≒ 約24万円を納付（来年5月頃）'}]},
 {id:'tax_sb',label:'税金対応②｜ソフトバンク株（9434）売却分',color:'#854F0B',bg:'#FAEEDA',items:[{id:'ts1',text:'社内コンプライアンスにインサイダー規制・売却可能期間を確認'},{id:'ts2',text:'取得単価を確認（持株会事務局 or みずほ証券の取引履歴）'},{id:'ts3',text:'みずほ証券から「年間取引報告書」が届く（来年1月）→ 保存する'},{id:'ts4',text:'e-Tax or 税務署で確定申告（来年2月16日〜3月15日）'},{id:'ts5',text:'納税：売却益 × 20.315% を納付（来年5月頃）'}]},
 {id:'nisa',label:'NISA口座開設後すぐ（最優先）',color:'#0F6E56',bg:'#E1F5EE',items:[{id:'n1',text:'OliveカードでeMAXIS Slim 米国株式(S&P500) 月10万円クレカ積立設定'},{id:'n2',text:'eMAXIS Slim 米国株式(S&P500) 成長投資枠で一括240万円購入'},{id:'n3',text:'スシロー 成長投資枠で約80〜90万円購入'},{id:'n4',text:'ドンキホーテ 成長投資枠で約80〜90万円購入'}]},
+{id:'retire_company',label:'退職手続き｜会社',color:'#2563EB',bg:'#EFF6FF',items:[
+  {id:'rc1',text:'退職届を提出する（退職日の1ヶ月以上前）'},
+  {id:'rc2',text:'有給休暇の残日数を確認・消化スケジュールを人事と合意する'},
+  {id:'rc3',text:'業務の引き継ぎ資料を作成し後任者に引き渡す'},
+  {id:'rc4',text:'会社貸与品を返却する（PC・社員証・名刺・鍵など）'},
+  {id:'rc5',text:'健康保険証を返却する（退職日当日）'},
+  {id:'rc6',text:'「離職票」を受け取る（ハローワーク申請に必要）'},
+  {id:'rc7',text:'「退職証明書」を受け取る（任意申請・転職・国保切替に使用）'},
+  {id:'rc8',text:'「源泉徴収票」を受け取る（翌年確定申告に必要）'},
+  {id:'rc9',text:'「雇用保険被保険者証」を受け取る'},
+  {id:'rc10',text:'「年金手帳」を返却されているか確認する（会社預かりの場合）'},
+  {id:'rc11',text:'持株会・財形貯蓄の解約・引き出し手続きをする'},
+  {id:'rc12',text:'企業DC（確定拠出年金）の脱退・移換手続きを開始する（退職後6ヶ月以内）'},
+  {id:'rc13',text:'会社メール・社内システムのデータを退職前に整理する'},
+  {id:'rc14',text:'同僚・取引先への退職挨拶メールを送る'}
+]},
+{id:'retire_gov',label:'退職手続き｜役所・公的機関',color:'#6D28D9',bg:'#F5F3FF',items:[
+  {id:'rg1',text:'【14日以内】国民健康保険への切替 or 任意継続を選択する（役所 or 健保組合）'},
+  {id:'rg2',text:'【14日以内】国民年金への切替手続き（退職日翌日から第1号被保険者）'},
+  {id:'rg3',text:'【退職翌日から】ハローワークで失業給付の受給資格確認・申請手続き'},
+  {id:'rg4',text:'マイナンバーカードの住所・情報を最新状態に更新する'},
+  {id:'rg5',text:'翌年の確定申告の準備（源泉徴収票・各種控除証明書を保管）'},
+  {id:'rg6',text:'住民税の納付方法が特別徴収→普通徴収に変わることを確認する'},
+  {id:'rg7',text:'iDeCo（個人型DC）への切替または継続の手続きをする'},
+  {id:'rg8',text:'企業DCのiDeCoへの移換手続きを行う（退職後6ヶ月以内）'},
+  {id:'rg9',text:'免許証・パスポートなど各種証明書の住所・勤務先を更新する'}
+]},
 {id:'card',label:'未利用クレジットカード解約',color:'#993556',bg:'#FBEAF0',items:[{id:'c1',text:'保有中のクレジットカードを全てリストアップする'},{id:'c2',text:'直近1年間利用していないカードを選別する'},{id:'c3',text:'年会費が発生しているカードを優先的に解約する'},{id:'c4',text:'ポイント残高を確認・使い切ってから解約する'},{id:'c5',text:'解約対象カードに紐付いている定期支払いを他カードへ変更する'},{id:'c6',text:'各カード会社に解約の電話 or アプリで手続きをする'}]},
 {id:'phone',label:'携帯番号変更の届け出',color:'#5F5E5A',bg:'#F1EFE8',items:[{id:'ph1',text:'【最優先】SBI証券 - 電話番号変更'},{id:'ph2',text:'【最優先】野村証券 - 電話番号変更'},{id:'ph3',text:'【最優先】みずほ証券 - 電話番号変更'},{id:'ph4',text:'【最優先】三井住友銀行（Olive）- 電話番号変更'},{id:'ph5',text:'【最優先】PayPay銀行 - 電話番号変更'},{id:'ph6',text:'確定拠出年金（DC）運営会社 - 電話番号変更'},{id:'ph7',text:'生命保険・損害保険各社 - 電話番号変更'},{id:'ph8',text:'Amazon・楽天・Yahoo! - アカウント設定で電話番号変更'},{id:'ph9',text:'マイナポータル・e-Tax - オンライン変更'},{id:'ph10',text:'勤務先（緊急連絡先）- 人事部に変更届'}]}
 ];
-const TODO_KEY='todo_kb_v3';
+const TODO_KEY='todo_kb_v4';
 let todoState=todoLoadState();
 let todoEditMeta={catId:null,itemId:null};
-function todoLoadState(){try{const s=localStorage.getItem(TODO_KEY);if(s)return JSON.parse(s);}catch(e){}return{categories:JSON.parse(JSON.stringify(TODO_DEFS)),checked:{}};}
+function todoLoadState(){
+  try{
+    const s=localStorage.getItem(TODO_KEY);
+    if(s){
+      const saved=JSON.parse(s);
+      // 新しいデフォルトカテゴリが追加されていれば追記する
+      const savedIds=saved.categories.map(c=>c.id);
+      TODO_DEFS.forEach(def=>{
+        if(!savedIds.includes(def.id)){
+          // 退職カテゴリはカード解約の前に挿入
+          const cardIdx=saved.categories.findIndex(c=>c.id==='card');
+          if(cardIdx>=0)saved.categories.splice(cardIdx,0,JSON.parse(JSON.stringify(def)));
+          else saved.categories.push(JSON.parse(JSON.stringify(def)));
+        }
+      });
+      return saved;
+    }
+  }catch(e){}
+  return{categories:JSON.parse(JSON.stringify(TODO_DEFS)),checked:{}};
+}
 function todoSaveState(){try{localStorage.setItem(TODO_KEY,JSON.stringify(todoState));}catch(e){}}
 function todoUID(){return 'i'+Math.random().toString(36).slice(2,9)}
 function buildColorPicker(){const r=document.getElementById('color-picker');r.innerHTML='';TODO_COLORS.forEach((col,i)=>{const d=document.createElement('div');d.className='cd'+(i===6?' sel':'');d.style.background=col.c;d.onclick=()=>{todoSelColor=col;document.querySelectorAll('.cd').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};r.appendChild(d);});}
