@@ -466,6 +466,7 @@ tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
   <button class="nav-btn" data-tab="portfolio" onclick="switchTab('portfolio')"><span class="ni">📊</span>PF</button>
+  <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
 </nav>
@@ -696,6 +697,48 @@ tr:last-child td{border-bottom:none}
       <div class="file-list" id="fileList" style="padding:0 12px 8px"></div>
     </div>
     <div class="hint" style="margin-top:8px"><strong>使い方：</strong>資産管理ツールでCSVを書き出し、ここで読み込むと資産推移が確認できます。</div>
+  </div>
+</div>
+
+<!-- ========== SELL ========== -->
+<div class="panel" id="tab-sell">
+  <div class="phead"><div class="phead-inner"><h1>💴 売却収支</h1><button class="btn-accent" onclick="slOpenModal()">＋ 追加</button></div></div>
+  <div class="page-inner">
+    <div id="sl-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px"></div>
+    <div id="sl-list"></div>
+    <div id="sl-empty" style="text-align:center;padding:60px 20px;color:var(--text3);font-size:14px">売却記録がありません<br><small>「＋ 追加」から登録してください</small></div>
+  </div>
+</div>
+<!-- 売却モーダル -->
+<div class="pf-modal-overlay" id="slModal" onclick="slCloseModalOutside(event)">
+  <div class="pf-modal-box">
+    <div class="pf-modal-header"><h3 id="slModalTitle">売却を記録</h3><button class="pf-modal-close" onclick="slCloseModal()">✕</button></div>
+    <div class="pf-modal-body">
+      <div class="form-group"><label class="form-label">銘柄名 *</label><input class="form-input" id="sl-f-name" placeholder="例: SBG 9984、スシロー 3563"></div>
+      <div class="form-group"><label class="form-label">カテゴリ</label><select class="form-input" id="sl-f-cat"><option value="個別株">個別株</option><option value="高配当">高配当</option><option value="全世界インデックス">全世界インデックス</option><option value="日本インデックス">日本インデックス</option><option value="インドインデックス">インドインデックス</option><option value="その他">その他</option></select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">株数（口数）</label><input class="form-input" id="sl-f-shares" type="number" placeholder="100" oninput="slCalc()"></div>
+        <div class="form-group"><label class="form-label">売却単価（円）</label><input class="form-input" id="sl-f-sell-price" type="number" placeholder="10000" oninput="slCalc()"></div>
+        <div class="form-group"><label class="form-label">取得単価（円）</label><input class="form-input" id="sl-f-buy-price" type="number" placeholder="8000" oninput="slCalc()"></div>
+        <div class="form-group"><label class="form-label">売却日</label><input class="form-input" id="sl-f-date" type="date"></div>
+      </div>
+      <div class="form-group"><label class="form-label">口座区分</label><select class="form-input" id="sl-f-account"><option value="NISA">NISA（非課税）</option><option value="特定">特定口座（20.315%課税）</option><option value="一般">一般口座（20.315%課税）</option></select></div>
+      <div id="sl-calc-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:12px 14px;margin-top:4px;display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:500">自動計算プレビュー</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+          <div><div style="font-size:10px;color:var(--text3)">売却金額</div><div id="sl-c-sell" style="font-weight:600">—</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">取得原価</div><div id="sl-c-cost" style="font-weight:600">—</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">税引前利益</div><div id="sl-c-gain" style="font-weight:600">—</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">税金（概算）</div><div id="sl-c-tax" style="font-weight:600">—</div></div>
+          <div style="grid-column:1/-1;border-top:0.5px solid var(--border);padding-top:8px"><div style="font-size:10px;color:var(--text3)">税引後手取り</div><div id="sl-c-net" style="font-weight:700;font-size:16px">—</div></div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:10px"><label class="form-label">メモ</label><input class="form-input" id="sl-f-memo" placeholder="任意"></div>
+    </div>
+    <div class="pf-modal-footer">
+      <div id="sl-delete-section" style="display:none;margin-bottom:10px"><button class="btn-danger" onclick="slDeleteEntry()">削除</button></div>
+      <button class="btn-accent" onclick="slSaveEntry()">保存</button>
+    </div>
   </div>
 </div>
 
@@ -1527,21 +1570,23 @@ function amMaybeInit(){
 }
 window.addEventListener('load',()=>{
   const s1=document.createElement('script');s1.src='https://apis.google.com/js/api.js';
-  s1.onload=()=>gapi.load('client',async()=>{
+  s1.onload=()=>{try{gapi.load('client',async()=>{try{
     await gapi.client.init({discoveryDocs:['https://sheets.googleapis.com/$discovery/rest?version=v4']});
     amGapiInited=true;
     if(amGisInited)amMaybeInit();
-  });
+  }catch(e){useOffline();}});}catch(e){useOffline();}};
+  s1.onerror=()=>useOffline();
   document.head.appendChild(s1);
   const s2=document.createElement('script');s2.src='https://accounts.google.com/gsi/client';
-  s2.onload=()=>{
+  s2.onload=()=>{try{
     amTokenClient=google.accounts.oauth2.initTokenClient({
       client_id:CLIENT_ID,scope:SCOPES,
       callback:async(resp)=>{if(!resp.error)await onSignedIn();}
     });
     amGisInited=true;
     if(amGapiInited)amMaybeInit();
-  };
+  }catch(e){useOffline();}};
+  s2.onerror=()=>{if(!amIsOnline)useOffline();};
   document.head.appendChild(s2);
 });
 
@@ -2338,6 +2383,8 @@ function todoRender(){
 pfLoadData();
 trLoadFromStorage();trRenderAll();
 todoRender();
+slLoadData();
+setTimeout(()=>{slRender();},0);
 refreshHome();
 
 // ===== FIRE SIMULATOR =====
@@ -2488,6 +2535,149 @@ function calcFamily(){
     ],res.zero);
     el('family-results').scrollIntoView({behavior:'smooth',block:'start'});
   },50);
+}
+
+// ============================================================
+// SELL (売却収支)
+// ============================================================
+const SL_KEY='sellRecords_v1';
+let slData=[];let slEditingId=null;
+function slUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function slFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP');}
+function slFmtSign(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP');}
+function slSaveData(){try{localStorage.setItem(SL_KEY,JSON.stringify(slData));}catch(e){}}
+function slLoadData(){try{slData=JSON.parse(localStorage.getItem(SL_KEY)||'[]');}catch(e){slData=[];}}
+
+function slCalc(){
+  const shares=parseFloat(document.getElementById('sl-f-shares').value)||0;
+  const sellP=parseFloat(document.getElementById('sl-f-sell-price').value)||0;
+  const buyP=parseFloat(document.getElementById('sl-f-buy-price').value)||0;
+  const account=document.getElementById('sl-f-account').value;
+  const box=document.getElementById('sl-calc-box');
+  if(!shares||!sellP){box.style.display='none';return;}
+  box.style.display='block';
+  const sellTotal=shares*sellP;
+  const cost=shares*buyP;
+  const gain=sellTotal-cost;
+  const isNISA=account==='NISA';
+  const tax=isNISA?0:(gain>0?gain*0.20315:0);
+  const net=sellTotal-tax;
+  document.getElementById('sl-c-sell').textContent=slFmt(sellTotal);
+  document.getElementById('sl-c-cost').textContent=buyP>0?slFmt(cost):'—';
+  document.getElementById('sl-c-gain').style.color=gain>=0?'var(--green,#2ecc71)':'var(--danger,#e74c3c)';
+  document.getElementById('sl-c-gain').textContent=buyP>0?(slFmtSign(gain)+(gain>=0?' 利益':' 損失')):'—';
+  document.getElementById('sl-c-tax').textContent=isNISA?'¥0（非課税）':(buyP>0?slFmt(tax):'—');
+  document.getElementById('sl-c-net').textContent=slFmt(net);
+  document.getElementById('sl-c-net').style.color=net>=(cost||sellTotal)?'var(--green,#2ecc71)':'var(--danger,#e74c3c)';
+}
+
+function slOpenModal(id=null){
+  slEditingId=id;
+  document.getElementById('slModalTitle').textContent=id?'売却記録を編集':'売却を記録';
+  document.getElementById('sl-delete-section').style.display=id?'block':'none';
+  document.getElementById('sl-calc-box').style.display='none';
+  const today=new Date().toISOString().slice(0,10);
+  if(id){
+    const d=slData.find(x=>x.id===id);
+    if(d){
+      document.getElementById('sl-f-name').value=d.name||'';
+      document.getElementById('sl-f-cat').value=d.cat||'個別株';
+      document.getElementById('sl-f-shares').value=d.shares||'';
+      document.getElementById('sl-f-sell-price').value=d.sellPrice||'';
+      document.getElementById('sl-f-buy-price').value=d.buyPrice||'';
+      document.getElementById('sl-f-date').value=d.date||today;
+      document.getElementById('sl-f-account').value=d.account||'特定';
+      document.getElementById('sl-f-memo').value=d.memo||'';
+      slCalc();
+    }
+  } else {
+    ['sl-f-name','sl-f-shares','sl-f-sell-price','sl-f-buy-price','sl-f-memo'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('sl-f-date').value=today;
+    document.getElementById('sl-f-cat').value='個別株';
+    document.getElementById('sl-f-account').value='特定';
+  }
+  document.getElementById('slModal').classList.add('open');
+}
+function slCloseModal(){document.getElementById('slModal').classList.remove('open');slEditingId=null;}
+function slCloseModalOutside(e){if(e.target===document.getElementById('slModal'))slCloseModal();}
+
+function slSaveEntry(){
+  const name=document.getElementById('sl-f-name').value.trim();
+  if(!name){alert('銘柄名を入力してください');return;}
+  const shares=parseFloat(document.getElementById('sl-f-shares').value)||0;
+  const sellPrice=parseFloat(document.getElementById('sl-f-sell-price').value)||0;
+  const buyPrice=parseFloat(document.getElementById('sl-f-buy-price').value)||0;
+  const account=document.getElementById('sl-f-account').value;
+  const isNISA=account==='NISA';
+  const sellTotal=shares*sellPrice;
+  const cost=shares*buyPrice;
+  const gain=buyPrice>0?sellTotal-cost:null;
+  const tax=isNISA?0:(gain!==null&&gain>0?gain*0.20315:0);
+  const net=sellTotal-tax;
+  const entry={
+    id:slEditingId||slUID(),
+    name,cat:document.getElementById('sl-f-cat').value,
+    shares,sellPrice,buyPrice,
+    date:document.getElementById('sl-f-date').value,
+    account,memo:document.getElementById('sl-f-memo').value.trim(),
+    sellTotal,cost:buyPrice>0?cost:null,gain,tax,net,
+  };
+  if(slEditingId){const idx=slData.findIndex(x=>x.id===slEditingId);slData[idx]=entry;}
+  else{slData.push(entry);}
+  slSaveData();slCloseModal();slRender();showToast('💴 売却記録を保存しました');
+}
+function slDeleteEntry(){if(!confirm('削除しますか？'))return;slData=slData.filter(x=>x.id!==slEditingId);slSaveData();slCloseModal();slRender();}
+
+function slRender(){
+  const list=document.getElementById('sl-list');
+  const empty=document.getElementById('sl-empty');
+  const summary=document.getElementById('sl-summary');
+  if(!list||!empty||!summary)return;
+  if(!slData.length){list.innerHTML='';empty.style.display='block';summary.innerHTML='';return;}
+  empty.style.display='none';
+  // サマリー集計
+  const totalSell=slData.reduce((s,d)=>s+(d.sellTotal||0),0);
+  const totalGain=slData.filter(d=>d.gain!==null).reduce((s,d)=>s+(d.gain||0),0);
+  const totalTax=slData.reduce((s,d)=>s+(d.tax||0),0);
+  const totalNet=slData.reduce((s,d)=>s+(d.net||0),0);
+  summary.innerHTML=`
+    <div class="metric"><div class="label">売却金額合計</div><div class="value">${slFmt(totalSell)}</div></div>
+    <div class="metric"><div class="label">損益合計</div><div class="value ${totalGain>=0?'up':'down'}">${slFmtSign(totalGain)}</div></div>
+    <div class="metric"><div class="label">税金合計</div><div class="value">${slFmt(totalTax)}</div></div>
+    <div class="metric"><div class="label">税引後手取り</div><div class="value ${totalNet>=totalSell?'up':'down'}">${slFmt(totalNet)}</div></div>
+  `;
+  // 記録一覧（新しい順）
+  const sorted=[...slData].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  list.innerHTML=sorted.map(d=>{
+    const isNISA=d.account==='NISA';
+    const gainColor=d.gain>=0?'var(--green,#2ecc71)':'var(--danger,#e74c3c)';
+    return`<div class="invest-card" style="margin-bottom:10px">
+  <div class="card-top">
+    <div class="card-left">
+      <div class="fund-name">${d.name}</div>
+      <div class="fund-meta">
+        <span class="status-badge sb-done">${d.account}</span>
+        <span class="status-badge" style="background:#33333322;color:var(--text2)">${d.cat}</span>
+        ${d.shares?`<span class="status-badge sb-pending">${d.shares.toLocaleString()}株</span>`:''}
+        <span style="font-size:11px;color:var(--text3)">${d.date||''}</span>
+      </div>
+    </div>
+    <div class="card-right">
+      <div class="main-amount">${slFmt(d.sellTotal||0)}</div>
+      <div class="main-label">売却金額</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
+    ${d.sellPrice?`<div><div style="font-size:10px;color:var(--text3)">売却単価</div><div style="font-size:12px">¥${d.sellPrice.toLocaleString()}</div></div>`:''}
+    ${d.buyPrice?`<div><div style="font-size:10px;color:var(--text3)">取得単価</div><div style="font-size:12px">¥${d.buyPrice.toLocaleString()}</div></div>`:''}
+    ${d.gain!==null?`<div><div style="font-size:10px;color:var(--text3)">税引前損益</div><div style="font-size:12px;font-weight:600;color:${gainColor}">${slFmtSign(d.gain)}</div></div>`:''}
+    <div><div style="font-size:10px;color:var(--text3)">税金</div><div style="font-size:12px">${isNISA?'¥0（非課税）':slFmt(d.tax||0)}</div></div>
+    <div><div style="font-size:10px;color:var(--text3)">税引後手取り</div><div style="font-size:13px;font-weight:700">${slFmt(d.net||0)}</div></div>
+  </div>
+  ${d.memo?`<div class="card-memo">${d.memo}</div>`:''}
+  <div class="card-actions"><button class="action-btn" onclick="slOpenModal('${d.id}')">編集</button></div>
+</div>`;
+  }).join('');
 }
 
 </script>
