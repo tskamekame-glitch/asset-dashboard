@@ -617,6 +617,7 @@ tr:last-child td{border-bottom:none}
       <div class="s-card c-done"><div class="s-label">✅ 購入済み</div><div class="s-amount" id="pf-sum-done">—</div><div class="s-sub">投資完了</div></div>
       <div class="s-card c-nisa"><div class="s-label">⏳ NISA待ち</div><div class="s-amount" id="pf-sum-nisa">—</div><div class="s-sub">開設後に購入</div></div>
       <div class="s-card c-pending"><div class="s-label">🔲 未購入</div><div class="s-amount" id="pf-sum-pending">—</div><div class="s-sub">銀行キープ中</div></div>
+      <div class="s-card" style="border-top:2px solid #f59e0b"><div class="s-label">💡 追加投資予定</div><div class="s-amount" id="pf-sum-extra">¥1,000万</div><div class="s-sub">来週検討中</div></div>
     </div>
     <div class="pf-progress">
       <div class="ps-title">投資進捗状況</div>
@@ -624,6 +625,7 @@ tr:last-child td{border-bottom:none}
         <div class="ps-row"><span class="ps-label">✅ 購入済み</span><div class="ps-bar"><div class="ps-fill fill-done" id="pf-bar-done" style="width:0%"></div></div><span class="ps-val" id="pf-pct-done">0%</span></div>
         <div class="ps-row"><span class="ps-label">⏳ NISA待ち</span><div class="ps-bar"><div class="ps-fill fill-nisa" id="pf-bar-nisa" style="width:0%"></div></div><span class="ps-val" id="pf-pct-nisa">0%</span></div>
         <div class="ps-row"><span class="ps-label">🔲 未購入</span><div class="ps-bar"><div class="ps-fill fill-pending" id="pf-bar-pending" style="width:0%"></div></div><span class="ps-val" id="pf-pct-pending">0%</span></div>
+        <div class="ps-row"><span class="ps-label">💡 追加予定</span><div class="ps-bar"><div class="ps-fill" id="pf-bar-extra" style="width:0%;background:#f59e0b"></div></div><span class="ps-val" id="pf-pct-extra">0%</span></div>
       </div>
     </div>
     <div class="pf-tabs">
@@ -1655,15 +1657,18 @@ function pfRender(){
   const doneAmt=pfData.filter(d=>pfGetGroup(d.status)==='done').reduce((s,d)=>s+Number(d.lump||0)+Number(d.monthly||0)*12,0);
   const nisaAmt=pfData.filter(d=>pfGetGroup(d.status)==='nisa-wait').reduce((s,d)=>s+Number(d.lump||0),0);
   const pendAmt=pfData.filter(d=>pfGetGroup(d.status)==='pending').reduce((s,d)=>s+Number(d.lump||0),0);
+  const extraAmt=10000000;// 追加投資予定1,000万円
+  const grandTotal=total+extraAmt;
   document.getElementById('pf-sum-total').textContent=pfFmt(total);
   document.getElementById('pf-sum-done').textContent=pfFmt(doneAmt);
   document.getElementById('pf-sum-nisa').textContent=pfFmt(nisaAmt);
   document.getElementById('pf-sum-pending').textContent=pfFmt(pendAmt);
-  const dPct=Math.min(100,(doneAmt/total)*100),nPct=Math.min(100,(nisaAmt/total)*100),pPct=Math.min(100,(pendAmt/total)*100);
-  document.getElementById('pf-bar-done').style.width=dPct+'%';document.getElementById('pf-bar-nisa').style.width=nPct+'%';document.getElementById('pf-bar-pending').style.width=pPct+'%';
+  const dPct=Math.min(100,(doneAmt/grandTotal)*100),nPct=Math.min(100,(nisaAmt/grandTotal)*100),pPct=Math.min(100,(pendAmt/grandTotal)*100),ePct=Math.min(100,(extraAmt/grandTotal)*100);
+  document.getElementById('pf-bar-done').style.width=dPct+'%';document.getElementById('pf-bar-nisa').style.width=nPct+'%';document.getElementById('pf-bar-pending').style.width=pPct+'%';document.getElementById('pf-bar-extra').style.width=ePct+'%';
   document.getElementById('pf-pct-done').textContent=pfFmt(doneAmt)+' ('+dPct.toFixed(0)+'%)';
   document.getElementById('pf-pct-nisa').textContent=pfFmt(nisaAmt)+' ('+nPct.toFixed(0)+'%)';
   document.getElementById('pf-pct-pending').textContent=pfFmt(pendAmt)+' ('+pPct.toFixed(0)+'%)';
+  document.getElementById('pf-pct-extra').textContent=pfFmt(extraAmt)+' ('+ePct.toFixed(0)+'%)';
   pfRenderDonutCharts();
   pfRenderList();
 }
