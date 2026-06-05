@@ -1101,7 +1101,7 @@ function amRender(){
     return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>{
       const stale=daysSince(a.updated)>=30;
       const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
-      const isStock=a.cat==='個別株';
+      const isStock=a.cat==='個別株'||a.cat==='高配当';
       const sharesVal=a.shares||'';
       const priceVal=a.price||'';
       const amountVal=a.amount||'';
