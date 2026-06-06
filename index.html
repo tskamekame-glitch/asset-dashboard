@@ -2394,15 +2394,19 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
   // 証券グラフから完全除外する口座名
   const EXCLUDE_FROM_CAT={'証券':['オルカンPayPay','インド(SBI)','全世界PayPay','全世界インデックス']};
   // 年金・iDeCoグラフに追加表示する口座名パターン（カテゴリ問わず）
-  const PENSION_EXTRA_PATTERNS=[/SBI.*確定拠出|確定拠出.*SBI/,/TOPIX100.*DC|DC.*TOPIX|DC.*年金|年金.*DC|ＤＣ.*年金|年金.*ＤＣ/,/iDeCo|ideco|イデコ/,/企業年金|確定給付/];
+  // 年金・iDeCoグラフに追加表示する口座名パターン（カテゴリ問わず）
+  // ※口座名の全角/半角・スペース有無に対応するため正規化してからマッチ
+  const normName=n=>(n||'').replace(/　/g,' ').replace(/ＤＣ/g,'DC').replace(/（/g,'(').replace(/）/g,')');
+  const PENSION_EXTRA_PATTERNS=[/SBI.*確定拠出|確定拠出.*SBI/i,/TOPIX.*DC|DC.*TOPIX|DC.*年金|年金.*DC/i,/iDeCo|ideco|イデコ/i,/企業年金|確定給付/];
   // 投信・インデックスグラフから除外する口座名パターン（年金グラフへ移動）
-  const TOUSHI_EXCL_PATTERNS=[/SBI.*確定拠出|確定拠出.*SBI/,/TOPIX100.*DC|DC.*TOPIX|DC.*年金|年金.*DC|ＤＣ.*年金|年金.*ＤＣ/];
-  const isPensionExtra=name=>PENSION_EXTRA_PATTERNS.some(p=>p.test(name));
-  const isToushiExcl=name=>TOUSHI_EXCL_PATTERNS.some(p=>p.test(name));
+  const TOUSHI_EXCL_PATTERNS=[/SBI.*確定拠出|確定拠出.*SBI/i,/TOPIX.*DC|DC.*TOPIX|DC.*年金|年金.*DC/i];
+  const isPensionExtra=name=>PENSION_EXTRA_PATTERNS.some(p=>p.test(normName(name)));
+  const isToushiExcl=name=>TOUSHI_EXCL_PATTERNS.some(p=>p.test(normName(name)));
 
   let accountNames;
   if(catName==='年金'){
-    // 年金カテゴリ + 確定拠出・DC年金口座（全カテゴリから）
+    // 年金カテゴリ + 確定拠出・DC年金口座（全カテゴリ・全スナップショット横断）
+    // カテゴリが「投信」でも口座名がDC年金・確定拠出であれば年金グラフに含める
     accountNames=[...new Set(snapshots.flatMap(s=>s.accounts
       ?s.accounts.filter(a=>a.cat===catName||isPensionExtra(a.name)).map(a=>a.name)
       :[]))];
@@ -2424,10 +2428,11 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
   // 口座別ラインは最初は非表示（凡例クリックで表示）
   const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{
     if(!s.accounts)return 0;
-    // 年金グラフの場合はカテゴリ問わず口座名で検索
+    // 年金グラフの場合はカテゴリ問わず口座名で検索（正規化して一致判定）
+    const normN=normName(name);
     const acct=catName==='年金'
-      ?s.accounts.find(a=>a.name===name)
-      :s.accounts.find(a=>a.name===name&&a.cat===catName);
+      ?s.accounts.find(a=>normName(a.name)===normN||a.name===name)
+      :s.accounts.find(a=>(a.name===name||normName(a.name)===normN)&&a.cat===catName);
     return acct?acct.amount:0;
   }),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:1.5,pointRadius:2,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3,hidden:true}));
   // 合計ラインの計算
@@ -2436,7 +2441,7 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
       return catName==='年金'?s.cats[catName]||0:s.cats[catName]||0;
     }
     if(catName==='年金'){
-      return s.accounts.filter(a=>a.cat===catName||isPensionExtra(a.name)).reduce((sum,a)=>sum+a.amount,0);
+      return s.accounts.filter(a=>a.cat===catName||a.cat==='投信'&&isPensionExtra(a.name)||isPensionExtra(a.name)).reduce((sum,a)=>sum+a.amount,0);
     }
     const excludeList=EXCLUDE_FROM_CAT[catName]||[];
     return s.accounts.filter(a=>{
