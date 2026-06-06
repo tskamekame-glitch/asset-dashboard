@@ -1514,6 +1514,34 @@ async function amSaveToSheet(){
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
   }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
+async function slSaveToSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const cols=['id','name','cat','shares','sellPrice','buyPrice','date','account','memo','sellTotal','cost','gain','tax','net'];
+    const values=[cols,...slData.map(d=>cols.map(k=>d[k]!==undefined&&d[k]!==null?d[k]:''))];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`sell!A1:N${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(slData.length+1<500)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`sell!A${slData.length+2}:N1000`});
+  }catch(e){console.error('slSaveToSheet error',e);}
+}
+async function slLoadFromSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'sell!A2:N1000'});
+    const rows=res.result.values||[];
+    if(rows.length===0)return;
+    const cols=['id','name','cat','shares','sellPrice','buyPrice','date','account','memo','sellTotal','cost','gain','tax','net'];
+    const numKeys=new Set(['shares','sellPrice','buyPrice','sellTotal','cost','gain','tax','net']);
+    slData=rows.filter(r=>r[0]).map(r=>{
+      const obj={};
+      cols.forEach((k,i)=>{
+        const v=r[i]!==undefined?r[i]:'';
+        obj[k]=numKeys.has(k)?(v===''||v===null?null:parseFloat(v)):v;
+      });
+      return obj;
+    });
+    slSaveData();slRender();
+  }catch(e){console.error('slLoadFromSheet error',e);}
+}
 function useOffline(){
   amIsOnline=false;localStorage.setItem('assetGoogleMode','offline');
   amLoadFromLocal();
@@ -1547,7 +1575,12 @@ async function amFindOrCreateSheet(){
   try{
     const res=await gapi.client.request({path:'https://www.googleapis.com/drive/v3/files',params:{q:`name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,fields:'files(id,name)'}});
     if(res.result.files&&res.result.files.length>0){amSpreadsheetId=res.result.files[0].id;}
-    else{const create=await gapi.client.sheets.spreadsheets.create({resource:{properties:{title:SHEET_NAME},sheets:[{properties:{title:'accounts'}}]}});amSpreadsheetId=create.result.spreadsheetId;}
+    else{const create=await gapi.client.sheets.spreadsheets.create({resource:{properties:{title:SHEET_NAME},sheets:[{properties:{title:'accounts'}},{properties:{title:'sell'}}]}});amSpreadsheetId=create.result.spreadsheetId;}
+    try{
+      const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:amSpreadsheetId});
+      const hasSlSheet=meta.result.sheets.some(s=>s.properties.title==='sell');
+      if(!hasSlSheet){await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:[{addSheet:{properties:{title:'sell'}}}]}});}
+    }catch(e){}
   }catch(e){console.error(e);}
 }
 async function amLoadFromSheet(){
@@ -1562,7 +1595,7 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
 }
 function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
@@ -2724,7 +2757,7 @@ function calcFamily(){
 // ============================================================
 function slFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP');}
 function slFmtSign(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP');}
-function slSaveData(){try{localStorage.setItem(SL_KEY,JSON.stringify(slData));}catch(e){}}
+function slSaveData(){try{localStorage.setItem(SL_KEY,JSON.stringify(slData));}catch(e){}slSaveToSheet();}
 function slLoadData(){try{slData=JSON.parse(localStorage.getItem(SL_KEY)||'[]');}catch(e){slData=[];}}
 
 function slCalc(){
