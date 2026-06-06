@@ -469,6 +469,7 @@ tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
+  <button class="nav-btn" data-tab="income" onclick="switchTab('income')"><span class="ni">💹</span>収入比較</button>
 </nav>
 
 <!-- ============================================================
@@ -601,14 +602,14 @@ tr:last-child td{border-bottom:none}
 
     <!-- 目標 vs 現状 円グラフ -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center;overflow:hidden;min-width:0">
         <div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:500">🎯 目標配分</div>
-        <canvas id="pf-donut-target" height="140"></canvas>
+        <div style="width:100%;max-width:160px;margin:0 auto"><canvas id="pf-donut-target"></canvas></div>
         <div id="pf-legend-target" style="margin-top:6px;text-align:left;font-size:10px;line-height:1.8;padding:0 4px"></div>
       </div>
-      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 8px;text-align:center;overflow:hidden;min-width:0">
         <div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:500">📊 現状配分</div>
-        <canvas id="pf-donut-actual" height="140"></canvas>
+        <div style="width:100%;max-width:160px;margin:0 auto"><canvas id="pf-donut-actual"></canvas></div>
         <div id="pf-legend-actual" style="margin-top:6px;text-align:left;font-size:10px;line-height:1.8;padding:0 4px"></div>
       </div>
     </div>
@@ -906,6 +907,210 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 </div>
+  </div>
+</div>
+
+<!-- ========== INCOME COMPARISON ========== -->
+<div class="panel" id="tab-income">
+  <div class="phead">
+    <div class="phead-inner"><h1>💹 収入比較シミュレーション</h1></div>
+  </div>
+  <div class="page-inner" style="padding-bottom:40px">
+
+    <!-- 前提説明 -->
+    <div style="background:linear-gradient(135deg,#0f6e56,#185fa5);border-radius:12px;padding:14px 16px;color:#fff;margin-bottom:14px">
+      <div style="font-size:11px;opacity:0.8;letter-spacing:1px;margin-bottom:4px">CAREER INCOME SIMULATOR</div>
+      <div style="font-size:16px;font-weight:700">キャリア別 生涯収入比較</div>
+      <div style="font-size:11px;opacity:0.75;margin-top:4px">3つのシナリオの生涯収入・手取りを比較します</div>
+    </div>
+
+    <!-- パラメータ設定 -->
+    <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px;display:flex;align-items:center;gap:6px">⚙️ シミュレーション設定</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:3px">現在の年齢</div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="ic-age" value="45" min="30" max="60" inputmode="numeric"
+              style="width:100%;padding:7px 8px;border:0.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text1);font-size:14px;font-weight:600">
+            <span style="font-size:11px;color:var(--text2);white-space:nowrap">歳</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text2);margin-bottom:3px">インフレ率（年）</div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" id="ic-inflation" value="1.0" min="0" max="5" step="0.1" inputmode="decimal"
+              style="width:100%;padding:7px 8px;border:0.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text1);font-size:14px;font-weight:600">
+            <span style="font-size:11px;color:var(--text2);white-space:nowrap">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- シナリオA: SB定年まで -->
+      <div style="background:rgba(24,95,165,0.08);border:1px solid rgba(24,95,165,0.25);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:#185fa5;margin-bottom:8px">🏢 シナリオA：SB定年（60歳）まで継続</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">現在年収</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-a-salary" value="700" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">万円</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">定年年齢</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-a-retire" value="60" min="55" max="70" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">歳</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">退職後バイト収入（年）</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-a-part" value="100" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">万円</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">バイト終了年齢</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-a-partend" value="80" min="60" max="90" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">歳</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- シナリオB: 45歳転職 -->
+      <div style="background:rgba(15,110,86,0.08);border:1px solid rgba(15,110,86,0.25);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:#0f6e56;margin-bottom:8px">🔄 シナリオB：45歳転職（土地家屋調査士補助など）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">転職後年収</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-b-salary" value="500" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">万円</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">転職年齢</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-b-changeage" value="45" min="30" max="60" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">歳</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">就労終了年齢</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-b-workend" value="80" min="55" max="90" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">歳</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">年収上昇率（年）</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-b-raise" value="1.0" step="0.5" inputmode="decimal"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 年金設定 -->
+      <div style="background:rgba(186,117,23,0.08);border:1px solid rgba(186,117,23,0.25);border-radius:10px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:#ba7517;margin-bottom:8px">🧓 年金設定（共通）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">受給開始年齢</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-pension-start" value="65" min="60" max="75" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">歳</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">シナリオA 年金月額</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-pension-a" value="20" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">万円/月</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">シナリオB 年金月額</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-pension-b" value="14" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">万円/月</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:2px">年金受給終了年齢</div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <input type="number" id="ic-pension-end" value="90" min="80" max="100" inputmode="numeric"
+                style="width:100%;padding:6px 7px;border:0.5px solid var(--border);border-radius:7px;background:var(--card);color:var(--text1);font-size:13px;font-weight:600">
+              <span style="font-size:10px;color:var(--text2);white-space:nowrap">歳</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button onclick="calcIncomeSimulator()"
+      style="width:100%;padding:14px;background:linear-gradient(135deg,#0f6e56,#185fa5);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;letter-spacing:0.5px">
+      📊 シミュレーション実行
+    </button>
+
+    <!-- 結果エリア -->
+    <div id="ic-results" style="display:none">
+
+      <!-- サマリーカード -->
+      <div id="ic-summary-cards" style="margin-bottom:14px"></div>
+
+      <!-- 差額ハイライト -->
+      <div id="ic-diff-box" style="margin-bottom:14px"></div>
+
+      <!-- 年齢別収入グラフ -->
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📈 年齢別 年間収入推移</div>
+        <div style="position:relative;height:240px"><canvas id="ic-chart-income"></canvas></div>
+      </div>
+
+      <!-- 累積収入グラフ -->
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">💰 累積収入推移（年金含む）</div>
+        <div style="position:relative;height:240px"><canvas id="ic-chart-cumulative"></canvas></div>
+      </div>
+
+      <!-- 手取り概算グラフ -->
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:6px">✋ 年齢別 手取り推移（概算）</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">※社会保険料・所得税の概算を控除。副業・パート収入は給与所得として計算。</div>
+        <div style="position:relative;height:240px"><canvas id="ic-chart-takehome"></canvas></div>
+      </div>
+
+      <!-- 詳細テーブル -->
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📋 フェーズ別 収入内訳</div>
+        <div id="ic-phase-table" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- 注記 -->
+      <div style="background:rgba(136,135,128,0.1);border-radius:10px;padding:12px;font-size:10px;color:var(--text3);line-height:1.7">
+        ※本シミュレーションは概算です。実際の手取りは税制改正・社会保険料率の変更・扶養状況により異なります。<br>
+        ※SB定年後のバイト収入は雑所得として扱い、103万円以下は非課税として概算計算します。<br>
+        ※インフレ調整後の実質価値（現在価値換算）も参考として表示しています。
+      </div>
+    </div>
   </div>
 </div>
 </div><!-- /panels -->
@@ -2004,7 +2209,7 @@ function pfRenderDonutCharts(){
     type:'doughnut',
     data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:1,borderColor:'var(--bg)'}]},
     options:{
-      responsive:true,cutout:'65%',
+      responsive:true,maintainAspectRatio:true,aspectRatio:1,cutout:'65%',
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{label:ctx=>{
@@ -3068,6 +3273,281 @@ function slRender(){
   }).join('');
 }
 
+
+// ============================================================
+// INCOME COMPARISON SIMULATOR
+// ============================================================
+let icChartIncome=null, icChartCumulative=null, icChartTakehome=null;
+
+// 所得税＋住民税の概算計算（給与収入ベース）
+function icTax(annualIncome) {
+  // 給与所得控除
+  let deduction = 0;
+  if (annualIncome <= 162.5) deduction = 55;
+  else if (annualIncome <= 180) deduction = annualIncome * 0.4 - 10;
+  else if (annualIncome <= 360) deduction = annualIncome * 0.3 + 8;
+  else if (annualIncome <= 660) deduction = annualIncome * 0.2 + 44;
+  else if (annualIncome <= 850) deduction = annualIncome * 0.1 + 110;
+  else deduction = 195;
+  // 社会保険料（概算：年収の14.5%、上限あり）
+  const socialIns = Math.min(annualIncome * 0.145, 120);
+  // 課税所得
+  const taxable = Math.max(annualIncome - deduction - socialIns - 48 /* 基礎控除 */, 0);
+  // 所得税（累進課税）
+  let incomeTax = 0;
+  if (taxable <= 195) incomeTax = taxable * 0.05;
+  else if (taxable <= 330) incomeTax = 195*0.05 + (taxable-195)*0.1;
+  else if (taxable <= 695) incomeTax = 195*0.05 + 135*0.1 + (taxable-330)*0.2;
+  else if (taxable <= 900) incomeTax = 195*0.05 + 135*0.1 + 365*0.2 + (taxable-695)*0.23;
+  else if (taxable <= 1800) incomeTax = 195*0.05 + 135*0.1 + 365*0.2 + 205*0.23 + (taxable-900)*0.33;
+  else incomeTax = 195*0.05 + 135*0.1 + 365*0.2 + 205*0.23 + 900*0.33 + (taxable-1800)*0.4;
+  incomeTax *= 1.021; // 復興特別所得税
+  // 住民税（10%）
+  const residenceTax = taxable * 0.10;
+  const totalTax = incomeTax + residenceTax + socialIns;
+  return { takehome: Math.max(annualIncome - totalTax, 0), tax: totalTax, socialIns };
+}
+
+// パート・バイト収入の手取り（103万以下は全額、超えると課税）
+function icPartTax(income) {
+  if (income <= 103) return income;
+  return icTax(income).takehome;
+}
+
+// 年金の手取り（公的年金等控除適用）
+function icPensionTakehome(annualPension) {
+  // 公的年金等控除（65歳以上）
+  let deduction = annualPension <= 330 ? 110 : annualPension * 0.25 + 27.5;
+  deduction = Math.max(deduction, 110);
+  const taxable = Math.max(annualPension - deduction - 48, 0);
+  const incomeTax = taxable * 0.05 * 1.021;
+  const residenceTax = taxable * 0.1;
+  return Math.max(annualPension - incomeTax - residenceTax, 0);
+}
+
+function icFmt(man) {
+  if (man >= 10000) return (man/10000).toFixed(1) + '億円';
+  if (man >= 1000) return Math.round(man/100)/10 + '千万円';
+  return Math.round(man) + '万円';
+}
+
+function calcIncomeSimulator() {
+  const curAge    = parseInt(document.getElementById('ic-age').value) || 45;
+  const inflation = (parseFloat(document.getElementById('ic-inflation').value) || 1.0) / 100;
+  // シナリオA
+  const aSalary   = parseFloat(document.getElementById('ic-a-salary').value) || 700;
+  const aRetire   = parseInt(document.getElementById('ic-a-retire').value) || 60;
+  const aPart     = parseFloat(document.getElementById('ic-a-part').value) || 100;
+  const aPartEnd  = parseInt(document.getElementById('ic-a-partend').value) || 80;
+  // シナリオB
+  const bSalary   = parseFloat(document.getElementById('ic-b-salary').value) || 500;
+  const bChangeAge= parseInt(document.getElementById('ic-b-changeage').value) || 45;
+  const bWorkEnd  = parseInt(document.getElementById('ic-b-workend').value) || 80;
+  const bRaise    = (parseFloat(document.getElementById('ic-b-raise').value) || 1.0) / 100;
+  // 年金
+  const pensionStart = parseInt(document.getElementById('ic-pension-start').value) || 65;
+  const pensionA     = (parseFloat(document.getElementById('ic-pension-a').value) || 20) * 12;
+  const pensionB     = (parseFloat(document.getElementById('ic-pension-b').value) || 14) * 12;
+  const pensionEnd   = parseInt(document.getElementById('ic-pension-end').value) || 90;
+
+  const endAge = Math.max(aPartEnd, bWorkEnd, pensionEnd, 90);
+  const ages = [];
+  for (let a = curAge; a <= endAge; a++) ages.push(a);
+
+  // 各年齢のデータ計算
+  const aIncome=[], bIncome=[], aIncomePension=[], bIncomePension=[];
+  const aTakehome=[], bTakehome=[];
+  const aCumul=[], bCumul=[];
+  let aCum=0, bCum=0;
+
+  ages.forEach((age, i) => {
+    const inf = Math.pow(1+inflation, i); // インフレ倍率（名目→名目のまま比較）
+
+    // ---- シナリオA ----
+    let aGross = 0, aPensionAmt = 0;
+    if (age < aRetire) {
+      // 正社員期間（年収微増：ほぼフラット想定）
+      aGross = aSalary * Math.pow(1.005, age - curAge);
+    } else if (age < aPartEnd) {
+      aGross = aPart; // バイト
+    }
+    if (age >= pensionStart && age <= pensionEnd) {
+      aPensionAmt = pensionA;
+    }
+    const aTH = (age < aRetire ? icTax(aGross).takehome : icPartTax(aGross))
+              + (aPensionAmt > 0 ? icPensionTakehome(aPensionAmt) : 0);
+    aIncome.push(aGross);
+    aIncomePension.push(aGross + aPensionAmt);
+    aTakehome.push(aTH);
+    aCum += aGross + aPensionAmt;
+    aCumul.push(aCum);
+
+    // ---- シナリオB ----
+    let bGross = 0, bPensionAmt = 0;
+    if (age >= bChangeAge && age < bWorkEnd) {
+      const yrs = age - bChangeAge;
+      bGross = bSalary * Math.pow(1 + bRaise, yrs);
+    }
+    if (age >= pensionStart && age <= pensionEnd) {
+      bPensionAmt = pensionB;
+    }
+    const bTH = (bGross > 0 ? icTax(bGross).takehome : 0)
+              + (bPensionAmt > 0 ? icPensionTakehome(bPensionAmt) : 0);
+    bIncome.push(bGross);
+    bIncomePension.push(bGross + bPensionAmt);
+    bTakehome.push(bTH);
+    bCum += bGross + bPensionAmt;
+    bCumul.push(bCum);
+  });
+
+  // 生涯合計
+  const aTotalGross = aCumul[aCumul.length-1];
+  const bTotalGross = bCumul[bCumul.length-1];
+  const aTotalTH    = aTakehome.reduce((s,v)=>s+v,0);
+  const bTotalTH    = bTakehome.reduce((s,v)=>s+v,0);
+  const diff = aTotalGross - bTotalGross;
+  const diffTH = aTotalTH - bTotalTH;
+
+  // ---- UI更新 ----
+  document.getElementById('ic-results').style.display = 'block';
+
+  // サマリーカード
+  document.getElementById('ic-summary-cards').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:rgba(24,95,165,0.08);border:1px solid rgba(24,95,165,0.3);border-radius:12px;padding:12px">
+        <div style="font-size:10px;color:#185fa5;font-weight:700;margin-bottom:6px">🏢 シナリオA（SB定年継続）</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:2px">生涯収入（年金含む）</div>
+        <div style="font-size:18px;font-weight:800;color:#185fa5;letter-spacing:-0.5px">${icFmt(aTotalGross)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">手取り概算</div>
+        <div style="font-size:14px;font-weight:700;color:#185fa5">${icFmt(aTotalTH)}</div>
+      </div>
+      <div style="background:rgba(15,110,86,0.08);border:1px solid rgba(15,110,86,0.3);border-radius:12px;padding:12px">
+        <div style="font-size:10px;color:#0f6e56;font-weight:700;margin-bottom:6px">🔄 シナリオB（45歳転職）</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:2px">生涯収入（年金含む）</div>
+        <div style="font-size:18px;font-weight:800;color:#0f6e56;letter-spacing:-0.5px">${icFmt(bTotalGross)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">手取り概算</div>
+        <div style="font-size:14px;font-weight:700;color:#0f6e56">${icFmt(bTotalTH)}</div>
+      </div>
+    </div>`;
+
+  // 差額ハイライト
+  const isDiffPos = diff >= 0;
+  const leader = isDiffPos ? 'A（SB継続）' : 'B（転職）';
+  const leaderCol = isDiffPos ? '#185fa5' : '#0f6e56';
+  document.getElementById('ic-diff-box').innerHTML = `
+    <div style="background:var(--card);border:2px solid ${leaderCol};border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">生涯収入（年金含む）の差額</div>
+      <div style="font-size:24px;font-weight:800;color:${leaderCol};letter-spacing:-1px">${icFmt(Math.abs(diff))}</div>
+      <div style="font-size:12px;color:${leaderCol};font-weight:600;margin-top:4px">シナリオ${leader}が多い</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">手取りベース差額: ${icFmt(Math.abs(diffTH))}（${diffTH>=0?'A':'B'}が多い）</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">※収入差を埋める資産運用・生活満足度・健康面も総合的に判断してください</div>
+    </div>`;
+
+  // フェーズ別テーブル
+  // ※A・B共通の年齢区間で集計（インデックスは ages[] から取得）
+  const ph1End = pensionStart - 1; // 64歳まで「現役期」
+  const ph2End = Math.max(aPartEnd - 1, bWorkEnd - 1); // 就労終了まで「65歳〜就労期」
+  const phases = [
+    { label: `現役期（${curAge}〜${ph1End}歳）`,
+      aStart: curAge, aEnd: ph1End, bStart: curAge, bEnd: ph1End },
+    { label: `65歳〜就労終了（A:バイト／B:転職継続＋年金開始）`,
+      aStart: pensionStart, aEnd: ph2End, bStart: pensionStart, bEnd: ph2End },
+    { label: `就労終了後（年金のみ）`,
+      aStart: ph2End + 1, aEnd: pensionEnd, bStart: ph2End + 1, bEnd: pensionEnd },
+  ];
+  const pRows = phases.map(ph => {
+    // A・B同一区間で集計
+    const idxList = ages.filter(a=>a>=ph.aStart&&a<=ph.aEnd);
+    const aIdx = idxList; const bIdx = idxList;
+    const aSum = aIdx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(aIncomePension[i]||0);},0);
+    const bSum = bIdx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(bIncomePension[i]||0);},0);
+    const aTHsum = aIdx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(aTakehome[i]||0);},0);
+    const bTHsum = bIdx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(bTakehome[i]||0);},0);
+    return `<tr>
+      <td style="padding:6px 8px;font-size:10px;color:var(--text2);white-space:nowrap">${ph.label}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px;font-weight:600;color:#185fa5">${icFmt(aSum)}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3)">${icFmt(aTHsum)}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px;font-weight:600;color:#0f6e56">${icFmt(bSum)}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3)">${icFmt(bTHsum)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('ic-phase-table').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text3);font-weight:500">フェーズ</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:#185fa5;font-weight:600">A収入</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">A手取</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:#0f6e56;font-weight:600">B収入</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">B手取</th>
+        </tr>
+      </thead>
+      <tbody>${pRows}</tbody>
+      <tfoot>
+        <tr style="border-top:2px solid var(--border)">
+          <td style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--text1)">生涯合計</td>
+          <td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:800;color:#185fa5">${icFmt(aTotalGross)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#185fa5">${icFmt(aTotalTH)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:800;color:#0f6e56">${icFmt(bTotalGross)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#0f6e56">${icFmt(bTotalTH)}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+
+  // グラフ共通設定
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  const tickColor = isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.4)';
+  const gridColor = isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+  const sharedOpts = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{position:'bottom',labels:{font:{size:10},padding:8,boxWidth:10,usePointStyle:true}}, datalabels:{display:false} },
+    scales:{
+      x:{ticks:{color:tickColor,font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},
+      y:{ticks:{callback:v=>Math.round(v)+'万',color:tickColor,font:{size:9}},grid:{color:gridColor}}
+    }
+  };
+
+  // 年間収入グラフ
+  if(icChartIncome){icChartIncome.destroy();}
+  icChartIncome = new Chart(document.getElementById('ic-chart-income'),{
+    type:'line',
+    data:{labels:ages,datasets:[
+      {label:'A：SB継続（収入+年金）',data:aIncomePension,borderColor:'#185fa5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2,pointRadius:2,fill:true,tension:0.3},
+      {label:'B：転職（収入+年金）',data:bIncomePension,borderColor:'#0f6e56',backgroundColor:'rgba(15,110,86,0.08)',borderWidth:2,pointRadius:2,fill:true,tension:0.3},
+      {label:'A：就労収入のみ',data:aIncome,borderColor:'#4a8fd4',borderWidth:1.5,borderDash:[4,3],pointRadius:0,fill:false,tension:0.3},
+      {label:'B：就労収入のみ',data:bIncome,borderColor:'#2ab080',borderWidth:1.5,borderDash:[4,3],pointRadius:0,fill:false,tension:0.3},
+    ]},
+    options:{...sharedOpts, plugins:{...sharedOpts.plugins, tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+Math.round(ctx.raw)+'万円'}}}},
+    plugins:[ChartDataLabels]
+  });
+
+  // 累積収入グラフ
+  if(icChartCumulative){icChartCumulative.destroy();}
+  icChartCumulative = new Chart(document.getElementById('ic-chart-cumulative'),{
+    type:'line',
+    data:{labels:ages,datasets:[
+      {label:'A：SB継続 累積',data:aCumul,borderColor:'#185fa5',backgroundColor:'rgba(24,95,165,0.1)',borderWidth:2.5,pointRadius:3,fill:true,tension:0.3},
+      {label:'B：転職 累積',data:bCumul,borderColor:'#0f6e56',backgroundColor:'rgba(15,110,86,0.1)',borderWidth:2.5,pointRadius:3,fill:true,tension:0.3},
+    ]},
+    options:{...sharedOpts, plugins:{...sharedOpts.plugins, tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+Math.round(ctx.raw)+'万円'}}}},
+    plugins:[ChartDataLabels]
+  });
+
+  // 手取りグラフ
+  if(icChartTakehome){icChartTakehome.destroy();}
+  icChartTakehome = new Chart(document.getElementById('ic-chart-takehome'),{
+    type:'bar',
+    data:{labels:ages,datasets:[
+      {label:'A：SB継続 手取り',data:aTakehome,backgroundColor:'rgba(24,95,165,0.7)',borderRadius:2},
+      {label:'B：転職 手取り',data:bTakehome,backgroundColor:'rgba(15,110,86,0.7)',borderRadius:2},
+    ]},
+    options:{...sharedOpts, plugins:{...sharedOpts.plugins, tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+Math.round(ctx.raw)+'万円'}}}},
+    plugins:[ChartDataLabels]
+  });
+
+  // スクロール
+  setTimeout(()=>document.getElementById('ic-summary-cards').scrollIntoView({behavior:'smooth',block:'start'}),100);
+}
 </script>
 </body>
 </html>
