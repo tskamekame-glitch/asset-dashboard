@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="収入比較">
+<meta name="theme-color" content="#0a0f1e">
+<title>キャリア収入比較シミュレーター</title>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0f1e;
+  --surface:   #111827;
+  --card:      #1a2235;
+  --border:    rgba(255,255,255,0.08);
+  --text1:     #f0f4ff;
+  --text2:     #94a3b8;
+  --text3:     #64748b;
+  --blue:      #3b82f6;
+  --blue-dim:  rgba(59,130,246,0.12);
+  --blue-border: rgba(59,130,246,0.3);
+  --green:     #10b981;
+  --green-dim: rgba(16,185,129,0.12);
+  --green-border: rgba(16,185,129,0.3);
+  --amber:     #f59e0b;
+  --amber-dim: rgba(245,158,11,0.12);
+  --amber-border: rgba(245,158,11,0.3);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ===== LAYOUT ===== */
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 0 40px;
+}
+
+/* ===== HERO HEADER ===== */
+.hero {
+  position: relative;
+  padding: 52px 20px 32px;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(59,130,246,0.18) 0%, transparent 70%),
+              radial-gradient(ellipse 80% 60% at 80% 100%, rgba(16,185,129,0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--blue);
+  font-weight: 600;
+  margin-bottom: 8px;
+  position: relative;
+}
+.hero-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.2;
+  position: relative;
+  background: linear-gradient(135deg, #f0f4ff 40%, #93c5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-sub {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 8px;
+  position: relative;
+}
+
+/* ===== SECTIONS ===== */
+.section {
+  padding: 0 16px;
+  margin-bottom: 12px;
+}
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--card);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.card-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ===== SCENARIO CARDS ===== */
+.scenario-a { border-left: 3px solid var(--blue); }
+.scenario-b { border-left: 3px solid var(--green); }
+.scenario-pension { border-left: 3px solid var(--amber); }
+
+.scenario-label-a { color: var(--blue); }
+.scenario-label-b { color: var(--green); }
+.scenario-label-pension { color: var(--amber); }
+
+/* ===== FORM GRID ===== */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field-label {
+  font-size: 10px;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+.field-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.field-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 10px;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text1);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.field-input:focus { border-color: var(--blue); }
+.field-unit {
+  font-size: 10px;
+  color: var(--text3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ===== GLOBAL SETTINGS ===== */
+.global-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ===== CALC BUTTON ===== */
+.calc-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #1d4ed8, #0f6e56);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  position: relative;
+  overflow: hidden;
+  transition: opacity 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.calc-btn:active { opacity: 0.85; transform: scale(0.99); }
+.calc-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+}
+
+/* ===== RESULTS ===== */
+#results { display: none; }
+
+/* ===== SUMMARY CARDS ===== */
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.summary-card {
+  border-radius: var(--radius-md);
+  padding: 14px 12px;
+}
+.summary-card.a-card {
+  background: var(--blue-dim);
+  border: 1px solid var(--blue-border);
+}
+.summary-card.b-card {
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+}
+.sc-tag { font-size: 10px; font-weight: 700; margin-bottom: 8px; }
+.sc-tag.a { color: var(--blue); }
+.sc-tag.b { color: var(--green); }
+.sc-sub { font-size: 10px; color: var(--text2); margin-bottom: 2px; }
+.sc-value { font-size: 20px; font-weight: 800; letter-spacing: -0.8px; }
+.sc-value.a { color: var(--blue); }
+.sc-value.b { color: var(--green); }
+.sc-th-sub { font-size: 10px; color: var(--text3); margin-top: 6px; }
+.sc-th-val { font-size: 13px; font-weight: 700; }
+.sc-th-val.a { color: #93c5fd; }
+.sc-th-val.b { color: #6ee7b7; }
+
+/* ===== DIFF BOX ===== */
+.diff-box {
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.diff-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+.diff-amount { font-size: 28px; font-weight: 900; letter-spacing: -1px; }
+.diff-who { font-size: 12px; font-weight: 600; margin-top: 4px; }
+.diff-th { font-size: 10px; color: var(--text3); margin-top: 6px; }
+.diff-note { font-size: 10px; color: var(--text3); margin-top: 4px; line-height: 1.6; }
+
+/* ===== CHART CONTAINERS ===== */
+.chart-card {
+  background: var(--card);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.chart-title { font-size: 12px; font-weight: 600; color: var(--text1); margin-bottom: 4px; }
+.chart-note { font-size: 10px; color: var(--text3); margin-bottom: 10px; }
+.chart-wrap { position: relative; height: 220px; }
+
+/* ===== PHASE TABLE ===== */
+.phase-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; }
+thead tr { border-bottom: 1px solid var(--border); }
+th {
+  padding: 8px 6px;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  white-space: nowrap;
+}
+th:first-child { text-align: left; }
+td {
+  padding: 7px 6px;
+  text-align: right;
+  font-size: 11px;
+  white-space: nowrap;
+  border-bottom: 0.5px solid var(--border);
+}
+td:first-child { text-align: left; font-size: 10px; color: var(--text2); }
+tfoot td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  font-weight: 700;
+}
+tfoot td:first-child { font-size: 12px; color: var(--text1); }
+.td-a { color: var(--blue); font-weight: 600; }
+.td-b { color: var(--green); font-weight: 600; }
+.td-dim { color: var(--text3); }
+
+/* ===== FOOTNOTE ===== */
+.footnote {
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.8;
+}
+
+/* ===== SHARE BANNER ===== */
+.share-banner {
+  background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(16,185,129,0.1));
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.share-banner p { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">CAREER INCOME SIMULATOR</div>
+    <h1 class="hero-title">キャリア別<br>生涯収入比較</h1>
+    <p class="hero-sub">SB継続 vs 45歳転職 — どちらが有利か試算します</p>
+  </div>
+
+  <!-- ===== SETTINGS ===== -->
+  <div class="section">
+
+    <!-- 基本設定 -->
+    <div class="card">
+      <div class="card-title">⚙️ 基本設定</div>
+      <div class="global-grid">
+        <div>
+          <div class="field-label">現在の年齢</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-age" value="45" min="30" max="60" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">インフレ率（年）</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-inflation" value="1.0" min="0" max="5" step="0.1" inputmode="decimal">
+            <span class="field-unit">%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- シナリオA -->
+    <div class="card scenario-a">
+      <div class="card-title scenario-label-a">🏢 シナリオA：SBに定年まで継続勤務</div>
+      <div class="form-grid">
+        <div>
+          <div class="field-label">現在の年収</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-a-salary" value="700" inputmode="numeric">
+            <span class="field-unit">万円</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">定年年齢</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-a-retire" value="60" min="55" max="70" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">定年後バイト収入（年）</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-a-part" value="100" inputmode="numeric">
+            <span class="field-unit">万円</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">バイト終了年齢</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-a-partend" value="80" min="60" max="90" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- シナリオB -->
+    <div class="card scenario-b">
+      <div class="card-title scenario-label-b">🔄 シナリオB：45歳で転職（土地家屋調査士補助など）</div>
+      <div class="form-grid">
+        <div>
+          <div class="field-label">転職後の年収</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-b-salary" value="500" inputmode="numeric">
+            <span class="field-unit">万円</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">転職年齢</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-b-changeage" value="45" min="30" max="60" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">就労終了年齢</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-b-workend" value="80" min="55" max="90" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">年収上昇率（年）</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-b-raise" value="1.0" step="0.5" inputmode="decimal">
+            <span class="field-unit">%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 年金設定 -->
+    <div class="card scenario-pension">
+      <div class="card-title scenario-label-pension">🧓 年金設定（共通）</div>
+      <div class="form-grid">
+        <div>
+          <div class="field-label">受給開始年齢</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-pension-start" value="65" min="60" max="75" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">年金受給終了</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-pension-end" value="90" min="80" max="100" inputmode="numeric">
+            <span class="field-unit">歳</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">A：年金月額（SB継続）</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-pension-a" value="20" inputmode="numeric">
+            <span class="field-unit">万円/月</span>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">B：年金月額（転職後）</div>
+          <div class="field-wrap">
+            <input class="field-input" type="number" id="ic-pension-b" value="14" inputmode="numeric">
+            <span class="field-unit">万円/月</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 実行ボタン -->
+    <button class="calc-btn" onclick="calc()">📊 シミュレーション実行</button>
+  </div>
+
+  <!-- ===== RESULTS ===== -->
+  <div id="results">
+    <div class="section">
+
+      <!-- サマリー -->
+      <div class="summary-grid" id="summary-cards"></div>
+
+      <!-- 差額 -->
+      <div id="diff-box" class="diff-box"></div>
+
+      <!-- 年間収入グラフ -->
+      <div class="chart-card">
+        <div class="chart-title">📈 年齢別 年間収入推移</div>
+        <div class="chart-note">就労収入のみ（破線）と年金込み（実線）を表示</div>
+        <div class="chart-wrap"><canvas id="chart-income"></canvas></div>
+      </div>
+
+      <!-- 累積グラフ -->
+      <div class="chart-card">
+        <div class="chart-title">💰 累積収入推移（年金込み）</div>
+        <div class="chart-note">ラインが交差するポイントでBがAを逆転</div>
+        <div class="chart-wrap"><canvas id="chart-cumul"></canvas></div>
+      </div>
+
+      <!-- 手取りグラフ -->
+      <div class="chart-card">
+        <div class="chart-title">✋ 年齢別 手取り推移（概算）</div>
+        <div class="chart-note">社会保険料・所得税・住民税を概算控除</div>
+        <div class="chart-wrap"><canvas id="chart-takehome"></canvas></div>
+      </div>
+
+      <!-- フェーズ表 -->
+      <div class="chart-card">
+        <div class="chart-title">📋 フェーズ別 収入内訳</div>
+        <div class="phase-table-wrap" id="phase-table"></div>
+      </div>
+
+      <!-- 注記 -->
+      <div class="footnote">
+        ※本シミュレーションは概算です。実際の手取りは税制改正・社会保険料率の変更・扶養状況等により異なります。<br>
+        ※定年後のバイト収入は103万円以下なら全額手取り、超える場合は給与所得として概算課税します。<br>
+        ※収入差に加えて、資産運用・生活満足度・健康・やりがいも総合的にご判断ください。
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+Chart.register(ChartDataLabels);
+
+let chartIncome=null, chartCumul=null, chartTakehome=null;
+
+// ===== 税計算 =====
+function icTax(y) {
+  let d = y<=162.5?55:y<=180?y*0.4-10:y<=360?y*0.3+8:y<=660?y*0.2+44:y<=850?y*0.1+110:195;
+  const si = Math.min(y*0.145, 120);
+  const tx = Math.max(y-d-si-48, 0);
+  let it = tx<=195?tx*0.05:tx<=330?195*0.05+(tx-195)*0.1:tx<=695?195*0.05+135*0.1+(tx-330)*0.2:
+           tx<=900?195*0.05+135*0.1+365*0.2+(tx-695)*0.23:tx<=1800?195*0.05+135*0.1+365*0.2+205*0.23+(tx-900)*0.33:
+           195*0.05+135*0.1+365*0.2+205*0.23+900*0.33+(tx-1800)*0.4;
+  it*=1.021;
+  return { takehome: Math.max(y-(it+tx*0.1+si),0) };
+}
+function partTax(y) { return y<=103?y:icTax(y).takehome; }
+function pensionTH(y) {
+  const d=Math.max(y<=330?110:y*0.25+27.5, 110);
+  const tx=Math.max(y-d-48,0);
+  return Math.max(y-tx*0.05*1.021-tx*0.1, 0);
+}
+function fmt(m) {
+  if(m>=10000) return (m/10000).toFixed(1)+'億円';
+  if(m>=1000) return (Math.round(m/100)/10)+'千万円';
+  return Math.round(m)+'万円';
+}
+
+// ===== メイン計算 =====
+function calc() {
+  const curAge    = +document.getElementById('ic-age').value||45;
+  const inflation = (+document.getElementById('ic-inflation').value||1)/100;
+  const aSalary   = +document.getElementById('ic-a-salary').value||700;
+  const aRetire   = +document.getElementById('ic-a-retire').value||60;
+  const aPart     = +document.getElementById('ic-a-part').value||100;
+  const aPartEnd  = +document.getElementById('ic-a-partend').value||80;
+  const bSalary   = +document.getElementById('ic-b-salary').value||500;
+  const bChange   = +document.getElementById('ic-b-changeage').value||45;
+  const bWorkEnd  = +document.getElementById('ic-b-workend').value||80;
+  const bRaise    = (+document.getElementById('ic-b-raise').value||1)/100;
+  const penStart  = +document.getElementById('ic-pension-start').value||65;
+  const penA      = (+document.getElementById('ic-pension-a').value||20)*12;
+  const penB      = (+document.getElementById('ic-pension-b').value||14)*12;
+  const penEnd    = +document.getElementById('ic-pension-end').value||90;
+
+  const endAge = Math.max(aPartEnd, bWorkEnd, penEnd, 90);
+  const ages = [];
+  for(let a=curAge;a<=endAge;a++) ages.push(a);
+
+  const aIn=[], bIn=[], aInP=[], bInP=[], aTH=[], bTH=[], aCum=[], bCum=[];
+  let ac=0, bc=0;
+
+  ages.forEach((age,i) => {
+    // A
+    let aG=0, aPen=0;
+    if(age<aRetire) aG=aSalary*Math.pow(1.005,age-curAge);
+    else if(age<aPartEnd) aG=aPart;
+    if(age>=penStart&&age<=penEnd) aPen=penA;
+    const ath=(age<aRetire?icTax(aG).takehome:partTax(aG))+(aPen>0?pensionTH(aPen):0);
+    aIn.push(aG); aInP.push(aG+aPen); aTH.push(ath);
+    ac+=aG+aPen; aCum.push(ac);
+
+    // B
+    let bG=0, bPen=0;
+    if(age>=bChange&&age<bWorkEnd) bG=bSalary*Math.pow(1+bRaise,age-bChange);
+    if(age>=penStart&&age<=penEnd) bPen=penB;
+    const bth=(bG>0?icTax(bG).takehome:0)+(bPen>0?pensionTH(bPen):0);
+    bIn.push(bG); bInP.push(bG+bPen); bTH.push(bth);
+    bc+=bG+bPen; bCum.push(bc);
+  });
+
+  const aTot=aCum[aCum.length-1], bTot=bCum[bCum.length-1];
+  const aTotTH=aTH.reduce((s,v)=>s+v,0), bTotTH=bTH.reduce((s,v)=>s+v,0);
+  const diff=aTot-bTot, diffTH=aTotTH-bTotTH;
+
+  // 表示
+  document.getElementById('results').style.display='block';
+
+  // サマリーカード
+  document.getElementById('summary-cards').innerHTML=`
+    <div class="summary-card a-card">
+      <div class="sc-tag a">🏢 シナリオA（SB継続）</div>
+      <div class="sc-sub">生涯収入（年金込み）</div>
+      <div class="sc-value a">${fmt(aTot)}</div>
+      <div class="sc-th-sub">手取り概算</div>
+      <div class="sc-th-val a">${fmt(aTotTH)}</div>
+    </div>
+    <div class="summary-card b-card">
+      <div class="sc-tag b">🔄 シナリオB（45歳転職）</div>
+      <div class="sc-sub">生涯収入（年金込み）</div>
+      <div class="sc-value b">${fmt(bTot)}</div>
+      <div class="sc-th-sub">手取り概算</div>
+      <div class="sc-th-val b">${fmt(bTotTH)}</div>
+    </div>`;
+
+  // 差額
+  const win=diff>=0?'A（SB継続）':'B（転職）';
+  const winCol=diff>=0?'var(--blue)':'var(--green)';
+  const winBorder=diff>=0?'var(--blue-border)':'var(--green-border)';
+  const winDim=diff>=0?'var(--blue-dim)':'var(--green-dim)';
+  document.getElementById('diff-box').style.cssText=`background:${winDim};border:2px solid ${winBorder};border-radius:var(--radius-md);padding:16px;text-align:center;margin-bottom:10px`;
+  document.getElementById('diff-box').innerHTML=`
+    <div class="diff-label">生涯収入（年金含む）の差額</div>
+    <div class="diff-amount" style="color:${winCol}">${fmt(Math.abs(diff))}</div>
+    <div class="diff-who" style="color:${winCol}">シナリオ${win}が多い</div>
+    <div class="diff-th">手取りベース差額：${fmt(Math.abs(diffTH))}（${diffTH>=0?'A':'B'}が多い）</div>
+    <div class="diff-note">※収入差に加えて、資産運用・生活満足度・健康面も<br>総合的にご判断ください</div>`;
+
+  // フェーズテーブル
+  const ph1End=penStart-1, ph2End=Math.max(aPartEnd-1,bWorkEnd-1);
+  const phases=[
+    { label:`現役期（${curAge}〜${ph1End}歳）`, s:curAge, e:ph1End },
+    { label:`65歳〜就労終了（A:バイト / B:転職継続＋年金）`, s:penStart, e:ph2End },
+    { label:`就労終了後（年金のみ）`, s:ph2End+1, e:penEnd },
+  ];
+  const rows=phases.map(ph=>{
+    const idx=ages.filter(a=>a>=ph.s&&a<=ph.e);
+    const aS=idx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(aInP[i]||0);},0);
+    const bS=idx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(bInP[i]||0);},0);
+    const aT=idx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(aTH[i]||0);},0);
+    const bT=idx.reduce((s,a)=>{const i=ages.indexOf(a);return s+(bTH[i]||0);},0);
+    return `<tr>
+      <td>${ph.label}</td>
+      <td class="td-a">${fmt(aS)}</td><td class="td-dim">${fmt(aT)}</td>
+      <td class="td-b">${fmt(bS)}</td><td class="td-dim">${fmt(bT)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('phase-table').innerHTML=`
+    <table>
+      <thead><tr>
+        <th style="text-align:left">フェーズ</th>
+        <th style="color:var(--blue)">A収入</th><th>A手取</th>
+        <th style="color:var(--green)">B収入</th><th>B手取</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td>生涯合計</td>
+        <td class="td-a" style="font-size:12px">${fmt(aTot)}</td><td class="td-a">${fmt(aTotTH)}</td>
+        <td class="td-b" style="font-size:12px">${fmt(bTot)}</td><td class="td-b">${fmt(bTotTH)}</td>
+      </tr></tfoot>
+    </table>`;
+
+  // グラフ共通
+  const tickColor='rgba(255,255,255,0.4)';
+  const gridColor='rgba(255,255,255,0.06)';
+  const baseOpts={
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{position:'bottom',labels:{color:'rgba(255,255,255,0.7)',font:{size:10},padding:8,boxWidth:10,usePointStyle:true}},datalabels:{display:false}},
+    scales:{
+      x:{ticks:{color:tickColor,font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false},border:{color:'rgba(255,255,255,0.1)'}},
+      y:{ticks:{callback:v=>Math.round(v)+'万',color:tickColor,font:{size:9}},grid:{color:gridColor},border:{display:false}}
+    }
+  };
+
+  if(chartIncome){chartIncome.destroy();}
+  chartIncome=new Chart(document.getElementById('chart-income'),{type:'line',
+    data:{labels:ages,datasets:[
+      {label:'A（収入+年金）',data:aInP,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.08)',borderWidth:2,pointRadius:1.5,fill:true,tension:0.3},
+      {label:'B（収入+年金）',data:bInP,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.08)',borderWidth:2,pointRadius:1.5,fill:true,tension:0.3},
+      {label:'A就労のみ',data:aIn,borderColor:'#60a5fa',borderWidth:1.5,borderDash:[4,3],pointRadius:0,fill:false,tension:0.3},
+      {label:'B就労のみ',data:bIn,borderColor:'#34d399',borderWidth:1.5,borderDash:[4,3],pointRadius:0,fill:false,tension:0.3},
+    ]},
+    options:{...baseOpts,plugins:{...baseOpts.plugins,tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.round(c.raw)+'万円'}}}},
+    plugins:[ChartDataLabels]
+  });
+
+  if(chartCumul){chartCumul.destroy();}
+  chartCumul=new Chart(document.getElementById('chart-cumul'),{type:'line',
+    data:{labels:ages,datasets:[
+      {label:'A累積',data:aCum,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',borderWidth:2.5,pointRadius:2,fill:true,tension:0.3},
+      {label:'B累積',data:bCum,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',borderWidth:2.5,pointRadius:2,fill:true,tension:0.3},
+    ]},
+    options:{...baseOpts,plugins:{...baseOpts.plugins,tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.round(c.raw)+'万円'}}}},
+    plugins:[ChartDataLabels]
+  });
+
+  if(chartTakehome){chartTakehome.destroy();}
+  chartTakehome=new Chart(document.getElementById('chart-takehome'),{type:'bar',
+    data:{labels:ages,datasets:[
+      {label:'A手取り',data:aTH,backgroundColor:'rgba(59,130,246,0.65)',borderRadius:2},
+      {label:'B手取り',data:bTH,backgroundColor:'rgba(16,185,129,0.65)',borderRadius:2},
+    ]},
+    options:{...baseOpts,plugins:{...baseOpts.plugins,tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.round(c.raw)+'万円'}}}},
+    plugins:[ChartDataLabels]
+  });
+
+  // スクロール
+  setTimeout(()=>document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}),150);
+}
+</script>
+</body>
+</html>
