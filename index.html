@@ -1276,6 +1276,7 @@ function switchTab(tab){
   fab.classList.toggle('hidden',tab!=='manager');
   if(tab==='home')refreshHome();
   if(tab==='portfolio')pfRender();
+  if(tab==='jpstock')jpRenderAll();
 }
 
 // ============================================================
@@ -2455,7 +2456,7 @@ function getFiltered(){
 }
 function setFilter(f){
   activeFilter=f;
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.f===f));
+  document.querySelectorAll('#tab-trend .filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.f===f));
   trRenderCharts();trRenderSummary();trRenderTable();renderComment();
 }
 document.getElementById('csvInput2').addEventListener('change',e=>{Array.from(e.target.files).forEach(f=>trReadFile(f));e.target.value='';});
@@ -3168,15 +3169,6 @@ function jpSwitchSub(name, btn) {
   document.getElementById('jpsub-' + name).classList.add('active');
   jpRenderAll();
 }
-
-// switchTab に日本株タブのフック
-const _origSwitchTab = switchTab;
-function switchTab(tab) {
-  _origSwitchTab(tab);
-  if (tab === 'jpstock') jpRenderAll();
-}
-
-// --- レンダリング ---
 function jpRenderAll() {
   jpRenderHome();
   jpRenderHold();
@@ -3236,7 +3228,7 @@ function jpRenderHome() {
 let jpHoldFilter = 'all';
 function jpSetFilter(f, btn) {
   jpHoldFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#tab-jpstock .filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   jpRenderHold();
 }
