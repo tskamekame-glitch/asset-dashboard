@@ -1579,13 +1579,14 @@ function amMaybeInit(){
   else{amShowLogin();}
 }
 window.addEventListener('load',()=>{
+  setTimeout(()=>{if(!amIsOnline&&document.getElementById('managerLogin').style.display==='none'&&document.getElementById('managerMain').style.display==='none')amShowLogin();},5000);
   const s1=document.createElement('script');s1.src='https://apis.google.com/js/api.js';
   s1.onload=()=>{try{gapi.load('client',async()=>{try{
     await gapi.client.init({discoveryDocs:['https://sheets.googleapis.com/$discovery/rest?version=v4']});
     amGapiInited=true;
     if(amGisInited)amMaybeInit();
-  }catch(e){useOffline();}});}catch(e){useOffline();}};
-  s1.onerror=()=>useOffline();
+  }catch(e){amShowLogin();}});}catch(e){amShowLogin();}};
+  s1.onerror=()=>amShowLogin();
   document.head.appendChild(s1);
   const s2=document.createElement('script');s2.src='https://accounts.google.com/gsi/client';
   s2.onload=()=>{try{
@@ -1595,8 +1596,8 @@ window.addEventListener('load',()=>{
     });
     amGisInited=true;
     if(amGapiInited)amMaybeInit();
-  }catch(e){useOffline();}};
-  s2.onerror=()=>{if(!amIsOnline)useOffline();};
+  }catch(e){amShowLogin();}};
+  s2.onerror=()=>{if(!amIsOnline)amShowLogin();};
   document.head.appendChild(s2);
 });
 
