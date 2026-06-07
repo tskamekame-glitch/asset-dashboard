@@ -3821,26 +3821,31 @@ async function wlEnsureSheet(){
     if(!has){await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:[{addSheet:{properties:{title:'watchlist'}}}]}});}
   }catch(e){console.warn('wl sheet ensure error',e);}
 }
+function wlIsGoogleReady(){
+  // amIsOnlineとamSpreadsheetIdが有効かを毎回チェック
+  return typeof amIsOnline!=='undefined' && amIsOnline===true
+      && typeof amSpreadsheetId!=='undefined' && amSpreadsheetId!=null;
+}
 async function wlSyncToSheet(){
-  if(!window.amIsOnline||!window.amSpreadsheetId)return;
+  if(!wlIsGoogleReady()){showToast('⚠ Google連携でサインイン後にお試しください');return;}
   try{
     await wlEnsureSheet();
     const data=wlLoad();
     const header=[['id','code','name','shares','limit','current','target','account','status','priority','memo']];
     const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.target||'',s.account,s.status,s.priority,s.memo||'']);
     const values=[...header,...rows];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:window.amSpreadsheetId,range:`watchlist!A1:K${values.length+5}`,valueInputOption:'RAW',resource:{values}});
-    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:window.amSpreadsheetId,range:`watchlist!A${data.length+2}:K1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`watchlist!A1:K${values.length+5}`,valueInputOption:'RAW',resource:{values}});
+    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`watchlist!A${data.length+2}:K1000`});
     showToast('👀 購入検討リストを同期しました');
   }catch(e){console.warn('wl sync err',e);showToast('⚠ Sheets同期失敗（ローカル保存済み）');}
 }
 async function wlSyncFromSheet(){
-  if(!window.amIsOnline||!window.amSpreadsheetId){showToast('⚠ まずGoogle連携でサインインしてください');return;}
+  if(!wlIsGoogleReady()){showToast('⚠ 資産管理タブでGoogleサインイン後にお試しください');return;}
   try{
     await wlEnsureSheet();
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:window.amSpreadsheetId,range:'watchlist!A2:K1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'watchlist!A2:K1000'});
     const rows=res.result.values||[];
-    if(!rows.length){showToast('シートにデータがまだありません');return;}
+    if(!rows.length){showToast('Sheetsにデータがまだありません。まずMacで↑保存してください');return;}
     const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,target:parseFloat(r[6])||null,account:r[7]||'特定',status:r[8]||'購入検討',priority:parseInt(r[9])||3,memo:r[10]||''})).filter(x=>x.name);
     wlSaveData(data);wlRender();showToast(`👀 ${data.length}件を読み込みました`);
   }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
@@ -3850,7 +3855,7 @@ async function wlSyncFromSheet(){
 const _origSwitch=window.switchTab;
 window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
-  if(t==='watchlist'){wlRender();if(window.amIsOnline&&window.amSpreadsheetId)wlSyncFromSheet();}
+  if(t==='watchlist'){wlRender();if(wlIsGoogleReady())wlSyncFromSheet();}
 };
 wlRender();
 </script>
