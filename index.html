@@ -3629,6 +3629,7 @@ function jpDeleteSell(id) {
         <tr>
           <th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
           <th>指値</th><th>現在値</th><th>乖離率</th><th>合計金額</th>
+          <th>売却価格</th><th>売却益</th>
           <th>口座</th><th>状況</th><th>操作</th>
         </tr>
       </thead>
@@ -3670,6 +3671,7 @@ function jpDeleteSell(id) {
         <option value="4">4 — 長期検討</option>
       </select>
     </div>
+    <div class="wl-frow"><label>売却価格（円）</label><input id="wf-sellprice" type="number" placeholder="例: 10641" inputmode="numeric"></div>
     <div class="wl-frow"><label>メモ</label><input id="wf-memo" placeholder="例: 業績確認後に購入"></div>
     <div class="wl-mbtns">
       <button class="wl-mbtn wl-mbtn-d" id="wl-del-btn" onclick="wlDelete()" style="display:none">削除</button>
@@ -3723,12 +3725,21 @@ function wlRender(){
     <div class="wl-sc"><div class="sl">今日購入予定</div><div class="sv" style="color:#A32D2D">${waitCnt}</div></div>
   `;
   const tbody=document.getElementById('wl-tbody');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="11" class="wl-empty">銘柄がありません</td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="13" class="wl-empty">銘柄がありません</td></tr>`;return;}
   tbody.innerHTML=data.map(s=>{
     const amt=(s.limit||0)*s.shares;
     const diff=s.current&&s.limit?((s.current-s.limit)/s.limit*100):null;
     const diffStr=diff==null?'—':diff>0?`<span style="color:#A32D2D">+${diff.toFixed(1)}%</span>`:`<span style="color:#3B6D11">${diff.toFixed(1)}%</span>`;
     const tgt=s.current&&s.target?`<div style="font-size:10px;color:#3B6D11">目標+${((s.target-s.current)/s.current*100).toFixed(0)}%</div>`:'';
+    // 売却益計算
+    const sellAmt=s.sellPrice?s.sellPrice*s.shares:null;
+    const buyAmt=s.limit?s.limit*s.shares:null;
+    const gain=sellAmt&&buyAmt?sellAmt-buyAmt:null;
+    const tax=gain&&gain>0&&s.account!=='NISA成長'&&s.account!=='NISA積立'?gain*0.20315:0;
+    const gainNet=gain!=null?gain-tax:null;
+    const gainStr=gain==null?'—':gain>=0
+      ?`<span style="color:#3B6D11;font-weight:500">+${wlFmt(gainNet)}</span><div style="font-size:10px;color:var(--text2)">${s.account.includes('NISA')?'非課税':'税後'}</div>`
+      :`<span style="color:#A32D2D;font-weight:500">${wlFmt(gainNet)}</span>`;
     return `<tr>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2)">${s.memo}</div>`:''}</td>
@@ -3738,6 +3749,8 @@ function wlRender(){
       <td><input class="wl-price-inp" type="number" value="${s.current||''}" placeholder="入力" onchange="wlUpdatePrice('${s.id}',this.value)">${tgt}</td>
       <td>${diffStr}</td>
       <td style="font-weight:500">${wlFmt(amt)}</td>
+      <td><input class="wl-price-inp" type="number" value="${s.sellPrice||''}" placeholder="売却価格" onchange="wlUpdateSellPrice('${s.id}',this.value)"></td>
+      <td>${gainStr}</td>
       <td>${wlAcctBadge(s.account)}</td>
       <td>${wlStatusBadge(s.status)}</td>
       <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
@@ -3749,13 +3762,17 @@ function wlUpdatePrice(id,val){
   const d=wlLoad();const item=d.find(x=>x.id===id);
   if(item){item.current=parseFloat(val)||null;wlSaveData(d);wlRender();}
 }
+function wlUpdateSellPrice(id,val){
+  const d=wlLoad();const item=d.find(x=>x.id===id);
+  if(item){item.sellPrice=parseFloat(val)||null;wlSaveData(d);wlRender();}
+}
 
 function wlOpenAdd(){
   wlEditId=null;
   document.getElementById('wl-modal-title').textContent='銘柄を追加';
   document.getElementById('wl-del-btn').style.display='none';
   ['wf-code','wf-name','wf-memo'].forEach(i=>document.getElementById(i).value='');
-  ['wf-shares','wf-limit','wf-current','wf-target'].forEach(i=>document.getElementById(i).value='');
+  ['wf-shares','wf-limit','wf-current','wf-target','wf-sellprice'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('wf-account').value='特定';
   document.getElementById('wf-status').value='購入検討';
   document.getElementById('wf-priority').value='3';
@@ -3773,6 +3790,7 @@ function wlOpenEdit(id){
   document.getElementById('wf-limit').value=s.limit||'';
   document.getElementById('wf-current').value=s.current||'';
   document.getElementById('wf-target').value=s.target||'';
+  document.getElementById('wf-sellprice').value=s.sellPrice||'';
   document.getElementById('wf-account').value=s.account;
   document.getElementById('wf-status').value=s.status;
   document.getElementById('wf-priority').value=s.priority;
@@ -3798,6 +3816,7 @@ function wlSave(){
     status:document.getElementById('wf-status').value,
     priority:parseInt(document.getElementById('wf-priority').value)||3,
     memo:document.getElementById('wf-memo').value.trim(),
+    sellPrice:parseFloat(document.getElementById('wf-sellprice').value)||null,
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
@@ -3840,11 +3859,11 @@ async function wlSyncToSheet(){
     if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
     await wlEnsureWatchlistTab(sid);
     const data=wlLoad();
-    const hdr=[['id','code','name','shares','limit','current','target','account','status','priority','memo']];
-    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.target||'',s.account,s.status,s.priority,s.memo||'']);
+    const hdr=[['id','code','name','shares','limit','current','target','account','status','priority','memo','sellPrice']];
+    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.target||'',s.account,s.status,s.priority,s.memo||'',s.sellPrice||'']);
     const vals=[...hdr,...rows];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:K${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
-    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:K1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:L${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
+    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:L1000`});
     showToast('✅ 保存しました');
   }catch(e){console.warn('wl sync err',e);showToast('⚠ 保存失敗');}
 }
@@ -3855,10 +3874,10 @@ async function wlSyncFromSheet(){
     const sid=await wlGetSheetId();
     if(!sid){showToast('⚠ まずMacで↑保存してください');return;}
     await wlEnsureWatchlistTab(sid);
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:K1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:L1000'});
     const rows=res.result.values||[];
     if(!rows.length){showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');return;}
-    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,target:parseFloat(r[6])||null,account:r[7]||'特定',status:r[8]||'購入検討',priority:parseInt(r[9])||3,memo:r[10]||''})).filter(x=>x.name);
+    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,target:parseFloat(r[6])||null,account:r[7]||'特定',status:r[8]||'購入検討',priority:parseInt(r[9])||3,memo:r[10]||'',sellPrice:parseFloat(r[11])||null})).filter(x=>x.name);
     wlSaveData(data);wlRender();showToast(`✅ ${data.length}件を読み込みました`);
   }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
 }
