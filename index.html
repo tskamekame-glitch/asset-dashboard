@@ -512,6 +512,7 @@ tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-tab="jpstock" onclick="switchTab('jpstock')"><span class="ni">📈</span>日本株</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
+  <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>購入検討</button>
 </nav>
 
 <!-- ============================================================
@@ -3563,6 +3564,254 @@ function jpDeleteSell(id) {
   showToast('🗑️ 削除しました');
 }
 
+</script>
+
+<!-- ========== 購入検討パネル ========== -->
+<style>
+#tab-watchlist{padding:12px 14px 80px}
+.wl-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.wl-title{font-size:15px;font-weight:500}
+.wl-add-btn{display:flex;align-items:center;gap:5px;padding:6px 14px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px;cursor:pointer}
+.wl-add-btn:active{background:var(--bg2)}
+.wl-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.wl-sc{background:var(--bg2);border-radius:8px;padding:8px 10px;text-align:center}
+.wl-sc .sl{font-size:10px;color:var(--text2);margin-bottom:3px}
+.wl-sc .sv{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.wl-note{font-size:11px;color:var(--text3);margin-bottom:8px}
+.wl-tbl-wrap{overflow-x:auto;border:0.5px solid var(--border);border-radius:10px;background:var(--bg)}
+.wl-tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:620px}
+.wl-tbl th{font-size:10px;font-weight:500;color:var(--text2);padding:7px 9px;border-bottom:0.5px solid var(--border);background:var(--bg2);text-align:left;white-space:nowrap}
+.wl-tbl td{padding:8px 9px;border-bottom:0.5px solid var(--border);vertical-align:middle;white-space:nowrap}
+.wl-tbl tr:last-child td{border-bottom:none}
+.wl-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;padding:2px 7px;border-radius:999px}
+.wl-b-done{background:#EAF3DE;color:#27500A}
+.wl-b-order{background:#E6F1FB;color:#0C447C}
+.wl-b-wait{background:#FAEEDA;color:#633806}
+.wl-b-plan{background:#F1EFE8;color:#444441}
+.wl-b-nisa{background:#EEEDFE;color:#3C3489}
+.wl-b-toku{background:#F1EFE8;color:#444441}
+.wl-pri{font-size:11px;font-weight:500}
+.wl-price-inp{width:85px;padding:3px 7px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:12px;text-align:right}
+.wl-edit-btn{padding:3px 8px;border:0.5px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);font-size:11px;cursor:pointer}
+.wl-edit-btn:active{background:var(--bg2)}
+/* modal */
+.wl-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center}
+.wl-modal-bg.open{display:flex}
+.wl-modal{background:var(--bg);border-radius:14px;border:0.5px solid var(--border);padding:1.25rem;width:min(420px,92vw);max-height:90vh;overflow-y:auto}
+.wl-modal h3{font-size:14px;font-weight:500;margin-bottom:14px}
+.wl-frow{margin-bottom:10px}
+.wl-frow label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px}
+.wl-frow input,.wl-frow select{width:100%;padding:7px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+.wl-fg2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wl-mbtns{display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+.wl-mbtn{padding:7px 16px;border-radius:8px;border:0.5px solid var(--border2);background:transparent;color:var(--text);font-family:inherit;font-size:13px;cursor:pointer}
+.wl-mbtn:active{background:var(--bg2)}
+.wl-mbtn-p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.wl-mbtn-d{color:#c0392b;border-color:#f7c1c1}
+.wl-mbtn-d:active{background:#fcebeb}
+.wl-empty{text-align:center;padding:2rem;color:var(--text2);font-size:13px}
+</style>
+
+<div class="panel" id="tab-watchlist">
+  <div class="wl-top">
+    <span class="wl-title">👀 購入検討リスト</span>
+    <button class="wl-add-btn" onclick="wlOpenAdd()">＋ 銘柄追加</button>
+  </div>
+  <p class="wl-note">現在値は手動入力。状況・優先度を随時更新してください。</p>
+  <div class="wl-summary" id="wl-summary"></div>
+  <div class="wl-tbl-wrap">
+    <table class="wl-tbl">
+      <thead>
+        <tr>
+          <th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
+          <th>指値</th><th>現在値</th><th>乖離率</th><th>合計金額</th>
+          <th>口座</th><th>状況</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="wl-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="wl-modal-bg" id="wl-modal">
+  <div class="wl-modal">
+    <h3 id="wl-modal-title">銘柄を追加</h3>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>銘柄コード</label><input id="wf-code" placeholder="例: 2413" maxlength="6" inputmode="numeric"></div>
+      <div class="wl-frow"><label>銘柄名</label><input id="wf-name" placeholder="例: エムスリー"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>株数</label><input id="wf-shares" type="number" placeholder="500" min="1" inputmode="numeric"></div>
+      <div class="wl-frow"><label>指値（円）</label><input id="wf-limit" type="number" placeholder="1550" inputmode="numeric"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>現在値（円）</label><input id="wf-current" type="number" placeholder="1590" inputmode="numeric"></div>
+      <div class="wl-frow"><label>目標株価（円）</label><input id="wf-target" type="number" placeholder="2473" inputmode="numeric"></div>
+    </div>
+    <div class="wl-frow"><label>口座</label>
+      <select id="wf-account">
+        <option>特定</option><option>NISA成長</option><option>NISA積立</option><option>一般</option>
+      </select>
+    </div>
+    <div class="wl-frow"><label>状況</label>
+      <select id="wf-status">
+        <option>注文待ち</option><option>指値注文中</option><option>購入済</option><option>購入検討</option><option>様子見</option>
+      </select>
+    </div>
+    <div class="wl-frow"><label>優先順位</label>
+      <select id="wf-priority">
+        <option value="1">1 — 今日購入</option>
+        <option value="2">2 — 今週</option>
+        <option value="3" selected>3 — 後日</option>
+        <option value="4">4 — 長期検討</option>
+      </select>
+    </div>
+    <div class="wl-frow"><label>メモ</label><input id="wf-memo" placeholder="例: 業績確認後に購入"></div>
+    <div class="wl-mbtns">
+      <button class="wl-mbtn wl-mbtn-d" id="wl-del-btn" onclick="wlDelete()" style="display:none">削除</button>
+      <button class="wl-mbtn" onclick="wlCloseModal()">キャンセル</button>
+      <button class="wl-mbtn wl-mbtn-p" onclick="wlSave()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 購入検討リスト JS ==========
+const WL_KEY = 'watchlist_v2';
+let wlEditId = null;
+
+const WL_DEFAULT = [
+  {id:'w1',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:7350,target:7307,account:'特定',status:'指値注文中',priority:2,memo:'今週中指値'},
+  {id:'w2',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,target:2473,account:'NISA成長',status:'注文待ち',priority:1,memo:'今日購入予定'},
+  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3200,current:3400,target:4689,account:'特定',status:'注文待ち',priority:1,memo:'今日購入予定'},
+  {id:'w4',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:4745,target:6130,account:'特定',status:'注文待ち',priority:1,memo:'今日購入予定'},
+  {id:'w5',code:'7974',name:'任天堂',shares:100,limit:6800,current:7350,target:10641,account:'特定',status:'指値注文中',priority:3,memo:'2027年業績確認後が理想'},
+];
+
+function wlLoad(){try{const d=localStorage.getItem(WL_KEY);return d?JSON.parse(d):WL_DEFAULT;}catch{return WL_DEFAULT;}}
+function wlSaveData(d){try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}}
+function wlUID(){return 'w'+Date.now()+Math.random().toString(36).slice(2,5);}
+function wlFmt(n){if(n==null)return '—';const v=Math.round(n);return v>=10000?'¥'+(v/10000).toFixed(1)+'万':'¥'+v.toLocaleString();}
+
+function wlStatusBadge(s){
+  const m={'購入済':'wl-b-done','指値注文中':'wl-b-order','注文待ち':'wl-b-wait','購入検討':'wl-b-plan','様子見':'wl-b-plan'};
+  return `<span class="wl-badge ${m[s]||'wl-b-plan'}">${s}</span>`;
+}
+function wlAcctBadge(a){
+  return `<span class="wl-badge ${a.includes('NISA')?'wl-b-nisa':'wl-b-toku'}">${a}</span>`;
+}
+function wlPriColor(p){return{1:'#A32D2D',2:'#854F0B',3:'#185FA5',4:'#888780'}[p]||'#888';}
+function wlPriLabel(p){return{1:'今日',2:'今週',3:'後日',4:'長期'}[p]||p;}
+
+function wlRender(){
+  const data=wlLoad().sort((a,b)=>a.priority-b.priority);
+  let totalAmt=0,orderCnt=0,waitCnt=0,doneCnt=0;
+  data.forEach(s=>{
+    totalAmt+=(s.limit||s.current||0)*s.shares;
+    if(s.status==='指値注文中')orderCnt++;
+    if(s.status==='注文待ち')waitCnt++;
+    if(s.status==='購入済')doneCnt++;
+  });
+  document.getElementById('wl-summary').innerHTML=`
+    <div class="wl-sc"><div class="sl">銘柄数</div><div class="sv">${data.length}</div></div>
+    <div class="wl-sc"><div class="sl">合計予定</div><div class="sv" style="font-size:12px">${wlFmt(totalAmt)}</div></div>
+    <div class="wl-sc"><div class="sl">指値注文中</div><div class="sv" style="color:#185FA5">${orderCnt}</div></div>
+    <div class="wl-sc"><div class="sl">今日購入予定</div><div class="sv" style="color:#A32D2D">${waitCnt}</div></div>
+  `;
+  const tbody=document.getElementById('wl-tbody');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="11" class="wl-empty">銘柄がありません</td></tr>`;return;}
+  tbody.innerHTML=data.map(s=>{
+    const amt=(s.limit||0)*s.shares;
+    const diff=s.current&&s.limit?((s.current-s.limit)/s.limit*100):null;
+    const diffStr=diff==null?'—':diff>0?`<span style="color:#A32D2D">+${diff.toFixed(1)}%</span>`:`<span style="color:#3B6D11">${diff.toFixed(1)}%</span>`;
+    const tgt=s.current&&s.target?`<div style="font-size:10px;color:#3B6D11">目標+${((s.target-s.current)/s.current*100).toFixed(0)}%</div>`:'';
+    return `<tr>
+      <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
+      <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2)">${s.memo}</div>`:''}</td>
+      <td style="color:var(--text2)">${s.code||'—'}</td>
+      <td>${(s.shares||0).toLocaleString()}株</td>
+      <td style="font-weight:500">${wlFmt(s.limit)}</td>
+      <td><input class="wl-price-inp" type="number" value="${s.current||''}" placeholder="入力" onchange="wlUpdatePrice('${s.id}',this.value)">${tgt}</td>
+      <td>${diffStr}</td>
+      <td style="font-weight:500">${wlFmt(amt)}</td>
+      <td>${wlAcctBadge(s.account)}</td>
+      <td>${wlStatusBadge(s.status)}</td>
+      <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function wlUpdatePrice(id,val){
+  const d=wlLoad();const item=d.find(x=>x.id===id);
+  if(item){item.current=parseFloat(val)||null;wlSaveData(d);wlRender();}
+}
+
+function wlOpenAdd(){
+  wlEditId=null;
+  document.getElementById('wl-modal-title').textContent='銘柄を追加';
+  document.getElementById('wl-del-btn').style.display='none';
+  ['wf-code','wf-name','wf-memo'].forEach(i=>document.getElementById(i).value='');
+  ['wf-shares','wf-limit','wf-current','wf-target'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('wf-account').value='特定';
+  document.getElementById('wf-status').value='購入検討';
+  document.getElementById('wf-priority').value='3';
+  document.getElementById('wl-modal').classList.add('open');
+}
+
+function wlOpenEdit(id){
+  const d=wlLoad();const s=d.find(x=>x.id===id);if(!s)return;
+  wlEditId=id;
+  document.getElementById('wl-modal-title').textContent='銘柄を編集';
+  document.getElementById('wl-del-btn').style.display='inline-block';
+  document.getElementById('wf-code').value=s.code||'';
+  document.getElementById('wf-name').value=s.name;
+  document.getElementById('wf-shares').value=s.shares;
+  document.getElementById('wf-limit').value=s.limit||'';
+  document.getElementById('wf-current').value=s.current||'';
+  document.getElementById('wf-target').value=s.target||'';
+  document.getElementById('wf-account').value=s.account;
+  document.getElementById('wf-status').value=s.status;
+  document.getElementById('wf-priority').value=s.priority;
+  document.getElementById('wf-memo').value=s.memo||'';
+  document.getElementById('wl-modal').classList.add('open');
+}
+
+function wlCloseModal(){document.getElementById('wl-modal').classList.remove('open');}
+
+function wlSave(){
+  const name=document.getElementById('wf-name').value.trim();
+  const shares=parseFloat(document.getElementById('wf-shares').value);
+  if(!name||!shares){alert('銘柄名と株数は必須です');return;}
+  const d=wlLoad();
+  const item={
+    id:wlEditId||wlUID(),
+    code:document.getElementById('wf-code').value.trim(),
+    name,shares,
+    limit:parseFloat(document.getElementById('wf-limit').value)||null,
+    current:parseFloat(document.getElementById('wf-current').value)||null,
+    target:parseFloat(document.getElementById('wf-target').value)||null,
+    account:document.getElementById('wf-account').value,
+    status:document.getElementById('wf-status').value,
+    priority:parseInt(document.getElementById('wf-priority').value)||3,
+    memo:document.getElementById('wf-memo').value.trim(),
+  };
+  if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
+  else{d.push(item);}
+  wlSaveData(d);wlCloseModal();wlRender();
+}
+
+function wlDelete(){
+  if(!wlEditId||!confirm('この銘柄を削除しますか？'))return;
+  wlSaveData(wlLoad().filter(x=>x.id!==wlEditId));
+  wlCloseModal();wlRender();
+}
+
+document.getElementById('wl-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)wlCloseModal();});
+
+// タブ切り替え時にレンダリング
+const _origSwitch=window.switchTab;
+window.switchTab=function(t){_origSwitch&&_origSwitch(t);if(t==='watchlist')wlRender();};
+wlRender();
 </script>
 </body>
 </html>
