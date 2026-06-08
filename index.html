@@ -3693,7 +3693,7 @@ function jpDeleteSell(id) {
 
 <script>
 // ========== 購入検討リスト JS ==========
-const WL_KEY = 'watchlist_v2';
+const WL_KEY = 'watchlist_v3';
 let wlEditId = null;
 
 const WL_DEFAULT = [
@@ -3712,7 +3712,21 @@ const WL_DEFAULT = [
   {id:'w13',code:'9984',name:'SBG',shares:100,limit:null,current:7400,sell1:8000,sell2:8500,sell3:9700,target:6829,per:null,pbr:null,account:'野村',status:'売却候補',priority:4,memo:'⚠️目標超過20%・高値圏で利確'},
 ];
 
-function wlLoad(){try{const d=localStorage.getItem(WL_KEY);return d?JSON.parse(d):WL_DEFAULT;}catch{return WL_DEFAULT;}}
+function wlLoad(){
+  try{
+    const d=localStorage.getItem(WL_KEY);
+    if(!d)return WL_DEFAULT;
+    const arr=JSON.parse(d);
+    // sell1/sell2/sell3/per/pbrが欠けている場合はデフォルトから補完
+    return arr.map(s=>{
+      if(s.sell2==null||s.sell2===undefined){
+        const def=WL_DEFAULT.find(x=>x.code===s.code);
+        if(def){s.sell1=s.sell1||def.sell1;s.sell2=s.sell2||def.sell2;s.sell3=s.sell3||def.sell3;s.target=s.target||def.target;s.per=s.per||def.per;s.pbr=s.pbr||def.pbr;}
+      }
+      return s;
+    });
+  }catch{return WL_DEFAULT;}
+}
 function wlSaveData(d){try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}}
 function wlUID(){return 'w'+Date.now()+Math.random().toString(36).slice(2,5);}
 function wlFmt(n){if(n==null)return '—';const v=Math.round(n);return v>=10000?'¥'+(v/10000).toFixed(1)+'万':'¥'+v.toLocaleString();}
