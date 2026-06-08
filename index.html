@@ -3628,9 +3628,11 @@ function jpDeleteSell(id) {
       <thead>
         <tr>
           <th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
-          <th>指値</th><th>現在値</th><th>乖離率</th><th>合計金額</th>
-          <th>売却価格</th><th>売却益</th>
-          <th>口座</th><th>状況</th><th>操作</th>
+          <th>指値</th><th>現在値</th><th>乖離率</th><th>合計</th>
+          <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
+          <th>目標株価</th><th>上昇余地</th>
+          <th>理論PER</th><th>理論PBR</th>
+          <th>売却益(税後)</th><th>口座</th><th>状況</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="wl-tbody"></tbody>
@@ -3671,7 +3673,15 @@ function jpDeleteSell(id) {
         <option value="4">4 — 長期検討</option>
       </select>
     </div>
-    <div class="wl-frow"><label>売却価格（円）</label><input id="wf-sellprice" type="number" placeholder="例: 10641" inputmode="numeric"></div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>売値①堅実（円）</label><input id="wf-sell1" type="number" placeholder="例: 2000" inputmode="numeric"></div>
+      <div class="wl-frow"><label>売値②本命（円）</label><input id="wf-sell2" type="number" placeholder="例: 2473" inputmode="numeric"></div>
+    </div>
+    <div class="wl-frow"><label>売値③強気（円）</label><input id="wf-sell3" type="number" placeholder="例: 3720" inputmode="numeric"></div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>理論株価PER（円）</label><input id="wf-per" type="number" placeholder="例: 1800" inputmode="numeric"></div>
+      <div class="wl-frow"><label>理論株価PBR（円）</label><input id="wf-pbr" type="number" placeholder="例: 1200" inputmode="numeric"></div>
+    </div>
     <div class="wl-frow"><label>メモ</label><input id="wf-memo" placeholder="例: 業績確認後に購入"></div>
     <div class="wl-mbtns">
       <button class="wl-mbtn wl-mbtn-d" id="wl-del-btn" onclick="wlDelete()" style="display:none">削除</button>
@@ -3687,11 +3697,19 @@ const WL_KEY = 'watchlist_v2';
 let wlEditId = null;
 
 const WL_DEFAULT = [
-  {id:'w1',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:7350,target:7307,account:'特定',status:'指値注文中',priority:2,memo:'今週中指値'},
-  {id:'w2',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,target:2473,account:'NISA成長',status:'注文待ち',priority:1,memo:'今日購入予定'},
-  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3200,current:3400,target:4689,account:'特定',status:'注文待ち',priority:1,memo:'今日購入予定'},
-  {id:'w4',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:4745,target:6130,account:'特定',status:'注文待ち',priority:1,memo:'今日購入予定'},
-  {id:'w5',code:'7974',name:'任天堂',shares:100,limit:6800,current:7350,target:10641,account:'特定',status:'指値注文中',priority:3,memo:'2027年業績確認後が理想'},
+  {id:'w1',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,sell1:2000,sell2:2473,sell3:3720,target:2473,per:1800,pbr:1200,account:'NISA成長',status:'注文待ち',priority:1,memo:'医療DX独占・来期増益'},
+  {id:'w2',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:5032,sell1:5500,sell2:6137,sell3:7900,target:6137,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'配当4.2%・来期+37%増益'},
+  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3100,current:3508,sell1:4000,sell2:4689,sell3:5000,target:4689,per:null,pbr:3410,account:'特定',status:'注文待ち',priority:1,memo:'特損一過性・91%買い推奨'},
+  {id:'w4',code:'5020',name:'エネオス',shares:200,limit:1200,current:1301,sell1:1400,sell2:1578,sell3:1800,target:1578,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'来期+173%増益・1単元12万'},
+  {id:'w5',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:6863,sell1:7307,sell2:8000,sell3:8600,target:7307,per:6951,pbr:6689,account:'特定',status:'指値注文中',priority:2,memo:'▲6.6%急落・TOB5235円サポート'},
+  {id:'w6',code:'7974',name:'任天堂',shares:100,limit:6800,current:7697,sell1:9000,sell2:10641,sell3:14200,target:10641,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'▲50%押し目・2027年業績確認後'},
+  {id:'w7',code:'5016',name:'JX金属',shares:100,limit:3400,current:3760,sell1:4079,sell2:5200,sell3:5828,target:4079,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'AI半導体薄膜・営業益+45%'},
+  {id:'w8',code:'9104',name:'商船三井',shares:100,limit:5200,current:5500,sell1:5800,sell2:6500,sell3:7500,target:6500,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・タンカー首位'},
+  {id:'w9',code:'1605',name:'INPEX',shares:100,limit:3500,current:3700,sell1:4000,sell2:4500,sell3:5000,target:4009,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・増配発表・原油LNG'},
+  {id:'w10',code:'7012',name:'川崎重工業',shares:100,limit:2500,current:2754,sell1:3000,sell2:3758,sell3:4000,target:3758,per:3426,pbr:3461,account:'特定',status:'様子見',priority:3,memo:'防衛・水素・ロボット長期テーマ'},
+  {id:'w11',code:'7201',name:'日産自動車',shares:100,limit:300,current:339,sell1:380,sell2:412,sell3:466,target:412,per:null,pbr:null,account:'特定',status:'様子見',priority:3,memo:'赤字・無配・様子見'},
+  {id:'w12',code:'9434',name:'SBKK',shares:100,limit:null,current:211,sell1:230,sell2:242,sell3:270,target:242,per:null,pbr:null,account:'みずほ',status:'売却候補',priority:4,memo:'配当4.5%・230〜242円で売却'},
+  {id:'w13',code:'9984',name:'SBG',shares:100,limit:null,current:7400,sell1:8000,sell2:8500,sell3:9700,target:6829,per:null,pbr:null,account:'野村',status:'売却候補',priority:4,memo:'⚠️目標超過20%・高値圏で利確'},
 ];
 
 function wlLoad(){try{const d=localStorage.getItem(WL_KEY);return d?JSON.parse(d):WL_DEFAULT;}catch{return WL_DEFAULT;}}
@@ -3725,14 +3743,19 @@ function wlRender(){
     <div class="wl-sc"><div class="sl">今日購入予定</div><div class="sv" style="color:#A32D2D">${waitCnt}</div></div>
   `;
   const tbody=document.getElementById('wl-tbody');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="13" class="wl-empty">銘柄がありません</td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="19" class="wl-empty">銘柄がありません</td></tr>`;return;}
   tbody.innerHTML=data.map(s=>{
     const amt=(s.limit||0)*s.shares;
     const diff=s.current&&s.limit?((s.current-s.limit)/s.limit*100):null;
-    const diffStr=diff==null?'—':diff>0?`<span style="color:#A32D2D">+${diff.toFixed(1)}%</span>`:`<span style="color:#3B6D11">${diff.toFixed(1)}%</span>`;
-    const tgt=s.current&&s.target?`<div style="font-size:10px;color:#3B6D11">目標+${((s.target-s.current)/s.current*100).toFixed(0)}%</div>`:'';
-    // 売却益計算
-    const sellAmt=s.sellPrice?s.sellPrice*s.shares:null;
+    const diffStr=diff==null?'—':diff>0?`<span style="color:#A32D2D;font-weight:500">+${diff.toFixed(1)}%</span>`:`<span style="color:#3B6D11;font-weight:500">${diff.toFixed(1)}%</span>`;
+    // 上昇余地（現在値→目標株価）
+    const upside=s.current&&s.target?((s.target-s.current)/s.current*100):null;
+    const upStr=upside==null?'—':upside>30?`<span style="color:#3B6D11;font-weight:500">+${upside.toFixed(1)}%</span>`:upside>10?`<span style="color:#854F0B;font-weight:500">+${upside.toFixed(1)}%</span>`:`<span style="color:#A32D2D;font-weight:500">${upside.toFixed(1)}%</span>`;
+    // 理論株価
+    const perStr=s.per?`<span style="color:${s.current>s.per?'#A32D2D':'#3B6D11'};font-weight:500">${wlFmt(s.per)}</span>`:'—';
+    const pbrStr=s.pbr?`<span style="color:${s.current>s.pbr?'#A32D2D':'#3B6D11'};font-weight:500">${wlFmt(s.pbr)}</span>`:'—';
+    // 売却益（売値②本命ベース）
+    const sellAmt=s.sell2?s.sell2*s.shares:null;
     const buyAmt=s.limit?s.limit*s.shares:null;
     const gain=sellAmt&&buyAmt?sellAmt-buyAmt:null;
     const tax=gain&&gain>0&&s.account!=='NISA成長'&&s.account!=='NISA積立'?gain*0.20315:0;
@@ -3743,13 +3766,19 @@ function wlRender(){
     return `<tr>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2)">${s.memo}</div>`:''}</td>
-      <td style="color:var(--text2)">${s.code||'—'}</td>
-      <td>${(s.shares||0).toLocaleString()}株</td>
-      <td style="font-weight:500">${wlFmt(s.limit)}</td>
-      <td><input class="wl-price-inp" type="number" value="${s.current||''}" placeholder="入力" onchange="wlUpdatePrice('${s.id}',this.value)">${tgt}</td>
+      <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
+      <td style="font-size:11px">${(s.shares||0).toLocaleString()}株</td>
+      <td style="font-weight:500;color:#3B6D11">${wlFmt(s.limit)}</td>
+      <td><input class="wl-price-inp" type="number" value="${s.current||''}" placeholder="入力" onchange="wlUpdatePrice('${s.id}',this.value)"></td>
       <td>${diffStr}</td>
       <td style="font-weight:500">${wlFmt(amt)}</td>
-      <td><input class="wl-price-inp" type="number" value="${s.sellPrice||''}" placeholder="売却価格" onchange="wlUpdateSellPrice('${s.id}',this.value)"></td>
+      <td style="color:var(--text2)">${wlFmt(s.sell1)}</td>
+      <td style="font-weight:500;color:#854F0B">${wlFmt(s.sell2)}</td>
+      <td style="color:#3B6D11">${wlFmt(s.sell3)}</td>
+      <td style="font-weight:500;color:#185FA5">${wlFmt(s.target)}</td>
+      <td>${upStr}</td>
+      <td>${perStr}</td>
+      <td>${pbrStr}</td>
       <td>${gainStr}</td>
       <td>${wlAcctBadge(s.account)}</td>
       <td>${wlStatusBadge(s.status)}</td>
@@ -3772,7 +3801,7 @@ function wlOpenAdd(){
   document.getElementById('wl-modal-title').textContent='銘柄を追加';
   document.getElementById('wl-del-btn').style.display='none';
   ['wf-code','wf-name','wf-memo'].forEach(i=>document.getElementById(i).value='');
-  ['wf-shares','wf-limit','wf-current','wf-target','wf-sellprice'].forEach(i=>document.getElementById(i).value='');
+  ['wf-shares','wf-limit','wf-current','wf-target','wf-sell1','wf-sell2','wf-sell3','wf-per','wf-pbr'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('wf-account').value='特定';
   document.getElementById('wf-status').value='購入検討';
   document.getElementById('wf-priority').value='3';
@@ -3790,7 +3819,11 @@ function wlOpenEdit(id){
   document.getElementById('wf-limit').value=s.limit||'';
   document.getElementById('wf-current').value=s.current||'';
   document.getElementById('wf-target').value=s.target||'';
-  document.getElementById('wf-sellprice').value=s.sellPrice||'';
+  document.getElementById('wf-sell1').value=s.sell1||'';
+  document.getElementById('wf-sell2').value=s.sell2||'';
+  document.getElementById('wf-sell3').value=s.sell3||'';
+  document.getElementById('wf-per').value=s.per||'';
+  document.getElementById('wf-pbr').value=s.pbr||'';
   document.getElementById('wf-account').value=s.account;
   document.getElementById('wf-status').value=s.status;
   document.getElementById('wf-priority').value=s.priority;
@@ -3816,7 +3849,11 @@ function wlSave(){
     status:document.getElementById('wf-status').value,
     priority:parseInt(document.getElementById('wf-priority').value)||3,
     memo:document.getElementById('wf-memo').value.trim(),
-    sellPrice:parseFloat(document.getElementById('wf-sellprice').value)||null,
+    sell1:parseFloat(document.getElementById('wf-sell1').value)||null,
+    sell2:parseFloat(document.getElementById('wf-sell2').value)||null,
+    sell3:parseFloat(document.getElementById('wf-sell3').value)||null,
+    per:parseFloat(document.getElementById('wf-per').value)||null,
+    pbr:parseFloat(document.getElementById('wf-pbr').value)||null,
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
@@ -3859,11 +3896,11 @@ async function wlSyncToSheet(){
     if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
     await wlEnsureWatchlistTab(sid);
     const data=wlLoad();
-    const hdr=[['id','code','name','shares','limit','current','target','account','status','priority','memo','sellPrice']];
-    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.target||'',s.account,s.status,s.priority,s.memo||'',s.sellPrice||'']);
+    const hdr=[['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo']];
+    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.sell1||'',s.sell2||'',s.sell3||'',s.target||'',s.per||'',s.pbr||'',s.account,s.status,s.priority,s.memo||'']);
     const vals=[...hdr,...rows];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:L${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
-    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:L1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:P${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
+    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:P1000`});
     showToast('✅ 保存しました');
   }catch(e){console.warn('wl sync err',e);showToast('⚠ 保存失敗');}
 }
@@ -3874,10 +3911,10 @@ async function wlSyncFromSheet(){
     const sid=await wlGetSheetId();
     if(!sid){showToast('⚠ まずMacで↑保存してください');return;}
     await wlEnsureWatchlistTab(sid);
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:L1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:P1000'});
     const rows=res.result.values||[];
     if(!rows.length){showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');return;}
-    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,target:parseFloat(r[6])||null,account:r[7]||'特定',status:r[8]||'購入検討',priority:parseInt(r[9])||3,memo:r[10]||'',sellPrice:parseFloat(r[11])||null})).filter(x=>x.name);
+    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,target:parseFloat(r[6])||null,account:r[7]||'特定',status:r[8]||'購入検討',sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||''})).filter(x=>x.name);
     wlSaveData(data);wlRender();showToast(`✅ ${data.length}件を読み込みました`);
   }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
 }
