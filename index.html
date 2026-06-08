@@ -3593,6 +3593,9 @@ function jpDeleteSell(id) {
 .wl-pri{font-size:11px;font-weight:500}
 .wl-price-inp{width:85px;padding:3px 7px;border:0.5px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:12px;text-align:right}
 .wl-edit-btn{padding:3px 8px;border:0.5px solid var(--border);border-radius:6px;background:transparent;color:var(--text2);font-size:11px;cursor:pointer}
+.wl-move-btn{padding:2px 6px;border:0.5px solid var(--border);border-radius:5px;background:transparent;color:var(--text2);font-size:13px;cursor:pointer;line-height:1}
+.wl-move-btn:active{background:var(--bg2)}
+.wl-move-btn:disabled{opacity:0.25;cursor:default}
 .wl-edit-btn:active{background:var(--bg2)}
 /* modal */
 .wl-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center}
@@ -3627,7 +3630,7 @@ function jpDeleteSell(id) {
     <table class="wl-tbl">
       <thead>
         <tr>
-          <th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
+          <th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
           <th>指値</th><th>現在値</th><th>乖離率</th><th>合計</th>
           <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
           <th>目標株価</th><th>上昇余地</th>
@@ -3757,8 +3760,8 @@ function wlRender(){
     <div class="wl-sc"><div class="sl">今日購入予定</div><div class="sv" style="color:#A32D2D">${waitCnt}</div></div>
   `;
   const tbody=document.getElementById('wl-tbody');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="19" class="wl-empty">銘柄がありません</td></tr>`;return;}
-  tbody.innerHTML=data.map(s=>{
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="20" class="wl-empty">銘柄がありません</td></tr>`;return;}
+  tbody.innerHTML=data.map((s,idx)=>{
     const amt=(s.limit||0)*s.shares;
     const diff=s.current&&s.limit?((s.current-s.limit)/s.limit*100):null;
     const diffStr=diff==null?'—':diff>0?`<span style="color:#A32D2D;font-weight:500">+${diff.toFixed(1)}%</span>`:`<span style="color:#3B6D11;font-weight:500">${diff.toFixed(1)}%</span>`;
@@ -3777,7 +3780,12 @@ function wlRender(){
     const gainStr=gain==null?'—':gain>=0
       ?`<span style="color:#3B6D11;font-weight:500">+${wlFmt(gainNet)}</span><div style="font-size:10px;color:var(--text2)">${s.account.includes('NISA')?'非課税':'税後'}</div>`
       :`<span style="color:#A32D2D;font-weight:500">${wlFmt(gainNet)}</span>`;
+    const isFirst=idx===0;const isLast=idx===data.length-1;
     return `<tr>
+      <td style="white-space:nowrap">
+        <button class="wl-move-btn" onclick="wlMoveUp('${s.id}')" ${isFirst?'disabled':''} title="上へ">▲</button>
+        <button class="wl-move-btn" onclick="wlMoveDown('${s.id}')" ${isLast?'disabled':''} title="下へ">▼</button>
+      </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2)">${s.memo}</div>`:''}</td>
       <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
@@ -3801,6 +3809,18 @@ function wlRender(){
   }).join('');
 }
 
+function wlMoveUp(id){
+  const d=wlLoad();const i=d.findIndex(x=>x.id===id);
+  if(i<=0)return;
+  [d[i-1],d[i]]=[d[i],d[i-1]];
+  wlSaveData(d);wlRender();
+}
+function wlMoveDown(id){
+  const d=wlLoad();const i=d.findIndex(x=>x.id===id);
+  if(i<0||i>=d.length-1)return;
+  [d[i],d[i+1]]=[d[i+1],d[i]];
+  wlSaveData(d);wlRender();
+}
 function wlUpdatePrice(id,val){
   const d=wlLoad();const item=d.find(x=>x.id===id);
   if(item){item.current=parseFloat(val)||null;wlSaveData(d);wlRender();}
