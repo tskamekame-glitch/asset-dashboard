@@ -3635,7 +3635,7 @@ function jpDeleteSell(id) {
           <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
           <th>目標株価</th><th>上昇余地</th>
           <th>理論PER</th><th>理論PBR</th>
-          <th>売却益(税後)</th><th>口座</th><th>状況</th><th>操作</th>
+          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="wl-tbody"></tbody>
@@ -3685,6 +3685,7 @@ function jpDeleteSell(id) {
       <div class="wl-frow"><label>理論株価PER（円）</label><input id="wf-per" type="number" placeholder="例: 1800" inputmode="numeric"></div>
       <div class="wl-frow"><label>理論株価PBR（円）</label><input id="wf-pbr" type="number" placeholder="例: 1200" inputmode="numeric"></div>
     </div>
+    <div class="wl-frow"><label>決算発表日</label><input id="wf-earningsDate" type="date" placeholder="例: 2025-07-31"></div>
     <div class="wl-frow"><label>メモ</label><input id="wf-memo" placeholder="例: 業績確認後に購入"></div>
     <div class="wl-mbtns">
       <button class="wl-mbtn wl-mbtn-d" id="wl-del-btn" onclick="wlDelete()" style="display:none">削除</button>
@@ -3700,19 +3701,19 @@ const WL_KEY = 'watchlist_v3';
 let wlEditId = null;
 
 const WL_DEFAULT = [
-  {id:'w1',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,sell1:2000,sell2:2473,sell3:3720,target:2473,per:1800,pbr:1200,account:'NISA成長',status:'注文待ち',priority:1,memo:'医療DX独占・来期増益'},
-  {id:'w2',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:5032,sell1:5500,sell2:6137,sell3:7900,target:6137,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'配当4.2%・来期+37%増益'},
-  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3100,current:3508,sell1:4000,sell2:4689,sell3:5000,target:4689,per:null,pbr:3410,account:'特定',status:'注文待ち',priority:1,memo:'特損一過性・91%買い推奨'},
-  {id:'w4',code:'5020',name:'エネオス',shares:200,limit:1200,current:1301,sell1:1400,sell2:1578,sell3:1800,target:1578,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'来期+173%増益・1単元12万'},
-  {id:'w5',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:6863,sell1:7307,sell2:8000,sell3:8600,target:7307,per:6951,pbr:6689,account:'特定',status:'指値注文中',priority:2,memo:'▲6.6%急落・TOB5235円サポート'},
-  {id:'w6',code:'7974',name:'任天堂',shares:100,limit:6800,current:7697,sell1:9000,sell2:10641,sell3:14200,target:10641,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'▲50%押し目・2027年業績確認後'},
-  {id:'w7',code:'5016',name:'JX金属',shares:100,limit:3400,current:3760,sell1:4079,sell2:5200,sell3:5828,target:4079,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'AI半導体薄膜・営業益+45%'},
-  {id:'w8',code:'9104',name:'商船三井',shares:100,limit:5200,current:5500,sell1:5800,sell2:6500,sell3:7500,target:6500,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・タンカー首位'},
-  {id:'w9',code:'1605',name:'INPEX',shares:100,limit:3500,current:3700,sell1:4000,sell2:4500,sell3:5000,target:4009,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・増配発表・原油LNG'},
-  {id:'w10',code:'7012',name:'川崎重工業',shares:100,limit:2500,current:2754,sell1:3000,sell2:3758,sell3:4000,target:3758,per:3426,pbr:3461,account:'特定',status:'様子見',priority:3,memo:'防衛・水素・ロボット長期テーマ'},
-  {id:'w11',code:'7201',name:'日産自動車',shares:100,limit:300,current:339,sell1:380,sell2:412,sell3:466,target:412,per:null,pbr:null,account:'特定',status:'様子見',priority:3,memo:'赤字・無配・様子見'},
-  {id:'w12',code:'9434',name:'SBKK',shares:100,limit:null,current:211,sell1:230,sell2:242,sell3:270,target:242,per:null,pbr:null,account:'みずほ',status:'売却候補',priority:4,memo:'配当4.5%・230〜242円で売却'},
-  {id:'w13',code:'9984',name:'SBG',shares:100,limit:null,current:7400,sell1:8000,sell2:8500,sell3:9700,target:6829,per:null,pbr:null,account:'野村',status:'売却候補',priority:4,memo:'⚠️目標超過20%・高値圏で利確'},
+  {id:'w1',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,sell1:2000,sell2:2473,sell3:3720,target:2473,per:1800,pbr:1200,account:'NISA成長',status:'注文待ち',priority:1,memo:'医療DX独占・来期増益',earningsDate:'2025-07-31'},
+  {id:'w2',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:5032,sell1:5500,sell2:6137,sell3:7900,target:6137,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'配当4.2%・来期+37%増益',earningsDate:'2025-07-31'},
+  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3100,current:3508,sell1:4000,sell2:4689,sell3:5000,target:4689,per:null,pbr:3410,account:'特定',status:'注文待ち',priority:1,memo:'特損一過性・91%買い推奨',earningsDate:'2025-08-07'},
+  {id:'w4',code:'5020',name:'エネオス',shares:200,limit:1200,current:1301,sell1:1400,sell2:1578,sell3:1800,target:1578,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'来期+173%増益・1単元12万',earningsDate:'2025-08-06'},
+  {id:'w5',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:6863,sell1:7307,sell2:8000,sell3:8600,target:7307,per:6951,pbr:6689,account:'特定',status:'指値注文中',priority:2,memo:'▲6.6%急落・TOB5235円サポート',earningsDate:'2025-07-25'},
+  {id:'w6',code:'7974',name:'任天堂',shares:100,limit:6800,current:7697,sell1:9000,sell2:10641,sell3:14200,target:10641,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'▲50%押し目・2027年業績確認後',earningsDate:'2025-08-05'},
+  {id:'w7',code:'5016',name:'JX金属',shares:100,limit:3400,current:3760,sell1:4079,sell2:5200,sell3:5828,target:4079,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'AI半導体薄膜・営業益+45%',earningsDate:''},
+  {id:'w8',code:'9104',name:'商船三井',shares:100,limit:5200,current:5500,sell1:5800,sell2:6500,sell3:7500,target:6500,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・タンカー首位',earningsDate:'2025-08-01'},
+  {id:'w9',code:'1605',name:'INPEX',shares:100,limit:3500,current:3700,sell1:4000,sell2:4500,sell3:5000,target:4009,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・増配発表・原油LNG',earningsDate:'2025-07-31'},
+  {id:'w10',code:'7012',name:'川崎重工業',shares:100,limit:2500,current:2754,sell1:3000,sell2:3758,sell3:4000,target:3758,per:3426,pbr:3461,account:'特定',status:'様子見',priority:3,memo:'防衛・水素・ロボット長期テーマ',earningsDate:'2025-08-01'},
+  {id:'w11',code:'7201',name:'日産自動車',shares:100,limit:300,current:339,sell1:380,sell2:412,sell3:466,target:412,per:null,pbr:null,account:'特定',status:'様子見',priority:3,memo:'赤字・無配・様子見',earningsDate:'2025-08-07'},
+  {id:'w12',code:'9434',name:'SBKK',shares:100,limit:null,current:211,sell1:230,sell2:242,sell3:270,target:242,per:null,pbr:null,account:'みずほ',status:'売却候補',priority:4,memo:'配当4.5%・230〜242円で売却',earningsDate:'2025-08-07'},
+  {id:'w13',code:'9984',name:'SBG',shares:100,limit:null,current:7400,sell1:8000,sell2:8500,sell3:9700,target:6829,per:null,pbr:null,account:'野村',status:'売却候補',priority:4,memo:'⚠️目標超過20%・高値圏で利確',earningsDate:'2025-08-07'},
 ];
 
 function wlLoad(){
@@ -3733,6 +3734,17 @@ function wlLoad(){
 function wlSaveData(d){try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}}
 function wlUID(){return 'w'+Date.now()+Math.random().toString(36).slice(2,5);}
 function wlFmt(n){if(n==null)return '—';const v=Math.round(n);return v>=10000?'¥'+(v/10000).toFixed(1)+'万':'¥'+v.toLocaleString();}
+function wlFmtEarnings(d){
+  if(!d)return '—';
+  const dt=new Date(d);const today=new Date();today.setHours(0,0,0,0);
+  const diff=Math.round((dt-today)/(1000*60*60*24));
+  const mmdd=(dt.getMonth()+1)+'/'+(dt.getDate());
+  if(diff<0)return `<span style="color:var(--text2)">${mmdd}済</span>`;
+  if(diff===0)return `<span style="color:#A32D2D;font-weight:600">本日!</span>`;
+  if(diff<=7)return `<span style="color:#A32D2D;font-weight:500">${mmdd}(${diff}日後)</span>`;
+  if(diff<=30)return `<span style="color:#854F0B">${mmdd}(${diff}日後)</span>`;
+  return `<span style="color:var(--text2)">${mmdd}</span>`;
+}
 
 function wlStatusBadge(s){
   const m={'購入済':'wl-b-done','指値注文中':'wl-b-order','注文待ち':'wl-b-wait','購入検討':'wl-b-plan','様子見':'wl-b-plan'};
@@ -3802,6 +3814,7 @@ function wlRender(){
       <td>${perStr}</td>
       <td>${pbrStr}</td>
       <td>${gainStr}</td>
+      <td style="font-size:11px;white-space:nowrap">${s.earningsDate?wlFmtEarnings(s.earningsDate):'—'}</td>
       <td>${wlAcctBadge(s.account)}</td>
       <td>${wlStatusBadge(s.status)}</td>
       <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
@@ -3834,7 +3847,7 @@ function wlOpenAdd(){
   wlEditId=null;
   document.getElementById('wl-modal-title').textContent='銘柄を追加';
   document.getElementById('wl-del-btn').style.display='none';
-  ['wf-code','wf-name','wf-memo'].forEach(i=>document.getElementById(i).value='');
+  ['wf-code','wf-name','wf-memo','wf-earningsDate'].forEach(i=>document.getElementById(i).value='');
   ['wf-shares','wf-limit','wf-current','wf-target','wf-sell1','wf-sell2','wf-sell3','wf-per','wf-pbr'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('wf-account').value='特定';
   document.getElementById('wf-status').value='購入検討';
@@ -3862,6 +3875,7 @@ function wlOpenEdit(id){
   document.getElementById('wf-status').value=s.status;
   document.getElementById('wf-priority').value=s.priority;
   document.getElementById('wf-memo').value=s.memo||'';
+  document.getElementById('wf-earningsDate').value=s.earningsDate||'';
   document.getElementById('wl-modal').classList.add('open');
 }
 
@@ -3888,6 +3902,7 @@ function wlSave(){
     sell3:parseFloat(document.getElementById('wf-sell3').value)||null,
     per:parseFloat(document.getElementById('wf-per').value)||null,
     pbr:parseFloat(document.getElementById('wf-pbr').value)||null,
+    earningsDate:document.getElementById('wf-earningsDate').value||'',
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
@@ -3930,11 +3945,11 @@ async function wlSyncToSheet(){
     if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
     await wlEnsureWatchlistTab(sid);
     const data=wlLoad();
-    const hdr=[['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo']];
-    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.sell1||'',s.sell2||'',s.sell3||'',s.target||'',s.per||'',s.pbr||'',s.account,s.status,s.priority,s.memo||'']);
+    const hdr=[['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo','earningsDate']];
+    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.sell1||'',s.sell2||'',s.sell3||'',s.target||'',s.per||'',s.pbr||'',s.account,s.status,s.priority,s.memo||'',s.earningsDate||'']);
     const vals=[...hdr,...rows];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:P${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
-    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:P1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:Q${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
+    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:Q1000`});
     showToast('✅ 保存しました');
   }catch(e){console.warn('wl sync err',e);showToast('⚠ 保存失敗');}
 }
@@ -3945,10 +3960,10 @@ async function wlSyncFromSheet(){
     const sid=await wlGetSheetId();
     if(!sid){showToast('⚠ まずMacで↑保存してください');return;}
     await wlEnsureWatchlistTab(sid);
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:P1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:Q1000'});
     const rows=res.result.values||[];
     if(!rows.length){showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');return;}
-    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,target:parseFloat(r[6])||null,account:r[7]||'特定',status:r[8]||'購入検討',sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||''})).filter(x=>x.name);
+    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||'',earningsDate:r[16]||''})).filter(x=>x.name);
     wlSaveData(data);wlRender();showToast(`✅ ${data.length}件を読み込みました`);
   }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
 }
