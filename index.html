@@ -1704,11 +1704,11 @@ function sendToTrend(){
     if(!confirm(dateStr+'のデータはすでにあります。上書きしますか？'))return;
     snapshots.splice(existing,1);
   }
-  const PENSION_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
-  const normCat=a=>PENSION_PATS.some(p=>p.test(a.name))?'年金':a.cat;
-  const cats={};amAccounts.forEach(a=>{const c=normCat(a);cats[c]=(cats[c]||0)+a.amount;});
+  const PENSION_PATS2=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
+  const normCat2=a=>PENSION_PATS2.some(p=>p.test(a.name))?'年金':a.cat;
+  const cats={};amAccounts.forEach(a=>{const c=normCat2(a);cats[c]=(cats[c]||0)+a.amount;});
   const total=amAccounts.reduce((s,a)=>s+a.amount,0);
-  const accounts=amAccounts.map(a=>({name:a.name,cat:normCat(a),amount:a.amount,updated:a.updated}));
+  const accounts=amAccounts.map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated}));
   snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
@@ -2436,9 +2436,15 @@ function trLoadFromStorage(){
     'インドインデックス':'投信','高配当':'証券','個別株':'証券',
   };
   const TOUSHI_NAMES2=['オルカンPayPay','全世界PayPay','インド(SBI)','全世界インデックス','eMAXIS','オルカン','iTrust'];
+  const PENSION_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
   snapshots.forEach(s=>{
     if(s.accounts)s.accounts.forEach(a=>{
-      if(CAT_NORM2[a.cat]){
+      // iDeCo・確定拠出・DC年金は口座名で判定して年金カテゴリに正規化
+      if(PENSION_PATS.some(p=>p.test(a.name))&&a.cat!=='年金'){
+        if(s.cats[a.cat]!=null)s.cats[a.cat]=Math.max(0,(s.cats[a.cat]||0)-a.amount);
+        a.cat='年金';
+        s.cats['年金']=(s.cats['年金']||0)+a.amount;
+      } else if(CAT_NORM2[a.cat]){
         if(s.cats[a.cat])s.cats[a.cat]=Math.max(0,(s.cats[a.cat]||0)-a.amount);
         const newCat=CAT_NORM2[a.cat];
         a.cat=newCat;
@@ -2478,13 +2484,11 @@ function trParseCSV(text,filename){
     '証券':'証券', '投信':'投信', '銀行':'銀行', '年金':'年金',
     'その他':'その他',
   };
-  // iDeCo・確定拠出・DC年金に該当する口座名パターン（年金カテゴリに振り分け）
-  const PENSION_NAME_PATS=[/iDeCo/i,/ideco/i,/イデコ/,/確定拠出/,/DC.*年金/,/年金.*DC/,/ＤＣ.*年金/,/年金.*ＤＣ/,/企業年金/,/確定給付/];
   const TOUSHI_NAMES=['オルカンPayPay','全世界PayPay','インド(SBI)','全世界インデックス','eMAXIS','オルカン','iTrust','PayPayポイント'];
+  const PENSION_NAME_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
   rows.forEach(r=>{
-    // 口座名がiDeCo・DC年金パターンに一致する場合は年金カテゴリに優先振り分け
-    if(PENSION_NAME_PATS.some(p=>p.test(r.name))){r.cat='年金';return;}
-    if(CAT_NORM[r.cat]){r.cat=CAT_NORM[r.cat];}
+    if(PENSION_NAME_PATS.some(p=>p.test(r.name))){r.cat='年金';}
+    else if(CAT_NORM[r.cat]){r.cat=CAT_NORM[r.cat];}
     else if((r.cat==='証券'||r.cat==='その他')&&TOUSHI_NAMES.some(n=>r.name.includes(n))){r.cat='投信';}
   });
   let dateStr='';const m=filename.match(/(\d{4}-\d{2}-\d{2})/);
