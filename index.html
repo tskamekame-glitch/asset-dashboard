@@ -3330,6 +3330,58 @@ async function jpLoadStockChart() {
     // 購入価格ライン用データ
     const buyLineData = prices.map(() => buyPrice);
 
+    // 購入日インデックスを特定
+    let buyDateIndex = -1;
+    if (stock.buyDate) {
+      const buyD = new Date(stock.buyDate);
+      const buyLabel = `${buyD.getMonth()+1}/${buyD.getDate()}`;
+      // ラベルから最も近いインデックスを探す
+      buyDateIndex = labels.indexOf(buyLabel);
+      if (buyDateIndex === -1) {
+        // ラベルに完全一致しない場合、タイムスタンプで最近傍を探す
+        const buyMs = buyD.getTime();
+        let minDiff = Infinity;
+        filteredTs.forEach((ts, i) => {
+          const diff = Math.abs(ts - buyMs);
+          if (diff < minDiff) { minDiff = diff; buyDateIndex = i; }
+        });
+      }
+    }
+
+    // 購入日縦線プラグイン
+    const buyDatePlugin = {
+      id: 'buyDateLine',
+      afterDraw(chart) {
+        if (buyDateIndex < 0) return;
+        const { ctx, chartArea, scales } = chart;
+        const x = scales.x.getPixelForValue(buyDateIndex);
+        if (x < chartArea.left || x > chartArea.right) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(251,191,36,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        // ラベル「買」
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(251,191,36,0.9)';
+        const lblW = 26, lblH = 16;
+        const lblX = Math.min(x - lblW/2, chartArea.right - lblW);
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(lblX, chartArea.top - 1, lblW, lblH, 4)
+                      : ctx.rect(lblX, chartArea.top - 1, lblW, lblH);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('買', x, chartArea.top + lblH/2 - 1);
+        ctx.restore();
+      }
+    };
+
     jpChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -3364,6 +3416,7 @@ async function jpLoadStockChart() {
         maintainAspectRatio: false,
         interaction: { intersect: false, mode: 'index' },
         plugins: {
+          buyDateLine: {},
           legend: { display: false },
           tooltip: {
             callbacks: {
@@ -3389,7 +3442,8 @@ async function jpLoadStockChart() {
             border: { color: 'var(--border)' }
           }
         }
-      }
+      },
+      plugins: [buyDatePlugin]
     });
 
     // 銘柄情報表示
