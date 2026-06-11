@@ -190,6 +190,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .sheet-bg.open{display:flex}
 .sheet{background:var(--bg);width:100%;max-width:600px;border-radius:20px 20px 0 0;padding:0 0 calc(16px + var(--safe-bot));max-height:92vh;overflow-y:auto;animation:slideUp 0.25s ease}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px}
 .sheet-title{font-size:17px;font-weight:600;text-align:center;padding:0 16px 16px;border-bottom:0.5px solid var(--border)}
 .sheet-body{padding:16px}
@@ -381,6 +382,9 @@ tr:last-child td{border-bottom:none}
    日本株収支管理
 ============================================================ */
 .jp-subnav{flex:1;padding:10px 4px;border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
+.jp-period-btn{flex:1;padding:6px 4px;border:0.5px solid var(--border2);border-radius:6px;font-family:inherit;font-size:11px;font-weight:500;cursor:pointer;background:var(--bg);color:var(--text2);transition:all 0.15s}
+.jp-period-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
 .jp-subnav.active{color:var(--accent);border-bottom-color:var(--accent)}
 .jp-sub{display:none}
 .jp-sub.active{display:block}
@@ -820,6 +824,7 @@ tr:last-child td{border-bottom:none}
     <button class="jp-subnav" data-jp="hold" onclick="jpSwitchSub('hold',this)">保有株</button>
     <button class="jp-subnav" data-jp="sell" onclick="jpSwitchSub('sell',this)">売却</button>
     <button class="jp-subnav" data-jp="pf" onclick="jpSwitchSub('pf',this)">PF</button>
+    <button class="jp-subnav" data-jp="chart" onclick="jpSwitchSub('chart',this)">📊チャート</button>
   </div>
 
   <!-- ホームサブパネル -->
@@ -873,6 +878,37 @@ tr:last-child td{border-bottom:none}
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px">口座別構成</div>
         <div style="position:relative;height:140px"><canvas id="jp-acct-chart"></canvas></div>
         <div id="jp-acct-legend" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- チャートサブパネル -->
+  <div class="jp-sub" id="jpsub-chart">
+    <div class="page-inner">
+      <!-- 銘柄選択 -->
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">保有銘柄を選択して株価推移を確認</div>
+        <select id="jp-chart-select" style="width:100%;padding:10px 12px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none" onchange="jpLoadStockChart()">
+          <option value="">-- 銘柄を選択 --</option>
+        </select>
+        <!-- 期間選択 -->
+        <div style="display:flex;gap:6px;margin-top:8px" id="jp-chart-period-btns" style="display:none">
+          <button class="jp-period-btn active" data-period="3mo" onclick="jpSetChartPeriod('3mo',this)">3ヶ月</button>
+          <button class="jp-period-btn" data-period="6mo" onclick="jpSetChartPeriod('6mo',this)">6ヶ月</button>
+          <button class="jp-period-btn" data-period="1y" onclick="jpSetChartPeriod('1y',this)">1年</button>
+          <button class="jp-period-btn" data-period="buy" onclick="jpSetChartPeriod('buy',this)">購入日〜</button>
+        </div>
+      </div>
+      <!-- チャート表示エリア -->
+      <div id="jp-chart-area" style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;min-height:280px;display:flex;align-items:center;justify-content:center">
+        <div style="text-align:center;color:var(--text3);font-size:13px">
+          <div style="font-size:24px;margin-bottom:8px">📊</div>
+          <div>銘柄を選択すると<br>株価推移が表示されます</div>
+        </div>
+      </div>
+      <!-- 銘柄情報 -->
+      <div id="jp-chart-info" style="display:none;background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="jp-chart-info-grid"></div>
       </div>
     </div>
   </div>
@@ -3180,11 +3216,219 @@ function jpSwitchSub(name, btn) {
   document.getElementById('jpsub-' + name).classList.add('active');
   jpRenderAll();
 }
+// ===== 株価チャート機能 =====
+let jpChartInstance = null;
+let jpChartCurrentPeriod = '3mo';
+let jpChartSelectedId = null;
+
+function jpUpdateChartSelect() {
+  const sel = document.getElementById('jp-chart-select');
+  if (!sel) return;
+  const { stocks } = jpLoad();
+  sel.innerHTML = '<option value="">-- 銘柄を選択 --</option>';
+  stocks.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name}${s.code ? ' (' + s.code + ')' : ''} — 取得 ¥${s.buyPrice.toLocaleString()}`;
+    sel.appendChild(opt);
+  });
+  if (jpChartSelectedId) sel.value = jpChartSelectedId;
+}
+
+function jpSetChartPeriod(period, btn) {
+  jpChartCurrentPeriod = period;
+  document.querySelectorAll('.jp-period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  jpLoadStockChart();
+}
+
+async function jpLoadStockChart() {
+  const sel = document.getElementById('jp-chart-select');
+  const stockId = sel ? sel.value : '';
+  if (!stockId) {
+    document.getElementById('jp-chart-area').innerHTML = `<div style="text-align:center;color:var(--text3);font-size:13px"><div style="font-size:24px;margin-bottom:8px">📊</div><div>銘柄を選択すると<br>株価推移が表示されます</div></div>`;
+    document.getElementById('jp-chart-info').style.display = 'none';
+    document.getElementById('jp-chart-period-btns').style.display = 'none';
+    return;
+  }
+  jpChartSelectedId = stockId;
+  const { stocks } = jpLoad();
+  const stock = stocks.find(s => String(s.id) === String(stockId));
+  if (!stock || !stock.code) {
+    document.getElementById('jp-chart-area').innerHTML = `<div style="text-align:center;color:var(--text3);font-size:13px">📋 銘柄コードが登録されていません<br><small>銘柄編集から証券コードを追加してください</small></div>`;
+    document.getElementById('jp-chart-period-btns').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('jp-chart-period-btns').style.display = 'flex';
+  document.getElementById('jp-chart-area').innerHTML = `<div style="text-align:center;color:var(--text3)"><div style="font-size:20px;animation:spin 1s linear infinite;display:inline-block">⏳</div><br>データ取得中...</div>`;
+
+  try {
+    // 期間計算
+    let period = jpChartCurrentPeriod;
+    let startDate = null;
+    if (period === 'buy' && stock.buyDate) {
+      startDate = new Date(stock.buyDate);
+      const diffMs = Date.now() - startDate.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (diffDays <= 90) period = '3mo';
+      else if (diffDays <= 180) period = '6mo';
+      else if (diffDays <= 365) period = '1y';
+      else period = '2y';
+    }
+
+    // Cloudflare Worker経由でYahoo Finance株価取得
+    const WORKER_URL = 'https://small-poetry-c9c2.tskamekame.workers.dev/';
+    const resp = await fetch(`${WORKER_URL}?code=${stock.code}&range=${period}`);
+    if (!resp.ok) throw new Error('Worker取得失敗');
+    const data = await resp.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) throw new Error('データなし');
+    
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators?.quote?.[0]?.close || [];
+    
+    if (timestamps.length === 0) throw new Error('データなし');
+
+    // 購入日以降にフィルタ
+    let filteredTs = timestamps;
+    let filteredClose = closes;
+    if (period === 'buy' && startDate) {
+      const startMs = startDate.getTime();
+      const filtered = timestamps.map((t, i) => ({t: t*1000, c: closes[i]}))
+        .filter(x => x.t >= startMs && x.c !== null);
+      filteredTs = filtered.map(x => x.t);
+      filteredClose = filtered.map(x => x.c);
+    } else {
+      // null除去
+      const filtered = timestamps.map((t, i) => ({t: t*1000, c: closes[i]}))
+        .filter(x => x.c !== null);
+      filteredTs = filtered.map(x => x.t);
+      filteredClose = filtered.map(x => x.c);
+    }
+
+    const labels = filteredTs.map(ts => {
+      const d = new Date(ts);
+      return `${d.getMonth()+1}/${d.getDate()}`;
+    });
+    const prices = filteredClose.map(p => Math.round(p));
+    const latestPrice = prices[prices.length - 1];
+    const firstPrice = prices[0];
+    const buyPrice = stock.buyPrice;
+    const gainPct = buyPrice > 0 ? ((latestPrice - buyPrice) / buyPrice * 100) : 0;
+    const isGain = latestPrice >= buyPrice;
+
+    // チャート描画
+    document.getElementById('jp-chart-area').innerHTML = '<canvas id="jp-stock-price-chart" style="width:100%;height:260px"></canvas>';
+    
+    if (jpChartInstance) { jpChartInstance.destroy(); jpChartInstance = null; }
+    
+    const ctx = document.getElementById('jp-stock-price-chart').getContext('2d');
+    const chartColor = isGain ? '#22c55e' : '#ef4444';
+    const bgColor = isGain ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+    
+    // 購入価格ライン用データ
+    const buyLineData = prices.map(() => buyPrice);
+
+    jpChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: stock.name,
+            data: prices,
+            borderColor: chartColor,
+            backgroundColor: bgColor,
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+          },
+          {
+            label: `取得単価 ¥${buyPrice.toLocaleString()}`,
+            data: buyLineData,
+            borderColor: 'rgba(150,150,150,0.6)',
+            borderWidth: 1.5,
+            borderDash: [6, 4],
+            fill: false,
+            tension: 0,
+            pointRadius: 0,
+            pointHoverRadius: 0,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.datasetIndex === 0
+                ? `株価: ¥${ctx.raw.toLocaleString()}`
+                : `取得単価: ¥${buyPrice.toLocaleString()}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { maxTicksLimit: 6, color: 'var(--text3)', font: { size: 10 } },
+            border: { color: 'var(--border)' }
+          },
+          y: {
+            grid: { color: 'var(--border)', lineWidth: 0.5 },
+            ticks: {
+              color: 'var(--text3)',
+              font: { size: 10 },
+              callback: v => '¥' + v.toLocaleString()
+            },
+            border: { color: 'var(--border)' }
+          }
+        }
+      }
+    });
+
+    // 銘柄情報表示
+    const infoEl = document.getElementById('jp-chart-info');
+    infoEl.style.display = 'block';
+    const costTotal = stock.shares * buyPrice;
+    const evalTotal = stock.shares * latestPrice;
+    const gain = evalTotal - costTotal;
+    document.getElementById('jp-chart-info-grid').innerHTML = `
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">現在値</div>
+        <div style="font-size:16px;font-weight:700;font-variant-numeric:tabular-nums">¥${latestPrice.toLocaleString()}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">取得比</div>
+        <div style="font-size:16px;font-weight:700;color:${isGain ? 'var(--green)' : 'var(--red)'};font-variant-numeric:tabular-nums">${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">評価損益</div>
+        <div style="font-size:15px;font-weight:600;color:${gain >= 0 ? 'var(--green)' : 'var(--red)'};font-variant-numeric:tabular-nums">${gain >= 0 ? '+' : ''}¥${Math.round(gain).toLocaleString()}</div>
+      </div>
+    `;
+  } catch(e) {
+    document.getElementById('jp-chart-area').innerHTML = `
+      <div style="text-align:center;color:var(--text3);font-size:13px">
+        <div style="font-size:20px;margin-bottom:8px">⚠️</div>
+        <div style="font-weight:600;color:var(--text2)">株価データを取得できませんでした</div>
+        <div style="font-size:11px;margin-top:6px;color:var(--text3)">CORSポリシーによりYahoo Financeへの直接アクセスがブロックされています。<br>Cloudflare Worker（small-poetry-c9c2）に株価プロキシを追加すると解決できます。</div>
+        <button onclick="jpLoadStockChart()" style="margin-top:10px;padding:6px 14px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;font-size:12px;cursor:pointer">再試行</button>
+      </div>`;
+  }
+}
+
 function jpRenderAll() {
   jpRenderHome();
   jpRenderHold();
   jpRenderSell();
   if (jpCurrentSub === 'pf') jpRenderPF();
+  if (jpCurrentSub === 'chart') jpUpdateChartSelect();
 }
 
 function jpRenderHome() {
@@ -3473,7 +3717,16 @@ function jpSaveStock() {
   const name = document.getElementById('jp-f-name').value.trim();
   const shares = parseFloat(document.getElementById('jp-f-shares').value);
   const buyPrice = parseFloat(document.getElementById('jp-f-buy').value);
-  if (!name || !shares || !buyPrice) { alert('銘柄名・株数・取得単価は必須です'); return; }
+  // Highlight missing fields
+  ['jp-f-name','jp-f-shares','jp-f-buy'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.borderColor = '';
+  });
+  const missing = [];
+  if (!name) { document.getElementById('jp-f-name').style.borderColor='#ef4444'; missing.push('銘柄名'); }
+  if (!shares) { document.getElementById('jp-f-shares').style.borderColor='#ef4444'; missing.push('購入株数'); }
+  if (!buyPrice) { document.getElementById('jp-f-buy').style.borderColor='#ef4444'; missing.push('取得単価'); }
+  if (missing.length) { alert(missing.join('・') + ' を入力してください'); return; }
   const data = jpLoad();
   const stock = {
     id: jpEditingId || jpUID(),
