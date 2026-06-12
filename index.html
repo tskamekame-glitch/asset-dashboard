@@ -3408,27 +3408,22 @@ async function jpLoadStockChart() {
     // 購入価格ライン用データ
     const buyLineData = prices.map(() => buyPrice);
 
-    // 購入日インデックスを特定
+    // 購入日インデックスを特定（タイムスタンプで正確に検索）
     let buyDateIndex = -1;
     if (stock.buyDate) {
       const buyD = new Date(stock.buyDate);
-      const buyLabel = `${buyD.getMonth()+1}/${buyD.getDate()}`;
-      // ラベルから最も近いインデックスを探す
-      buyDateIndex = labels.indexOf(buyLabel);
-      if (buyDateIndex === -1) {
-        // チャート期間内に購入日があるか確認（±3日以内）
-        const buyMs = buyD.getTime();
-        const chartStart = filteredTs[0];
-        const chartEnd = filteredTs[filteredTs.length - 1];
-        // 購入日がチャート期間内の場合のみ最近傍を探す
-        if (buyMs >= chartStart - 3*86400000 && buyMs <= chartEnd + 3*86400000) {
-          let minDiff = Infinity;
-          filteredTs.forEach((ts, i) => {
-            const diff = Math.abs(ts - buyMs);
-            if (diff < minDiff) { minDiff = diff; buyDateIndex = i; }
-          });
-        }
-        // 期間外なら buyDateIndex = -1 のまま（表示しない）
+      const buyMs = buyD.getTime();
+      const chartStart = filteredTs[0];
+      const chartEnd = filteredTs[filteredTs.length - 1];
+      // 購入日がチャート期間内にある場合のみ表示（±5日以内に収まるか）
+      if (buyMs >= chartStart - 5*86400000 && buyMs <= chartEnd + 5*86400000) {
+        let minDiff = Infinity;
+        filteredTs.forEach((ts, i) => {
+          const diff = Math.abs(ts - buyMs);
+          if (diff < minDiff) { minDiff = diff; buyDateIndex = i; }
+        });
+        // 最近傍が7日以上離れていたら表示しない（データの空白期間対策）
+        if (minDiff > 7 * 86400000) buyDateIndex = -1;
       }
     }
 
