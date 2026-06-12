@@ -2517,19 +2517,26 @@ function trParseCSV(text,filename){
   const rows=[];
   for(let i=1;i<lines.length;i++){const cols=[];let cur='',inQ=false;for(const ch of lines[i]){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur);cur='';}else{cur+=ch;}}cols.push(cur);if(cols.length>=4&&cols[1])rows.push({name:cols[1]||'',cat:cols[2]||'その他',amount:parseFloat(cols[3])||0,updated:cols[5]||''});}
   if(!rows.length){alert('有効なデータがありませんでした: '+filename);return;}
-  // カテゴリ正規化：新旧カテゴリ名を推移グラフ用カテゴリに統一
+  // カテゴリ正規化：資産管理の7カテゴリに統一
   const CAT_NORM={
-    '全世界インデックス':'投信', '日本インデックス':'投信',
-    'インドインデックス':'投信', '高配当':'証券', '個別株':'証券',
-    '証券':'証券', '投信':'投信', '銀行':'銀行', '年金':'年金',
-    'その他':'その他',
+    '全世界インデックス':'全世界インデックス', '日本インデックス':'日本インデックス',
+    'インドインデックス':'インドインデックス', '高配当':'高配当', '個別株':'個別株',
+    '銀行':'銀行', '年金':'年金', '預り金':'銀行',
+    '証券':'個別株', '投信':'全世界インデックス', '銀行キープ':'銀行', 'その他':'銀行',
   };
-  const TOUSHI_NAMES=['オルカンPayPay','全世界PayPay','インド(SBI)','全世界インデックス','eMAXIS','オルカン','iTrust','PayPayポイント'];
-  const PENSION_NAME_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
+  const CAT_NORM_BY_NAME=[
+    {pat:/iDeCo|イデコ|確定拠出|DC.*年金|ＤＣ.*年金|企業年金|確定給付/i, cat:'年金'},
+    {pat:/TOPIX|日本.*インデックス|国内.*インデックス|eMAXIS.*国内|eMAXIS.*TOPIX|eMAXIS.*日経/i, cat:'日本インデックス'},
+    {pat:/インド|India/i, cat:'インドインデックス'},
+    {pat:/高配当|SBI.*日本高配当|日本高配当/i, cat:'高配当'},
+    {pat:/全世界|オルカン|S&P|S&amp;P|米国|FANG|PayPay|eMAXIS/i, cat:'全世界インデックス'},
+    {pat:/銀行|ゆうちょ|UFJ|三菱|みずほ|三井住友銀|りそな|新生/i, cat:'銀行'},
+  ];
   rows.forEach(r=>{
-    if(PENSION_NAME_PATS.some(p=>p.test(r.name))){r.cat='年金';}
+    const byName=CAT_NORM_BY_NAME.find(x=>x.pat.test(r.name));
+    if(byName){r.cat=byName.cat;}
     else if(CAT_NORM[r.cat]){r.cat=CAT_NORM[r.cat];}
-    else if((r.cat==='証券'||r.cat==='その他')&&TOUSHI_NAMES.some(n=>r.name.includes(n))){r.cat='投信';}
+    else{r.cat='銀行';}
   });
   let dateStr='';const m=filename.match(/(\d{4}-\d{2}-\d{2})/);
   if(m){dateStr=m[1];}else{const dates=rows.map(r=>r.updated).filter(Boolean).sort();dateStr=dates[dates.length-1]||new Date().toISOString().slice(0,10);}
@@ -2606,8 +2613,11 @@ function trRenderCharts(){
   trDestroyChart('bar');
   chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:allCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
   trDestroyChart('donut');
-  const latest=filtered[filtered.length-1];const catEntries=Object.entries(latest.cats).sort((a,b)=>b[1]-a[1]);
-  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map((_,i)=>TR_CAT_COLORS[i%TR_CAT_COLORS.length]),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels]});
+  const TR_DONUT_CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
+  const TR_DONUT_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
+  const latest=filtered[filtered.length-1];
+  const catEntries=TR_DONUT_CAT_ORDER.filter(c=>latest.cats[c]>0).map(c=>[c,latest.cats[c]]).concat(Object.entries(latest.cats).filter(([c,v])=>v>0&&!TR_DONUT_CAT_ORDER.includes(c)).sort((a,b)=>b[1]-a[1]));
+  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels]});
   trRenderCategoryChart('証券','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('投信','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
