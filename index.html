@@ -3350,7 +3350,9 @@ async function jpLoadStockChart() {
       if (diffDays <= 90) period = '3mo';
       else if (diffDays <= 180) period = '6mo';
       else if (diffDays <= 365) period = '1y';
-      else period = '2y';
+      else if (diffDays <= 365*2) period = '2y';
+      else if (diffDays <= 365*5) period = '5y';
+      else period = 'max'; // 5年以上前はmax（Yahoo Financeの最大範囲）
     }
 
     // Cloudflare Worker経由でYahoo Finance株価取得
@@ -3414,13 +3416,19 @@ async function jpLoadStockChart() {
       // ラベルから最も近いインデックスを探す
       buyDateIndex = labels.indexOf(buyLabel);
       if (buyDateIndex === -1) {
-        // ラベルに完全一致しない場合、タイムスタンプで最近傍を探す
+        // チャート期間内に購入日があるか確認（±3日以内）
         const buyMs = buyD.getTime();
-        let minDiff = Infinity;
-        filteredTs.forEach((ts, i) => {
-          const diff = Math.abs(ts - buyMs);
-          if (diff < minDiff) { minDiff = diff; buyDateIndex = i; }
-        });
+        const chartStart = filteredTs[0];
+        const chartEnd = filteredTs[filteredTs.length - 1];
+        // 購入日がチャート期間内の場合のみ最近傍を探す
+        if (buyMs >= chartStart - 3*86400000 && buyMs <= chartEnd + 3*86400000) {
+          let minDiff = Infinity;
+          filteredTs.forEach((ts, i) => {
+            const diff = Math.abs(ts - buyMs);
+            if (diff < minDiff) { minDiff = diff; buyDateIndex = i; }
+          });
+        }
+        // 期間外なら buyDateIndex = -1 のまま（表示しない）
       }
     }
 
