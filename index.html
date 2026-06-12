@@ -3389,18 +3389,14 @@ async function jpLoadStockChart() {
     const spanDays = filteredTs.length > 1
       ? (filteredTs[filteredTs.length-1] - filteredTs[0]) / 86400000
       : 0;
-    const multiYear = spanDays > 300; // 約1年超は年を表示
 
-    const labels = filteredTs.map((ts, i) => {
+    // X軸ティックのcallbackで年付きフォーマットを使う
+    // labels配列は内部インデックス用（全データ点）に月/日のみ格納
+    // Chart.jsのticks.callbackで表示を制御するため、labelsにはフル日付情報を格納
+    const labels = filteredTs.map(ts => {
       const d = new Date(ts);
-      const m = d.getMonth() + 1;
-      const day = d.getDate();
-      if (!multiYear) return `${m}/${day}`;
-      // 年またぎチャート：年が変わる最初のラベルまたは1月1日付近に年表示
-      const prevD = i > 0 ? new Date(filteredTs[i-1]) : null;
-      const yearChanged = !prevD || prevD.getFullYear() !== d.getFullYear();
-      if (yearChanged) return `${d.getFullYear()}/${m}/${day}`;
-      return `${m}/${day}`;
+      // YYYY/M/D形式で保存（tick callbackで整形）
+      return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
     });
     const prices = filteredClose.map(p => Math.round(p));
     const latestPrice = prices[prices.length - 1];
@@ -3521,7 +3517,30 @@ async function jpLoadStockChart() {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { maxTicksLimit: 6, color: 'var(--text3)', font: { size: 10 } },
+            ticks: {
+              maxTicksLimit: 7,
+              color: 'var(--text3)',
+              font: { size: 10 },
+              callback: function(val, idx, allTicks) {
+                const lbl = this.getLabelForValue(val); // "YYYY/M/D"
+                if (!lbl) return '';
+                const parts = lbl.split('/');
+                if (parts.length < 3) return lbl;
+                const y = parseInt(parts[0]);
+                const m = parseInt(parts[1]);
+                const d = parseInt(parts[2]);
+                if (spanDays > 300) {
+                  // 長期：前のtickと年が違う場合は "2021年" を付加
+                  const prevTick = idx > 0 ? allTicks[idx - 1] : null;
+                  const prevLbl = prevTick != null ? this.getLabelForValue(prevTick.value) : null;
+                  const prevYear = prevLbl ? parseInt(prevLbl.split('/')[0]) : null;
+                  if (prevYear !== y) return `${y}/${m}月`;
+                  return `${m}月`;
+                }
+                // 短期：月/日
+                return `${m}/${d}`;
+              }
+            },
             border: { color: 'var(--border)' }
           },
           y: {
