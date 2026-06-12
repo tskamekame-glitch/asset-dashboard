@@ -3385,9 +3385,22 @@ async function jpLoadStockChart() {
       filteredClose = filtered.map(x => x.c);
     }
 
-    const labels = filteredTs.map(ts => {
+    // 期間に応じてラベルフォーマットを決定
+    const spanDays = filteredTs.length > 1
+      ? (filteredTs[filteredTs.length-1] - filteredTs[0]) / 86400000
+      : 0;
+    const multiYear = spanDays > 300; // 約1年超は年を表示
+
+    const labels = filteredTs.map((ts, i) => {
       const d = new Date(ts);
-      return `${d.getMonth()+1}/${d.getDate()}`;
+      const m = d.getMonth() + 1;
+      const day = d.getDate();
+      if (!multiYear) return `${m}/${day}`;
+      // 年またぎチャート：年が変わる最初のラベルまたは1月1日付近に年表示
+      const prevD = i > 0 ? new Date(filteredTs[i-1]) : null;
+      const yearChanged = !prevD || prevD.getFullYear() !== d.getFullYear();
+      if (yearChanged) return `${d.getFullYear()}/${m}/${day}`;
+      return `${m}/${day}`;
     });
     const prices = filteredClose.map(p => Math.round(p));
     const latestPrice = prices[prices.length - 1];
