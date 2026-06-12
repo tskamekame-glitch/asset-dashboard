@@ -1843,7 +1843,11 @@ async function amFindOrCreateSheet(){
     try{
       const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:amSpreadsheetId});
       const hasSlSheet=meta.result.sheets.some(s=>s.properties.title==='sell');
-      if(!hasSlSheet){await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:[{addSheet:{properties:{title:'sell'}}}]}});}
+      const hasJpSheet=meta.result.sheets.some(s=>s.properties.title==='jpstock');
+      const addReqs=[];
+      if(!hasSlSheet)addReqs.push({addSheet:{properties:{title:'sell'}}});
+      if(!hasJpSheet)addReqs.push({addSheet:{properties:{title:'jpstock'}}});
+      if(addReqs.length)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:addReqs}});
     }catch(e){}
   }catch(e){console.error(e);}
 }
@@ -1859,7 +1863,7 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await jpLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
 }
 function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
@@ -3198,7 +3202,79 @@ function jpLoad() {
   try { return JSON.parse(localStorage.getItem(JP_KEY)) || { stocks: [], sells: [] }; }
   catch(e) { return { stocks: [], sells: [] }; }
 }
-function jpSave(data) { localStorage.setItem(JP_KEY, JSON.stringify(data)); }
+function jpSave(data) {
+  localStorage.setItem(JP_KEY, JSON.stringify(data));
+  jpSaveToSheet(data); // Googleログイン中は自動同期
+}
+
+// ---- Google Sheets 同期 ----
+async function jpSaveToSheet(data) {
+  if (!amSpreadsheetId) return;
+  const token = gapi.client && gapi.client.getToken && gapi.client.getToken();
+  if (!token) return;
+  try {
+    // stocks: 1行1銘柄 (id,name,code,sector,account,shares,buyPrice,buyDate,currentPrice,memo)
+    const sRows = [['id','name','code','sector','account','shares','buyPrice','buyDate','currentPrice','memo']];
+    (data.stocks || []).forEach(s => sRows.push([s.id||'',s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.buyDate||'',s.currentPrice||'',s.memo||'']));
+    // sells: 11列 (id,name,code,sector,account,shares,buyPrice,sellPrice,sellDate,memo,buyDate)
+    const sellRows = [['id','name','code','sector','account','shares','buyPrice','sellPrice','sellDate','memo','buyDate']];
+    (data.sells || []).forEach(s => sellRows.push([s.id||'',s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.sellPrice||0,s.sellDate||'',s.memo||'',s.buyDate||'']));
+
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: amSpreadsheetId,
+      range: `jpstock!A1:J${sRows.length + 200}`,
+      valueInputOption: 'RAW',
+      resource: { values: sRows }
+    });
+    if (sRows.length < 200) await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: amSpreadsheetId,
+      range: `jpstock!A${sRows.length + 1}:J1000`
+    });
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: amSpreadsheetId,
+      range: `jpstock!L1:V${sellRows.length + 200}`,
+      valueInputOption: 'RAW',
+      resource: { values: sellRows }
+    });
+    if (sellRows.length < 200) await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: amSpreadsheetId,
+      range: `jpstock!L${sellRows.length + 1}:V1000`
+    });
+  } catch(e) { console.warn('jpSaveToSheet error', e); }
+}
+
+async function jpLoadFromSheet() {
+  if (!amSpreadsheetId) return;
+  try {
+    const res = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: amSpreadsheetId,
+      range: 'jpstock!A1:V1000'
+    });
+    const rows = res.result.values || [];
+    if (rows.length < 2) return; // ヘッダーのみ or 空
+    // stocks: A-J列 (行1がヘッダー)
+    const sHeader = rows[0];
+    if (!sHeader || sHeader[0] !== 'id') return; // 未初期化
+    const stocks = rows.slice(1).filter(r => r[0] && r[2]).map(r => ({
+      id: r[0]||'', name: r[1]||'', code: r[2]||'', sector: r[3]||'その他',
+      account: r[4]||'特定口座', shares: parseFloat(r[5])||0,
+      buyPrice: parseFloat(r[6])||0, buyDate: r[7]||'',
+      currentPrice: r[8]?parseFloat(r[8]):null, memo: r[9]||''
+    }));
+    // sells: L-V列
+    const sellStartCol = 11; // L=11
+    const sellRows = rows.filter((r,i) => i >= 1 && r[sellStartCol]);
+    const sells = sellRows.map(r => ({
+      id: r[11]||'', name: r[12]||'', code: r[13]||'', sector: r[14]||'その他',
+      account: r[15]||'特定口座', shares: parseFloat(r[16])||0,
+      buyPrice: parseFloat(r[17])||0, sellPrice: parseFloat(r[18])||0,
+      sellDate: r[19]||'', memo: r[20]||'', buyDate: r[21]||''
+    }));
+    const data = { stocks, sells };
+    localStorage.setItem(JP_KEY, JSON.stringify(data));
+    jpRenderAll();
+  } catch(e) { console.warn('jpLoadFromSheet error', e); }
+}
 function jpUID() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function jpFmt(n) { return '¥' + Math.round(n).toLocaleString('ja-JP'); }
 function jpFmtSign(n) { return (n >= 0 ? '+¥' : '-¥') + Math.abs(Math.round(n)).toLocaleString('ja-JP'); }
