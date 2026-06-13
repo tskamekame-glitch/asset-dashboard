@@ -2372,9 +2372,9 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const values=[['id','name','cat','amount','note','shares','price','updated'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:H${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:H1000`});
+    const values=[['id','name','cat','amount','note','shares','price','updated','code'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||''])];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:I${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:I1000`});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
   }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
@@ -2460,9 +2460,9 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:H1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:I1000'});
     const rows=res.result.values||[];
-    amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr()}));
+    amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr(),code:r[8]||''}));
     amSaveToLocal();amRender();
   }catch(e){amLoadFromLocal();amRender();}
 }
