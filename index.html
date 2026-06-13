@@ -5275,14 +5275,14 @@ const CF_CAT_RULES=[
   {pat:/副業|フリーランス|報酬|謝礼/i,                            type:'income', cat:'副業'},
   {pat:/年金|給付|還付|キャッシュバック|ポイント還元|生活応援|ｵｳｴﾝ|応援/i, type:'income', cat:'年金'},
   // 証券会社（振込=入金扱い）: SBI証券・野村証券・みずほ証券などへの振込/からの振込
-  // 半角カナ「ｼﾖｳｹﾝ」（証券）を含む取引は、出金=積立、入金=売却益として扱う
-  {pat:/ｼﾖｳｹﾝ|証券|SBI証券|野村証券|みずほ証券/i,                  type:'auto', catExpense:'積立', catIncome:'売却益'},
+  // 半角・全角カナ「ｼﾖｳｹﾝ／シヨウケン」（証券）を含む取引は、出金=積立、入金=売却益として扱う
+  {pat:/ｼﾖｳｹﾝ|シヨウケン|証券|SBI証券|野村証券|みずほ証券/i,           type:'auto', catExpense:'積立', catIncome:'売却益'},
   // 定期預金・自動振替
   {pat:/ﾃｲｷ|定期預金|定期預金へ|定期へ/i,                          type:'auto', catExpense:'積立', catIncome:'その他収入'},
   // 住居
   {pat:/家賃|管理費|修繕|地代|UR|住宅/i,                         type:'expense', cat:'家賃'},
-  // 通信
-  {pat:/NTT|docomo|ドコモ|SoftBank|ソフトバンク|au|UQ|楽天モバイル|line mobile|povo|通信|インターネット|wifi|光/i, type:'expense', cat:'通信費'},
+  // 通信・光熱
+  {pat:/NTT|docomo|ドコモ|SoftBank|ソフトバンク|au|UQ|楽天モバイル|line mobile|povo|通信|インターネット|wifi|光|電気料金|ガス|水道/i, type:'expense', cat:'通信費'},
   // 交通
   {pat:/Suica|PASMO|JR|小田急|東急|京王|メトロ|都営|バス|新幹線|taxi|タクシー|駐車|ETC|高速/i, type:'expense', cat:'交通費'},
   // 積立・投資
@@ -5293,10 +5293,10 @@ const CF_CAT_RULES=[
   {pat:/ﾗｸﾃﾝｶ-ﾄﾞ|楽天カード|ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ|三井住友カード|ｼﾞﾔﾂｸｽ|JACCS|ジャックス|UCS|引落.*カード|カード.*引落|振替.*カード/i, type:'expense', cat:'税金'},
   // 税金・社会保険
   {pat:/国民健康保険|国民年金|住民税|所得税|社会保険|年金保険料/i, type:'expense', cat:'税金'},
-  // 娯楽
-  {pat:/Amazon|アマゾン|Netflix|ネットフリックス|Spotify|Hulu|映画|ゲーム|書籍|本屋|コンビニ|セブン|ローソン|ファミマ/i, type:'expense', cat:'娯楽'},
+  // 娯楽・サブスク・通販（デジタルコンテンツ・配信・宅配）
+  {pat:/Amazon|アマゾン|AMAZON|ＡＭＡＺＯＮ|Netflix|ネットフリックス|Spotify|Hulu|ユーネクスト|U-NEXT|映画|ゲーム|書籍|本屋|コンビニ|セブン|ローソン|ファミマ|ファミリ|フアミリ|ＰＡＹＰＡＹ|PayPay|ペイペイ|GOOGLE|ＧＯＯＧＬＥ|YOUTUBE|ＹＯＵＴＵＢＥ|APPLE|ＡＰＰＬＥ|ウーバー|UBER|まぐまぐ|TEMU|SEAART/i, type:'expense', cat:'娯楽'},
   // 生活費（広めに最後）
-  {pat:/スーパー|イオン|西友|マルエツ|ライフ|食料品|ドンキ|ドン・キホーテ|薬局|マツキヨ|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|スシロー|外食|レストラン|カフェ|コーヒー/i, type:'expense', cat:'生活費'},
+  {pat:/スーパー|イオン|西友|マルエツ|ライフ|食料品|ドンキ|ドン・キホーテ|薬局|マツキヨ|マツモトキヨシ|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|スシロー|外食|レストラン|カフェ|コーヒー|ダイソー|カスミ|ビックカメラ/i, type:'expense', cat:'生活費'},
 ];
 
 function cfGuessCat(desc,isExpense){
@@ -5356,37 +5356,30 @@ function cfParseSMBC(text){
   return rows;
 }
 
-// ---- Vpass（三井住友カード・Amazonゴールド）CSVパーサー ----
-// 列パターン: 利用日, 利用店名・商品名, 利用金額(円), お支払い金額, ...
+// ---- Vpass（三井住友カード・Amazonマスター・ApplePay等）CSVパーサー ----
+// 実フォーマット: ヘッダー行なし。1ファイルに複数カードの明細が連結される場合あり。
+//   カード情報行: "氏名,カード番号,カード名称"（日付なし）
+//   明細行:       "YYYY/MM/DD,利用店名,利用金額,...,メモ"
+//   フッター行:   日付列が空、または合計行（※マイ・ペイすリボ...等）
 // 文字コード: Shift-JIS
 function cfParseVpass(text){
   text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   const lines=text.split('\n').filter(l=>l.trim());
   const rows=[];
-  let dateCol=-1,nameCol=-1,amtCol=-1;
   for(const line of lines){
     const cols=cfSplitCSV(line);
-    // ヘッダー行検出
-    if(dateCol===-1){
-      const h=cols.map(c=>c.replace(/"/g,'').trim());
-      const di=h.findIndex(c=>/利用日|ご利用日/i.test(c));
-      const ni=h.findIndex(c=>/利用店名|店名|商品名|摘要/i.test(c));
-      const ai=h.findIndex(c=>/利用金額|ご利用金額/i.test(c));
-      if(di>=0&&ni>=0&&ai>=0){dateCol=di;nameCol=ni;amtCol=ai;}
-      continue;
-    }
-    if(cols.length<=Math.max(dateCol,nameCol,amtCol))continue;
-    const dateRaw=(cols[dateCol]||'').replace(/"/g,'').trim();
-    // 年が省略（MM/DD形式）の場合は当年補完
-    let date='';
-    if(/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(dateRaw)){
-      date=dateRaw.replace(/\//g,'-');
-    }else if(/^\d{2}[\/\-]\d{2}$/.test(dateRaw)){
-      date=new Date().getFullYear()+'-'+dateRaw.replace(/\//g,'-');
-    }else continue;
-    const desc=(cols[nameCol]||'').replace(/"/g,'').trim();
-    const amt=parseFloat((cols[amtCol]||'').replace(/[",，\s]/g,''))||0;
-    if(!amt||!date)continue;
+    if(cols.length<3)continue;
+
+    const dateRaw=(cols[0]||'').replace(/"/g,'').trim();
+    // 明細行のみ処理: 1列目が "YYYY/MM/DD" または "YYYY-MM-DD"（1〜2桁月日も許容）
+    const dm=dateRaw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if(!dm)continue;// カード情報行・フッター行はスキップ
+    const date=`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
+
+    const desc=(cols[1]||'').replace(/"/g,'').trim();
+    const amt=parseFloat((cols[2]||'').replace(/[",，\s]/g,''))||0;
+    if(!amt||!desc)continue;
+
     // クレカ明細は全て支出
     const{type,cat}=cfGuessCat(desc,true);
     rows.push({id:cfUID(),type,cat,amount:amt,date,memo:desc});
@@ -5395,47 +5388,50 @@ function cfParseVpass(text){
 }
 
 // ---- PayPay銀行 CSVパーサー ----
-// 列構成（個人口座）:
-//   取引日時, お取引内容, 出金金額(円), 入金金額(円), 取引後残高(円)
-//   ※「取引日時」は "YYYY/MM/DD HH:MM:SS" 形式
-//   ※ 文字コード: UTF-8（BOMなし）
+// 列構成（個人口座・実フォーマット）:
+//   操作日(年), 操作日(月), 操作日(日), 操作時刻(時), 操作時刻(分), 操作時刻(秒),
+//   取引順番号, 摘要, お支払金額, お預り金額, 残高, メモ
+//   ※ 日付が年/月/日で別列に分かれている
+//   ※ 文字コード: Shift-JIS
 function cfParsePaypay(text){
   text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   const lines=text.split('\n').filter(l=>l.trim());
   const rows=[];
-  let dateCol=-1,descCol=-1,outCol=-1,inCol=-1;
+  let yCol=-1,mCol=-1,dCol=-1,descCol=-1,outCol=-1,inCol=-1;
 
   for(const line of lines){
     const cols=cfSplitCSV(line);
     // ヘッダー行検出
-    if(dateCol===-1){
+    if(yCol===-1){
       const h=cols.map(c=>c.replace(/"/g,'').trim());
-      // 「取引日時」「日時」「取引日」などを許容
-      const di=h.findIndex(c=>/取引日|日時/i.test(c));
-      // 「お取引内容」「取引内容」「摘要」
-      const ni=h.findIndex(c=>/取引内容|摘要|お取引内容/i.test(c));
-      // 「出金金額」「支出」「出金」
-      const oi=h.findIndex(c=>/出金|支出/i.test(c));
-      // 「入金金額」「収入」「入金」
-      const ii=h.findIndex(c=>/入金|収入/i.test(c));
-      if(di>=0&&ni>=0){
-        dateCol=di;descCol=ni;
+      // 年/月/日が別列のパターン（操作日(年)等）
+      const yi=h.findIndex(c=>/年/.test(c)&&/日/.test(c));
+      const mi=h.findIndex(c=>/月/.test(c)&&/日/.test(c)&&h.indexOf(c)!==yi);
+      const di=h.findIndex((c,idx)=>/[日]/.test(c)&&/操作日|取引日|年月日/.test(c)&&idx!==yi&&idx!==mi);
+      // 摘要・取引内容
+      const ni=h.findIndex(c=>/摘要|取引内容|お取引内容/.test(c));
+      // お支払金額（出金）/ お預り金額（入金）
+      const oi=h.findIndex(c=>/お支払|出金|支払金額/.test(c));
+      const ii=h.findIndex(c=>/お預り|入金|預り金額/.test(c));
+
+      if(yi>=0&&mi>=0&&di>=0&&ni>=0){
+        yCol=yi;mCol=mi;dCol=di;descCol=ni;
         outCol=oi>=0?oi:-1;
         inCol=ii>=0?ii:-1;
       }
       continue;
     }
-    if(cols.length<=Math.max(dateCol,descCol))continue;
+    if(cols.length<=Math.max(yCol,mCol,dCol,descCol))continue;
 
-    // 日時から日付だけ抽出（"YYYY/MM/DD HH:MM:SS" → "YYYY-MM-DD"）
-    const dateRaw=(cols[dateCol]||'').replace(/"/g,'').trim();
-    const dateMatch=dateRaw.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
-    if(!dateMatch)continue;
-    const date=`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+    const yRaw=(cols[yCol]||'').replace(/"/g,'').trim();
+    const mRaw=(cols[mCol]||'').replace(/"/g,'').trim();
+    const dRaw=(cols[dCol]||'').replace(/"/g,'').trim();
+    if(!/^\d{4}$/.test(yRaw)||!/^\d{1,2}$/.test(mRaw)||!/^\d{1,2}$/.test(dRaw))continue;
+    const date=`${yRaw}-${mRaw.padStart(2,'0')}-${dRaw.padStart(2,'0')}`;
 
     const desc=(cols[descCol]||'').replace(/"/g,'').trim();
     const outAmt=outCol>=0?parseFloat((cols[outCol]||'').replace(/[",，\s]/g,''))||0:0;
-    const inAmt=inCol>=0?parseFloat((cols[inCol]||'').replace(/[",，\s]/g,''))||0:0;
+    const inAmt =inCol>=0 ?parseFloat((cols[inCol ]||'').replace(/[",，\s]/g,''))||0:0;
 
     if(!outAmt&&!inAmt)continue;
 
