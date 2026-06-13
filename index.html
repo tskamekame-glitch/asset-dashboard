@@ -1177,13 +1177,20 @@ tr:last-child td{border-bottom:none}
   <div class="phead">
     <div class="phead-inner">
       <h1>💸 月次収支</h1>
-      <div style="display:flex;gap:6px">
-        <button class="btn-sm" onclick="cfOpenImport()" style="font-size:12px;padding:6px 12px;color:var(--accent);border-color:var(--accent)">📥 CSV取込</button>
-        <button class="btn-accent" onclick="cfOpenModal()">＋ 記録</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="sync-status" id="cfSyncStatus" style="display:none"><span class="sync-dot" id="cfSyncDot"></span><span id="cfSyncText" style="font-size:11px"></span></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm" onclick="cfOpenImport()" style="font-size:12px;padding:6px 12px;color:var(--accent);border-color:var(--accent)">📥 CSV取込</button>
+          <button class="btn-accent" onclick="cfOpenModal()">＋ 記録</button>
+        </div>
       </div>
     </div>
   </div>
   <div class="page-inner">
+    <!-- 未ログイン時の同期案内 -->
+    <div id="cf-sync-banner" style="display:none;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.6">
+      💡 現在この端末のみに保存されています。「資産管理」タブでGoogleログインすると、Mac・スマホ間で収支データが自動同期されます。
+    </div>
     <!-- サマリーカード -->
     <div id="cf-summary-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
     <!-- 月切替 -->
@@ -2411,10 +2418,14 @@ function amShowLogin(){
   document.getElementById('managerMain').style.display='none';
 }
 function setSyncStatus(state,text){
-  const dot=document.getElementById('syncDot'),txt=document.getElementById('syncText'),st=document.getElementById('syncStatus');
-  st.style.display='flex';
-  dot.className='sync-dot '+(state==='ok'?'ok':state==='syncing'?'syncing':'');
-  txt.textContent=text;
+  const ids=[['syncStatus','syncDot','syncText'],['cfSyncStatus','cfSyncDot','cfSyncText']];
+  ids.forEach(([stId,dotId,txtId])=>{
+    const st=document.getElementById(stId),dot=document.getElementById(dotId),txt=document.getElementById(txtId);
+    if(!st||!dot||!txt)return;
+    st.style.display='flex';
+    dot.className='sync-dot '+(state==='ok'?'ok':state==='syncing'?'syncing':'');
+    txt.textContent=text;
+  });
 }
 async function amFindOrCreateSheet(){
   try{
@@ -5023,12 +5034,17 @@ function cfSave(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch
 const CF_COLS=['id','type','cat','amount','date','memo'];
 
 async function cfSaveToSheet(){
-  if(!amIsOnline||!amSpreadsheetId)return;
+  if(!amIsOnline||!amSpreadsheetId){
+    setSyncStatus('','未ログイン（ローカル保存のみ）');
+    return;
+  }
+  setSyncStatus('syncing','同期中...');
   try{
     const values=[CF_COLS,...cfData.map(d=>CF_COLS.map(k=>d[k]!==undefined&&d[k]!==null?d[k]:''))];
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`cashflow!A1:F${values.length+10}`,valueInputOption:'RAW',resource:{values}});
     if(cfData.length+1<1000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`cashflow!A${cfData.length+2}:F10000`});
-  }catch(e){console.error('cfSaveToSheet error',e);}
+    setSyncStatus('ok','同期済み✓');
+  }catch(e){console.error('cfSaveToSheet error',e);setSyncStatus('err','同期失敗（ローカル保存済み）');}
 }
 
 async function cfLoadFromSheet(){
@@ -5068,6 +5084,15 @@ const CF_CAT_COLOR={
 
 function cfRender(){
   cfLoad();
+  // 同期状態の初期表示
+  const banner=document.getElementById('cf-sync-banner');
+  if(amIsOnline&&amSpreadsheetId){
+    setSyncStatus('ok','同期済み✓');
+    if(banner)banner.style.display='none';
+  }else{
+    setSyncStatus('','未ログイン（ローカル保存のみ）');
+    if(banner)banner.style.display='block';
+  }
   const now=new Date();
   if(!cfCurrentMonth){
     cfCurrentMonth=now.getFullYear()+'-'+(String(now.getMonth()+1).padStart(2,'0'));
