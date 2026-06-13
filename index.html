@@ -2944,7 +2944,7 @@ function trParseCSV(text,filename){
   const rows=[];
   for(let i=1;i<lines.length;i++){const cols=[];let cur='',inQ=false;for(const ch of lines[i]){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur);cur='';}else{cur+=ch;}}cols.push(cur);if(cols.length>=4&&cols[1])rows.push({name:cols[1]||'',cat:cols[2]||'その他',amount:parseFloat(cols[3])||0,updated:cols[5]||''});}
   if(!rows.length){alert('有効なデータがありませんでした: '+filename);return;}
-  // カテゴリ正規化：資産管理の7カテゴリに統一
+  const VALID_CATS=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','銀行','年金','預り金','その他'];
   const CAT_NORM={
     '全世界インデックス':'全世界インデックス', '日本インデックス':'日本インデックス',
     'インドインデックス':'インドインデックス', '高配当':'高配当', '個別株':'個別株',
@@ -2957,12 +2957,16 @@ function trParseCSV(text,filename){
     {pat:/インド|India/i, cat:'インドインデックス'},
     {pat:/高配当|SBI.*日本高配当|日本高配当/i, cat:'高配当'},
     {pat:/全世界|オルカン|S&P|S&amp;P|米国|FANG|PayPay|eMAXIS/i, cat:'全世界インデックス'},
-    {pat:/銀行|ゆうちょ|UFJ|三菱|みずほ|三井住友銀|りそな|新生/i, cat:'銀行'},
+    {pat:/銀行|ゆうちょ|UFJ|三菱(?!UFJ以外)|三井住友銀|りそな|新生/i, cat:'銀行'},
   ];
   rows.forEach(r=>{
+    // Step1: CSVに有効なカテゴリが入っていればそのまま使う（最優先）
+    const normalizedCat=CAT_NORM[r.cat];
+    if(normalizedCat){r.cat=normalizedCat;return;}
+    if(VALID_CATS.includes(r.cat))return;
+    // Step2: カテゴリが不明な場合のみ口座名から推定（補完）
     const byName=CAT_NORM_BY_NAME.find(x=>x.pat.test(r.name));
     if(byName){r.cat=byName.cat;}
-    else if(CAT_NORM[r.cat]){r.cat=CAT_NORM[r.cat];}
     else{r.cat='銀行';}
   });
   let dateStr='';const m=filename.match(/(\d{4}-\d{2}-\d{2})/);
