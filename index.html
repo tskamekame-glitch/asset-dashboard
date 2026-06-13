@@ -631,7 +631,11 @@ tr:last-child td{border-bottom:none}
 <!-- ========== PORTFOLIO ========== -->
 <div class="panel" id="tab-portfolio">
   <div class="phead">
-    <div class="phead-inner"><h1>📊 PF管理</h1></div>
+    <div class="phead-inner">
+      <h1>📊 PF管理</h1>
+      <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="document.getElementById('pf-sbi-csv-input').click()">📥 SBI CSV</button>
+      <input type="file" id="pf-sbi-csv-input" accept=".csv" multiple style="display:none" onchange="pfSBIImport(event)">
+    </div>
   </div>
   <div class="page-inner">
     <div class="pf-header">
@@ -1616,6 +1620,173 @@ function pfSyncFromAM(){
     }
   });
   if(changed){pfSaveData();if(currentTab==='portfolio')pfRender();}
+}
+
+// ============================================================
+// SBI証券 CSV → PF管理 自動反映
+// ============================================================
+// SBI証券CSVには2種類ある
+//   投信残高: ファンド名, 口座種別, 基準価額, 保有口数, 平均取得価額, 取得金額合計, 評価額, 評価損益額, ...
+//   株式残高: 銘柄名, 銘柄コード, 口座種別, 数量, 取得単価, 取得金額, 現在値, 評価額, 評価損益額, ...
+//
+// マッチングキー：PFエントリ名 ⊇ SBI銘柄名の一部（双方向部分一致）
+
+function pfSBIImport(event){
+  const files=Array.from(event.target.files);
+  event.target.value='';
+  if(!files.length)return;
+  let pending=files.length;
+  const allRows=[];
+  files.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const rows=pfParseSBICSV(ev.target.result,f.name);
+      allRows.push(...rows);
+      pending--;
+      if(pending===0) pfApplySBIRows(allRows);
+    };
+    // SBI証券CSVはShift-JIS
+    reader.readAsText(f,'Shift-JIS');
+  });
+}
+
+function pfParseSBICSV(text,filename){
+  // BOM除去・改行統一
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+
+  const rows=[];
+  // ヘッダー行を探してフォーマット判定
+  let headerIdx=-1;
+  let isToushin=false;
+  for(let i=0;i<Math.min(20,lines.length);i++){
+    const c=lines[i].split(',');
+    // 投信判定: 「ファンド名」または「基準価額」を含む
+    if(c.some(v=>v.includes('ファンド名')||v.includes('基準価額'))){
+      headerIdx=i; isToushin=true; break;
+    }
+    // 株式判定: 「銘柄コード」または「現在値」を含む
+    if(c.some(v=>v.includes('銘柄コード')||v.includes('現在値'))){
+      headerIdx=i; isToushin=false; break;
+    }
+  }
+
+  if(headerIdx<0){
+    // ヘッダーなし→列数で自動判定して全行試みる
+    // 評価額が含まれそうな行を総当たり
+    for(let i=0;i<lines.length;i++){
+      const c=lines[i].split(',').map(v=>v.replace(/"/g,'').trim());
+      const row=pfTrySBIParseLine(c,null);
+      if(row)rows.push(row);
+    }
+    return rows;
+  }
+
+  const header=lines[headerIdx].split(',').map(v=>v.replace(/"/g,'').trim());
+  for(let i=headerIdx+1;i<lines.length;i++){
+    const cols=lines[i].split(',').map(v=>v.replace(/"/g,'').trim());
+    if(!cols[0])continue;
+    const row=pfTrySBIParseLine(cols,header);
+    if(row)rows.push(row);
+  }
+  return rows;
+}
+
+function pfTrySBIParseLine(cols,header){
+  // ヘッダーがある場合はインデックスで取得、ない場合は位置推定
+  function col(names,fallbackIdx){
+    if(header){
+      for(const n of names){
+        const i=header.findIndex(h=>h.includes(n));
+        if(i>=0&&cols[i]!==undefined)return cols[i];
+      }
+    }
+    return cols[fallbackIdx]!==undefined?cols[fallbackIdx]:'';
+  }
+  function toNum(s){return parseFloat((s||'').replace(/,/g,'').replace(/円/g,''))||0;}
+
+  // 銘柄名（投信=ファンド名、株式=銘柄名）
+  const name=col(['ファンド名','銘柄名'],0);
+  if(!name||name.length<2)return null;
+  // 数字だけの列はスキップ
+  if(/^\d+$/.test(name))return null;
+
+  // 評価額
+  const evalAmt=toNum(col(['評価額'],6));
+  if(evalAmt<=0)return null;
+
+  // 株式の場合：株数・現在値
+  const sharesRaw=col(['数量','保有口数','口数'],3);
+  const priceRaw=col(['現在値','基準価額'],6);
+  const shares=toNum(sharesRaw);
+  const price=toNum(priceRaw);
+
+  // 口座種別
+  const acct=col(['口座種別','口座'],1)||'';
+
+  return {name,evalAmt,shares,price,acct};
+}
+
+// SBIの銘柄名 ↔ PFエントリ名の部分一致スコアを返す
+function pfSBIMatchScore(sbiName,pfName){
+  const s=sbiName.replace(/\s/g,'').toLowerCase();
+  const p=pfName.replace(/\s/g,'').toLowerCase();
+  if(s===p)return 100;
+  if(p.includes(s)||s.includes(p))return 80;
+  // トークン分割して共通部分
+  const tokens=s.split(/[（）()・、,\-\/]/);
+  for(const t of tokens){
+    if(t.length>=3&&p.includes(t))return 60;
+  }
+  // 銘柄コード（4桁数字）一致
+  const codeMatch=sbiName.match(/\b(\d{4})\b/);
+  if(codeMatch&&pfName.includes(codeMatch[1]))return 90;
+  return 0;
+}
+
+function pfApplySBIRows(rows){
+  if(!rows.length){showToast('⚠️ 有効な行が見つかりませんでした',3000);return;}
+  if(!pfData||!pfData.length){showToast('⚠️ PFデータが未初期化です',3000);return;}
+
+  let updated=0;
+  const log=[];
+
+  rows.forEach(row=>{
+    // 最もスコアの高いPFエントリを探す
+    let bestIdx=-1,bestScore=0;
+    pfData.forEach((d,i)=>{
+      const score=pfSBIMatchScore(row.name,d.name);
+      if(score>bestScore){bestScore=score;bestIdx=i;}
+    });
+    if(bestIdx<0||bestScore<50)return; // マッチなし
+
+    const item=pfData[bestIdx];
+    const newVal=Math.round(row.evalAmt);
+    const changed=item.value!==newVal||(row.shares>0&&item.shares!==row.shares);
+    if(!changed)return;
+
+    item.value=newVal;
+    if(row.shares>0){item.shares=Math.round(row.shares);}
+    if(row.price>0&&row.shares>0){item.price=Math.round(row.price);}
+    // memoに最終更新日時を追記
+    const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}).replace('/','月').replace('$','日')+'日';
+    const base=item.memo.replace(/\s*\[SBI.*?\]$/,'');
+    item.memo=base+` [SBI更新 ${new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'})}]`;
+    updated++;
+    log.push({sbi:row.name,pf:item.name,val:newVal,score:bestScore});
+  });
+
+  if(!updated){
+    showToast('ℹ️ 更新対象なし（既に最新または銘柄未マッチ）',3500);
+    console.log('[SBI Import] rows parsed:',rows);
+    return;
+  }
+
+  pfSaveData();
+  if(currentTab==='portfolio')pfRender();
+  refreshHome();
+  showToast(`✅ SBI CSV: ${updated}件の評価額を更新しました`,3500);
+  console.log('[SBI Import] updated:',log);
 }
 
 // 口座名 → カテゴリ自動判定ルール（上から順にマッチ）
