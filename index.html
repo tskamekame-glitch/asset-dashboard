@@ -1175,6 +1175,10 @@ tr:last-child td{border-bottom:none}
         </select>
       </div>
       <div class="field"><label>残高（円）</label><input type="number" id="fAmount" placeholder="例: 500000" inputmode="numeric"></div>
+      <div class="field" id="fCodeField" style="display:none">
+        <label>銘柄コード <span style="font-size:11px;color:var(--text3);font-weight:400">（SBI CSV自動照合に使用）</span></label>
+        <input type="text" id="fCode" placeholder="例: 4063" inputmode="numeric" maxlength="6" autocomplete="off" style="letter-spacing:0.08em;font-variant-numeric:tabular-nums">
+      </div>
       <div class="field" id="fStockFields" style="display:none">
         <label>株式自動計算</label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1439,7 +1443,7 @@ function amRender(){
         +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
           +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
             +'<div style="flex:1;min-width:0">'
-              +'<div class="acct-name">'+esc(a.name)+'</div>'
+              +'<div class="acct-name">'+esc(a.name)+(a.code?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle;letter-spacing:0.05em">'+esc(a.code)+'</span>':'')+'</div>'
               +noteHtml
               +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
                 +stockInputs
@@ -1507,6 +1511,7 @@ function openAddModal(defaultCat){
   document.getElementById('fCat').value=defaultCat||'銀行';
   document.getElementById('fAmount').value='';
   document.getElementById('fNote').value='';
+  document.getElementById('fCode').value='';
   document.getElementById('fShares').value='';
   document.getElementById('fPrice').value='';
   document.getElementById('fCalcResult').textContent='';
@@ -1527,6 +1532,7 @@ function openEditModal(id){
   document.getElementById('fCat').value=finalCat;
   document.getElementById('fAmount').value=a.amount;
   document.getElementById('fNote').value=a.note||'';
+  document.getElementById('fCode').value=a.code||'';
   document.getElementById('fShares').value=a.shares||'';
   document.getElementById('fPrice').value=a.price||'';
   document.getElementById('fCalcResult').textContent='';
@@ -1550,10 +1556,11 @@ async function saveAccount(){
   const amount=parseFloat(document.getElementById('fAmount').value)||0;
   const note=document.getElementById('fNote').value.trim();
   if(!name){document.getElementById('fName').focus();return;}
+  const code=(document.getElementById('fCode').value||'').trim().replace(/[^0-9A-Za-z]/g,'');
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,amount,note,shares,price,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,amount,note,shares,price,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();
 }
 function amConfirmDelete(id){
@@ -1567,9 +1574,12 @@ document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===do
 document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
 function amToggleStockFields(){
   const cat=document.getElementById('fCat').value;
+  const isStock=(cat==='個別株'||cat==='高配当');
   const sf=document.getElementById('fStockFields');
-  if(sf)sf.style.display=(cat==='個別株'||cat==='高配当')?'block':'none';
-  if(cat!=='個別株'&&cat!=='高配当'){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
+  const cf=document.getElementById('fCodeField');
+  if(sf)sf.style.display=isStock?'block':'none';
+  if(cf)cf.style.display=isStock?'block':'none';
+  if(!isStock){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
 }
 function amCalcAmount(){
   const shares=parseFloat(document.getElementById('fShares').value)||0;
@@ -1976,39 +1986,55 @@ function amParseSBICSV(text){
 }
 
 // amAccounts内の口座とSBI銘柄をマッチング
-function amSBIMatchScore(sbiNorm,accName){
-  // accNameも全角→半角正規化
+function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode){
   function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
+  const s=toH(sbiNorm);
   const p=toH(accName);
-  const s=sbiNorm;
-  if(p===s)return 100;
-  // 銘柄コード4桁（株式）: SBIの "4063 信越化" ↔ amの "信越化学（特定）" でもコード一致優先
+  // ===== 銘柄コード完全一致（最優先）=====
+  // AM口座にcodeが設定されている場合はコードで即決
+  if(accCode){
+    const codeInSBI=s.match(/\b(\d{4,6})\b/);
+    if(codeInSBI&&codeInSBI[1]===accCode)return 100;
+    // コードが設定済みなのにSBIの銘柄コードと一致しない→この口座は候補から外す
+    if(codeInSBI)return 0;
+  }
+  // ===== ファンド固有ルール（最優先）=====
+  // SBI銘柄ごとに must/not キーワードで正確に対応するAM口座を特定
+  const FUND_RULES=[
+    {sbi:/eMAXIS.*Slim.*米国|S.P.*500.*eMAXIS/i,   must:['米国'],  not:['インド','TOPIX','日経','国内','SBI iDeCo']},
+    {sbi:/eMAXIS.*Slim.*国内.*日経|日経平均.*eMAXIS/i, must:['日経'],  not:['米国','インド','TOPIX','SBI iDeCo']},
+    {sbi:/eMAXIS.*Slim.*国内.*TOPIX/i,              must:['TOPIX'], not:['米国','インド','日経']},
+    {sbi:/eMAXIS.*インド|インド.*eMAXIS/i,           must:['インド','eMAXIS'], not:['日経','米国','TOPIX','SBI iDeCo']},
+    {sbi:/iFreeNEXT.*FANG/i,                        must:['FANG'],  not:[]},
+    {sbi:/iTrust.*インド/i,                          must:['iTrust'],not:[]},
+    {sbi:/SBI.*高配当|高配当.*SBI/i,                 must:['高配当'], not:[]},
+  ];
+  for(const rule of FUND_RULES){
+    if(!rule.sbi.test(s))continue;
+    const allMust=rule.must.every(k=>p.includes(k));
+    const noneNot=rule.not.every(k=>!p.includes(k));
+    if(!allMust||!noneNot)return 0; // 条件不一致→絶対に選ばない
+    let base=70;
+    if(acctSuffix==='特定'&&p.includes('特定')&&!p.includes('NISA'))base=92;
+    else if(acctSuffix==='NISA成長'&&p.includes('NISA成長'))base=92;
+    else if(acctSuffix==='NISAつみたて'&&p.includes('つみたて'))base=92;
+    else if(acctSuffix==='特定'&&p.includes('NISA'))base=45;
+    else if(acctSuffix==='NISA成長'&&p.includes('特定')&&!p.includes('NISA'))base=45;
+    return base;
+  }
+  // ===== 株式（コード・会社名）=====
   const codeM=s.match(/\b(\d{4})\b/);
   if(codeM&&p.includes(codeM[1]))return 95;
-  // 完全部分一致
+  if(p===s)return 100;
   if(p.includes(s)||s.includes(p))return 80;
-  // 長めのトークン（4文字以上）で照合
-  const tokens=s.split(/[\s（）()・＆&\/＋\+\-\uff0b]+/).filter(t=>t.length>=4);
-  let maxTok=0;
-  for(const t of tokens){if(p.includes(t))maxTok=Math.max(maxTok,t.length);}
-  if(maxTok>=6)return 75;
-  if(maxTok>=4)return 65;
-  // ファンド固有の短縮マッチング
-  const shortMap=[
-    {pat:/eMAXIS.*Slim.*米国|S.P.*500/i, key:'米国', antiKey:'国内'},
-    {pat:/eMAXIS.*Slim.*国内.*日経|日経平均/i, key:'日経', antiKey:'米国'},
-    {pat:/eMAXIS.*Slim.*国内.*TOPIX/i, key:'TOPIX', antiKey:'米国'},
-    {pat:/iFreeNEXT.*FANG/i, key:'FANG', antiKey:null},
-    {pat:/iTrust.*インド/i, key:'iTrust', antiKey:null},
-    {pat:/インド.*eMAXIS|eMAXIS.*インド/i, key:'インド', antiKey:null},
-    {pat:/SBI.*高配当|高配当.*SBI/i, key:'高配当', antiKey:null},
-  ];
-  for(const {pat,key,antiKey} of shortMap){
-    if(pat.test(s)&&p.includes(key)&&(!antiKey||!p.includes(antiKey)))return 70;
-  }
-  // 銘柄名の主要部分（会社名）一致（3文字以上のひらがな/カタカナ/漢字）
   const nameTokens=s.match(/[\u3040-\u9FFF\u30A0-\u30FF]{3,}/g)||[];
-  for(const t of nameTokens){if(p.includes(t))return 60;}
+  for(const t of nameTokens){if(p.includes(t))return 65;}
+  // 2文字以上の英数＋漢字混合トークン（JX金属など）
+  const mixTokens=s.match(/[A-Za-z0-9]{1,}[\u4E00-\u9FFF]{1,}|[\u4E00-\u9FFF]{1,}[A-Za-z0-9]{1,}/g)||[];
+  for(const t of mixTokens){if(t.length>=3&&p.includes(t))return 60;}
+  // 英字2文字以上のトークン（JX等）が会社名と一致
+  const engOnly=s.match(/[A-Z]{2,}/g)||[];
+  for(const t of engOnly){if(p.includes(t))return 55;}
   return 0;
 }
 
@@ -2020,10 +2046,12 @@ function amApplySBIRows(rows){
   const log=[];
   const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
 
+  // 同名SBI行が複数ある場合（iFreeNEXT FANG+ 特定/NISA等）は
+  // セクション情報でPFエントリの(特定/NISA)を区別して対応
   rows.forEach(row=>{
     let bestIdx=-1,bestScore=0;
     amAccounts.forEach((acc,i)=>{
-      const score=amSBIMatchScore(row.nameNorm,acc.name);
+      const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'');
       if(score>bestScore){bestScore=score;bestIdx=i;}
     });
     if(bestIdx<0||bestScore<55)return;
@@ -2036,11 +2064,10 @@ function amApplySBIRows(rows){
     acc.amount=newVal;
     if(row.shares>0)acc.shares=row.shares;
     if(row.price>0&&row.shares>0)acc.price=row.price;
-    // memoに最終SBI更新日を記録
     acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
 
     updated++;
-    log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:bestScore});
+    log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:bestScore,acctSuffix:row.acctSuffix});
   });
 
   if(!updated){
@@ -2052,7 +2079,7 @@ function amApplySBIRows(rows){
   amSaveToLocal();
   amRender();
   refreshHome();
-  pfSyncFromAM(); // PF管理にも反映
+  pfSyncFromAM();
   showToast(`✅ SBI CSV: ${updated}件の評価額を更新しました`,3500);
   console.log('[amSBI] updated:',log);
 }
