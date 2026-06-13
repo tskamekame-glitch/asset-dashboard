@@ -555,6 +555,15 @@ tr:last-child td{border-bottom:none}
         <span style="font-size:11px;color:var(--text3)">月次合計（概算）</span>
         <span id="home-income-total" style="font-size:14px;font-weight:700;color:var(--text)">—</span>
       </div>
+      <div id="home-income-div-actual-row" style="margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);display:none;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--text3)">今年の配当受取実績</span>
+        <span id="home-income-div-actual" style="font-size:13px;font-weight:700;color:#8B5CF6">—</span>
+      </div>
+    </div>
+    <!-- 配当・決算カレンダー -->
+    <div id="home-earnings-cal" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;display:none">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">📅 配当・決算カレンダー（直近）</div>
+      <div id="home-earnings-list"></div>
     </div>
     <div class="home-grid">
       <div class="home-card" onclick="switchTab('manager')">
@@ -795,6 +804,8 @@ tr:last-child td{border-bottom:none}
   <div class="phead"><div class="phead-inner"><h1>💴 売却収支</h1><div style="display:flex;gap:6px"><button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="slExport()">↓ 出力</button><button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="slImportClick()">↑ 取込</button><button class="btn-accent" onclick="slOpenModal()">＋ 追加</button></div></div></div>
   <input type="file" id="sl-import-file" accept=".json" style="display:none" onchange="slImport(event)">
   <div class="page-inner">
+    <!-- 税務サマリー -->
+    <div id="sl-tax-summary" style="margin-bottom:14px"></div>
     <div id="sl-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px"></div>
     <div id="sl-list"></div>
     <div id="sl-empty" style="text-align:center;padding:60px 20px;color:var(--text3);font-size:14px">売却記録がありません<br><small>「＋ 追加」から登録してください</small></div>
@@ -1533,6 +1544,7 @@ function refreshHome(){
     document.getElementById('home-todo').textContent=rem>0?rem+'件':t>0?'完了🎉':'—';
     document.getElementById('hbadge-todo').textContent=t>0?dn+'/'+t+'件 完了':'データなし';
   }catch(e){}
+  try{wlRenderEarningsCalendar();}catch(e){}
 }
 
 // ============================================================
@@ -3756,11 +3768,112 @@ function slImport(e){
   reader.readAsText(file);
 }
 
+// ============================================================
+// 税務サマリー（年間損益・損益通算・NISA枠消化率）
+// ============================================================
+function pfNisaGetYearUsage(year){
+  const s=pfNisaLoadSettings();
+  const T=1200000,G=2400000;
+  let tsY=0,sg=0,label=year+'年';
+  if(year===2026){
+    tsY=s.tsumitate.reduce((a,d)=>a+Number(d.monthly||0),0)*12;
+    sg=s.seichou2026.reduce((a,d)=>a+Number(d.amount||0),0);
+  }else if(year===2027){
+    tsY=(s.tsumitate27||s.tsumitate).reduce((a,d)=>a+Number(d.monthly||0),0)*12;
+    sg=s.seichou2027.reduce((a,d)=>a+Number(d.amount||0),0);
+  }else{
+    tsY=s.tsumitate.reduce((a,d)=>a+Number(d.monthly||0),0)*12;
+  }
+  return{year:label,T,G,tsY,sg,tsRem:T-tsY,sgRem:G-sg,tsPct:Math.min(100,(tsY/T)*100),sgPct:Math.min(100,(sg/G)*100)};
+}
+
+function slRenderTaxSummary(){
+  const el=document.getElementById('sl-tax-summary');
+  if(!el)return;
+
+  const TAX_RATE=0.20315;
+  const currentYear=new Date().getFullYear();
+
+  // 年別グループ化（特定/一般口座のみ＝課税対象）
+  const byYear={};
+  slData.forEach(d=>{
+    const y=(d.date||'').slice(0,4);
+    if(!y)return;
+    if(!byYear[y])byYear[y]={gainSum:0,taxPaid:0,sellTotal:0,count:0,nisaGain:0,nisaCount:0};
+    if(d.account==='NISA'){
+      byYear[y].nisaGain+=(d.gain||0);
+      byYear[y].nisaCount++;
+    }else{
+      byYear[y].gainSum+=(d.gain||0);
+      byYear[y].taxPaid+=(d.tax||0);
+      byYear[y].sellTotal+=(d.sellTotal||0);
+      byYear[y].count++;
+    }
+  });
+
+  const years=Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
+
+  // NISA枠消化率（現在の年）
+  const nisaUsage=pfNisaGetYearUsage(currentYear);
+
+  let yearCards='';
+  if(years.length===0){
+    yearCards=`<div style="font-size:12px;color:var(--text3);text-align:center;padding:10px">特定口座の売却記録がありません</div>`;
+  }else{
+    yearCards=years.map(y=>{
+      const d=byYear[y];
+      // 損益通算後の課税対象額（マイナスなら課税なし）
+      const taxableGain=Math.max(0,d.gainSum);
+      const taxAfterOffset=Math.round(taxableGain*TAX_RATE);
+      const diff=Math.round(d.taxPaid-taxAfterOffset);
+      const hasLossOffset=d.gainSum<0&&d.taxPaid>0;
+      return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:13px;font-weight:600">${y}年（特定/一般口座）</span>
+          <span style="font-size:11px;color:var(--text3)">${d.count}件</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:${diff!==0?'6px':'0'}">
+          <div><div style="font-size:10px;color:var(--text3)">年間損益</div><div style="font-size:13px;font-weight:700;color:${d.gainSum>=0?'var(--green)':'var(--danger)'}">${slFmtSign(Math.round(d.gainSum))}</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">源泉徴収済み税額</div><div style="font-size:13px;font-weight:700">${slFmt(Math.round(d.taxPaid))}</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">損益通算後 想定税額</div><div style="font-size:13px;font-weight:700">${slFmt(taxAfterOffset)}</div></div>
+        </div>
+        ${diff!==0?`<div style="font-size:11px;padding-top:6px;border-top:0.5px solid var(--border);color:${diff>0?'var(--green)':'var(--text2)'}">
+          ${diff>0
+            ?`💡 確定申告で損益通算すると ${slFmt(diff)} 程度が還付される可能性があります`
+            :`⚠ 損益通算後の税額が源泉徴収額を上回っています（不足分の申告が必要な場合があります）`}
+        </div>`:''}
+        ${d.nisaCount>0?`<div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border)">NISA口座（非課税）：${d.nisaCount}件 損益${slFmtSign(Math.round(d.nisaGain))}</div>`:''}
+      </div>`;
+    }).join('');
+  }
+
+  el.innerHTML=`
+    <div style="font-size:12px;font-weight:600;color:var(--text2);letter-spacing:0.06em;margin-bottom:8px">🧾 税務サマリー</div>
+    ${yearCards}
+    <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-top:4px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">${nisaUsage.year} NISA枠 消化率</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px"><span>つみたて枠</span><span>${nisaUsage.tsPct.toFixed(0)}%</span></div>
+          <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:3px"><div style="width:${nisaUsage.tsPct}%;height:100%;background:#185FA5;border-radius:3px"></div></div>
+          <div style="font-size:10px;color:var(--text3)">使用 ${slFmt(nisaUsage.tsY)} / 上限 ${slFmt(nisaUsage.T)}（残り${slFmt(nisaUsage.tsRem)}）</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px"><span>成長投資枠</span><span>${nisaUsage.sgPct.toFixed(0)}%</span></div>
+          <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:3px"><div style="width:${nisaUsage.sgPct}%;height:100%;background:#2ecc71;border-radius:3px"></div></div>
+          <div style="font-size:10px;color:var(--text3)">使用 ${slFmt(nisaUsage.sg)} / 上限 ${slFmt(nisaUsage.G)}（残り${slFmt(nisaUsage.sgRem)}）</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function slRender(){
   const list=document.getElementById('sl-list');
   const empty=document.getElementById('sl-empty');
   const summary=document.getElementById('sl-summary');
   if(!list||!empty||!summary)return;
+  try{slRenderTaxSummary();}catch(e){}
   if(!slData.length){list.innerHTML='';empty.style.display='block';summary.innerHTML='';return;}
   empty.style.display='none';
   // サマリー集計
@@ -4789,6 +4902,52 @@ function wlFmtEarnings(d){
   return `<span style="color:var(--text2)">${mmdd}</span>`;
 }
 
+// ============================================================
+// 配当・決算カレンダー（ホーム画面）
+// ============================================================
+function wlRenderEarningsCalendar(){
+  const cal=document.getElementById('home-earnings-cal');
+  const listEl=document.getElementById('home-earnings-list');
+  if(!cal||!listEl)return;
+
+  let data=[];
+  try{data=wlLoad();}catch(e){data=[];}
+
+  const today=new Date();today.setHours(0,0,0,0);
+  const items=data
+    .filter(s=>s.earningsDate)
+    .map(s=>{
+      const dt=new Date(s.earningsDate);
+      const diff=Math.round((dt-today)/(1000*60*60*24));
+      return{...s,_diff:diff,_dt:dt};
+    })
+    // 直近7日以内に終わったものも含め、向こう45日以内のものを表示
+    .filter(s=>s._diff>=-7&&s._diff<=45)
+    .sort((a,b)=>a._diff-b._diff);
+
+  if(!items.length){cal.style.display='none';return;}
+  cal.style.display='block';
+
+  listEl.innerHTML=items.map(s=>{
+    const mmdd=(s._dt.getMonth()+1)+'/'+s._dt.getDate();
+    let badgeColor,badgeText,badgeBg;
+    if(s._diff<0){badgeColor='var(--text3)';badgeBg='var(--bg2)';badgeText=`${mmdd} 発表済`;}
+    else if(s._diff===0){badgeColor='#A32D2D';badgeBg='rgba(163,45,45,0.1)';badgeText=`${mmdd} 本日!`;}
+    else if(s._diff<=7){badgeColor='#A32D2D';badgeBg='rgba(163,45,45,0.1)';badgeText=`${mmdd}（${s._diff}日後）`;}
+    else if(s._diff<=14){badgeColor='#854F0B';badgeBg='rgba(133,79,11,0.1)';badgeText=`${mmdd}（${s._diff}日後）`;}
+    else{badgeColor='var(--text2)';badgeBg='var(--bg2)';badgeText=`${mmdd}（${s._diff}日後）`;}
+
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">
+      <div style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:${badgeBg};color:${badgeColor};white-space:nowrap;min-width:84px;text-align:center">${badgeText}</div>
+      <div style="flex:1;min-width:0">
+        <span style="font-size:13px;font-weight:500">${s.name}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:6px">${s.code}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">${s.shares?s.shares.toLocaleString()+'株':''}</div>
+    </div>`;
+  }).join('');
+}
+
 function wlStatusBadge(s){
   const m={'購入済':'wl-b-done','指値注文中':'wl-b-order','注文待ち':'wl-b-wait','購入検討':'wl-b-plan','様子見':'wl-b-plan'};
   return `<span class="wl-badge ${m[s]||'wl-b-plan'}">${s}</span>`;
@@ -5195,15 +5354,33 @@ function cfRefreshHomeIncome(){
     sideAvg=sideItems.length>0?Math.round(sideItems.reduce((s,d)=>s+d.amount,0)/3):0;
   }catch(e){}
 
+  // 今年の配当受取実績（収支タブの「配当」カテゴリ合計）
+  let divActual=0;
+  try{
+    const currentYear=String(new Date().getFullYear());
+    divActual=cfData.filter(d=>d.type==='income'&&d.cat==='配当'&&d.date&&d.date.startsWith(currentYear)).reduce((s,d)=>s+d.amount,0);
+  }catch(e){}
+
   const monthDiv=Math.round(divEst/12);
   const total=monthDiv+accMonthly+sideAvg;
   const bar=document.getElementById('home-income-bar');
-  if(bar&&(divEst>0||accMonthly>0||sideAvg>0)){
+  if(bar&&(divEst>0||accMonthly>0||sideAvg>0||divActual>0)){
     bar.style.display='block';
     document.getElementById('home-income-div').textContent=cfFmt(divEst)+'/年';
     document.getElementById('home-income-acc').textContent=cfFmt(accMonthly)+'/月';
     document.getElementById('home-income-side').textContent=sideAvg>0?cfFmt(sideAvg)+'/月':'未入力';
     document.getElementById('home-income-total').textContent='月'+cfFmt(total)+' / 年'+cfFmt(total*12);
+
+    const actualRow=document.getElementById('home-income-div-actual-row');
+    if(actualRow){
+      if(divActual>0){
+        actualRow.style.display='flex';
+        const pct=divEst>0?Math.round((divActual/divEst)*100):null;
+        document.getElementById('home-income-div-actual').textContent=cfFmt(divActual)+(pct!==null?`（予想の${pct}%）`:'');
+      }else{
+        actualRow.style.display='none';
+      }
+    }
   }
 }
 
