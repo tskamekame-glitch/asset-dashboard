@@ -1427,8 +1427,14 @@ function amRender(){
       const stale=daysSince(a.updated)>=30;
       const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
       const isStock=a.cat==='個別株'||a.cat==='高配当';
+      const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
       const hasSBICode=isStock&&!!(a.code&&a.code.length>0);
-      const noAutoUpdate=isStock&&!hasSBICode;
+      // SBI以外の証券会社・サービス保有は手動扱い
+      const NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
+      const isNonSBI=NON_SBI_PAT.test(a.name)||NON_SBI_PAT.test(a.note||'');
+      // SBI自動更新対象: SBI保有のインデックス投信 or SBI保有のコード設定済み株式
+      const isSBIAuto=(isIndexFund||hasSBICode)&&!isNonSBI;
+      const needsManual=!isSBIAuto;
       const sharesVal=a.shares||'';
       const priceVal=a.price||'';
       const amountVal=a.amount||'';
@@ -1443,7 +1449,12 @@ function amRender(){
          +(hasSBICode?'':'<span style="font-size:10px;color:#e53e3e;font-weight:600;margin-left:4px">← 入力でSBI自動更新</span>')
          +'</div>'
         :'';
-      const amountColor=noAutoUpdate?'#e53e3e':'var(--text)';
+      // 手動更新が必要な口座は評価額・更新ボタンを赤系に
+      const amountColor=needsManual?'#e53e3e':'var(--text)';
+      const updateBtnStyle=needsManual
+        ?'padding:6px 14px;background:#e53e3e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap'
+        :'padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap';
+      const updateBtnLabel=needsManual?'✏️ 手動更新':'更新';
       const stockInputs=isStock
         ?'<input id="il-shares-'+a.id+'" type="number" inputmode="numeric" value="'+sharesVal+'" placeholder="株数" oninput="amInlineCalc('+a.id+')" style="width:80px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
          +'<span style="color:var(--text3);font-size:13px">×</span>'
@@ -1460,7 +1471,7 @@ function amRender(){
               +codeInput
               +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
                 +stockInputs
-                +'<button onclick="amInlineSave('+a.id+')" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">更新</button>'
+                +'<button onclick="amInlineSave('+a.id+')" style="'+updateBtnStyle+'">'+updateBtnLabel+'</button>'
               +'</div>'
             +'</div>'
             +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
@@ -2023,20 +2034,28 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode){
     {sbi:/eMAXIS.*インド|インド.*eMAXIS/i,           must:['インド','eMAXIS'], not:['日経','米国','TOPIX','SBI iDeCo']},
     {sbi:/iFreeNEXT.*FANG/i,                        must:['FANG'],  not:[]},
     {sbi:/iTrust.*インド/i,                          must:['iTrust'],not:[]},
+    {sbi:/iTrust.*インド/i,                          must:['インド(SBI)'],not:['eMAXIS']},
     {sbi:/SBI.*高配当|高配当.*SBI/i,                 must:['高配当'], not:[]},
   ];
-  for(const rule of FUND_RULES){
-    if(!rule.sbi.test(s))continue;
-    const allMust=rule.must.every(k=>p.includes(k));
-    const noneNot=rule.not.every(k=>!p.includes(k));
-    if(!allMust||!noneNot)return 0; // 条件不一致→絶対に選ばない
-    let base=70;
-    if(acctSuffix==='特定'&&p.includes('特定')&&!p.includes('NISA'))base=92;
-    else if(acctSuffix==='NISA成長'&&p.includes('NISA成長'))base=92;
-    else if(acctSuffix==='NISAつみたて'&&p.includes('つみたて'))base=92;
-    else if(acctSuffix==='特定'&&p.includes('NISA'))base=45;
-    else if(acctSuffix==='NISA成長'&&p.includes('特定')&&!p.includes('NISA'))base=45;
-    return base;
+  // sbiパターンにマッチするルール群を全収集し、条件を満たすものでスコアを返す
+  const matchedRules=FUND_RULES.filter(r=>r.sbi.test(s));
+  if(matchedRules.length>0){
+    // 条件を満たすルールがあればスコアを返す
+    for(const rule of matchedRules){
+      const allMust=rule.must.every(k=>p.includes(k));
+      const noneNot=rule.not.every(k=>!p.includes(k));
+      if(allMust&&noneNot){
+        let base=70;
+        if(acctSuffix==='特定'&&p.includes('特定')&&!p.includes('NISA'))base=92;
+        else if(acctSuffix==='NISA成長'&&p.includes('NISA成長'))base=92;
+        else if(acctSuffix==='NISAつみたて'&&p.includes('つみたて'))base=92;
+        else if(acctSuffix==='特定'&&p.includes('NISA'))base=45;
+        else if(acctSuffix==='NISA成長'&&p.includes('特定')&&!p.includes('NISA'))base=45;
+        return base;
+      }
+    }
+    // どのルールも条件を満たさない → この銘柄カテゴリには属さない → 0
+    return 0;
   }
   // ===== 株式（コード・会社名）=====
   const codeM=s.match(/\b(\d{4})\b/);
@@ -2064,13 +2083,14 @@ function amApplySBIRows(rows){
 
   // 同名SBI行が複数ある場合（iFreeNEXT FANG+ 特定/NISA等）は
   // セクション情報でPFエントリの(特定/NISA)を区別して対応
+  const noMatch=[];
   rows.forEach(row=>{
     let bestIdx=-1,bestScore=0;
     amAccounts.forEach((acc,i)=>{
       const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'');
       if(score>bestScore){bestScore=score;bestIdx=i;}
     });
-    if(bestIdx<0||bestScore<55)return;
+    if(bestIdx<0||bestScore<55){noMatch.push({sbi:row.nameRaw,score:bestScore});return;}
 
     const acc=amAccounts[bestIdx];
     const oldVal=acc.amount||0;
@@ -2089,6 +2109,7 @@ function amApplySBIRows(rows){
   if(!updated){
     showToast('ℹ️ 更新対象なし（既に最新または銘柄未マッチ）',3500);
     console.log('[amSBI] rows:',rows);
+    console.log('[amSBI] noMatch:',noMatch);
     return;
   }
 
@@ -2096,8 +2117,16 @@ function amApplySBIRows(rows){
   amRender();
   refreshHome();
   pfSyncFromAM();
-  showToast(`✅ SBI CSV: ${updated}件の評価額を更新しました`,3500);
-  console.log('[amSBI] updated:',log);
+  let msg=`✅ SBI CSV: ${updated}件更新`;
+  if(noMatch.length){
+    const names=noMatch.map(x=>{
+      function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
+      return toH(x.sbi).slice(0,10);
+    }).join('・');
+    msg+=` ⚠️未マッチ${noMatch.length}件: ${names}`;
+  }
+  showToast(msg,6000);
+  console.log('[amSBI] updated:',log,'noMatch:',noMatch);
 }
 
 function amExportCSV(){
