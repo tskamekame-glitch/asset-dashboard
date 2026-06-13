@@ -1177,7 +1177,10 @@ tr:last-child td{border-bottom:none}
   <div class="phead">
     <div class="phead-inner">
       <h1>💸 月次収支</h1>
-      <button class="btn-accent" onclick="cfOpenModal()">＋ 記録</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" onclick="cfOpenImport()" style="font-size:12px;padding:6px 12px;color:var(--accent);border-color:var(--accent)">📥 CSV取込</button>
+        <button class="btn-accent" onclick="cfOpenModal()">＋ 記録</button>
+      </div>
     </div>
   </div>
   <div class="page-inner">
@@ -1243,6 +1246,52 @@ tr:last-child td{border-bottom:none}
         <button class="btn-cancel" onclick="cfCloseModal()" style="flex:1">キャンセル</button>
         <button class="btn-accent" onclick="cfSaveEntry()" style="flex:2">保存</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- CSV取込モーダル -->
+<div class="pf-modal-overlay" id="cfImportModal" onclick="if(event.target===this)cfCloseImport()">
+  <div class="pf-modal" style="max-height:90dvh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="pf-modal-title">📥 明細CSVを取り込む</div>
+      <button onclick="cfCloseImport()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
+
+    <!-- 形式選択 -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500">① CSVの種類を選択</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <button id="cf-fmt-smbc" onclick="cfSelectFmt('smbc')" style="padding:10px 6px;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);text-align:center;line-height:1.4">🏦 三井住友銀行<br><span style="font-weight:400;font-size:11px">入出金明細CSV</span></button>
+        <button id="cf-fmt-vpass" onclick="cfSelectFmt('vpass')" style="padding:10px 6px;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);text-align:center;line-height:1.4">💳 Vpass（三井住友／Amazon）<br><span style="font-weight:400;font-size:11px">ご利用明細CSV</span></button>
+        <button id="cf-fmt-paypay" onclick="cfSelectFmt('paypay')" style="padding:10px 6px;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);text-align:center;line-height:1.4">🏦 PayPay銀行<br><span style="font-weight:400;font-size:11px">取引明細CSV</span></button>
+        <button id="cf-fmt-paypayapp" onclick="cfSelectFmt('paypayapp')" style="padding:10px 6px;border-radius:var(--radius);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);text-align:center;line-height:1.4">📱 PayPayアプリ<br><span style="font-weight:400;font-size:11px">取引履歴CSV（店名付き）</span></button>
+      </div>
+      <div style="margin-top:6px;padding:8px 10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--text3);line-height:1.6" id="cf-fmt-hint">
+        ※ ドンペンカード（UCS）はCSV非対応のため、三井住友銀行のUCS引き落とし行から自動検出します
+      </div>
+    </div>
+
+    <!-- ファイル選択 -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500">② CSVファイルを選択</div>
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;border:1.5px dashed var(--border2);border-radius:var(--radius);cursor:pointer;background:var(--bg2);font-size:13px;color:var(--text2)">
+        <span id="cf-file-label">ファイルを選択またはドロップ</span>
+        <input type="file" id="cf-csv-input" accept=".csv" style="display:none" onchange="cfOnFileSelect(event)">
+      </label>
+    </div>
+
+    <!-- プレビュー -->
+    <div id="cf-import-preview" style="display:none;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500">③ 取込プレビュー</div>
+      <div id="cf-preview-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px"></div>
+      <div id="cf-preview-list" style="max-height:200px;overflow-y:auto;border:0.5px solid var(--border);border-radius:8px;font-size:12px"></div>
+      <div id="cf-preview-warn" style="margin-top:6px;font-size:11px;color:var(--amber)"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-cancel" onclick="cfCloseImport()" style="flex:1">キャンセル</button>
+      <button id="cf-import-ok" class="btn-accent" onclick="cfImportConfirm()" style="flex:2;display:none">✅ この内容で取り込む</button>
     </div>
   </div>
 </div>
@@ -2376,9 +2425,11 @@ async function amFindOrCreateSheet(){
       const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:amSpreadsheetId});
       const hasSlSheet=meta.result.sheets.some(s=>s.properties.title==='sell');
       const hasJpSheet=meta.result.sheets.some(s=>s.properties.title==='jpstock');
+      const hasCfSheet=meta.result.sheets.some(s=>s.properties.title==='cashflow');
       const addReqs=[];
       if(!hasSlSheet)addReqs.push({addSheet:{properties:{title:'sell'}}});
       if(!hasJpSheet)addReqs.push({addSheet:{properties:{title:'jpstock'}}});
+      if(!hasCfSheet)addReqs.push({addSheet:{properties:{title:'cashflow'}}});
       if(addReqs.length)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:addReqs}});
     }catch(e){}
   }catch(e){console.error(e);}
@@ -2395,7 +2446,7 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await jpLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await jpLoadFromSheet();await cfLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
 }
 function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
@@ -4967,7 +5018,40 @@ let cfEditId=null;
 let cfCurrentType='income';
 
 function cfLoad(){try{cfData=JSON.parse(localStorage.getItem(CF_KEY)||'[]');}catch(e){cfData=[];}}
-function cfSave(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}}
+function cfSave(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}cfSaveToSheet();}
+
+const CF_COLS=['id','type','cat','amount','date','memo'];
+
+async function cfSaveToSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const values=[CF_COLS,...cfData.map(d=>CF_COLS.map(k=>d[k]!==undefined&&d[k]!==null?d[k]:''))];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`cashflow!A1:F${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(cfData.length+1<1000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`cashflow!A${cfData.length+2}:F10000`});
+  }catch(e){console.error('cfSaveToSheet error',e);}
+}
+
+async function cfLoadFromSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'cashflow!A2:F10000'});
+    const rows=res.result.values||[];
+    if(rows.length===0)return;
+    const loaded=rows.filter(r=>r[0]).map(r=>({
+      id:r[0]||cfUID(),
+      type:r[1]||'income',
+      cat:r[2]||'その他収入',
+      amount:parseFloat(r[3])||0,
+      date:r[4]||'',
+      memo:r[5]||''
+    }));
+    cfData=loaded;
+    cfSaveLocal();
+    if(typeof cfRender==='function'&&document.getElementById('tab-cashflow')?.classList.contains('active'))cfRender();
+  }catch(e){console.error('cfLoadFromSheet error',e);}
+}
+
+function cfSaveLocal(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}}
 function cfUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 function cfFmt(n){return'¥'+Math.abs(Math.round(n)).toLocaleString('ja-JP');}
 
@@ -5174,6 +5258,379 @@ function cfDeleteEntry(){
   cfLoad();
   cfData=cfData.filter(d=>d.id!==cfEditId);
   cfSave();cfCloseModal();cfRender();showToast('削除しました');
+}
+
+// ============================================================
+// CASHFLOW CSV IMPORT — 明細CSV取込
+// ============================================================
+let cfImportFmt='smbc';
+let cfImportPending=[];
+
+// カテゴリ自動判定ルール（キーワード→カテゴリ）
+const CF_CAT_RULES=[
+  // 収入系
+  {pat:/給与|賞与|給料|振込.*給|salary/i,                        type:'income', cat:'給与'},
+  {pat:/配当|分配金|dividend/i,                                   type:'income', cat:'配当'},
+  {pat:/SBI.*入金|証券.*入金|投資.*払戻/i,                       type:'income', cat:'売却益'},
+  {pat:/副業|フリーランス|報酬|謝礼/i,                            type:'income', cat:'副業'},
+  {pat:/年金|給付|還付|キャッシュバック|ポイント還元/i,            type:'income', cat:'年金'},
+  // 住居
+  {pat:/家賃|管理費|修繕|地代|UR|住宅/i,                         type:'expense', cat:'家賃'},
+  // 通信
+  {pat:/NTT|docomo|ドコモ|SoftBank|ソフトバンク|au|UQ|楽天モバイル|line mobile|povo|通信|インターネット|wifi|光/i, type:'expense', cat:'通信費'},
+  // 交通
+  {pat:/Suica|PASMO|JR|小田急|東急|京王|メトロ|都営|バス|新幹線|taxi|タクシー|駐車|ETC|高速/i, type:'expense', cat:'交通費'},
+  // 積立・投資
+  {pat:/SBI証券|投資信託|積立|iDeCo|NISA|クレカ積立/i,           type:'expense', cat:'積立'},
+  // 保険
+  {pat:/保険|insurance/i,                                         type:'expense', cat:'保険'},
+  // 税金・社会保険
+  {pat:/国民健康保険|国民年金|住民税|所得税|社会保険|年金保険料|UCS|引落.*カード|カード.*引落|振替.*カード/i, type:'expense', cat:'税金'},
+  // 娯楽
+  {pat:/Amazon|アマゾン|Netflix|ネットフリックス|Spotify|Hulu|映画|ゲーム|書籍|本屋|コンビニ|セブン|ローソン|ファミマ/i, type:'expense', cat:'娯楽'},
+  // 生活費（広めに最後）
+  {pat:/スーパー|イオン|西友|マルエツ|ライフ|食料品|ドンキ|ドン・キホーテ|薬局|マツキヨ|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|スシロー|外食|レストラン|カフェ|コーヒー/i, type:'expense', cat:'生活費'},
+];
+
+function cfGuessCat(desc,isExpense){
+  for(const rule of CF_CAT_RULES){
+    if(rule.pat.test(desc)){
+      return{type:rule.type,cat:rule.cat};
+    }
+  }
+  return isExpense?{type:'expense',cat:'その他支出'}:{type:'income',cat:'その他収入'};
+}
+
+// ---- SMBC銀行CSV パーサー ----
+// 列: 取引日, 摘要, 支店名, 取扱区分, 取引金額, 取引後残高
+// 文字コード: UTF-8 / Shift-JIS 両対応
+function cfParseSMBC(text){
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n').filter(l=>l.trim());
+  const rows=[];
+  for(const line of lines){
+    const cols=cfSplitCSV(line);
+    if(cols.length<5)continue;
+    // 取引日判定: YYYY/MM/DD or YYYY-MM-DD
+    const dateRaw=(cols[0]||'').replace(/"/g,'').trim();
+    if(!/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(dateRaw))continue;
+    const date=dateRaw.replace(/\//g,'-');
+    const desc=(cols[1]||'').replace(/"/g,'').trim();
+    const amtRaw=(cols[4]||'').replace(/[",，\s]/g,'');
+    const amt=parseFloat(amtRaw)||0;
+    if(!amt||!date)continue;
+    // 金額が正→入金、負→出金（SMBCは符号付きまたは列で判断）
+    // SMBCは「入金額」「出金額」が別列の場合もある（5列目=入金, 6列目=出金 のケース）
+    let type,cat,finalAmt;
+    if(cols.length>=6){
+      const inAmt=parseFloat((cols[4]||'').replace(/[",，\s]/g,''))||0;
+      const outAmt=parseFloat((cols[5]||'').replace(/[",，\s]/g,''))||0;
+      if(outAmt>0){const r=cfGuessCat(desc,true);type=r.type;cat=r.cat;finalAmt=outAmt;}
+      else if(inAmt>0){const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;finalAmt=inAmt;}
+      else continue;
+    }else{
+      if(amt>0){const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;finalAmt=amt;}
+      else{const r=cfGuessCat(desc,true);type=r.type;cat=r.cat;finalAmt=Math.abs(amt);}
+    }
+    rows.push({id:cfUID(),type,cat,amount:finalAmt,date,memo:desc});
+  }
+  return rows;
+}
+
+// ---- Vpass（三井住友カード・Amazonゴールド）CSVパーサー ----
+// 列パターン: 利用日, 利用店名・商品名, 利用金額(円), お支払い金額, ...
+// 文字コード: Shift-JIS
+function cfParseVpass(text){
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n').filter(l=>l.trim());
+  const rows=[];
+  let dateCol=-1,nameCol=-1,amtCol=-1;
+  for(const line of lines){
+    const cols=cfSplitCSV(line);
+    // ヘッダー行検出
+    if(dateCol===-1){
+      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      const di=h.findIndex(c=>/利用日|ご利用日/i.test(c));
+      const ni=h.findIndex(c=>/利用店名|店名|商品名|摘要/i.test(c));
+      const ai=h.findIndex(c=>/利用金額|ご利用金額/i.test(c));
+      if(di>=0&&ni>=0&&ai>=0){dateCol=di;nameCol=ni;amtCol=ai;}
+      continue;
+    }
+    if(cols.length<=Math.max(dateCol,nameCol,amtCol))continue;
+    const dateRaw=(cols[dateCol]||'').replace(/"/g,'').trim();
+    // 年が省略（MM/DD形式）の場合は当年補完
+    let date='';
+    if(/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(dateRaw)){
+      date=dateRaw.replace(/\//g,'-');
+    }else if(/^\d{2}[\/\-]\d{2}$/.test(dateRaw)){
+      date=new Date().getFullYear()+'-'+dateRaw.replace(/\//g,'-');
+    }else continue;
+    const desc=(cols[nameCol]||'').replace(/"/g,'').trim();
+    const amt=parseFloat((cols[amtCol]||'').replace(/[",，\s]/g,''))||0;
+    if(!amt||!date)continue;
+    // クレカ明細は全て支出
+    const{type,cat}=cfGuessCat(desc,true);
+    rows.push({id:cfUID(),type,cat,amount:amt,date,memo:desc});
+  }
+  return rows;
+}
+
+// ---- PayPay銀行 CSVパーサー ----
+// 列構成（個人口座）:
+//   取引日時, お取引内容, 出金金額(円), 入金金額(円), 取引後残高(円)
+//   ※「取引日時」は "YYYY/MM/DD HH:MM:SS" 形式
+//   ※ 文字コード: UTF-8（BOMなし）
+function cfParsePaypay(text){
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n').filter(l=>l.trim());
+  const rows=[];
+  let dateCol=-1,descCol=-1,outCol=-1,inCol=-1;
+
+  for(const line of lines){
+    const cols=cfSplitCSV(line);
+    // ヘッダー行検出
+    if(dateCol===-1){
+      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      // 「取引日時」「日時」「取引日」などを許容
+      const di=h.findIndex(c=>/取引日|日時/i.test(c));
+      // 「お取引内容」「取引内容」「摘要」
+      const ni=h.findIndex(c=>/取引内容|摘要|お取引内容/i.test(c));
+      // 「出金金額」「支出」「出金」
+      const oi=h.findIndex(c=>/出金|支出/i.test(c));
+      // 「入金金額」「収入」「入金」
+      const ii=h.findIndex(c=>/入金|収入/i.test(c));
+      if(di>=0&&ni>=0){
+        dateCol=di;descCol=ni;
+        outCol=oi>=0?oi:-1;
+        inCol=ii>=0?ii:-1;
+      }
+      continue;
+    }
+    if(cols.length<=Math.max(dateCol,descCol))continue;
+
+    // 日時から日付だけ抽出（"YYYY/MM/DD HH:MM:SS" → "YYYY-MM-DD"）
+    const dateRaw=(cols[dateCol]||'').replace(/"/g,'').trim();
+    const dateMatch=dateRaw.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
+    if(!dateMatch)continue;
+    const date=`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+
+    const desc=(cols[descCol]||'').replace(/"/g,'').trim();
+    const outAmt=outCol>=0?parseFloat((cols[outCol]||'').replace(/[",，\s]/g,''))||0:0;
+    const inAmt=inCol>=0?parseFloat((cols[inCol]||'').replace(/[",，\s]/g,''))||0:0;
+
+    if(!outAmt&&!inAmt)continue;
+
+    let type,cat,amount;
+    if(outAmt>0){
+      const r=cfGuessCat(desc,true);type=r.type;cat=r.cat;amount=outAmt;
+    }else{
+      const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;amount=inAmt;
+    }
+    rows.push({id:cfUID(),type,cat,amount,date,memo:desc});
+  }
+  return rows;
+}
+
+// ---- PayPayアプリ 取引履歴CSVパーサー ----
+// 公式列構成（2025年2月〜）:
+//   取引日, 出金金額（円）, 入金金額（円）, 海外出金金額, 通貨, 変換レート（円）,
+//   利用国, 取引内容, 取引先, 取引方法, 支払い区分, 利用者, 取引番号
+// 文字コード: UTF-8（BOMなし）
+function cfParsePaypayApp(text){
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n').filter(l=>l.trim());
+  const rows=[];
+  let dateCol=-1,outCol=-1,inCol=-1,typeCol=-1,shopCol=-1;
+
+  for(const line of lines){
+    const cols=cfSplitCSV(line);
+    // ヘッダー行検出
+    if(dateCol===-1){
+      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      dateCol=h.findIndex(c=>/取引日/i.test(c));
+      outCol =h.findIndex(c=>/出金金額/i.test(c));
+      inCol  =h.findIndex(c=>/入金金額/i.test(c));
+      typeCol=h.findIndex(c=>/取引内容/i.test(c));
+      shopCol=h.findIndex(c=>/取引先/i.test(c));
+      continue;
+    }
+    if(dateCol<0||cols.length<=Math.max(dateCol,outCol<0?0:outCol))continue;
+
+    // 日付: "2024/06/03 11:28" → "2024-06-03"
+    const dateRaw=(cols[dateCol]||'').replace(/"/g,'').trim();
+    const dm=dateRaw.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
+    if(!dm)continue;
+    const date=`${dm[1]}-${dm[2]}-${dm[3]}`;
+
+    const outAmt=outCol>=0?parseFloat((cols[outCol]||'').replace(/[",，\s]/g,''))||0:0;
+    const inAmt =inCol>=0 ?parseFloat((cols[inCol ]||'').replace(/[",，\s]/g,''))||0:0;
+    if(!outAmt&&!inAmt)continue;
+
+    // 取引内容と取引先を組み合わせて摘要にする（店名優先）
+    const txType=(typeCol>=0?(cols[typeCol]||'').replace(/"/g,'').trim():'');
+    const shop  =(shopCol>=0?(cols[shopCol]||'').replace(/"/g,'').trim():'');
+
+    // 「チャージ」「ポイント獲得」「投資」などは収入または内部取引
+    const isCharge=/チャージ|入金|ポイント獲得|受取|返金|キャッシュバック/.test(txType);
+    const isSkip =/投資|ポイント運用|資産運用/.test(txType)&&!inAmt&&!outAmt;
+    if(isSkip)continue;
+
+    // 摘要: 店名があれば「店名（取引内容）」、なければ「取引内容」
+    const desc=shop&&shop!=='お店'?`${shop}（${txType}）`:txType||shop;
+
+    let type,cat,amount;
+    if(inAmt>0){
+      const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;amount=inAmt;
+    }else{
+      // 支払い系は全て支出。取引先店名でカテゴリを精度よく判定
+      const r=cfGuessCat(shop||desc,true);
+      // 「チャージ」「送金」はカテゴリ上書き
+      type=r.type;
+      cat=/チャージ|送金|譲渡/.test(txType)?'その他支出':r.cat;
+      amount=outAmt;
+    }
+    rows.push({id:cfUID(),type,cat,amount,date,memo:desc});
+  }
+  return rows;
+}
+
+function cfSplitCSV(line){  const cols=[];let cur='',inQ=false;
+  for(const ch of line){
+    if(ch==='"'){inQ=!inQ;}
+    else if(ch===','&&!inQ){cols.push(cur);cur='';}
+    else{cur+=ch;}
+  }
+  cols.push(cur);
+  return cols;
+}
+
+// ---- 取込UI制御 ----
+function cfOpenImport(){
+  cfImportFmt='smbc';
+  cfImportPending=[];
+  cfSelectFmt('smbc');
+  document.getElementById('cf-file-label').textContent='ファイルを選択またはドロップ';
+  document.getElementById('cf-csv-input').value='';
+  document.getElementById('cf-import-preview').style.display='none';
+  document.getElementById('cf-import-ok').style.display='none';
+  document.getElementById('cfImportModal').style.display='flex';
+}
+
+function cfCloseImport(){document.getElementById('cfImportModal').style.display='none';}
+
+function cfSelectFmt(fmt){
+  cfImportFmt=fmt;
+  const ids=['cf-fmt-smbc','cf-fmt-vpass','cf-fmt-paypay','cf-fmt-paypayapp'];
+  const active='border:1.5px solid var(--accent);background:rgba(24,95,165,0.08);color:var(--accent)';
+  const inactive='border:1.5px solid var(--border2);background:var(--bg);color:var(--text2)';
+  ids.forEach(id=>{
+    const b=document.getElementById(id);
+    if(b) b.style.cssText=b.style.cssText.replace(/border[^;]+;background[^;]+;color[^;]+/,'')+(b.id===('cf-fmt-'+fmt.replace('paypayapp','paypayapp'))?active:inactive);
+  });
+  // アクティブボタンを明示的に再設定
+  const activeId='cf-fmt-'+fmt;
+  const ab=document.getElementById(activeId);
+  if(ab) ab.style.cssText=ab.style.cssText.replace(/border[^;]+;background[^;]+;color[^;]+/,'')+active;
+
+  const hints={
+    smbc:'三井住友銀行アプリ→「入出金明細」→「ダウンロード」からCSVを取得。UTF-8/Shift-JIS両対応。UCS（ドンペンカード）引き落とし行も自動検出。',
+    vpass:'VpassサイトPC→「ご利用明細」→「CSV形式で保存する」。Olive Gold・Amazonゴールド共通。Shift-JIS対応。',
+    paypay:'PayPay銀行サイトPC→「取引明細」→「CSVダウンロード」。UTF-8。入出金を自動判定してカテゴリ振り分け。',
+    paypayapp:'PayPayアプリ→「取引履歴」→右上ダウンロードアイコン→期間選択→申請→通知後にダウンロード。店名まで取得できるため、カテゴリ自動判定の精度が高い。UTF-8。',
+  };
+  document.getElementById('cf-fmt-hint').textContent=hints[fmt]||'';
+  const input=document.getElementById('cf-csv-input');
+  if(input.files.length>0) cfParseFile(input.files[0]);
+}
+
+function cfOnFileSelect(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  document.getElementById('cf-file-label').textContent=file.name;
+  cfParseFile(file);
+}
+
+function cfParseFile(file){
+  // PayPayアプリ・PayPay銀行・SMBCはUTF-8、VpassはShift-JIS
+  const firstEncoding=(cfImportFmt==='vpass')?'Shift-JIS':'UTF-8';
+  const tryParse=(encoding)=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const text=ev.target.result;
+      let rows=[];
+      try{
+        if(cfImportFmt==='smbc')         rows=cfParseSMBC(text);
+        else if(cfImportFmt==='vpass')   rows=cfParseVpass(text);
+        else if(cfImportFmt==='paypay')  rows=cfParsePaypay(text);
+        else                             rows=cfParsePaypayApp(text);
+      }catch(e){rows=[];}
+      if(rows.length===0&&encoding==='UTF-8'){
+        tryParse('Shift-JIS');return;
+      }
+      cfImportPending=rows;
+      cfShowPreview(rows);
+    };
+    reader.readAsText(file,encoding);
+  };
+  tryParse(firstEncoding);
+}
+
+function cfShowPreview(rows){
+  const preview=document.getElementById('cf-import-preview');
+  const stats=document.getElementById('cf-preview-stats');
+  const list=document.getElementById('cf-preview-list');
+  const warn=document.getElementById('cf-preview-warn');
+  const okBtn=document.getElementById('cf-import-ok');
+
+  if(!rows.length){
+    preview.style.display='block';
+    stats.innerHTML='<div style="grid-column:1/-1;color:var(--danger);font-size:13px">⚠ 読み取れる明細がありませんでした。CSVの種類が正しいか確認してください。</div>';
+    list.innerHTML='';warn.textContent='';okBtn.style.display='none';
+    return;
+  }
+
+  // 重複チェック（既存データとdate+amount+memoで照合）
+  cfLoad();
+  const existKeys=new Set(cfData.map(d=>`${d.date}|${d.amount}|${d.memo}`));
+  const newRows=rows.filter(r=>!existKeys.has(`${r.date}|${r.amount}|${r.memo}`));
+  const dupCount=rows.length-newRows.length;
+
+  const income=newRows.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+  const expense=newRows.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+
+  stats.innerHTML=`
+    <div class="metric"><div class="label">新規件数</div><div class="value">${newRows.length}件</div></div>
+    <div class="metric"><div class="label">収入合計</div><div class="value up">+¥${income.toLocaleString()}</div></div>
+    <div class="metric"><div class="label">支出合計</div><div class="value">¥${expense.toLocaleString()}</div></div>`;
+
+  warn.textContent=dupCount>0?`※ 重複 ${dupCount}件はスキップします`:'';
+
+  list.innerHTML=newRows.slice(0,50).map(r=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:0.5px solid var(--border)">
+      <div style="width:7px;height:7px;border-radius:50%;background:${r.type==='income'?'var(--green)':'var(--amber)'};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.memo||r.cat}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.date} · ${r.cat}</div>
+      </div>
+      <div style="font-size:12px;font-weight:600;white-space:nowrap;color:${r.type==='income'?'var(--green)':'var(--text)'}">${r.type==='income'?'＋':'－'}¥${r.amount.toLocaleString()}</div>
+    </div>`).join('')+(newRows.length>50?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--text3)">他 ${newRows.length-50}件...</div>`:'');
+
+  cfImportPending=newRows;// 重複除去済みを保存
+  preview.style.display='block';
+  okBtn.style.display=newRows.length>0?'block':'none';
+}
+
+function cfImportConfirm(){
+  if(!cfImportPending.length){showToast('⚠ 取込データがありません');return;}
+  cfLoad();
+  cfData.push(...cfImportPending);
+  // 日付順にソート
+  cfData.sort((a,b)=>b.date.localeCompare(a.date));
+  cfSave();
+  cfCloseImport();
+  cfRender();
+  showToast(`✅ ${cfImportPending.length}件を取り込みました`);
+  cfImportPending=[];
 }
 
 // ============================================================
