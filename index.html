@@ -2168,7 +2168,13 @@ function sendToTrend(){
     snapshots.splice(existing,1);
   }
   const PENSION_PATS2=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
-  const normCat2=a=>PENSION_PATS2.some(p=>p.test(a.name))?'年金':a.cat;
+  const TOUSHI_NAMES2=['オルカンPayPay','全世界PayPay','全世界インデックス','eMAXIS','オルカン','iTrust','インド(SBI)','FANG','iFreeNEXT'];
+  const TO_GRAPH_CAT2={'全世界インデックス':'投信','日本インデックス':'投信','インドインデックス':'投信','高配当':'証券','個別株':'証券','銀行':'銀行','預り金':'銀行','年金':'年金','その他':'銀行'};
+  const normCat2=a=>{
+    if(PENSION_PATS2.some(p=>p.test(a.name)))return'年金';
+    if((a.cat==='証券'||a.cat==='個別株'||a.cat==='高配当'||a.cat==='その他')&&TOUSHI_NAMES2.some(n=>a.name.includes(n)))return'投信';
+    return TO_GRAPH_CAT2[a.cat]||a.cat;
+  };
   const cats={};amAccounts.forEach(a=>{const c=normCat2(a);cats[c]=(cats[c]||0)+a.amount;});
   const total=amAccounts.reduce((s,a)=>s+a.amount,0);
   const accounts=amAccounts.map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated}));
@@ -2898,30 +2904,34 @@ function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP'
 function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}}
 function trLoadFromStorage(){
   try{snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snapshots=[];}
-  const CAT_NORM2={
-    '全世界インデックス':'投信','日本インデックス':'投信',
-    'インドインデックス':'投信','高配当':'証券','個別株':'証券',
+
+  // 資産カテゴリ → グラフカテゴリ変換マップ
+  const TO_GRAPH_CAT={
+    '全世界インデックス':'投信','日本インデックス':'投信','インドインデックス':'投信',
+    '高配当':'証券','個別株':'証券',
+    '銀行':'銀行','預り金':'銀行','年金':'年金','その他':'銀行',
   };
-  const TOUSHI_NAMES2=['オルカンPayPay','全世界PayPay','インド(SBI)','全世界インデックス','eMAXIS','オルカン','iTrust'];
   const PENSION_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
+  const TOUSHI_NAMES=['オルカンPayPay','全世界PayPay','全世界インデックス','eMAXIS','オルカン','iTrust','インド(SBI)','FANG','iFreeNEXT'];
+
   snapshots.forEach(s=>{
-    if(s.accounts)s.accounts.forEach(a=>{
-      // iDeCo・確定拠出・DC年金は口座名で判定して年金カテゴリに正規化
-      if(PENSION_PATS.some(p=>p.test(a.name))&&a.cat!=='年金'){
-        if(s.cats[a.cat]!=null)s.cats[a.cat]=Math.max(0,(s.cats[a.cat]||0)-a.amount);
-        a.cat='年金';
-        s.cats['年金']=(s.cats['年金']||0)+a.amount;
-      } else if(CAT_NORM2[a.cat]){
-        if(s.cats[a.cat])s.cats[a.cat]=Math.max(0,(s.cats[a.cat]||0)-a.amount);
-        const newCat=CAT_NORM2[a.cat];
-        a.cat=newCat;
-        s.cats[newCat]=(s.cats[newCat]||0)+a.amount;
-      } else if((a.cat==='証券'||a.cat==='その他')&&TOUSHI_NAMES2.some(n=>a.name.includes(n))){
-        if(s.cats[a.cat])s.cats[a.cat]=Math.max(0,(s.cats[a.cat]||0)-a.amount);
-        a.cat='投信';
-        s.cats['投信']=(s.cats['投信']||0)+a.amount;
-      }
+    if(!s.accounts||!s.accounts.length)return;
+
+    // Step1: 各accountのcatをグラフカテゴリに正規化
+    s.accounts.forEach(a=>{
+      // 年金判定（最優先）
+      if(PENSION_PATS.some(p=>p.test(a.name))){a.cat='年金';return;}
+      // 投信名で証券→投信へ
+      if((a.cat==='証券'||a.cat==='個別株'||a.cat==='高配当'||a.cat==='その他')&&TOUSHI_NAMES.some(n=>a.name.includes(n))){a.cat='投信';return;}
+      // カテゴリマップ変換
+      if(TO_GRAPH_CAT[a.cat])a.cat=TO_GRAPH_CAT[a.cat];
     });
+
+    // Step2: accoutsからcatsを完全再計算（不整合を排除）
+    const newCats={};
+    s.accounts.forEach(a=>{newCats[a.cat]=(newCats[a.cat]||0)+a.amount;});
+    s.cats=newCats;
+    s.total=s.accounts.reduce((sum,a)=>sum+a.amount,0);
   });
 }
 function getFiltered(){
@@ -2973,10 +2983,13 @@ function trParseCSV(text,filename){
   if(m){dateStr=m[1];}else{const dates=rows.map(r=>r.updated).filter(Boolean).sort();dateStr=dates[dates.length-1]||new Date().toISOString().slice(0,10);}
   const existing=snapshots.findIndex(s=>s.date===dateStr);
   if(existing>=0){if(!confirm(`${dateStr}のデータはすでにあります。上書きしますか？`))return;snapshots.splice(existing,1);}
+  // catsをaccountsから再計算（カテゴリは既に正規化済み）
   const cats={};rows.forEach(r=>{cats[r.cat]=(cats[r.cat]||0)+r.amount;});
   const total=rows.reduce((s,r)=>s+r.amount,0);
   snapshots.push({date:dateStr,filename,total,cats,accounts:rows});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
+  // trLoadFromStorageで再正規化して整合性を確保
+  trLoadFromStorage();
   trSaveToStorage();trRenderAll();refreshHome();
 }
 function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();trRenderAll();refreshHome();}
