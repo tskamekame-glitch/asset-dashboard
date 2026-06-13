@@ -1427,11 +1427,23 @@ function amRender(){
       const stale=daysSince(a.updated)>=30;
       const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
       const isStock=a.cat==='個別株'||a.cat==='高配当';
+      const hasSBICode=isStock&&!!(a.code&&a.code.length>0);
+      const noAutoUpdate=isStock&&!hasSBICode;
       const sharesVal=a.shares||'';
       const priceVal=a.price||'';
       const amountVal=a.amount||'';
       const calcVal=a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price)):'';
       const noteHtml=a.note?'<div class="acct-note">'+esc(a.note)+'</div>':'';
+      const codeInput=isStock
+        ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'
+         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">銘柄コード</span>'
+         +'<input id="il-code-'+a.id+'" type="text" inputmode="numeric" value="'+esc(a.code||'')+'" placeholder="例:4063" maxlength="6"'
+         +' style="width:70px;padding:4px 8px;font-size:13px;border:1px solid '+(hasSBICode?'var(--accent)':'#e53e3e')+';border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;letter-spacing:0.05em"'
+         +' title="SBI CSV照合用コード">'
+         +(hasSBICode?'':'<span style="font-size:10px;color:#e53e3e;font-weight:600;margin-left:4px">← 入力でSBI自動更新</span>')
+         +'</div>'
+        :'';
+      const amountColor=noAutoUpdate?'#e53e3e':'var(--text)';
       const stockInputs=isStock
         ?'<input id="il-shares-'+a.id+'" type="number" inputmode="numeric" value="'+sharesVal+'" placeholder="株数" oninput="amInlineCalc('+a.id+')" style="width:80px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
          +'<span style="color:var(--text3);font-size:13px">×</span>'
@@ -1443,15 +1455,16 @@ function amRender(){
         +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
           +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
             +'<div style="flex:1;min-width:0">'
-              +'<div class="acct-name">'+esc(a.name)+(a.code?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle;letter-spacing:0.05em">'+esc(a.code)+'</span>':'')+'</div>'
+              +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+'</div>'
               +noteHtml
+              +codeInput
               +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
                 +stockInputs
                 +'<button onclick="amInlineSave('+a.id+')" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">更新</button>'
               +'</div>'
             +'</div>'
             +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
-              +'<span class="acct-amount">'+fmt(a.amount)+'</span>'
+              +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
               +staleHtml
               +'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
             +'</div>'
@@ -1489,6 +1502,8 @@ function amInlineCalc(id){
 }
 async function amInlineSave(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  const codeEl=document.getElementById('il-code-'+id);
+  if(codeEl){a.code=(codeEl.value||'').trim().replace(/[^0-9A-Za-z]/g,'');}
   const sharesEl=document.getElementById('il-shares-'+id);
   const priceEl=document.getElementById('il-price-'+id);
   const amountEl=document.getElementById('il-amount-'+id);
@@ -1991,12 +2006,13 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode){
   const s=toH(sbiNorm);
   const p=toH(accName);
   // ===== 銘柄コード完全一致（最優先）=====
-  // AM口座にcodeが設定されている場合はコードで即決
   if(accCode){
     const codeInSBI=s.match(/\b(\d{4,6})\b/);
-    if(codeInSBI&&codeInSBI[1]===accCode)return 100;
-    // コードが設定済みなのにSBIの銘柄コードと一致しない→この口座は候補から外す
-    if(codeInSBI)return 0;
+    if(codeInSBI){
+      // SBI行に銘柄コードあり: 一致→100、不一致→0（誤マッチ防止）
+      return codeInSBI[1]===accCode?100:0;
+    }
+    // SBI行に銘柄コードなし（投信等）→ 以降のルールで判定
   }
   // ===== ファンド固有ルール（最優先）=====
   // SBI銘柄ごとに must/not キーワードで正確に対応するAM口座を特定
