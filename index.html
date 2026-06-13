@@ -612,10 +612,12 @@ tr:last-child td{border-bottom:none}
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
+      <button class="btn-sm" style="color:#e6931a;border-color:#e6931a;font-weight:600" onclick="document.getElementById('amSBIInput').click()">📥 SBI読込</button>
       <button class="btn-sm" onclick="importFromPortfolio()" style="color:var(--accent);border-color:var(--accent)">📊 PF反映</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
+      <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
     </div>
     <div class="section" id="chartSection">
       <div class="section-head" onclick="toggleSection('chartSection')">
@@ -1873,6 +1875,188 @@ function amReclassifyAll(){
   if(typeof pfRenderDonutCharts==='function')try{pfRenderDonutCharts();}catch(e){}
   showToast(count>0?`2713 ${count}4ef6306e30ab30c630b430ea3092518d52245b9a3057307e3057305f`:'カテゴリの変更はありませんでした',3000);
 }
+// ============================================================
+// SBI証券 CSV → 資産管理（amAccounts）自動更新
+// 実際のフォーマット:
+//   セクションヘッダー行: "株式（現物/特定預り）" 等
+//   データ行: "銘柄名", 買付日, 数量, 参考単価, 取得単価, 現在値, 前日比, 前日比%, 損益, 損益%, 評価額
+//   合計行: "株式(現物/...)合計" など
+// ============================================================
+function amSBIImport(event){
+  const files=Array.from(event.target.files);
+  event.target.value='';
+  if(!files.length)return;
+  let pending=files.length;
+  const allRows=[];
+  files.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const rows=amParseSBICSV(ev.target.result);
+      allRows.push(...rows);
+      pending--;
+      if(pending===0) amApplySBIRows(allRows);
+    };
+    reader.readAsText(f,'Shift-JIS');
+  });
+}
+
+function amParseSBICSV(text){
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n');
+  const rows=[];
+  let currentSection='';
+
+  // 全角→半角変換（銘柄名正規化用）
+  function toHankaku(s){
+    return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+            .replace(/　/g,' ').trim();
+  }
+  function toNum(s){
+    return parseFloat((s||'').replace(/[,，"]/g,'').replace(/[＋\+]/g,''))||0;
+  }
+  // 口座種別を口座名サフィックスに変換
+  function sectionToAccount(sec){
+    if(/NISA.*成長|成長.*NISA/i.test(sec)) return 'NISA成長';
+    if(/NISAつみたて|つみたて.*NISA/i.test(sec)) return 'NISAつみたて';
+    if(/特定/i.test(sec)) return '特定';
+    if(/一般/i.test(sec)) return '一般';
+    return '';
+  }
+
+  for(let i=0;i<lines.length;i++){
+    const raw=lines[i];
+    // CSV列分割（ダブルクォート対応）
+    const cols=[];
+    let cur='',inQ=false;
+    for(const ch of raw){
+      if(ch==='"'){inQ=!inQ;}
+      else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}
+      else{cur+=ch;}
+    }
+    cols.push(cur.trim());
+
+    const c0=(cols[0]||'').replace(/"/g,'').trim();
+    if(!c0)continue;
+
+    // セクションヘッダー検出（株式/投資信託のセクション行）
+    if(/株式|投資信託|投信/.test(c0)&&cols.length<=3&&!/合計/.test(c0)){
+      currentSection=c0;
+      continue;
+    }
+    // 合計行・ヘッダー行・その他メタ行をスキップ
+    if(/合計|ポートフォリオ|個別表示|PTS|総件数|選択範囲|ページ|銘柄（コード）|ファンド名/.test(c0))continue;
+    // 評価額が数値の行（総合計など）をスキップ
+    if(/^[\d,]+(\.\d+)?$/.test(c0))continue;
+
+    // 評価額は最終列（11列目 index=10）
+    const evalAmt=toNum(cols[10]);
+    if(evalAmt<=0)continue;
+
+    // 株数・現在値
+    const shares=toNum(cols[2]);
+    const price=toNum(cols[5]);
+
+    // 銘柄名を正規化（全角→半角、空白統一）
+    const nameRaw=c0.replace(/[""]/g,'');
+    const nameNorm=toHankaku(nameRaw);
+
+    const acctSuffix=sectionToAccount(currentSection);
+
+    rows.push({
+      nameRaw,
+      nameNorm,
+      evalAmt:Math.round(evalAmt),
+      shares:Math.round(shares)||0,
+      price:Math.round(price)||0,
+      section:currentSection,
+      acctSuffix
+    });
+  }
+  return rows;
+}
+
+// amAccounts内の口座とSBI銘柄をマッチング
+function amSBIMatchScore(sbiNorm,accName){
+  // accNameも全角→半角正規化
+  function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
+  const p=toH(accName);
+  const s=sbiNorm;
+  if(p===s)return 100;
+  // 銘柄コード4桁（株式）: SBIの "4063 信越化" ↔ amの "信越化学（特定）" でもコード一致優先
+  const codeM=s.match(/\b(\d{4})\b/);
+  if(codeM&&p.includes(codeM[1]))return 95;
+  // 完全部分一致
+  if(p.includes(s)||s.includes(p))return 80;
+  // 長めのトークン（4文字以上）で照合
+  const tokens=s.split(/[\s（）()・＆&\/＋\+\-\uff0b]+/).filter(t=>t.length>=4);
+  let maxTok=0;
+  for(const t of tokens){if(p.includes(t))maxTok=Math.max(maxTok,t.length);}
+  if(maxTok>=6)return 75;
+  if(maxTok>=4)return 65;
+  // ファンド固有の短縮マッチング
+  const shortMap=[
+    {pat:/eMAXIS.*Slim.*米国|S.P.*500/i, key:'米国', antiKey:'国内'},
+    {pat:/eMAXIS.*Slim.*国内.*日経|日経平均/i, key:'日経', antiKey:'米国'},
+    {pat:/eMAXIS.*Slim.*国内.*TOPIX/i, key:'TOPIX', antiKey:'米国'},
+    {pat:/iFreeNEXT.*FANG/i, key:'FANG', antiKey:null},
+    {pat:/iTrust.*インド/i, key:'iTrust', antiKey:null},
+    {pat:/インド.*eMAXIS|eMAXIS.*インド/i, key:'インド', antiKey:null},
+    {pat:/SBI.*高配当|高配当.*SBI/i, key:'高配当', antiKey:null},
+  ];
+  for(const {pat,key,antiKey} of shortMap){
+    if(pat.test(s)&&p.includes(key)&&(!antiKey||!p.includes(antiKey)))return 70;
+  }
+  // 銘柄名の主要部分（会社名）一致（3文字以上のひらがな/カタカナ/漢字）
+  const nameTokens=s.match(/[\u3040-\u9FFF\u30A0-\u30FF]{3,}/g)||[];
+  for(const t of nameTokens){if(p.includes(t))return 60;}
+  return 0;
+}
+
+function amApplySBIRows(rows){
+  if(!rows.length){showToast('⚠️ 有効な行が見つかりませんでした',3000);return;}
+  if(!amAccounts||!amAccounts.length){showToast('⚠️ 資産管理にデータがありません',3000);return;}
+
+  let updated=0;
+  const log=[];
+  const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+
+  rows.forEach(row=>{
+    let bestIdx=-1,bestScore=0;
+    amAccounts.forEach((acc,i)=>{
+      const score=amSBIMatchScore(row.nameNorm,acc.name);
+      if(score>bestScore){bestScore=score;bestIdx=i;}
+    });
+    if(bestIdx<0||bestScore<55)return;
+
+    const acc=amAccounts[bestIdx];
+    const oldVal=acc.amount||0;
+    const newVal=row.evalAmt;
+    if(oldVal===newVal&&(!row.shares||acc.shares===row.shares))return;
+
+    acc.amount=newVal;
+    if(row.shares>0)acc.shares=row.shares;
+    if(row.price>0&&row.shares>0)acc.price=row.price;
+    // memoに最終SBI更新日を記録
+    acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+
+    updated++;
+    log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:bestScore});
+  });
+
+  if(!updated){
+    showToast('ℹ️ 更新対象なし（既に最新または銘柄未マッチ）',3500);
+    console.log('[amSBI] rows:',rows);
+    return;
+  }
+
+  amSaveToLocal();
+  amRender();
+  refreshHome();
+  pfSyncFromAM(); // PF管理にも反映
+  showToast(`✅ SBI CSV: ${updated}件の評価額を更新しました`,3500);
+  console.log('[amSBI] updated:',log);
+}
+
 function amExportCSV(){
   const rows=[['id','口座名','カテゴリ','残高','メモ','更新日']];
   amAccounts.forEach(a=>rows.push([a.id,a.name,a.cat,a.amount,a.note||'',a.updated]));
