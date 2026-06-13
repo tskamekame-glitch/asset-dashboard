@@ -305,6 +305,7 @@ tr:last-child td{border-bottom:none}
 .btn-primary{flex:1;padding:10px;border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;background:var(--accent);color:white}
 .btn-secondary{flex:1;padding:10px;border:0.5px solid var(--border2);border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;background:var(--bg2);color:var(--text2)}
 .btn-danger-pf{width:100%;padding:10px;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.3);border-radius:8px;font-family:inherit;font-size:14px;cursor:pointer;color:var(--danger);margin-top:8px}
+.btn-danger{width:100%;padding:12px;background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.25);border-radius:var(--radius);font-family:inherit;font-size:14px;cursor:pointer;color:var(--danger);font-weight:600}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .section-title{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:var(--text2)}
 .section-dot{width:7px;height:7px;border-radius:50%}
@@ -516,6 +517,7 @@ tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-tab="jpstock" onclick="switchTab('jpstock')"><span class="ni">📈</span>日本株</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
+  <button class="nav-btn" data-tab="cashflow" onclick="switchTab('cashflow')"><span class="ni">💸</span>収支</button>
   <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>購入検討</button>
 </nav>
 
@@ -540,6 +542,19 @@ tr:last-child td{border-bottom:none}
       <div class="metric"><div class="label">口座数</div><div class="value" id="home-accounts">—</div></div>
       <div class="metric"><div class="label">前月比</div><div class="value" id="home-diff">—</div></div>
       <div class="metric"><div class="label">TODO残り</div><div class="value" id="home-todo">—</div></div>
+    </div>
+    <!-- インカム収益サマリー -->
+    <div id="home-income-bar" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;display:none">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">💎 インカム収益（年間予想）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">高配当・配当</div><div id="home-income-div" style="font-size:15px;font-weight:700;color:#8B5CF6">—</div></div>
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">積立（月次換算）</div><div id="home-income-acc" style="font-size:15px;font-weight:700;color:var(--accent)">—</div></div>
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">副業収入</div><div id="home-income-side" style="font-size:15px;font-weight:700;color:var(--green)">—</div></div>
+      </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--text3)">月次合計（概算）</span>
+        <span id="home-income-total" style="font-size:14px;font-weight:700;color:var(--text)">—</span>
+      </div>
     </div>
     <div class="home-grid">
       <div class="home-card" onclick="switchTab('manager')">
@@ -577,6 +592,12 @@ tr:last-child td{border-bottom:none}
         <div class="hc-title">日本株 収支管理</div>
         <div class="hc-meta">保有株・売却損益<br>セクター別PF分析</div>
         <div class="hc-badge" id="hbadge-jpstock">データなし</div>
+      </div>
+      <div class="home-card" onclick="switchTab('cashflow')">
+        <div class="hc-icon">💸</div>
+        <div class="hc-title">月次収支</div>
+        <div class="hc-meta">収入・支出・副業<br>キャッシュフロー管理</div>
+        <div class="hc-badge" id="hbadge-cashflow">タップして入力</div>
       </div>
     </div>
     <div class="hint"><strong>ヒント：</strong>「資産管理」でCSV書き出し→「推移グラフ」に読み込むと月次推移を記録できます。「PF反映」ボタンでポートフォリオの評価額を資産管理に自動反映できます。</div>
@@ -691,6 +712,9 @@ tr:last-child td{border-bottom:none}
 
     <!-- NISA枠サマリー -->
     <div id="pf-nisa-section" style="margin:12px 0"></div>
+
+    <!-- リバランスアラート -->
+    <div id="pf-rebalance-section" style="margin-bottom:12px"></div>
 
     <div class="pf-tabs">
       <button class="pf-tab active" onclick="setPfTab('all')">すべて</button>
@@ -1147,6 +1171,81 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 </div><!-- /panels -->
+
+<!-- ========== CASHFLOW TAB ========== -->
+<div class="panel" id="tab-cashflow">
+  <div class="phead">
+    <div class="phead-inner">
+      <h1>💸 月次収支</h1>
+      <button class="btn-accent" onclick="cfOpenModal()">＋ 記録</button>
+    </div>
+  </div>
+  <div class="page-inner">
+    <!-- サマリーカード -->
+    <div id="cf-summary-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
+    <!-- 月切替 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <button onclick="cfChangeMonth(-1)" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:7px 14px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit">‹ 前月</button>
+      <div id="cf-month-label" style="font-size:15px;font-weight:600"></div>
+      <button onclick="cfChangeMonth(1)" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:7px 14px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit">次月 ›</button>
+    </div>
+    <!-- カテゴリ別サマリー -->
+    <div id="cf-cat-summary" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px"></div>
+    <!-- 明細リスト -->
+    <div id="cf-list"></div>
+    <div id="cf-empty" style="text-align:center;padding:60px 20px;color:var(--text3);font-size:14px;display:none">この月の記録がありません<br><small>右上「＋ 記録」から追加</small></div>
+  </div>
+</div>
+
+<!-- キャッシュフロー入力モーダル -->
+<div class="pf-modal-overlay" id="cfModal" onclick="if(event.target===this)cfCloseModal()">
+  <div class="pf-modal" style="max-height:90dvh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="pf-modal-title" id="cfModalTitle">収支を記録</div>
+      <button onclick="cfCloseModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
+    <!-- 収入/支出トグル -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
+      <button id="cf-type-income" onclick="cfSetType('income')" style="padding:10px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid var(--green);background:var(--green);color:#fff">＋ 収入</button>
+      <button id="cf-type-expense" onclick="cfSetType('expense')" style="padding:10px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2)">－ 支出</button>
+    </div>
+    <div class="form-group"><label class="form-label">カテゴリ</label>
+      <select class="form-input" id="cf-f-cat">
+        <optgroup label="収入" id="cf-opt-income">
+          <option value="給与">給与・賞与</option>
+          <option value="副業">副業収入</option>
+          <option value="配当">配当・分配金</option>
+          <option value="売却益">売却益</option>
+          <option value="年金">年金・給付金</option>
+          <option value="その他収入">その他収入</option>
+        </optgroup>
+        <optgroup label="支出" id="cf-opt-expense">
+          <option value="生活費">生活費（食費・日用品）</option>
+          <option value="家賃">家賃・住居費</option>
+          <option value="交通費">交通費</option>
+          <option value="通信費">通信費</option>
+          <option value="積立">投資・積立</option>
+          <option value="保険">保険料</option>
+          <option value="税金">税金・社会保険</option>
+          <option value="娯楽">娯楽・交際費</option>
+          <option value="その他支出">その他支出</option>
+        </optgroup>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">金額（円）*</label><input class="form-input" type="number" id="cf-f-amount" inputmode="numeric" placeholder="50000"></div>
+      <div class="form-group"><label class="form-label">日付</label><input class="form-input" type="date" id="cf-f-date"></div>
+    </div>
+    <div class="form-group"><label class="form-label">メモ（任意）</label><input class="form-input" id="cf-f-memo" placeholder="例: SBKKの配当 Q1"></div>
+    <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">
+      <div id="cf-del-wrap" style="display:none"><button class="btn-danger" onclick="cfDeleteEntry()">削除</button></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-cancel" onclick="cfCloseModal()" style="flex:1">キャンセル</button>
+        <button class="btn-accent" onclick="cfSaveEntry()" style="flex:2">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ============================================================
      FAB（資産管理タブのみ表示）
@@ -4854,8 +4953,330 @@ const _origSwitch=window.switchTab;
 window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
   if(t==='watchlist'){wlRender();if(wlHasToken())wlSyncFromSheet();}
+  if(t==='cashflow'){cfRender();}
 };
 wlRender();
+
+// ============================================================
+// CASHFLOW — 月次収支トラッカー
+// ============================================================
+const CF_KEY='cashflow_v1';
+let cfData=[];
+let cfCurrentMonth='';
+let cfEditId=null;
+let cfCurrentType='income';
+
+function cfLoad(){try{cfData=JSON.parse(localStorage.getItem(CF_KEY)||'[]');}catch(e){cfData=[];}}
+function cfSave(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}}
+function cfUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+function cfFmt(n){return'¥'+Math.abs(Math.round(n)).toLocaleString('ja-JP');}
+
+const CF_CAT_TYPE={
+  '給与':'income','副業':'income','配当':'income','売却益':'income','年金':'income','その他収入':'income',
+  '生活費':'expense','家賃':'expense','交通費':'expense','通信費':'expense','積立':'expense',
+  '保険':'expense','税金':'expense','娯楽':'expense','その他支出':'expense'
+};
+const CF_CAT_COLOR={
+  '給与':'#185fa5','副業':'#0f6e56','配当':'#8B5CF6','売却益':'#e24b4a','年金':'#D4537E','その他収入':'#888780',
+  '生活費':'#ba7517','家賃':'#ef9f27','交通費':'#888780','通信費':'#4A90D9','積立':'#0f6e56',
+  '保険':'#9b9b97','税金':'#e24b4a','娯楽':'#D4537E','その他支出':'#b4b2a9'
+};
+
+function cfRender(){
+  cfLoad();
+  const now=new Date();
+  if(!cfCurrentMonth){
+    cfCurrentMonth=now.getFullYear()+'-'+(String(now.getMonth()+1).padStart(2,'0'));
+  }
+  document.getElementById('cf-month-label').textContent=cfCurrentMonth.replace('-','年')+'月';
+
+  const monthItems=cfData.filter(d=>d.date&&d.date.startsWith(cfCurrentMonth));
+  const income=monthItems.filter(d=>d.type==='income').reduce((s,d)=>s+d.amount,0);
+  const expense=monthItems.filter(d=>d.type==='expense').reduce((s,d)=>s+d.amount,0);
+  const balance=income-expense;
+
+  // サマリーカード
+  const sg=document.getElementById('cf-summary-grid');
+  sg.innerHTML=`
+    <div class="metric"><div class="label">収入合計</div><div class="value up">${cfFmt(income)}</div></div>
+    <div class="metric"><div class="label">支出合計</div><div class="value down">${cfFmt(expense)}</div></div>
+    <div class="metric" style="grid-column:1/-1;border-top:2px solid ${balance>=0?'var(--green)':'var(--danger)'}">
+      <div class="label">月次収支</div>
+      <div class="value" style="font-size:20px;color:${balance>=0?'var(--green)':'var(--danger)'}">${balance>=0?'＋':'－'}${cfFmt(balance)}</div>
+      <div class="sub">${balance>=0?'黒字 ✅':'赤字 ⚠️'}</div>
+    </div>`;
+
+  // カテゴリ別サマリー
+  const cats={};
+  monthItems.forEach(d=>{if(!cats[d.cat])cats[d.cat]={type:d.type,total:0};cats[d.cat].total+=d.amount;});
+  const cs=document.getElementById('cf-cat-summary');
+  if(Object.keys(cats).length===0){
+    cs.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">この月のカテゴリ別集計がここに表示されます</div>';
+  }else{
+    const sorted=Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
+    const maxVal=sorted[0]?.[1]?.total||1;
+    cs.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:500">カテゴリ別内訳</div>'+
+      sorted.map(([cat,info])=>{
+        const pct=Math.round((info.total/maxVal)*100);
+        const col=CF_CAT_COLOR[cat]||'#888';
+        const isIn=info.type==='income';
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:60px;font-size:11px;color:var(--text2);text-align:right;flex-shrink:0">${cat}</div>
+          <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;transition:width 0.4s"></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;min-width:72px;text-align:right;color:${isIn?'var(--green)':'var(--text)'}">${isIn?'＋':'－'}${cfFmt(info.total)}</div>
+        </div>`;
+      }).join('');
+  }
+
+  // 明細リスト
+  const list=document.getElementById('cf-list');
+  const empty=document.getElementById('cf-empty');
+  if(!monthItems.length){list.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  const sorted=[...monthItems].sort((a,b)=>b.date.localeCompare(a.date));
+  list.innerHTML=sorted.map(d=>{
+    const isIn=d.type==='income';
+    const col=CF_CAT_COLOR[d.cat]||'#888';
+    return `<div onclick="cfOpenEdit('${d.id}')" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;active:opacity(0.7)">
+      <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500">${d.cat}<span style="color:var(--text3);font-weight:400;margin-left:6px;font-size:11px">${d.date}</span></div>
+        ${d.memo?`<div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.memo}</div>`:''}
+      </div>
+      <div style="font-size:15px;font-weight:700;color:${isIn?'var(--green)':'var(--text)'};">${isIn?'＋':'－'}${cfFmt(d.amount)}</div>
+    </div>`;
+  }).join('');
+
+  // ホームバッジ更新
+  const badge=document.getElementById('hbadge-cashflow');
+  if(badge) badge.textContent=balance>=0?'＋'+cfFmt(balance)+'黒字':'-'+cfFmt(balance)+'赤字';
+
+  // インカムバー更新
+  cfRefreshHomeIncome();
+}
+
+function cfRefreshHomeIncome(){
+  cfLoad();
+  // 高配当評価額から配当推計（利回り3%想定）
+  let divEst=0;
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const divAmt=accs.filter(a=>a.cat==='高配当').reduce((s,a)=>s+Number(a.amount||0),0);
+    divEst=Math.round(divAmt*0.03); // 年3%想定
+  }catch(e){}
+
+  // 積立月次合計
+  let accMonthly=0;
+  try{
+    const pf=JSON.parse(localStorage.getItem(PF_KEY)||'[]');
+    accMonthly=pf.filter(d=>d.status==='done-credit'||d.status==='nisa-credit').reduce((s,d)=>s+Number(d.monthly||0),0);
+  }catch(e){}
+
+  // 副業収入（直近3ヶ月平均）
+  let sideAvg=0;
+  try{
+    const now=new Date();
+    const months=[-2,-1,0].map(i=>{
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      return d.getFullYear()+'-'+(String(d.getMonth()+1).padStart(2,'0'));
+    });
+    const sideItems=cfData.filter(d=>d.cat==='副業'&&months.some(m=>d.date&&d.date.startsWith(m)));
+    sideAvg=sideItems.length>0?Math.round(sideItems.reduce((s,d)=>s+d.amount,0)/3):0;
+  }catch(e){}
+
+  const monthDiv=Math.round(divEst/12);
+  const total=monthDiv+accMonthly+sideAvg;
+  const bar=document.getElementById('home-income-bar');
+  if(bar&&(divEst>0||accMonthly>0||sideAvg>0)){
+    bar.style.display='block';
+    document.getElementById('home-income-div').textContent=cfFmt(divEst)+'/年';
+    document.getElementById('home-income-acc').textContent=cfFmt(accMonthly)+'/月';
+    document.getElementById('home-income-side').textContent=sideAvg>0?cfFmt(sideAvg)+'/月':'未入力';
+    document.getElementById('home-income-total').textContent='月'+cfFmt(total)+' / 年'+cfFmt(total*12);
+  }
+}
+
+function cfChangeMonth(dir){
+  const [y,m]=cfCurrentMonth.split('-').map(Number);
+  const d=new Date(y,m-1+dir,1);
+  cfCurrentMonth=d.getFullYear()+'-'+(String(d.getMonth()+1).padStart(2,'0'));
+  cfRender();
+}
+
+function cfSetType(type){
+  cfCurrentType=type;
+  const inc=document.getElementById('cf-type-income');
+  const exp=document.getElementById('cf-type-expense');
+  if(type==='income'){
+    inc.style.background='var(--green)';inc.style.color='#fff';inc.style.borderColor='var(--green)';
+    exp.style.background='var(--bg)';exp.style.color='var(--text2)';exp.style.borderColor='var(--border2)';
+  }else{
+    exp.style.background='var(--danger)';exp.style.color='#fff';exp.style.borderColor='var(--danger)';
+    inc.style.background='var(--bg)';inc.style.color='var(--text2)';inc.style.borderColor='var(--border2)';
+  }
+  // カテゴリ選択をタイプに合わせてリセット
+  const sel=document.getElementById('cf-f-cat');
+  const opts=sel.options;
+  for(let i=0;i<opts.length;i++){
+    const cat=opts[i].value;
+    if(CF_CAT_TYPE[cat]===type){sel.selectedIndex=i;break;}
+  }
+}
+
+function cfOpenModal(){
+  cfEditId=null;
+  document.getElementById('cfModalTitle').textContent='収支を記録';
+  document.getElementById('cf-f-amount').value='';
+  document.getElementById('cf-f-memo').value='';
+  document.getElementById('cf-f-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('cf-del-wrap').style.display='none';
+  cfSetType('income');
+  document.getElementById('cfModal').style.display='flex';
+}
+
+function cfOpenEdit(id){
+  cfLoad();
+  const entry=cfData.find(d=>d.id===id);
+  if(!entry)return;
+  cfEditId=id;
+  document.getElementById('cfModalTitle').textContent='収支を編集';
+  cfSetType(entry.type);
+  document.getElementById('cf-f-cat').value=entry.cat;
+  document.getElementById('cf-f-amount').value=entry.amount;
+  document.getElementById('cf-f-date').value=entry.date;
+  document.getElementById('cf-f-memo').value=entry.memo||'';
+  document.getElementById('cf-del-wrap').style.display='block';
+  document.getElementById('cfModal').style.display='flex';
+}
+
+function cfCloseModal(){document.getElementById('cfModal').style.display='none';}
+
+function cfSaveEntry(){
+  const amount=parseFloat(document.getElementById('cf-f-amount').value)||0;
+  const cat=document.getElementById('cf-f-cat').value;
+  const date=document.getElementById('cf-f-date').value;
+  const memo=document.getElementById('cf-f-memo').value.trim();
+  if(!amount||!date){showToast('⚠ 金額と日付は必須です');return;}
+  cfLoad();
+  if(cfEditId){
+    const idx=cfData.findIndex(d=>d.id===cfEditId);
+    if(idx>=0)cfData[idx]={...cfData[idx],type:cfCurrentType,cat,amount,date,memo};
+  }else{
+    cfData.push({id:cfUID(),type:cfCurrentType,cat,amount,date,memo});
+  }
+  cfSave();cfCloseModal();cfRender();showToast('✅ 保存しました');
+}
+
+function cfDeleteEntry(){
+  if(!cfEditId)return;
+  cfLoad();
+  cfData=cfData.filter(d=>d.id!==cfEditId);
+  cfSave();cfCloseModal();cfRender();showToast('削除しました');
+}
+
+// ============================================================
+// REBALANCE ALERT — リバランスアラート
+// ============================================================
+function pfRenderRebalance(){
+  const section=document.getElementById('pf-rebalance-section');
+  if(!section)return;
+
+  // 現状配分を資産管理から取得
+  const AM_TO_ALLOC2={
+    '全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス',
+    'インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株',
+    '証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス',
+    '証券-高配当':'高配当','証券-個別':'個別株','投信':'全世界インデックス',
+  };
+  const INVEST_CATS=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株'];
+
+  let amRaw=[];
+  try{amRaw=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){}
+
+  const actual={};INVEST_CATS.forEach(k=>actual[k]=0);
+  amRaw.forEach(a=>{
+    const cat=amGuessCat(a.name)||a.cat;
+    const key=AM_TO_ALLOC2[cat];
+    if(key&&actual[key]!==undefined)actual[key]+=Number(a.amount||0);
+  });
+  const totalActual=INVEST_CATS.reduce((s,k)=>s+actual[k],0);
+
+  // PFフォールバック
+  if(totalActual===0){
+    pfData.forEach(d=>{
+      const key=PF_TO_ALLOC[d.category];
+      if(key&&actual[key]!==undefined)actual[key]+=(Number(d.value||0)||Number(d.lump||0));
+    });
+  }
+  const totalFinal=INVEST_CATS.reduce((s,k)=>s+actual[k],0);
+  if(totalFinal===0){section.innerHTML='';return;}
+
+  // 乖離計算
+  const deviations=INVEST_CATS.map(cat=>{
+    const actualPct=totalFinal>0?(actual[cat]/totalFinal)*100:0;
+    const targetPct=PF_TARGET_ALLOC[cat]||0;
+    const diff=actualPct-targetPct;
+    return{cat,actualPct,targetPct,diff,actualAmt:actual[cat]};
+  }).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+
+  const hasAlert=deviations.some(d=>Math.abs(d.diff)>=5);
+  const THRESHOLD=5;// 5%以上乖離でアラート
+
+  const CAT_COLOR={...PF_ALLOC_COLORS};
+
+  let html=`<div style="background:var(--bg);border:0.5px solid ${hasAlert?'#ba7517':'var(--border)'};border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:2px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text)">⚖️ リバランスチェック</div>
+      <div style="font-size:11px;padding:3px 8px;border-radius:20px;background:${hasAlert?'rgba(186,117,23,0.12)':'rgba(15,110,86,0.1)'};color:${hasAlert?'var(--amber)':'var(--green)'};font-weight:600">${hasAlert?'⚠ 要リバランス':'✅ バランス良好'}</div>
+    </div>`;
+
+  deviations.forEach(({cat,actualPct,targetPct,diff,actualAmt})=>{
+    const isOver=diff>0;const absD=Math.abs(diff);
+    const alert=absD>=THRESHOLD;
+    const barW=Math.min(100,actualPct/Math.max(...Object.values(PF_TARGET_ALLOC))*100);
+    const targetBarW=Math.min(100,targetPct/Math.max(...Object.values(PF_TARGET_ALLOC))*100);
+    const col=CAT_COLOR[cat]||'#888';
+    html+=`<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:500">${cat}</span>
+        <span style="font-size:12px;display:flex;gap:6px;align-items:center">
+          <span style="color:var(--text2)">${actualPct.toFixed(1)}%</span>
+          <span style="color:var(--text3);font-size:10px">/ 目標${targetPct}%</span>
+          ${alert?`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(186,117,23,0.12);color:var(--amber);font-weight:600">${isOver?'↑過多':'↓不足'} ${absD.toFixed(1)}%</span>`:''}
+        </span>
+      </div>
+      <div style="position:relative;height:6px;background:var(--bg2);border-radius:3px;overflow:visible;margin-bottom:2px">
+        <div style="height:100%;border-radius:3px;background:${col};width:${actualPct.toFixed(1)}%;max-width:100%;transition:width 0.5s;opacity:${alert?1:0.7}"></div>
+        <div style="position:absolute;top:-1px;height:8px;width:2px;background:var(--text2);border-radius:1px;left:${targetPct}%;transform:translateX(-50%)" title="目標:${targetPct}%"></div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--text3)">${pfFmt(actualAmt)}</div>
+    </div>`;
+  });
+
+  if(hasAlert){
+    html+=`<div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);font-size:11px;color:var(--amber)">
+      ▲ 縦線が目標比率。5%以上の乖離がある場合は買い増しまたは売却でリバランスを検討してください。
+    </div>`;
+  }
+  html+='</div>';
+  section.innerHTML=html;
+}
+
+// refreshHome にインカムバー更新を追加
+const _origRefreshHome=refreshHome;
+window.refreshHome=function(){
+  _origRefreshHome&&_origRefreshHome();
+  try{cfLoad();cfRefreshHomeIncome();}catch(e){}
+};
+
+// pfRender にリバランスを追加
+const _origPfRender=pfRender;
+window.pfRender=function(){
+  _origPfRender&&_origPfRender();
+  try{pfRenderRebalance();}catch(e){}
+};
 </script>
 </body>
 </html>
