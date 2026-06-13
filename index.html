@@ -5273,7 +5273,12 @@ const CF_CAT_RULES=[
   {pat:/配当|分配金|dividend/i,                                   type:'income', cat:'配当'},
   {pat:/SBI.*入金|証券.*入金|投資.*払戻/i,                       type:'income', cat:'売却益'},
   {pat:/副業|フリーランス|報酬|謝礼/i,                            type:'income', cat:'副業'},
-  {pat:/年金|給付|還付|キャッシュバック|ポイント還元/i,            type:'income', cat:'年金'},
+  {pat:/年金|給付|還付|キャッシュバック|ポイント還元|生活応援|ｵｳｴﾝ|応援/i, type:'income', cat:'年金'},
+  // 証券会社（振込=入金扱い）: SBI証券・野村証券・みずほ証券などへの振込/からの振込
+  // 半角カナ「ｼﾖｳｹﾝ」（証券）を含む取引は、出金=積立、入金=売却益として扱う
+  {pat:/ｼﾖｳｹﾝ|証券|SBI証券|野村証券|みずほ証券/i,                  type:'auto', catExpense:'積立', catIncome:'売却益'},
+  // 定期預金・自動振替
+  {pat:/ﾃｲｷ|定期預金|定期預金へ|定期へ/i,                          type:'auto', catExpense:'積立', catIncome:'その他収入'},
   // 住居
   {pat:/家賃|管理費|修繕|地代|UR|住宅/i,                         type:'expense', cat:'家賃'},
   // 通信
@@ -5284,8 +5289,10 @@ const CF_CAT_RULES=[
   {pat:/SBI証券|投資信託|積立|iDeCo|NISA|クレカ積立/i,           type:'expense', cat:'積立'},
   // 保険
   {pat:/保険|insurance/i,                                         type:'expense', cat:'保険'},
+  // クレジットカード会社からの引き落とし（楽天カード・三井住友カード・JACCS/ジャックス・UCS等）
+  {pat:/ﾗｸﾃﾝｶ-ﾄﾞ|楽天カード|ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ|三井住友カード|ｼﾞﾔﾂｸｽ|JACCS|ジャックス|UCS|引落.*カード|カード.*引落|振替.*カード/i, type:'expense', cat:'税金'},
   // 税金・社会保険
-  {pat:/国民健康保険|国民年金|住民税|所得税|社会保険|年金保険料|UCS|引落.*カード|カード.*引落|振替.*カード/i, type:'expense', cat:'税金'},
+  {pat:/国民健康保険|国民年金|住民税|所得税|社会保険|年金保険料/i, type:'expense', cat:'税金'},
   // 娯楽
   {pat:/Amazon|アマゾン|Netflix|ネットフリックス|Spotify|Hulu|映画|ゲーム|書籍|本屋|コンビニ|セブン|ローソン|ファミマ/i, type:'expense', cat:'娯楽'},
   // 生活費（広めに最後）
@@ -5295,6 +5302,9 @@ const CF_CAT_RULES=[
 function cfGuessCat(desc,isExpense){
   for(const rule of CF_CAT_RULES){
     if(rule.pat.test(desc)){
+      if(rule.type==='auto'){
+        return isExpense?{type:'expense',cat:rule.catExpense}:{type:'income',cat:rule.catIncome};
+      }
       return{type:rule.type,cat:rule.cat};
     }
   }
@@ -5308,31 +5318,40 @@ function cfParseSMBC(text){
   text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   const lines=text.split('\n').filter(l=>l.trim());
   const rows=[];
+  let dateCol=-1,outCol=-1,inCol=-1,descCol=-1;
+
   for(const line of lines){
     const cols=cfSplitCSV(line);
-    if(cols.length<5)continue;
-    // 取引日判定: YYYY/MM/DD or YYYY-MM-DD
-    const dateRaw=(cols[0]||'').replace(/"/g,'').trim();
-    if(!/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(dateRaw))continue;
-    const date=dateRaw.replace(/\//g,'-');
-    const desc=(cols[1]||'').replace(/"/g,'').trim();
-    const amtRaw=(cols[4]||'').replace(/[",，\s]/g,'');
-    const amt=parseFloat(amtRaw)||0;
-    if(!amt||!date)continue;
-    // 金額が正→入金、負→出金（SMBCは符号付きまたは列で判断）
-    // SMBCは「入金額」「出金額」が別列の場合もある（5列目=入金, 6列目=出金 のケース）
-    let type,cat,finalAmt;
-    if(cols.length>=6){
-      const inAmt=parseFloat((cols[4]||'').replace(/[",，\s]/g,''))||0;
-      const outAmt=parseFloat((cols[5]||'').replace(/[",，\s]/g,''))||0;
-      if(outAmt>0){const r=cfGuessCat(desc,true);type=r.type;cat=r.cat;finalAmt=outAmt;}
-      else if(inAmt>0){const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;finalAmt=inAmt;}
-      else continue;
-    }else{
-      if(amt>0){const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;finalAmt=amt;}
-      else{const r=cfGuessCat(desc,true);type=r.type;cat=r.cat;finalAmt=Math.abs(amt);}
+    // ヘッダー行検出（年月日・お引出し・お預入れ・お取り扱い内容 等）
+    if(dateCol===-1){
+      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      const di=h.findIndex(c=>/年月日|取引日|日付/.test(c));
+      const oi=h.findIndex(c=>/お引出し|引出|出金/.test(c));
+      const ii=h.findIndex(c=>/お預入れ|預入|入金/.test(c));
+      const desci=h.findIndex(c=>/お取り扱い内容|取扱内容|内容|摘要/.test(c));
+      if(di>=0&&(oi>=0||ii>=0)&&desci>=0){
+        dateCol=di;outCol=oi;inCol=ii;descCol=desci;
+      }
+      continue;
     }
-    rows.push({id:cfUID(),type,cat,amount:finalAmt,date,memo:desc});
+    if(cols.length<=dateCol)continue;
+
+    // 日付: "2026/6/12" のような1〜2桁月日にも対応
+    const dateRaw=(cols[dateCol]||'').replace(/"/g,'').trim();
+    const dm=dateRaw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if(!dm)continue;
+    const date=`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
+
+    const desc=(cols[descCol]||'').replace(/"/g,'').trim();
+    const outAmt=outCol>=0?parseFloat((cols[outCol]||'').replace(/[",，\s]/g,''))||0:0;
+    const inAmt =inCol>=0 ?parseFloat((cols[inCol ]||'').replace(/[",，\s]/g,''))||0:0;
+    if(!outAmt&&!inAmt)continue;
+
+    let type,cat,amount;
+    if(outAmt>0){const r=cfGuessCat(desc,true);type=r.type;cat=r.cat;amount=outAmt;}
+    else{const r=cfGuessCat(desc,false);type=r.type;cat=r.cat;amount=inAmt;}
+
+    rows.push({id:cfUID(),type,cat,amount,date,memo:desc});
   }
   return rows;
 }
