@@ -1340,7 +1340,7 @@ tr:last-child td{border-bottom:none}
           <option value="その他">📁 その他</option>
         </select>
       </div>
-      <div class="field"><label>残高（円）</label><input type="number" id="fAmount" placeholder="例: 500000" inputmode="numeric"></div>
+      <div class="field"><label>残高（円）</label><input type="number" id="fAmount" placeholder="例: 500000" inputmode="numeric" oninput="amCalcAmount()"></div>
       <div class="field" id="fCodeField" style="display:none">
         <label>銘柄コード <span style="font-size:11px;color:var(--text3);font-weight:400">（SBI CSV自動照合に使用）</span></label>
         <input type="text" id="fCode" placeholder="例: 4063" inputmode="numeric" maxlength="6" autocomplete="off" style="letter-spacing:0.08em;font-variant-numeric:tabular-nums">
@@ -1354,6 +1354,11 @@ tr:last-child td{border-bottom:none}
           <span style="color:var(--text3);font-size:13px">=</span>
           <span id="fCalcResult" style="font-size:13px;font-weight:600;color:var(--green);min-width:60px"></span>
         </div>
+      </div>
+      <div class="field" id="fCostField" style="display:none">
+        <label id="fCostLabel">取得価格（円）</label>
+        <input type="number" id="fCost" placeholder="例: 1000000" inputmode="numeric" oninput="amCalcAmount()">
+        <div id="fGainResult" style="font-size:12px;font-weight:600;margin-top:4px"></div>
       </div>
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
     </div>
@@ -1628,7 +1633,26 @@ function amRender(){
          +'<input id="il-price-'+a.id+'" type="number" inputmode="numeric" value="'+priceVal+'" placeholder="株価" oninput="amInlineCalc('+a.id+')" style="width:95px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
          +'<span style="color:var(--text3);font-size:13px">=</span>'
          +'<span id="il-calc-'+a.id+'" style="font-size:13px;font-weight:600;color:var(--green)">'+calcVal+'</span>'
-        :'<input id="il-amount-'+a.id+'" type="number" inputmode="numeric" value="'+amountVal+'" placeholder="残高（円）" style="width:140px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">';
+        :'<input id="il-amount-'+a.id+'" type="number" inputmode="numeric" value="'+amountVal+'" placeholder="残高（円）" oninput="amInlineCalc('+a.id+')" style="width:140px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">';
+      // 取得価格・取得株価 入力欄＋損益表示（個別株/高配当/インデックスのみ）
+      const costVal=a.costPrice||'';
+      const initGainHtml=(()=>{
+        if(isStock&&a.shares>0&&a.price>0&&a.costPrice>0){
+          return amGainHtml((a.price-a.costPrice)*a.shares,(a.price-a.costPrice)/a.costPrice*100);
+        }
+        if(isIndexFund&&a.amount>0&&a.costPrice>0){
+          return amGainHtml(a.amount-a.costPrice,(a.amount-a.costPrice)/a.costPrice*100);
+        }
+        return'';
+      })();
+      const costInput=(isStock||isIndexFund)
+        ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'
+         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isStock?'取得株価':'取得価格')+'</span>'
+         +'<input id="il-cost-'+a.id+'" type="number" inputmode="numeric" value="'+costVal+'" placeholder="'+(isStock?'例:1500':'例:1000000')+'" oninput="amInlineCalc('+a.id+')" style="width:'+(isStock?'90px':'120px')+';padding:5px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+         +'<span style="font-size:11px;color:var(--text3)">'+(isStock?'円/株':'円')+'</span>'
+         +'<span id="il-gain-'+a.id+'">'+initGainHtml+'</span>'
+         +'</div>'
+        :'';
       const html=''
         +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
           +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
@@ -1640,6 +1664,7 @@ function amRender(){
                 +stockInputs
                 +'<button onclick="amInlineSave('+a.id+')" style="'+updateBtnStyle+'">'+updateBtnLabel+'</button>'
               +'</div>'
+              +costInput
             +'</div>'
             +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
               +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
@@ -1668,20 +1693,48 @@ function amToggleInline(id){
     if(inp)setTimeout(()=>inp.focus(),100);
   }
 }
+// 損益表示HTML生成（gain:差額, pct:変化率）
+function amGainHtml(gain,pct){
+  if(gain==null||!isFinite(gain))return'';
+  const color=gain>=0?'var(--green)':'var(--danger)';
+  const sign=gain>=0?'+':'';
+  const pctTxt=isFinite(pct)?`（${sign}${pct.toFixed(1)}%）`:'';
+  return`<span style="font-size:12px;font-weight:600;color:${color}">損益 ${sign}${fmt(Math.round(gain))}${pctTxt}</span>`;
+}
 function amInlineCalc(id){
   const shares=parseFloat(document.getElementById('il-shares-'+id)?.value)||0;
   const price=parseFloat(document.getElementById('il-price-'+id)?.value)||0;
+  const amount=parseFloat(document.getElementById('il-amount-'+id)?.value)||0;
+  const cost=parseFloat(document.getElementById('il-cost-'+id)?.value)||0;
   const calc=document.getElementById('il-calc-'+id);
+  const gainEl=document.getElementById('il-gain-'+id);
   if(shares>0&&price>0){
     if(calc)calc.textContent=fmt(Math.round(shares*price));
   }else{
     if(calc)calc.textContent='';
+  }
+  if(gainEl){
+    if(shares>0&&price>0&&cost>0){
+      // 個別株・高配当: 取得株価との差
+      const gain=(price-cost)*shares;
+      const pct=(price-cost)/cost*100;
+      gainEl.innerHTML=amGainHtml(gain,pct);
+    }else if(!(shares>0&&price>0)&&amount>0&&cost>0){
+      // インデックス: 取得価格(総額)との差
+      const gain=amount-cost;
+      const pct=gain/cost*100;
+      gainEl.innerHTML=amGainHtml(gain,pct);
+    }else{
+      gainEl.innerHTML='';
+    }
   }
 }
 async function amInlineSave(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
   const codeEl=document.getElementById('il-code-'+id);
   if(codeEl){a.code=(codeEl.value||'').trim().replace(/[^0-9A-Za-z]/g,'');}
+  const costEl=document.getElementById('il-cost-'+id);
+  if(costEl){a.costPrice=parseFloat(costEl.value)||0;}
   const sharesEl=document.getElementById('il-shares-'+id);
   const priceEl=document.getElementById('il-price-'+id);
   const amountEl=document.getElementById('il-amount-'+id);
@@ -1707,7 +1760,9 @@ function openAddModal(defaultCat){
   document.getElementById('fCode').value='';
   document.getElementById('fShares').value='';
   document.getElementById('fPrice').value='';
+  document.getElementById('fCost').value='';
   document.getElementById('fCalcResult').textContent='';
+  document.getElementById('fGainResult').innerHTML='';
   amToggleStockFields();
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fName').focus(),300);
@@ -1728,7 +1783,9 @@ function openEditModal(id){
   document.getElementById('fCode').value=a.code||'';
   document.getElementById('fShares').value=a.shares||'';
   document.getElementById('fPrice').value=a.price||'';
+  document.getElementById('fCost').value=a.costPrice||'';
   document.getElementById('fCalcResult').textContent='';
+  document.getElementById('fGainResult').innerHTML='';
   amToggleStockFields();
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fAmount').focus(),300);
@@ -1752,8 +1809,9 @@ async function saveAccount(){
   const code=(document.getElementById('fCode').value||'').trim().replace(/[^0-9A-Za-z]/g,'');
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,updated:todayStr()});}
+  const costPrice=parseFloat(document.getElementById('fCost').value)||0;
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();
 }
 function amConfirmDelete(id){
@@ -1768,22 +1826,44 @@ document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===
 function amToggleStockFields(){
   const cat=document.getElementById('fCat').value;
   const isStock=(cat==='個別株'||cat==='高配当');
+  const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
   const sf=document.getElementById('fStockFields');
   const cf=document.getElementById('fCodeField');
+  const costF=document.getElementById('fCostField');
+  const costLabel=document.getElementById('fCostLabel');
   if(sf)sf.style.display=isStock?'block':'none';
   if(cf)cf.style.display=isStock?'block':'none';
+  if(costF)costF.style.display=(isStock||isIndexFund)?'block':'none';
+  if(costLabel)costLabel.textContent=isStock?'取得株価（円/株）':'取得価格（円・総額）';
   if(!isStock){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
+  if(!isStock&&!isIndexFund){document.getElementById('fCost').value='';document.getElementById('fGainResult').innerHTML='';}
+  amCalcAmount();
 }
 function amCalcAmount(){
+  const cat=document.getElementById('fCat').value;
+  const isStock=(cat==='個別株'||cat==='高配当');
+  const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
+  const cost=parseFloat(document.getElementById('fCost').value)||0;
   const result=document.getElementById('fCalcResult');
+  const gainResult=document.getElementById('fGainResult');
+  let amount=parseFloat(document.getElementById('fAmount').value)||0;
   if(shares>0&&price>0){
-    const total=Math.round(shares*price);
-    document.getElementById('fAmount').value=total;
-    if(result)result.textContent='¥'+total.toLocaleString('ja-JP');
+    amount=Math.round(shares*price);
+    document.getElementById('fAmount').value=amount;
+    if(result)result.textContent='¥'+amount.toLocaleString('ja-JP');
   }else{
     if(result)result.textContent='';
+  }
+  if(gainResult){
+    if(isStock&&shares>0&&price>0&&cost>0){
+      gainResult.innerHTML=amGainHtml((price-cost)*shares,(price-cost)/cost*100);
+    }else if(isIndexFund&&amount>0&&cost>0){
+      gainResult.innerHTML=amGainHtml(amount-cost,(amount-cost)/cost*100);
+    }else{
+      gainResult.innerHTML='';
+    }
   }
 }
 function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
@@ -2372,9 +2452,9 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const values=[['id','name','cat','amount','note','shares','price','updated','code'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||''])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:I${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:I1000`});
+    const values=[['id','name','cat','amount','note','shares','price','updated','code','costPrice'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0])];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:J${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:J1000`});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
   }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
@@ -2460,9 +2540,9 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:I1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:J1000'});
     const rows=res.result.values||[];
-    amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr(),code:r[8]||''}));
+    amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr(),code:r[8]||'',costPrice:parseFloat(r[9])||0}));
     amSaveToLocal();amRender();
   }catch(e){amLoadFromLocal();amRender();}
 }
