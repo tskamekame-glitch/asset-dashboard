@@ -2187,6 +2187,9 @@ function amReclassifyAll(){
 //   セクションヘッダー行: "株式（現物/特定預り）" 等
 //   データ行: "銘柄名", 買付日, 数量, 参考単価, 取得単価, 現在値, 前日比, 前日比%, 損益, 損益%, 評価額
 //   合計行: "株式(現物/...)合計" など
+// 反映項目: 評価額(amount)・数量(shares)・現在値(price)・取得単価(costPrice)
+// 投資信託は「数量」が口数のため、基準価額(10,000口あたり)と単位を揃えて
+// 万口（数量÷10000）に変換して保存する（数量×単価＝評価額 を維持）
 // ============================================================
 function amSBIImport(event){
   const files=Array.from(event.target.files);
@@ -2258,9 +2261,17 @@ function amParseSBICSV(text){
     const evalAmt=toNum(cols[10]);
     if(evalAmt<=0)continue;
 
-    // 株数・現在値
-    const shares=toNum(cols[2]);
-    const price=toNum(cols[5]);
+    // 株数・現在値・取得単価
+    let shares=toNum(cols[2]);
+    let price=toNum(cols[5]);
+    let costPrice=toNum(cols[4]);
+
+    // 投資信託は「数量」が口数、「基準価額/取得単価」が1万口あたりの単価のため、
+    // 数量×単価=評価額 の関係を保つように口数を「万口」単位に変換する
+    const isFund=/投資信託|投信/.test(currentSection);
+    if(isFund&&shares>0){
+      shares=shares/10000;
+    }
 
     // 銘柄名を正規化（全角→半角、空白統一）
     const nameRaw=c0.replace(/[""]/g,'');
@@ -2272,10 +2283,12 @@ function amParseSBICSV(text){
       nameRaw,
       nameNorm,
       evalAmt:Math.round(evalAmt),
-      shares:Math.round(shares)||0,
-      price:Math.round(price)||0,
+      shares:isFund?Math.round(shares*10000)/10000:(Math.round(shares)||0),
+      price:Math.round(price*100)/100,
+      costPrice:Math.round(costPrice*100)/100,
       section:currentSection,
-      acctSuffix
+      acctSuffix,
+      isFund
     });
   }
   return rows;
@@ -2343,7 +2356,7 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode){
   return 0;
 }
 
-function amApplySBIRows(rows){
+async function amApplySBIRows(rows){
   if(!rows.length){showToast('⚠️ 有効な行が見つかりませんでした',3000);return;}
   if(!amAccounts||!amAccounts.length){showToast('⚠️ 資産管理にデータがありません',3000);return;}
 
@@ -2365,11 +2378,13 @@ function amApplySBIRows(rows){
     const acc=amAccounts[bestIdx];
     const oldVal=acc.amount||0;
     const newVal=row.evalAmt;
-    if(oldVal===newVal&&(!row.shares||acc.shares===row.shares))return;
+    const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+    if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
 
     acc.amount=newVal;
     if(row.shares>0)acc.shares=row.shares;
     if(row.price>0&&row.shares>0)acc.price=row.price;
+    if(row.costPrice>0)acc.costPrice=row.costPrice;
     acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
 
     updated++;
@@ -2387,6 +2402,7 @@ function amApplySBIRows(rows){
   amRender();
   refreshHome();
   pfSyncFromAM();
+  await amSaveToSheet();
   let msg=`✅ SBI CSV: ${updated}件更新`;
   if(noMatch.length){
     const names=noMatch.map(x=>{
