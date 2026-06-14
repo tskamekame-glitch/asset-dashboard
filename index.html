@@ -1346,7 +1346,7 @@ tr:last-child td{border-bottom:none}
         <input type="text" id="fCode" placeholder="例: 4063" inputmode="numeric" maxlength="6" autocomplete="off" style="letter-spacing:0.08em;font-variant-numeric:tabular-nums">
       </div>
       <div class="field" id="fStockFields" style="display:none">
-        <label>株式自動計算</label>
+        <label id="fStockFieldsLabel">株式自動計算</label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="number" id="fShares" placeholder="株数" inputmode="numeric" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-width:80px" oninput="amCalcAmount()">
           <span style="color:var(--text3);font-size:16px">×</span>
@@ -1601,6 +1601,11 @@ function amRender(){
       const isStock=a.cat==='個別株'||a.cat==='高配当';
       const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
       const hasSBICode=isStock&&!!(a.code&&a.code.length>0);
+      // PayPay系（ポイント運用等）は数量×単価表示の対象外＝残高入力のまま
+      const PAYPAY_PAT=/PayPay|ペイペイ/;
+      const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
+      // 数量×単価＝評価額 表示の対象: 個別株・高配当・インデックス投信（PayPay系除く）
+      const isUnitBased=isStock||(isIndexFund&&!isPayPay);
       // SBI以外の証券会社・サービス保有は手動扱い
       const NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
       const isNonSBI=NON_SBI_PAT.test(a.name)||NON_SBI_PAT.test(a.note||'');
@@ -1627,29 +1632,31 @@ function amRender(){
         ?'padding:6px 14px;background:#e53e3e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap'
         :'padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap';
       const updateBtnLabel=needsManual?'✏️ 手動更新':'更新';
-      const stockInputs=isStock
-        ?'<input id="il-shares-'+a.id+'" type="number" inputmode="numeric" value="'+sharesVal+'" placeholder="株数" oninput="amInlineCalc('+a.id+')" style="width:80px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+      const unitLabel=isStock?'株数':'数量';
+      const priceLabel=isStock?'株価':'単価';
+      const stockInputs=isUnitBased
+        ?'<input id="il-shares-'+a.id+'" type="number" inputmode="numeric" value="'+sharesVal+'" placeholder="'+unitLabel+'" oninput="amInlineCalc('+a.id+')" style="width:80px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
          +'<span style="color:var(--text3);font-size:13px">×</span>'
-         +'<input id="il-price-'+a.id+'" type="number" inputmode="numeric" value="'+priceVal+'" placeholder="株価" oninput="amInlineCalc('+a.id+')" style="width:95px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+         +'<input id="il-price-'+a.id+'" type="number" inputmode="numeric" value="'+priceVal+'" placeholder="'+priceLabel+'" oninput="amInlineCalc('+a.id+')" style="width:95px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
          +'<span style="color:var(--text3);font-size:13px">=</span>'
          +'<span id="il-calc-'+a.id+'" style="font-size:13px;font-weight:600;color:var(--green)">'+calcVal+'</span>'
         :'<input id="il-amount-'+a.id+'" type="number" inputmode="numeric" value="'+amountVal+'" placeholder="残高（円）" oninput="amInlineCalc('+a.id+')" style="width:140px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">';
       // 取得価格・取得株価 入力欄＋損益表示（個別株/高配当/インデックスのみ）
       const costVal=a.costPrice||'';
       const initGainHtml=(()=>{
-        if(isStock&&a.shares>0&&a.price>0&&a.costPrice>0){
+        if(isUnitBased&&a.shares>0&&a.price>0&&a.costPrice>0){
           return amGainHtml((a.price-a.costPrice)*a.shares,(a.price-a.costPrice)/a.costPrice*100);
         }
-        if(isIndexFund&&a.amount>0&&a.costPrice>0){
+        if(!isUnitBased&&isIndexFund&&a.amount>0&&a.costPrice>0){
           return amGainHtml(a.amount-a.costPrice,(a.amount-a.costPrice)/a.costPrice*100);
         }
         return'';
       })();
       const costInput=(isStock||isIndexFund)
         ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'
-         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isStock?'取得株価':'取得価格')+'</span>'
-         +'<input id="il-cost-'+a.id+'" type="number" inputmode="numeric" value="'+costVal+'" placeholder="'+(isStock?'例:1500':'例:1000000')+'" oninput="amInlineCalc('+a.id+')" style="width:'+(isStock?'90px':'120px')+';padding:5px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
-         +'<span style="font-size:11px;color:var(--text3)">'+(isStock?'円/株':'円')+'</span>'
+         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isUnitBased?'取得単価':'取得価格')+'</span>'
+         +'<input id="il-cost-'+a.id+'" type="number" inputmode="numeric" value="'+costVal+'" placeholder="'+(isUnitBased?(isStock?'例:1500':'例:18000'):'例:1000000')+'" oninput="amInlineCalc('+a.id+')" style="width:'+(isUnitBased?'90px':'120px')+';padding:5px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+         +'<span style="font-size:11px;color:var(--text3)">'+(isUnitBased?'円/'+(isStock?'株':'単位'):'円')+'</span>'
          +'<span id="il-gain-'+a.id+'">'+initGainHtml+'</span>'
          +'</div>'
         :'';
@@ -1796,8 +1803,8 @@ function amAutoCategory(){
   const guessed=amGuessCat(name);
   if(guessed){
     document.getElementById('fCat').value=guessed;
-    amToggleStockFields();
   }
+  amToggleStockFields();
 }
 function closeSheet(){document.getElementById('sheetBg').classList.remove('open')}
 async function saveAccount(){
@@ -1827,15 +1834,26 @@ function amToggleStockFields(){
   const cat=document.getElementById('fCat').value;
   const isStock=(cat==='個別株'||cat==='高配当');
   const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
+  const name=(document.getElementById('fName').value||'');
+  const note=(document.getElementById('fNote')?.value||'');
+  const PAYPAY_PAT=/PayPay|ペイペイ/;
+  const isPayPay=PAYPAY_PAT.test(name)||PAYPAY_PAT.test(note);
+  const isUnitBased=isStock||(isIndexFund&&!isPayPay);
   const sf=document.getElementById('fStockFields');
   const cf=document.getElementById('fCodeField');
   const costF=document.getElementById('fCostField');
   const costLabel=document.getElementById('fCostLabel');
-  if(sf)sf.style.display=isStock?'block':'none';
+  const sfLabel=document.getElementById('fStockFieldsLabel');
+  const sharesEl=document.getElementById('fShares');
+  const priceEl=document.getElementById('fPrice');
+  if(sf)sf.style.display=isUnitBased?'block':'none';
   if(cf)cf.style.display=isStock?'block':'none';
   if(costF)costF.style.display=(isStock||isIndexFund)?'block':'none';
-  if(costLabel)costLabel.textContent=isStock?'取得株価（円/株）':'取得価格（円・総額）';
-  if(!isStock){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
+  if(costLabel)costLabel.textContent=isUnitBased?(isStock?'取得株価（円/株）':'取得単価（円/単位）'):'取得価格（円・総額）';
+  if(sfLabel)sfLabel.textContent=isStock?'株式自動計算':'投資信託 自動計算';
+  if(sharesEl)sharesEl.placeholder=isStock?'株数':'数量';
+  if(priceEl)priceEl.placeholder=isStock?'株価（円）':'単価（円）';
+  if(!isUnitBased){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
   if(!isStock&&!isIndexFund){document.getElementById('fCost').value='';document.getElementById('fGainResult').innerHTML='';}
   amCalcAmount();
 }
@@ -1843,6 +1861,11 @@ function amCalcAmount(){
   const cat=document.getElementById('fCat').value;
   const isStock=(cat==='個別株'||cat==='高配当');
   const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
+  const name=(document.getElementById('fName').value||'');
+  const note=(document.getElementById('fNote')?.value||'');
+  const PAYPAY_PAT=/PayPay|ペイペイ/;
+  const isPayPay=PAYPAY_PAT.test(name)||PAYPAY_PAT.test(note);
+  const isUnitBased=isStock||(isIndexFund&&!isPayPay);
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
   const cost=parseFloat(document.getElementById('fCost').value)||0;
@@ -1857,9 +1880,9 @@ function amCalcAmount(){
     if(result)result.textContent='';
   }
   if(gainResult){
-    if(isStock&&shares>0&&price>0&&cost>0){
+    if(isUnitBased&&shares>0&&price>0&&cost>0){
       gainResult.innerHTML=amGainHtml((price-cost)*shares,(price-cost)/cost*100);
-    }else if(isIndexFund&&amount>0&&cost>0){
+    }else if(!isUnitBased&&isIndexFund&&amount>0&&cost>0){
       gainResult.innerHTML=amGainHtml(amount-cost,(amount-cost)/cost*100);
     }else{
       gainResult.innerHTML='';
