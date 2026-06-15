@@ -646,6 +646,7 @@ tr:last-child td{border-bottom:none}
       <button class="btn-sm" onclick="importFromPortfolio()" style="color:var(--accent);border-color:var(--accent)">📊 PF反映</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
+      <button class="btn-sm" onclick="amFixFundUnits()" style="color:#e24b4a;border-color:#e24b4a" title="投資信託の数量(口数)を万口単位に補正">🔧 投信数量修正</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
     </div>
@@ -2180,6 +2181,45 @@ function amReclassifyAll(){
   refreshHome();
   if(typeof pfRenderDonutCharts==='function')try{pfRenderDonutCharts();}catch(e){}
   showToast(count>0?`2713 ${count}4ef6306e30ab30c630b430ea3092518d52245b9a3057307e3057305f`:'カテゴリの変更はありませんでした',3000);
+}
+// ============================================================
+// 投資信託の数量(口数→万口)補正
+// 旧バージョンのSBI取込で「数量」が口数のまま保存された投信を、
+// 万口（÷10000）単位に補正する。PayPay系は対象外。
+// 判定: 投信カテゴリで数量(shares)が1,000を超える場合、
+//       「万口」としては大きすぎる＝口数のまま保存されていると判断。
+//       数量を÷10000補正し、評価額(amount)も 数量×単価 で再計算する。
+//       （「更新」ボタン押下でamountも10000倍に汚染されている場合に対応）
+// ============================================================
+async function amFixFundUnits(){
+  const PAYPAY_PAT=/PayPay|ペイペイ/;
+  let fixed=0;
+  const log=[];
+  amAccounts.forEach(a=>{
+    const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+    const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
+    if(!isIndexFund||isPayPay)return;
+    if(!(a.shares>1000))return;// 万口表記として大きすぎる→口数のまま保存されている
+
+    const oldShares=a.shares;
+    const oldAmount=a.amount;
+    a.shares=Math.round(a.shares/10000*1e4)/1e4;
+    if(a.price>0)a.amount=Math.round(a.shares*a.price);
+    a.updated=todayStr();
+    fixed++;
+    log.push({name:a.name,oldShares,newShares:a.shares,oldAmount,newAmount:a.amount});
+  });
+  if(fixed===0){
+    showToast('修正対象はありませんでした（数量は正常です）',3000);
+    return;
+  }
+  amSaveToLocal();
+  amRender();
+  refreshHome();
+  pfSyncFromAM();
+  await amSaveToSheet();
+  showToast(`✅ ${fixed}件の投信数量・評価額を万口単位に補正しました`,4000);
+  console.log('[amFixFundUnits]',log);
 }
 // ============================================================
 // SBI証券 CSV → 資産管理（amAccounts）自動更新
