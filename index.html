@@ -2230,6 +2230,8 @@ async function amFixFundUnits(){
 // 反映項目: 評価額(amount)・数量(shares)・現在値(price)・取得単価(costPrice)
 // 投資信託は「数量」が口数のため、基準価額(10,000口あたり)と単位を揃えて
 // 万口（数量÷10000）に変換して保存する（数量×単価＝評価額 を維持）
+// 同一投信が「特定」「NISA成長」等の複数セクションに分割記載される場合は、
+// 資産管理側の1口座に合算してマッチングする（数量・評価額を合算、取得単価は加重平均）
 // ============================================================
 function amSBIImport(event){
   const files=Array.from(event.target.files);
@@ -2331,7 +2333,33 @@ function amParseSBICSV(text){
       isFund
     });
   }
-  return rows;
+
+  // 投資信託は「特定」「NISA成長」など複数セクションに分割記載される場合がある。
+  // 資産管理側は1ファンド=1口座で管理する想定のため、同一ファンド名の行は合算する。
+  // （合算後はacctSuffixを空にし、特定/NISA成長による減点を避ける）
+  const merged=[];
+  const fundMap=new Map();
+  rows.forEach(row=>{
+    if(!row.isFund){merged.push(row);return;}
+    const key=row.nameNorm;
+    if(fundMap.has(key)){
+      const ex=fundMap.get(key);
+      const totalShares=Math.round((ex.shares+row.shares)*1e4)/1e4;
+      // 加重平均取得単価
+      const totalCostAmt=ex.shares*ex.costPrice+row.shares*row.costPrice;
+      ex.costPrice=totalShares>0?Math.round(totalCostAmt/totalShares*100)/100:ex.costPrice;
+      ex.shares=totalShares;
+      ex.evalAmt+=row.evalAmt;
+      ex.price=row.price;// 基準価額は共通
+      ex.acctSuffix='';// 複数セクション合算のため口座区分は問わない
+      ex.section+=' + '+row.section;
+    }else{
+      const copy={...row};
+      fundMap.set(key,copy);
+      merged.push(copy);
+    }
+  });
+  return merged;
 }
 
 // amAccounts内の口座とSBI銘柄をマッチング
@@ -3236,7 +3264,11 @@ function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP'
 function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}}
 function trLoadFromStorage(){
   try{snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snapshots=[];}
-
+  trNormalizeSnapshots(snapshots);
+}
+// スナップショット配列のカテゴリ正規化・cats/total再計算
+// （trLoadFromStorageからの呼び出しと、CSV追加直後の正規化の両方で使う）
+function trNormalizeSnapshots(snaps){
   // 資産カテゴリ → グラフカテゴリ変換マップ
   const TO_GRAPH_CAT={
     '全世界インデックス':'投信','日本インデックス':'投信','インドインデックス':'投信',
@@ -3246,7 +3278,7 @@ function trLoadFromStorage(){
   const PENSION_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
   const TOUSHI_NAMES=['オルカンPayPay','全世界PayPay','全世界インデックス','eMAXIS','オルカン','iTrust','インド(SBI)','FANG','iFreeNEXT'];
 
-  snapshots.forEach(s=>{
+  snaps.forEach(s=>{
     if(!s.accounts||!s.accounts.length)return;
 
     // Step1: 各accountのcatをグラフカテゴリに正規化
@@ -3320,8 +3352,8 @@ function trParseCSV(text,filename){
   const total=rows.reduce((s,r)=>s+r.amount,0);
   snapshots.push({date:dateStr,filename,total,cats,accounts:rows});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
-  // trLoadFromStorageで再正規化して整合性を確保
-  trLoadFromStorage();
+  // 追加したスナップショットを含めて正規化（trLoadFromStorageは使わない＝新規データを破棄しない）
+  trNormalizeSnapshots(snapshots);
   trSaveToStorage();trRenderAll();refreshHome();
 }
 function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();trRenderAll();refreshHome();}
