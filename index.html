@@ -2242,7 +2242,9 @@ function amSBIImport(event){
   files.forEach(f=>{
     const reader=new FileReader();
     reader.onload=ev=>{
-      const rows=amParseSBICSV(ev.target.result);
+      const text=ev.target.result;
+      // フォーマット判定: 「保有証券一覧」CSV（SaveFile.csv形式）は列見出しに「銘柄コード」を含む
+      const rows=/銘柄コード/.test(text)?amParseSBIHoldingsCSV(text):amParseSBICSV(text);
       allRows.push(...rows);
       pending--;
       if(pending===0) amApplySBIRows(allRows);
@@ -2362,14 +2364,151 @@ function amParseSBICSV(text){
   return merged;
 }
 
+// ============================================================
+// SBI証券「保有証券」CSV（SaveFile.csv形式）パーサー
+// 実フォーマット（ヘッダー行 "保有証券一覧"）:
+//   セクション見出し: "株式（特定預り）" "株式（NISA預り（成長投資枠））"
+//                     "投資信託（金額/特定預り）" "投資信託（金額/NISA預り（成長投資枠））"
+//   各セクションの前に "○○合計" + "評価額合計,評価損益合計" + 数値行（スキップ対象）
+//   株式の列: 銘柄コード,銘柄名称,保有株数,売却注文中,取得単価,現在値,取得金額,評価額,評価損益
+//   投信の列: ファンド名,保有口数(例:1092830口),売却注文中,取得単価,基準価額,取得金額,評価額,評価損益,分配金受取方法
+// このフォーマットは「取得単価」「取得金額」が直接記載されているため精度が高い
+// ============================================================
+function amParseSBIHoldingsCSV(text){
+  text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n');
+  const rows=[];
+  let currentSection='';
+  let mode=null;// 'stock' | 'fund' | null
+
+  function toHankaku(s){
+    return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
+  }
+  function toNum(s){
+    return parseFloat((s||'').replace(/[,，"]/g,'').replace(/[＋\+]/g,'').replace(/口$/,''))||0;
+  }
+  function sectionToAccount(sec){
+    if(/NISA.*成長|成長.*NISA/i.test(sec)) return 'NISA成長';
+    if(/NISAつみたて|つみたて.*NISA/i.test(sec)) return 'NISAつみたて';
+    if(/特定/i.test(sec)) return '特定';
+    if(/一般/i.test(sec)) return '一般';
+    return '';
+  }
+
+  for(let i=0;i<lines.length;i++){
+    const raw=lines[i];
+    const cols=[];
+    let cur='',inQ=false;
+    for(const ch of raw){
+      if(ch==='"'){inQ=!inQ;}
+      else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}
+      else{cur+=ch;}
+    }
+    cols.push(cur.trim());
+
+    const c0=(cols[0]||'').replace(/"/g,'').trim();
+    if(!c0)continue;
+
+    // セクション見出し（"株式（...）" / "投資信託（...）"、"合計"を含まない、列数1）
+    if(/^(株式|投資信託)（/.test(c0)&&cols.length<=1&&!/合計/.test(c0)){
+      currentSection=c0;
+      mode=null;
+      continue;
+    }
+    // 合計関連行をスキップ（表外の合計行のため、modeもリセット）
+    if(/合計/.test(c0)){mode=null;continue;}
+    // 「評価額合計,評価損益合計」直後の数値行（合計値）は mode未確定時のみスキップ
+    // ※銘柄コード自体が数字のみ(例:4063)の場合があるため、mode='stock'/'fund'時は対象外
+    if(mode===null&&/^[+\-\d,]+$/.test(c0))continue;
+
+    // 列ヘッダー検出
+    if(c0==='銘柄コード'){mode='stock';continue;}
+    if(c0==='ファンド名'){mode='fund';continue;}
+
+    if(mode==='stock'){
+      // 銘柄コード,銘柄名称,保有株数,売却注文中,取得単価,現在値,取得金額,評価額,評価損益
+      const code=c0.replace(/[^0-9A-Za-z]/g,'');
+      const name=(cols[1]||'').replace(/"/g,'').trim();
+      const shares=toNum(cols[2]);
+      const costPrice=toNum(cols[4]);
+      const price=toNum(cols[5]);
+      const costAmt=toNum(cols[6]);
+      const evalAmt=toNum(cols[7]);
+      if(evalAmt<=0)continue;
+      rows.push({
+        nameRaw:name,
+        nameNorm:toHankaku(name),
+        code,
+        evalAmt:Math.round(evalAmt),
+        shares:Math.round(shares)||0,
+        price:Math.round(price*100)/100,
+        costPrice:Math.round(costPrice*100)/100,
+        costAmt:Math.round(costAmt),
+        section:currentSection,
+        acctSuffix:sectionToAccount(currentSection),
+        isFund:false
+      });
+    }else if(mode==='fund'){
+      // ファンド名,保有口数(例:1092830口),売却注文中,取得単価,基準価額,取得金額,評価額,評価損益,分配金受取方法
+      const name=c0;
+      const sharesRaw=toNum(cols[1]);// "口"は toNum内で除去済み
+      const costPrice=toNum(cols[3]);
+      const price=toNum(cols[4]);
+      const costAmt=toNum(cols[5]);
+      const evalAmt=toNum(cols[6]);
+      if(evalAmt<=0)continue;
+      const shares=sharesRaw/10000;// 口→万口に変換
+      rows.push({
+        nameRaw:name,
+        nameNorm:toHankaku(name),
+        evalAmt:Math.round(evalAmt),
+        shares:Math.round(shares*1e4)/1e4,
+        price:Math.round(price*100)/100,
+        costPrice:Math.round(costPrice*100)/100,
+        costAmt:Math.round(costAmt),
+        section:currentSection,
+        acctSuffix:sectionToAccount(currentSection),
+        isFund:true
+      });
+    }
+  }
+
+  // 投資信託は「特定」「NISA成長」等の複数セクションに分割記載される場合があるため合算
+  const merged=[];
+  const fundMap=new Map();
+  rows.forEach(row=>{
+    if(!row.isFund){merged.push(row);return;}
+    const key=row.nameNorm;
+    if(fundMap.has(key)){
+      const ex=fundMap.get(key);
+      const totalShares=Math.round((ex.shares+row.shares)*1e4)/1e4;
+      const totalCostAmt=(ex.costAmt||0)+(row.costAmt||0);
+      ex.costPrice=totalShares>0?Math.round(totalCostAmt/totalShares*100)/100:ex.costPrice;
+      ex.shares=totalShares;
+      ex.evalAmt+=row.evalAmt;
+      ex.costAmt=totalCostAmt;
+      ex.price=row.price;
+      ex.acctSuffix='';
+      ex.section+=' + '+row.section;
+    }else{
+      const copy={...row};
+      fundMap.set(key,copy);
+      merged.push(copy);
+    }
+  });
+  return merged;
+}
+
 // amAccounts内の口座とSBI銘柄をマッチング
-function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode){
+// sbiCode: フォーマットB（保有証券一覧CSV）で銘柄コードが別列にある場合に渡す
+function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
   function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
   const s=toH(sbiNorm);
   const p=toH(accName);
   // ===== 銘柄コード完全一致（最優先）=====
   if(accCode){
-    const codeInSBI=s.match(/\b(\d{4,6})\b/);
+    // フォーマットBで明示的なコードが渡されていればそれを優先使用
+    const codeInSBI=sbiCode?[null,sbiCode]:s.match(/\b(\d{4,6})\b/);
     if(codeInSBI){
       // SBI行に銘柄コードあり: 一致→100、不一致→0（誤マッチ防止）
       return codeInSBI[1]===accCode?100:0;
@@ -2438,7 +2577,7 @@ async function amApplySBIRows(rows){
   rows.forEach(row=>{
     let bestIdx=-1,bestScore=0;
     amAccounts.forEach((acc,i)=>{
-      const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'');
+      const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'',row.code||'');
       if(score>bestScore){bestScore=score;bestIdx=i;}
     });
     if(bestIdx<0||bestScore<55){noMatch.push({sbi:row.nameRaw,score:bestScore});return;}
