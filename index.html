@@ -4425,32 +4425,32 @@ async function jpSaveToSheet(data) {
   const token = gapi.client && gapi.client.getToken && gapi.client.getToken();
   if (!token) return;
   try {
-    // stocks: 1行1銘柄 (id,name,code,sector,account,shares,buyPrice,buyDate,currentPrice,memo)
-    const sRows = [['id','name','code','sector','account','shares','buyPrice','buyDate','currentPrice','memo']];
-    (data.stocks || []).forEach(s => sRows.push([s.id||'',s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.buyDate||'',s.currentPrice||'',s.memo||'']));
-    // sells: 11列 (id,name,code,sector,account,shares,buyPrice,sellPrice,sellDate,memo,buyDate)
-    const sellRows = [['id','name','code','sector','account','shares','buyPrice','sellPrice','sellDate','memo','buyDate']];
-    (data.sells || []).forEach(s => sellRows.push([s.id||'',s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.sellPrice||0,s.sellDate||'',s.memo||'',s.buyDate||'']));
+    // stocks: 1行1銘柄 (id,name,code,sector,account,shares,buyPrice,buyDate,currentPrice,memo,sell1,sell2,sell3)
+    const sRows = [['id','name','code','sector','account','shares','buyPrice','buyDate','currentPrice','memo','sell1','sell2','sell3']];
+    (data.stocks || []).forEach(s => sRows.push([s.id||'',s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.buyDate||'',s.currentPrice||'',s.memo||'',s.sell1||'',s.sell2||'',s.sell3||'']));
+    // sells: 13列 (id,name,code,sector,account,shares,buyPrice,sellPrice,sellDate,memo,buyDate,reflection,type)
+    const sellRows = [['id','name','code','sector','account','shares','buyPrice','sellPrice','sellDate','memo','buyDate','reflection','type']];
+    (data.sells || []).forEach(s => sellRows.push([s.id||'',s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.sellPrice||0,s.date||s.sellDate||'',s.memo||'',s.buyDate||'',s.reflection||'',s.type||'stock']));
 
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: amSpreadsheetId,
-      range: `jpstock!A1:J${sRows.length + 200}`,
+      range: `jpstock!A1:M${sRows.length + 200}`,
       valueInputOption: 'RAW',
       resource: { values: sRows }
     });
     if (sRows.length < 200) await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: amSpreadsheetId,
-      range: `jpstock!A${sRows.length + 1}:J1000`
+      range: `jpstock!A${sRows.length + 1}:M1000`
     });
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: amSpreadsheetId,
-      range: `jpstock!L1:V${sellRows.length + 200}`,
+      range: `jpstock!O1:AA${sellRows.length + 200}`,
       valueInputOption: 'RAW',
       resource: { values: sellRows }
     });
     if (sellRows.length < 200) await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: amSpreadsheetId,
-      range: `jpstock!L${sellRows.length + 1}:V1000`
+      range: `jpstock!O${sellRows.length + 1}:AA1000`
     });
   } catch(e) { console.warn('jpSaveToSheet error', e); }
 }
@@ -4460,28 +4460,36 @@ async function jpLoadFromSheet() {
   try {
     const res = await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: amSpreadsheetId,
-      range: 'jpstock!A1:V1000'
+      range: 'jpstock!A1:AA1000'
     });
     const rows = res.result.values || [];
     if (rows.length < 2) return; // ヘッダーのみ or 空
-    // stocks: A-J列 (行1がヘッダー)
+    // stocks: A-M列 (行1がヘッダー)
     const sHeader = rows[0];
     if (!sHeader || sHeader[0] !== 'id') return; // 未初期化
     const stocks = rows.slice(1).filter(r => r[0] && r[2]).map(r => ({
       id: r[0]||'', name: r[1]||'', code: r[2]||'', sector: r[3]||'その他',
       account: r[4]||'特定口座', shares: parseFloat(r[5])||0,
       buyPrice: parseFloat(r[6])||0, buyDate: r[7]||'',
-      currentPrice: r[8]?parseFloat(r[8]):null, memo: r[9]||''
+      currentPrice: r[8]?parseFloat(r[8]):null, memo: r[9]||'',
+      sell1: r[10]?parseFloat(r[10]):null, sell2: r[11]?parseFloat(r[11]):null, sell3: r[12]?parseFloat(r[12]):null
     }));
-    // sells: L-V列
-    const sellStartCol = 11; // L=11
+    // sells: O-AA列（O=14）
+    const sellStartCol = 14;
     const sellRows = rows.filter((r,i) => i >= 1 && r[sellStartCol]);
     const sells = sellRows.map(r => ({
-      id: r[11]||'', name: r[12]||'', code: r[13]||'', sector: r[14]||'その他',
-      account: r[15]||'特定口座', shares: parseFloat(r[16])||0,
-      buyPrice: parseFloat(r[17])||0, sellPrice: parseFloat(r[18])||0,
-      sellDate: r[19]||'', memo: r[20]||'', buyDate: r[21]||''
+      id: r[14]||'', name: r[15]||'', code: r[16]||'', sector: r[17]||'その他',
+      account: r[18]||'特定口座', shares: parseFloat(r[19])||0,
+      buyPrice: parseFloat(r[20])||0, sellPrice: parseFloat(r[21])||0,
+      date: r[22]||'', sellDate: r[22]||'', memo: r[23]||'', buyDate: r[24]||'',
+      reflection: r[25]||'', type: r[26]||'stock'
     }));
+    // 派生フィールド(sellTotal/gain/tax)を再計算
+    sells.forEach(s=>{
+      s.sellTotal = s.shares*s.sellPrice;
+      s.gain = s.sellTotal - s.shares*s.buyPrice;
+      s.tax = s.account==='NISA' ? 0 : (s.gain>0 ? s.gain*JP_TAX : 0);
+    });
     const data = { stocks, sells };
     localStorage.setItem(JP_KEY, JSON.stringify(data));
     jpRenderAll();
