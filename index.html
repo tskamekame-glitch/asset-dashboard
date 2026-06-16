@@ -907,6 +907,9 @@ tr:last-child td{border-bottom:none}
   <!-- 売却サブパネル -->
   <div class="jp-sub" id="jpsub-sell">
     <div class="page-inner">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="btn-accent" style="font-size:12px;padding:6px 14px" onclick="jpOpenDirectSell()">＋ 直接記録（インデックス等）</button>
+      </div>
       <div id="jp-sell-sum" style="margin-bottom:10px"></div>
       <div id="jp-sell-list"></div>
       <div class="empty" id="jp-sell-empty" style="display:none">売却記録がありません</div>
@@ -1013,31 +1016,37 @@ tr:last-child td{border-bottom:none}
 
 <!-- 日本株: 売却モーダル -->
 <div class="pf-modal-overlay" id="jpSellModal" onclick="if(event.target===this)jpCloseSell()">
-  <div class="pf-modal">
+  <div class="pf-modal" style="max-height:90dvh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div class="pf-modal-title">売却を記録</div>
+      <div class="pf-modal-title" id="jp-sell-modal-title">売却を記録</div>
       <button onclick="jpCloseSell()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
     </div>
     <div id="jp-sell-info" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-group">
-        <label class="form-label">売却株数</label>
+        <label class="form-label">売却株数 / 数量</label>
         <input class="form-input" type="number" id="jp-s-shares" inputmode="numeric" placeholder="100" oninput="jpCalcSell()">
         <div style="font-size:11px;color:var(--text3);margin-top:4px" id="jp-s-hint"></div>
       </div>
       <div class="form-group"><label class="form-label">売却単価（円）</label><input class="form-input" type="number" id="jp-s-price" inputmode="decimal" placeholder="2000" step="0.1" oninput="jpCalcSell()"></div>
     </div>
-    <div class="form-group"><label class="form-label">売却日</label><input class="form-input" type="date" id="jp-s-date"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group"><label class="form-label">購入日</label><input class="form-input" type="date" id="jp-s-buydate"></div>
+      <div class="form-group"><label class="form-label">売却日</label><input class="form-input" type="date" id="jp-s-date"></div>
+    </div>
     <div id="jp-sell-calc" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:none">
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">自動計算プレビュー</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
         <div><div style="font-size:10px;color:var(--text3)">売却金額</div><div id="jp-sc-total" style="font-weight:600">—</div></div>
         <div><div style="font-size:10px;color:var(--text3)">税引前損益</div><div id="jp-sc-gain" style="font-weight:600">—</div></div>
-        <div><div style="font-size:10px;color:var(--text3)">税金</div><div id="jp-sc-tax" style="font-weight:600">—</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">保有日数</div><div id="jp-sc-days" style="font-weight:600">—</div></div>
         <div><div style="font-size:10px;color:var(--text3)">税引後手取り</div><div id="jp-sc-net" style="font-weight:700;font-size:14px">—</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">税金</div><div id="jp-sc-tax" style="font-weight:600">—</div></div>
+        <div><div style="font-size:10px;color:var(--text3)">年率換算</div><div id="jp-sc-annualized" style="font-weight:600">—</div></div>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">メモ</label><input class="form-input" id="jp-s-memo" placeholder="売却理由など"></div>
+    <div class="form-group"><label class="form-label">売却理由・メモ</label><input class="form-input" id="jp-s-memo" placeholder="目標達成・利確など"></div>
+    <div class="form-group"><label class="form-label">📝 反省ポイント（次回に活かす）</label><textarea class="form-input" id="jp-s-reflection" rows="3" placeholder="例：もっと早く利確すれば良かった。決算跨ぎリスクを考慮すべきだった。" style="resize:vertical;min-height:72px"></textarea></div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="btn-cancel" onclick="jpCloseSell()" style="flex:1">キャンセル</button>
       <button class="btn-accent" onclick="jpRecordSell()" style="flex:2">売却を確定</button>
@@ -5022,15 +5031,30 @@ function jpRenderSell() {
 
 function jpSellCardHTML(s) {
   const net = s.gain - s.tax;
+  // 保有日数・年率計算
+  let holdDays=null, annualized=null;
+  if(s.buyDate&&s.date){
+    const bd=new Date(s.buyDate),sd=new Date(s.date);
+    holdDays=Math.round((sd-bd)/(1000*60*60*24));
+    if(holdDays>0&&s.buyPrice>0&&s.shares>0){
+      const costBasis=s.shares*s.buyPrice;
+      const years=holdDays/365.25;
+      annualized=(Math.pow((s.sellTotal/costBasis),1/years)-1)*100;
+    }
+  }
+  const holdDaysHtml=holdDays!==null?`<div><div class="jp-detail-label">保有日数</div><div class="jp-detail-val">${holdDays}日</div></div>`:'';
+  const annualizedHtml=annualized!==null?`<div><div class="jp-detail-label">年率換算</div><div class="jp-detail-val" class="${annualized>=0?'up':'down'}" style="font-weight:600;color:${annualized>=0?'var(--green)':'var(--red)'}">${annualized>=0?'+':''}${annualized.toFixed(1)}%</div></div>`:'';
+  const buyDateHtml=s.buyDate?`<div><div class="jp-detail-label">購入日</div><div class="jp-detail-val">${s.buyDate}</div></div>`:'';
+  const sellDateHtml=`<div><div class="jp-detail-label">売却日</div><div class="jp-detail-val">${s.date}</div></div>`;
   return `<div class="jp-stock-card jp-card-sell">
     <div class="jp-sc-top">
       <div>
         <div class="jp-sc-name">${esc(s.name)}</div>
-        <div class="jp-sc-code">${esc(s.code||'')} · ${s.date}</div>
+        <div class="jp-sc-code">${esc(s.code||'')}${s.type==='index'?' 📊インデックス':''}</div>
         <div class="jp-badges">
           <span class="jp-badge jp-badge-sell">売却済み</span>
           <span class="jp-badge jp-badge-hold">${s.account}</span>
-          <span class="jp-badge jp-badge-gray">${s.shares.toLocaleString()}株</span>
+          <span class="jp-badge jp-badge-gray">${s.shares.toLocaleString()}${s.type==='index'?'万口':'株'}</span>
         </div>
       </div>
       <div class="jp-sc-right">
@@ -5044,9 +5068,14 @@ function jpSellCardHTML(s) {
       <div><div class="jp-detail-label">取得単価</div><div class="jp-detail-val">¥${s.buyPrice.toLocaleString()}</div></div>
       <div><div class="jp-detail-label">税金</div><div class="jp-detail-val">${s.account==='NISA'?'非課税':jpFmt(s.tax)}</div></div>
       <div><div class="jp-detail-label">税引後手取り</div><div class="jp-detail-val" style="font-weight:700">${jpFmt(net)}</div></div>
+      ${buyDateHtml}${sellDateHtml}${holdDaysHtml}${annualizedHtml}
     </div>
-    ${s.memo ? `<div style="font-size:12px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">${esc(s.memo)}</div>` : ''}
-    <div class="jp-card-actions"><button class="jp-action-btn" style="color:var(--red)" onclick="jpDeleteSell('${s.id}')">削除</button></div>
+    ${s.memo?`<div style="font-size:12px;color:var(--text2);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">💬 ${esc(s.memo)}</div>`:''}
+    ${s.reflection?`<div style="margin-top:8px;padding:8px 10px;background:rgba(239,159,39,0.08);border-left:2px solid var(--amber);border-radius:0 6px 6px 0;font-size:12px;color:var(--text2)"><span style="font-size:11px;font-weight:600;color:var(--amber)">📝 反省ポイント</span><br>${esc(s.reflection)}</div>`:''}
+    <div class="jp-card-actions">
+      <button class="jp-action-btn" onclick="jpEditSell('${s.id}')">編集</button>
+      <button class="jp-action-btn" style="color:var(--red)" onclick="jpDeleteSell('${s.id}')">削除</button>
+    </div>
   </div>`;
 }
 
@@ -5218,11 +5247,14 @@ function jpDeleteStock() {
 
 // --- SELL MODAL ---
 let jpSellTargetId = null;
+let jpSellEditId=null;// 編集モードのsell ID
 function jpOpenSellModal(id) {
   const { stocks } = jpLoad();
   const s = stocks.find(x => x.id === id);
   if (!s) return;
   jpSellTargetId = id;
+  jpSellEditId = null;
+  document.getElementById('jp-sell-modal-title').textContent='売却を記録';
   document.getElementById('jp-sell-info').innerHTML = `
     <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text2)">銘柄</span><span style="font-weight:600">${esc(s.name)}</span></div>
     <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text2)">口座</span><span style="font-weight:600">${s.account}</span></div>
@@ -5232,55 +5264,177 @@ function jpOpenSellModal(id) {
   document.getElementById('jp-s-shares').value = s.shares;
   document.getElementById('jp-s-hint').textContent = `最大 ${s.shares.toLocaleString()}株`;
   document.getElementById('jp-s-price').value = s.currentPrice || '';
+  document.getElementById('jp-s-buydate').value = s.buyDate || '';
   document.getElementById('jp-s-date').value = todayStr();
   document.getElementById('jp-s-memo').value = '';
+  document.getElementById('jp-s-reflection').value = '';
   document.getElementById('jp-sell-calc').style.display = 'none';
   document.getElementById('jpSellModal').classList.add('open');
   jpCalcSell();
 }
+
+// 直接記録モーダル（インデックスファンド等、保有株から記録しない場合）
+function jpOpenDirectSell(){
+  jpSellTargetId = null;
+  jpSellEditId = null;
+  document.getElementById('jp-sell-modal-title').textContent='売却を直接記録';
+  document.getElementById('jp-sell-info').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div class="form-group" style="margin:0"><label class="form-label">銘柄名 *</label><input class="form-input" id="jp-sd-name" placeholder="eMAXIS Slim 米国株式"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">コード（任意）</label><input class="form-input" id="jp-sd-code" placeholder="例:0331418A"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0"><label class="form-label">口座</label><select class="form-input" id="jp-sd-account">
+        <option>特定口座</option><option>NISA</option><option>一般口座</option>
+      </select></div>
+      <div class="form-group" style="margin:0"><label class="form-label">取得単価（円）*</label><input class="form-input" type="number" id="jp-sd-buyprice" inputmode="decimal" placeholder="43000" oninput="jpCalcSell()"></div>
+    </div>
+  `;
+  document.getElementById('jp-s-shares').value = '';
+  document.getElementById('jp-s-hint').textContent = '万口 or 株数';
+  document.getElementById('jp-s-price').value = '';
+  document.getElementById('jp-s-buydate').value = '';
+  document.getElementById('jp-s-date').value = todayStr();
+  document.getElementById('jp-s-memo').value = '';
+  document.getElementById('jp-s-reflection').value = '';
+  document.getElementById('jp-sell-calc').style.display = 'none';
+  document.getElementById('jpSellModal').classList.add('open');
+}
+
+// 売却記録の編集
+function jpEditSell(id){
+  const {sells}=jpLoad();
+  const s=sells.find(x=>x.id===id);
+  if(!s)return;
+  jpSellTargetId=null;
+  jpSellEditId=id;
+  document.getElementById('jp-sell-modal-title').textContent='売却記録を編集';
+  document.getElementById('jp-sell-info').innerHTML=`<div style="font-size:12px;color:var(--text2)">編集モード：${esc(s.name)}</div>`;
+  document.getElementById('jp-s-shares').value=s.shares;
+  document.getElementById('jp-s-hint').textContent='';
+  document.getElementById('jp-s-price').value=s.sellPrice;
+  document.getElementById('jp-s-buydate').value=s.buyDate||'';
+  document.getElementById('jp-s-date').value=s.date;
+  document.getElementById('jp-s-memo').value=s.memo||'';
+  document.getElementById('jp-s-reflection').value=s.reflection||'';
+  document.getElementById('jp-sell-calc').style.display='none';
+  document.getElementById('jpSellModal').classList.add('open');
+  jpCalcSell();
+}
+
 function jpCloseSell() { document.getElementById('jpSellModal').classList.remove('open'); }
 function jpCalcSell() {
-  if (!jpSellTargetId) return;
-  const { stocks } = jpLoad();
-  const s = stocks.find(x => x.id === jpSellTargetId);
-  if (!s) return;
   const sellSh = parseFloat(document.getElementById('jp-s-shares').value) || 0;
   const sellPr = parseFloat(document.getElementById('jp-s-price').value) || 0;
+  const buyDate = document.getElementById('jp-s-buydate').value;
+  const sellDate = document.getElementById('jp-s-date').value;
   const box = document.getElementById('jp-sell-calc');
-  if (sellSh > 0 && sellPr > 0) {
+
+  // buyPriceをターゲット株or直接入力から取得
+  let buyPr=0, account='特定口座';
+  if(jpSellTargetId){
+    const {stocks}=jpLoad();
+    const s=stocks.find(x=>x.id===jpSellTargetId);
+    if(s){buyPr=s.buyPrice;account=s.account;}
+  }else if(jpSellEditId){
+    const {sells}=jpLoad();
+    const s=sells.find(x=>x.id===jpSellEditId);
+    if(s){buyPr=s.buyPrice;account=s.account;}
+  }else{
+    buyPr=parseFloat(document.getElementById('jp-sd-buyprice')?.value)||0;
+    account=document.getElementById('jp-sd-account')?.value||'特定口座';
+  }
+
+  if (sellSh > 0 && sellPr > 0 && buyPr > 0) {
     box.style.display = 'block';
     const sellTotal = sellSh * sellPr;
-    const gain = sellTotal - sellSh * s.buyPrice;
-    const tax = s.account === 'NISA' ? 0 : (gain > 0 ? gain * JP_TAX : 0);
+    const costBasis = sellSh * buyPr;
+    const gain = sellTotal - costBasis;
+    const tax = account==='NISA' ? 0 : (gain > 0 ? gain * JP_TAX : 0);
     document.getElementById('jp-sc-total').textContent = jpFmt(sellTotal);
     const gEl = document.getElementById('jp-sc-gain'); gEl.textContent = jpFmtSign(gain); gEl.className = gain >= 0 ? 'up' : 'down';
-    document.getElementById('jp-sc-tax').textContent = s.account === 'NISA' ? '¥0（非課税）' : jpFmt(tax);
+    document.getElementById('jp-sc-tax').textContent = account==='NISA' ? '¥0（非課税）' : jpFmt(tax);
     const nEl = document.getElementById('jp-sc-net'); nEl.textContent = jpFmtSign(gain - tax); nEl.className = (gain-tax) >= 0 ? 'up' : 'down';
+    // 保有日数・年率
+    if(buyDate&&sellDate){
+      const bd=new Date(buyDate),sd=new Date(sellDate);
+      const days=Math.round((sd-bd)/(1000*60*60*24));
+      document.getElementById('jp-sc-days').textContent=days>=0?days+'日':'—';
+      if(days>0&&costBasis>0){
+        const years=days/365.25;
+        const ann=(Math.pow(sellTotal/costBasis,1/years)-1)*100;
+        const annEl=document.getElementById('jp-sc-annualized');
+        annEl.textContent=(ann>=0?'+':'')+ann.toFixed(1)+'%';
+        annEl.style.color=ann>=0?'var(--green)':'var(--red)';
+      }else{document.getElementById('jp-sc-annualized').textContent='—';}
+    }else{
+      document.getElementById('jp-sc-days').textContent='—';
+      document.getElementById('jp-sc-annualized').textContent='—';
+    }
   } else { box.style.display = 'none'; }
 }
 function jpRecordSell() {
-  if (!jpSellTargetId) return;
-  const data = jpLoad();
-  const s = data.stocks.find(x => x.id === jpSellTargetId);
-  if (!s) return;
   const sellSh = parseFloat(document.getElementById('jp-s-shares').value);
   const sellPr = parseFloat(document.getElementById('jp-s-price').value);
+  const sellDate = document.getElementById('jp-s-date').value;
+  const buyDate = document.getElementById('jp-s-buydate').value;
+  const memo = document.getElementById('jp-s-memo').value.trim();
+  const reflection = document.getElementById('jp-s-reflection').value.trim();
   if (!sellSh || !sellPr) { alert('売却株数と売却単価は必須です'); return; }
-  if (sellSh > s.shares) { alert(`保有株数（${s.shares}株）を超えています`); return; }
-  const sellTotal = sellSh * sellPr;
-  const gain = sellTotal - sellSh * s.buyPrice;
-  const tax = s.account === 'NISA' ? 0 : (gain > 0 ? gain * JP_TAX : 0);
+
+  const data = jpLoad();
+
+  // 編集モード
+  if(jpSellEditId){
+    const idx=data.sells.findIndex(x=>x.id===jpSellEditId);
+    if(idx>=0){
+      const s=data.sells[idx];
+      const sellTotal=sellSh*sellPr;
+      const gain=sellTotal-sellSh*s.buyPrice;
+      const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
+      data.sells[idx]={...s,shares:sellSh,sellPrice:sellPr,sellTotal,gain,tax,date:sellDate,buyDate,memo,reflection};
+    }
+    jpSave(data);jpCloseSell();jpRenderAll();showToast('✅ 売却記録を更新しました');
+    return;
+  }
+
+  // 保有株から記録
+  if(jpSellTargetId){
+    const s = data.stocks.find(x => x.id === jpSellTargetId);
+    if (!s) return;
+    if (sellSh > s.shares) { alert(`保有株数（${s.shares}株）を超えています`); return; }
+    const sellTotal = sellSh * sellPr;
+    const gain = sellTotal - sellSh * s.buyPrice;
+    const tax = s.account === 'NISA' ? 0 : (gain > 0 ? gain * JP_TAX : 0);
+    data.sells.push({
+      id: jpUID(), stockId: s.id, code: s.code, name: s.name,
+      account: s.account, shares: sellSh, buyPrice: s.buyPrice,
+      sellPrice: sellPr, sellTotal, gain, tax,
+      buyDate: buyDate||s.buyDate||'', date: sellDate, memo, reflection, type:'stock'
+    });
+    if (sellSh >= s.shares) { data.stocks = data.stocks.filter(x => x.id !== jpSellTargetId); }
+    else { data.stocks.find(x => x.id === jpSellTargetId).shares -= sellSh; }
+    jpSave(data); jpCloseSell(); jpRenderAll();
+    showToast('💴 売却を記録しました');
+    return;
+  }
+
+  // 直接記録（インデックス等）
+  const name=(document.getElementById('jp-sd-name')?.value||'').trim();
+  const code=(document.getElementById('jp-sd-code')?.value||'').trim();
+  const account=document.getElementById('jp-sd-account')?.value||'特定口座';
+  const buyPr=parseFloat(document.getElementById('jp-sd-buyprice')?.value)||0;
+  if(!name||!buyPr){alert('銘柄名と取得単価は必須です');return;}
+  const sellTotal=sellSh*sellPr;
+  const gain=sellTotal-sellSh*buyPr;
+  const tax=account==='NISA'?0:(gain>0?gain*JP_TAX:0);
   data.sells.push({
-    id: jpUID(), stockId: s.id, code: s.code, name: s.name,
-    account: s.account, shares: sellSh, buyPrice: s.buyPrice,
-    sellPrice: sellPr, sellTotal, gain, tax,
-    date: document.getElementById('jp-s-date').value,
-    memo: document.getElementById('jp-s-memo').value.trim(),
+    id:jpUID(),stockId:null,code,name,account,
+    shares:sellSh,buyPrice:buyPr,sellPrice:sellPr,sellTotal,gain,tax,
+    buyDate,date:sellDate,memo,reflection,type:'index'
   });
-  if (sellSh >= s.shares) { data.stocks = data.stocks.filter(x => x.id !== jpSellTargetId); }
-  else { data.stocks.find(x => x.id === jpSellTargetId).shares -= sellSh; }
-  jpSave(data); jpCloseSell(); jpRenderAll();
-  showToast('💴 売却を記録しました');
+  jpSave(data);jpCloseSell();jpRenderAll();
+  showToast('📊 売却を記録しました');
 }
 function jpDeleteSell(id) {
   if (!confirm('この売却記録を削除しますか？')) return;
