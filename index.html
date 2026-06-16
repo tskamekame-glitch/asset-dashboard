@@ -2673,7 +2673,7 @@ async function amApplySBIRows(rows){
 
     acc.amount=newVal;
     if(row.shares>0)acc.shares=row.shares;
-    if(row.price>0&&row.shares>0)acc.price=row.price;
+    if(row.price>0)acc.price=row.price;
     if(row.costPrice>0)acc.costPrice=row.costPrice;
     acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
 
@@ -3798,25 +3798,36 @@ function trRenderCharts(){
 // ============================================================
 function trCalcSnapshotGain(s){
   if(!s.accounts||!s.accounts.length)return null;
-  // 現在の資産管理データから名前→costPriceの参照マップを作成（フォールバック用）
-  const amCostMap={};
+  // 現在の資産管理データから名前→{costPrice,shares,price,cat}の参照マップを作成（フォールバック用）
+  const amInfoMap={};
   try{
-    (amAccounts||[]).forEach(a=>{if(a.costPrice>0)amCostMap[a.name]=a.costPrice;});
+    (amAccounts||[]).forEach(a=>{if(a.costPrice>0)amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};});
   }catch(e){}
+  const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
   let evalSum=0,costSum=0,hasAny=false;
   s.accounts.forEach(a=>{
-    // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座のcostPriceを補完
-    const cp=(a.costPrice>0)?a.costPrice:(amCostMap[a.name]||0);
+    // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
+    const fallback=amInfoMap[a.name];
+    const cp=(a.costPrice>0)?a.costPrice:(fallback?fallback.costPrice:0);
     if(!cp||cp<=0)return;// 取得価格が一切わからない口座は除外
-    hasAny=true;
+
+    const shares=(a.shares>0)?a.shares:(fallback?fallback.shares:0);
+    const price=(a.price>0)?a.price:(fallback?fallback.price:0);
+    const cat=a.cat||(fallback?fallback.cat:'');
+
+    // 数量×単価方式の対象カテゴリかどうかで計算方法を決める（shares/priceの有無だけで判定しない）
+    const isUnitBased=UNIT_BASED_CATS.includes(cat);
+
     let costTotal;
-    if(a.shares>0&&a.price>0){
-      // 個別株・高配当・投信(数量×単価方式): costPriceは単価
-      costTotal=a.shares*cp;
+    if(isUnitBased){
+      // 数量・単価が欠落している場合は計算不能として除外（誤った巨額損益を防ぐ）
+      if(!(shares>0))return;
+      costTotal=shares*cp;
     }else{
-      // インデックス(残高入力方式): costPriceは総額
+      // 銀行・預り金等以外の「残高入力方式」カテゴリ: costPriceは総額
       costTotal=cp;
     }
+    hasAny=true;
     evalSum+=a.amount||0;
     costSum+=costTotal;
   });
@@ -3902,9 +3913,17 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   if(canvasWrap)canvasWrap.style.display='block';
   card.style.display='block';
 
-  const items=sourceAccounts.filter(a=>a.costPrice>0).map(a=>{
+  const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
+  const items=sourceAccounts.filter(a=>{
+    if(!(a.costPrice>0))return false;
+    const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
+    // 数量×単価方式のカテゴリなのに数量が0以下なら計算不能のため除外（誤った巨額損益を防ぐ）
+    if(isUnitBased&&!(a.shares>0))return false;
+    return true;
+  }).map(a=>{
+    const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
     let costTotal,evalTotal=a.amount||0;
-    if(a.shares>0&&a.price>0){costTotal=a.shares*a.costPrice;}
+    if(isUnitBased){costTotal=a.shares*a.costPrice;}
     else{costTotal=a.costPrice;}
     const gain=evalTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
