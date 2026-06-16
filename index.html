@@ -1537,6 +1537,7 @@ function switchTab(tab){
   if(tab==='home')refreshHome();
   if(tab==='portfolio')pfRender();
   if(tab==='jpstock')jpRenderAll();
+  if(tab==='trend')trRenderAll();
 }
 
 // ============================================================
@@ -2952,6 +2953,7 @@ async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
   await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await jpLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  try{trRenderAll();}catch(e){}
 }
 function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
@@ -3826,14 +3828,18 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   trDestroyChart('gainLine');
   const card=document.getElementById('gainLineCard');
   const summaryEl=document.getElementById('gainLineSummary');
+  const canvasWrap=document.getElementById('gainLineChart')?.parentElement;
 
   const gainData=filtered.map(s=>trCalcSnapshotGain(s));
   const validIdx=gainData.map((g,i)=>g?i:null).filter(i=>i!==null);
 
   if(validIdx.length===0){
-    card.style.display='none';
+    card.style.display='block';
+    if(canvasWrap)canvasWrap.style.display='none';
+    if(summaryEl)summaryEl.innerHTML=`<span style="color:var(--text3)">取得単価が入力された口座を含む記録がまだありません。資産管理タブで取得単価を入力し、推移グラフに記録すると表示されます。</span>`;
     return;
   }
+  if(canvasWrap)canvasWrap.style.display='block';
   card.style.display='block';
 
   const gLabels=validIdx.map(i=>labels[i]);
@@ -3878,14 +3884,22 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   trDestroyChart('gainBar');
   const card=document.getElementById('gainBarCard');
   const summaryEl=document.getElementById('gainBarSummary');
+  const detailEl0=document.getElementById('gainBarDetail');
+  const canvasWrap=document.getElementById('gainBarChart')?.parentElement;
 
   // 「最新」は現在の資産管理データ（amAccounts）を直接使う
   // ＝ユーザーが資産管理タブで入力した最新のcostPrice・評価額がそのまま反映される
   const sourceAccounts=(amAccounts&&amAccounts.length)?amAccounts:null;
   if(!sourceAccounts||!sourceAccounts.some(a=>a.costPrice>0)){
-    card.style.display='none';
+    card.style.display='block';
+    if(summaryEl)summaryEl.innerHTML='';
+    if(canvasWrap)canvasWrap.style.display='none';
+    if(detailEl0)detailEl0.innerHTML=`<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3)">
+      ${!sourceAccounts ? '資産管理データが読み込まれていません。一度ログイン・同期してから再度開いてください。' : '取得単価（取得価格・取得株価）が入力された口座がありません。資産管理タブで取得単価を入力すると表示されます。'}
+    </div>`;
     return;
   }
+  if(canvasWrap)canvasWrap.style.display='block';
   card.style.display='block';
 
   const items=sourceAccounts.filter(a=>a.costPrice>0).map(a=>{
