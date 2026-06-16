@@ -1003,6 +1003,16 @@ tr:last-child td{border-bottom:none}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">含み損益</span><span id="jp-c-unrealized" style="font-weight:600"></span></div>
       <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">損益率</span><span id="jp-c-rate" style="font-weight:600"></span></div>
     </div>
+    <!-- 売却目標価格 -->
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px">🎯 売却目標価格（任意）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="form-group" style="margin:0"><label class="form-label">sell1（第1目標）</label><input class="form-input" type="number" id="jp-f-sell1" inputmode="decimal" placeholder="例: 7307" step="0.1" oninput="jpCalcUnrealized()"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">sell2（第2目標）</label><input class="form-input" type="number" id="jp-f-sell2" inputmode="decimal" placeholder="例: 8000" step="0.1" oninput="jpCalcUnrealized()"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">sell3（第3目標）</label><input class="form-input" type="number" id="jp-f-sell3" inputmode="decimal" placeholder="例: 8600" step="0.1" oninput="jpCalcUnrealized()"></div>
+      </div>
+      <div id="jp-sell-target-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+    </div>
     <div class="form-group"><label class="form-label">メモ</label><input class="form-input" id="jp-f-memo" placeholder="購入理由など"></div>
     <div style="margin-top:6px;display:flex;flex-direction:column;gap:8px">
       <div id="jp-add-del-wrap" style="display:none"><button class="btn-danger" onclick="jpDeleteStock()">この銘柄を削除</button></div>
@@ -4869,12 +4879,21 @@ function jpRenderHold() {
 // WLデータ参照ヘルパー（保有株↔購入検討タブ連携）
 // ============================================================
 function jpGetWLMatch(code, name){
+  // まず jpstock_v1 自身の sell1〜3 を参照（最優先）
+  try{
+    const jpData=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
+    const jpStocks=jpData.stocks||[];
+    const toH=n=>n.replace(/\s/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+    const jp=code
+      ?jpStocks.find(s=>String(s.code||'').replace(/[^0-9A-Za-z]/g,'')===String(code).replace(/[^0-9A-Za-z]/g,''))
+      :jpStocks.find(s=>toH(s.name||'').startsWith(toH(name||'').slice(0,4)));
+    if(jp&&(jp.sell1||jp.sell2||jp.sell3))return jp;// sell値があれば優先使用
+  }catch(e){}
+  // 次に watchlist_v3 を参照
   try{
     const wl=JSON.parse(localStorage.getItem('watchlist_v3')||'[]');
     if(!wl.length)return null;
-    // 銘柄コード一致（最優先）
     if(code){const m=wl.find(w=>String(w.code)===String(code));if(m)return m;}
-    // 銘柄名の前方一致（コードなし銘柄用）
     const nameNorm=n=>n.replace(/\s/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
     return wl.find(w=>nameNorm(w.name||'').startsWith(nameNorm(name||'').slice(0,4)))||null;
   }catch(e){return null;}
@@ -5149,7 +5168,7 @@ function jpShowAddModal() {
   jpEditingId = null;
   document.getElementById('jp-add-title').textContent = '銘柄を追加';
   document.getElementById('jp-add-del-wrap').style.display = 'none';
-  ['jp-f-code','jp-f-name','jp-f-memo'].forEach(id => document.getElementById(id).value = '');
+  ['jp-f-code','jp-f-name','jp-f-memo','jp-f-sell1','jp-f-sell2','jp-f-sell3'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('jp-f-sector').value = 'その他';
   document.getElementById('jp-f-account').value = '特定口座';
   document.getElementById('jp-f-shares').value = '';
@@ -5176,6 +5195,9 @@ function jpOpenEdit(id) {
   document.getElementById('jp-f-current').value = s.currentPrice || '';
   document.getElementById('jp-f-buydate').value = s.buyDate || '';
   document.getElementById('jp-f-memo').value = s.memo || '';
+  document.getElementById('jp-f-sell1').value = s.sell1 || '';
+  document.getElementById('jp-f-sell2').value = s.sell2 || '';
+  document.getElementById('jp-f-sell3').value = s.sell3 || '';
   jpCalcCost(); jpCalcUnrealized();
   document.getElementById('jpAddModal').classList.add('open');
 }
@@ -5208,6 +5230,23 @@ function jpCalcUnrealized() {
     const rEl = document.getElementById('jp-c-rate');
     rEl.textContent = jpFmtPct(rate); rEl.className = gain >= 0 ? 'up' : 'down';
   } else { box.style.display = 'none'; }
+  // 売却目標との乖離ヒント
+  const hintEl = document.getElementById('jp-sell-target-hint');
+  if(hintEl && cp > 0){
+    const sells = [
+      {label:'sell1', val: parseFloat(document.getElementById('jp-f-sell1').value)||0},
+      {label:'sell2', val: parseFloat(document.getElementById('jp-f-sell2').value)||0},
+      {label:'sell3', val: parseFloat(document.getElementById('jp-f-sell3').value)||0},
+    ].filter(s=>s.val>0);
+    if(sells.length>0){
+      const hints = sells.map(s=>{
+        const diff = ((s.val - cp)/cp*100);
+        const reached = cp >= s.val;
+        return `${s.label}: ¥${s.val.toLocaleString()} ${reached ? '✅到達済' : `(あと+${diff.toFixed(1)}%)`}`;
+      });
+      hintEl.textContent = hints.join('  ');
+    } else { hintEl.textContent = ''; }
+  } else if(hintEl){ hintEl.textContent = ''; }
 }
 function jpSaveStock() {
   const name = document.getElementById('jp-f-name').value.trim();
@@ -5233,6 +5272,9 @@ function jpSaveStock() {
     currentPrice: parseFloat(document.getElementById('jp-f-current').value) || null,
     buyDate: document.getElementById('jp-f-buydate').value,
     memo: document.getElementById('jp-f-memo').value.trim(),
+    sell1: parseFloat(document.getElementById('jp-f-sell1').value) || null,
+    sell2: parseFloat(document.getElementById('jp-f-sell2').value) || null,
+    sell3: parseFloat(document.getElementById('jp-f-sell3').value) || null,
   };
   if (jpEditingId) {
     const idx = data.stocks.findIndex(s => s.id === jpEditingId);
