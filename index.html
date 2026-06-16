@@ -773,6 +773,18 @@ tr:last-child td{border-bottom:none}
   <div style="padding:0 16px 8px;display:flex;gap:12px;flex-wrap:wrap" id="yieldSummary"></div>
   <div class="chart-container"><canvas id="lineChart"></canvas></div>
 </div>
+    <!-- 投資結果（損益）推移 -->
+    <div class="card" id="gainLineCard" style="display:none">
+      <div class="card-head"><h2>📈 投資結果（損益）推移</h2></div>
+      <div style="padding:0 16px 8px;display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text3)" id="gainLineSummary"></div>
+      <div class="chart-container"><canvas id="gainLineChart"></canvas></div>
+    </div>
+    <!-- 最新日の銘柄別損益（プラス/マイナス） -->
+    <div class="card" id="gainBarCard" style="display:none">
+      <div class="card-head"><h2>💹 最新の銘柄別損益</h2></div>
+      <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainBarSummary"></div>
+      <div class="chart-container" style="min-height:280px"><canvas id="gainBarChart"></canvas></div>
+    </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
@@ -2807,7 +2819,7 @@ function sendToTrend(){
   };
   const cats={};amAccounts.forEach(a=>{const c=normCat2(a);cats[c]=(cats[c]||0)+a.amount;});
   const total=amAccounts.reduce((s,a)=>s+a.amount,0);
-  const accounts=amAccounts.map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated}));
+  const accounts=amAccounts.map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated,costPrice:a.costPrice||0,shares:a.shares||0,price:a.price||0,code:a.code||''}));
   snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
@@ -3644,7 +3656,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','barCard','donutCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','gainLineCard','gainBarCard','barCard','donutCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -3719,10 +3731,167 @@ function trRenderCharts(){
   const latest=filtered[filtered.length-1];
   const catEntries=TR_DONUT_CAT_ORDER.filter(c=>latest.cats[c]>0).map(c=>[c,latest.cats[c]]).concat(Object.entries(latest.cats).filter(([c,v])=>v>0&&!TR_DONUT_CAT_ORDER.includes(c)).sort((a,b)=>b[1]-a[1]));
   chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels]});
+  trRenderGainLineChart(filtered,labels,tickColor,gridColor);
+  trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
 }
+// ============================================================
+// 投資結果（損益）推移 折れ線グラフ
+// 各スナップショットの accounts に costPrice/shares/price/amount があれば
+// 「評価額の合計 − 取得額の合計」で日次の損益を算出する。
+// costPriceが入っていない口座（銀行・預り金等）は損益計算から除外する。
+// ============================================================
+function trCalcSnapshotGain(s){
+  if(!s.accounts||!s.accounts.length)return null;
+  // 現在の資産管理データから名前→costPriceの参照マップを作成（フォールバック用）
+  const amCostMap={};
+  try{
+    (amAccounts||[]).forEach(a=>{if(a.costPrice>0)amCostMap[a.name]=a.costPrice;});
+  }catch(e){}
+  let evalSum=0,costSum=0,hasAny=false;
+  s.accounts.forEach(a=>{
+    // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座のcostPriceを補完
+    const cp=(a.costPrice>0)?a.costPrice:(amCostMap[a.name]||0);
+    if(!cp||cp<=0)return;// 取得価格が一切わからない口座は除外
+    hasAny=true;
+    let costTotal;
+    if(a.shares>0&&a.price>0){
+      // 個別株・高配当・投信(数量×単価方式): costPriceは単価
+      costTotal=a.shares*cp;
+    }else{
+      // インデックス(残高入力方式): costPriceは総額
+      costTotal=cp;
+    }
+    evalSum+=a.amount||0;
+    costSum+=costTotal;
+  });
+  if(!hasAny)return null;
+  return {evalSum,costSum,gain:evalSum-costSum,pct:costSum>0?(evalSum-costSum)/costSum*100:0};
+}
+
+function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
+  trDestroyChart('gainLine');
+  const card=document.getElementById('gainLineCard');
+  const summaryEl=document.getElementById('gainLineSummary');
+
+  const gainData=filtered.map(s=>trCalcSnapshotGain(s));
+  const validIdx=gainData.map((g,i)=>g?i:null).filter(i=>i!==null);
+
+  if(validIdx.length===0){
+    card.style.display='none';
+    return;
+  }
+  card.style.display='block';
+
+  const gLabels=validIdx.map(i=>labels[i]);
+  const gainLine=validIdx.map(i=>gainData[i].gain);
+  const pctLine=validIdx.map(i=>gainData[i].pct);
+
+  const latest=gainData[validIdx[validIdx.length-1]];
+  const first=gainData[validIdx[0]];
+  if(summaryEl){
+    const sign=latest.gain>=0?'+':'';
+    const col=latest.gain>=0?'var(--green)':'var(--danger)';
+    summaryEl.innerHTML=`<span>最新（${gLabels[gLabels.length-1]}）: <b style="color:${col}">${sign}${trFmt(latest.gain)}（${sign}${latest.pct.toFixed(1)}%）</b></span>`
+      +`<span>取得総額: ${trFmt(latest.costSum)}</span>`
+      +`<span>評価総額: ${trFmt(latest.evalSum)}</span>`;
+  }
+
+  chartInstances['gainLine']=new Chart(document.getElementById('gainLineChart'),{
+    type:'line',
+    data:{labels:gLabels,datasets:[
+      {label:'損益額',data:gainLine,borderColor:'#0F6E56',backgroundColor:gainLine.map(v=>v>=0?'rgba(15,110,86,0.10)':'rgba(192,57,43,0.10)'),borderWidth:2.5,pointRadius:4,pointBackgroundColor:gainLine.map(v=>v>=0?'#0F6E56':'#C0392B'),fill:true,tension:0.25,segment:{borderColor:ctx=>(ctx.p0.parsed.y<0||ctx.p1.parsed.y<0)?'#C0392B':'#0F6E56'},yAxisID:'y'}
+    ]},
+    options:{responsive:true,plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>{
+        const idx=ctx.dataIndex;
+        const sign=gainLine[idx]>=0?'+':'';
+        return[`損益: ${sign}${trFmt(gainLine[idx])}`,`損益率: ${sign}${pctLine[idx].toFixed(1)}%`];
+      }}},
+      datalabels:{display:false}
+    },scales:{
+      y:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor},grace:'10%'},
+      x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}
+    },layout:{padding:{top:8,right:8}}},
+    plugins:[ChartDataLabels]
+  });
+}
+
+// ============================================================
+// 最新日の銘柄別損益（横棒・プラスマイナス色分け）
+// ============================================================
+function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
+  trDestroyChart('gainBar');
+  const card=document.getElementById('gainBarCard');
+  const summaryEl=document.getElementById('gainBarSummary');
+
+  // 「最新」は現在の資産管理データ（amAccounts）を直接使う
+  // ＝ユーザーが資産管理タブで入力した最新のcostPrice・評価額がそのまま反映される
+  const sourceAccounts=(amAccounts&&amAccounts.length)?amAccounts:null;
+  if(!sourceAccounts||!sourceAccounts.some(a=>a.costPrice>0)){
+    card.style.display='none';
+    return;
+  }
+  card.style.display='block';
+
+  const items=sourceAccounts.filter(a=>a.costPrice>0).map(a=>{
+    let costTotal,evalTotal=a.amount||0;
+    if(a.shares>0&&a.price>0){costTotal=a.shares*a.costPrice;}
+    else{costTotal=a.costPrice;}
+    const gain=evalTotal-costTotal;
+    const pct=costTotal>0?gain/costTotal*100:0;
+    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal};
+  }).sort((a,b)=>b.gain-a.gain);
+
+  if(summaryEl){
+    const winCount=items.filter(i=>i.gain>=0).length;
+    const loseCount=items.length-winCount;
+    const totalGain=items.reduce((s,i)=>s+i.gain,0);
+    const sign=totalGain>=0?'+':'';
+    summaryEl.innerHTML=`<span>現在時点 ／ 損益合計: <b style="color:${totalGain>=0?'var(--green)':'var(--danger)'}">${sign}${trFmt(totalGain)}</b> ／ プラス${winCount}件・マイナス${loseCount}件</span>`;
+  }
+
+  const labels=items.map(i=>i.name);
+  const data=items.map(i=>i.gain);
+  const colors=items.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
+  const heightPx=Math.max(280,items.length*34+60);
+  document.getElementById('gainBarChart').parentElement.style.height=heightPx+'px';
+
+  chartInstances['gainBar']=new Chart(document.getElementById('gainBarChart'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'損益額',data,backgroundColor:colors,borderRadius:4}]},
+    options:{
+      indexAxis:'y',
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>{
+          const i=items[ctx.dataIndex];
+          const sign=i.gain>=0?'+':'';
+          return[`損益: ${sign}${trFmt(i.gain)}（${sign}${i.pct.toFixed(1)}%）`,`評価額: ${trFmt(i.evalTotal)}`,`取得額: ${trFmt(i.costTotal)}`];
+        }}},
+        datalabels:{
+          display:true,
+          anchor:ctx=>data[ctx.dataIndex]>=0?'end':'start',
+          align:ctx=>data[ctx.dataIndex]>=0?'end':'start',
+          color:tickColor,
+          font:{size:10,weight:600},
+          formatter:v=>(v>=0?'+':'')+Math.round(v/10000).toLocaleString()+'万'
+        }
+      },
+      scales:{
+        x:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
+        y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}
+      },
+      layout:{padding:{top:8,right:36,left:4}}
+    },
+    plugins:[ChartDataLabels]
+  });
+}
+
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
   // 個別株グラフから完全除外する口座名（PayPay系投信など）
   const EXCLUDE_FROM_CAT={'個別株':['オルカンPayPay','インド(SBI)','全世界PayPay','全世界インデックス']};
