@@ -4870,7 +4870,7 @@ function jpRenderHold() {
 // ============================================================
 function jpGetWLMatch(code, name){
   try{
-    const wl=JSON.parse(localStorage.getItem(WL_KEY)||'[]');
+    const wl=JSON.parse(localStorage.getItem('watchlist_v3')||'[]');
     if(!wl.length)return null;
     // 銘柄コード一致（最優先）
     if(code){const m=wl.find(w=>String(w.code)===String(code));if(m)return m;}
