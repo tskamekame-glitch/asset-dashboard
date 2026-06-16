@@ -543,6 +543,11 @@ tr:last-child td{border-bottom:none}
       <div class="metric"><div class="label">前月比</div><div class="value" id="home-diff">—</div></div>
       <div class="metric"><div class="label">TODO残り</div><div class="value" id="home-todo">—</div></div>
     </div>
+    <!-- 売り目標到達アラートバナー -->
+    <div id="home-sell-alert" style="display:none;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">🎯 売り目標 到達アラート</div>
+      <div id="home-sell-alert-list"></div>
+    </div>
     <!-- インカム収益サマリー -->
     <div id="home-income-bar" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;display:none">
       <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">💎 インカム収益（年間予想）</div>
@@ -1551,6 +1556,36 @@ function refreshHome(){
     document.getElementById('hbadge-todo').textContent=t>0?dn+'/'+t+'件 完了':'データなし';
   }catch(e){}
   try{wlRenderEarningsCalendar();}catch(e){}
+  // 売り目標到達アラートバナー
+  try{
+    const jpData=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
+    const jpStocks=jpData.stocks||[];
+    const alerts=jpCheckAlerts(jpStocks);
+    const bannerEl=document.getElementById('home-sell-alert');
+    const listEl=document.getElementById('home-sell-alert-list');
+    if(bannerEl&&listEl){
+      if(alerts.length>0){
+        bannerEl.style.display='block';
+        listEl.innerHTML=alerts.map(a=>{
+          const next=a.next;
+          const nextTxt=next?`次: sell${['sell1','sell2','sell3'].indexOf(next.key)+1} ¥${next.price.toLocaleString()}`:'最終目標到達';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">
+            <div style="flex:1;min-width:0">
+              <span style="font-size:13px;font-weight:500">${esc(a.name)}</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:6px">${a.code}</span>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${nextTxt}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:13px;font-weight:700;color:var(--red)">🎯 ${a.reachedLabel}到達</div>
+              <div style="font-size:11px;color:var(--text3)">現在 ¥${a.currentPrice.toLocaleString()} / 目標 ¥${a.reachedPrice.toLocaleString()}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }else{
+        bannerEl.style.display='none';
+      }
+    }
+  }catch(e){}
 }
 
 // ============================================================
@@ -4738,6 +4773,46 @@ function jpRenderHold() {
   listEl.innerHTML = filtered.map(s => jpStockCardHTML(s, false)).join('');
 }
 
+// ============================================================
+// WLデータ参照ヘルパー（保有株↔購入検討タブ連携）
+// ============================================================
+function jpGetWLMatch(code, name){
+  try{
+    const wl=JSON.parse(localStorage.getItem(WL_KEY)||'[]');
+    if(!wl.length)return null;
+    // 銘柄コード一致（最優先）
+    if(code){const m=wl.find(w=>String(w.code)===String(code));if(m)return m;}
+    // 銘柄名の前方一致（コードなし銘柄用）
+    const nameNorm=n=>n.replace(/\s/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+    return wl.find(w=>nameNorm(w.name||'').startsWith(nameNorm(name||'').slice(0,4)))||null;
+  }catch(e){return null;}
+}
+
+// 売り目標到達チェック → アラートバナーとバッジ情報を返す
+function jpCheckAlerts(stocks){
+  const alerts=[];
+  stocks.forEach(s=>{
+    if(!s.currentPrice)return;
+    const wl=jpGetWLMatch(s.code,s.name);
+    if(!wl)return;
+    const lvls=[
+      {key:'sell1',label:'第1目標',price:wl.sell1},
+      {key:'sell2',label:'第2目標',price:wl.sell2},
+      {key:'sell3',label:'第3目標',price:wl.sell3},
+    ].filter(l=>l.price>0);
+    // 到達済みの最高段階を取得
+    const reached=lvls.filter(l=>s.currentPrice>=l.price);
+    if(reached.length>0){
+      const top=reached[reached.length-1];
+      const next=lvls[reached.length]||null;
+      alerts.push({name:s.name,code:s.code,currentPrice:s.currentPrice,
+        reachedLabel:top.label,reachedPrice:top.price,
+        next,wl});
+    }
+  });
+  return alerts;
+}
+
 function jpStockCardHTML(s, compact) {
   const cost = s.shares * s.buyPrice;
   const evalVal = s.currentPrice ? s.shares * s.currentPrice : null;
@@ -4745,6 +4820,71 @@ function jpStockCardHTML(s, compact) {
   const gainPct = gain !== null && cost > 0 ? (gain/cost)*100 : null;
   const edgeCls = gain === null ? 'jp-card-hold' : (gain >= 0 ? 'jp-card-up' : 'jp-card-down');
   const acctBadgeCls = s.account === 'NISA' ? 'jp-badge-nisa' : 'jp-badge-hold';
+
+  // ── WL連携データ取得 ──
+  const wl = jpGetWLMatch(s.code, s.name);
+  // 売り目標到達判定
+  const lvls = wl ? [
+    {label:'第1目標',price:wl.sell1},
+    {label:'第2目標',price:wl.sell2},
+    {label:'第3目標',price:wl.sell3},
+  ].filter(l=>l.price>0) : [];
+  const reached = s.currentPrice ? lvls.filter(l=>s.currentPrice>=l.price) : [];
+  const topReached = reached[reached.length-1]||null;
+  const nextTarget = wl && s.currentPrice ? lvls.find(l=>s.currentPrice<l.price) : null;
+  // 決算日情報
+  const earningsDate = wl?.earningsDate ? wl.earningsDate : null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let earningsHtml = '';
+  if(earningsDate){
+    const dt=new Date(earningsDate);
+    const diff=Math.round((dt-today)/(1000*60*60*24));
+    const mmdd=(dt.getMonth()+1)+'/'+(dt.getDate());
+    if(diff>=-7&&diff<=45){
+      const col=diff<=0?'var(--text3)':diff<=7?'var(--red)':diff<=14?'var(--amber)':'var(--text3)';
+      const txt=diff<0?`${mmdd} 発表済`:diff===0?`${mmdd} 本日!`:`${mmdd} (${diff}日後)`;
+      earningsHtml=`<span class="jp-badge jp-badge-gray" style="color:${col}">📅 ${txt}</span>`;
+    }
+  }
+
+  // 売り目標バッジ
+  let sellBadgeHtml = '';
+  if(topReached){
+    sellBadgeHtml=`<span class="jp-badge" style="background:rgba(163,45,45,0.12);color:var(--red);font-weight:600">🎯 ${topReached.label}到達</span>`;
+  }
+
+  // 次の売り目標表示
+  let nextTargetHtml = '';
+  if(nextTarget&&s.currentPrice){
+    const toNext = nextTarget.price - s.currentPrice;
+    const toPct = (toNext/s.currentPrice*100).toFixed(1);
+    nextTargetHtml = `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--border)">
+      <span style="font-size:11px;color:var(--text3)">🎯 次の目標 ${nextTarget.label}</span>
+      <span style="font-size:12px;font-weight:600;color:var(--accent)">¥${nextTarget.price.toLocaleString()} (+${toPct}%)</span>
+    </div>`;
+  }
+
+  // 売り目標グリッド（compact=falseのみ）
+  let sellGridHtml = '';
+  if(!compact && wl && lvls.length>0){
+    sellGridHtml = `<div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:5px;letter-spacing:0.06em">売り目標</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+      ${lvls.map((l,i)=>{
+        const isReached=s.currentPrice&&s.currentPrice>=l.price;
+        const bg=isReached?'rgba(163,45,45,0.08)':'var(--bg2)';
+        const tc=isReached?'var(--red)':'var(--text2)';
+        const diffPct=s.currentPrice?((l.price-s.currentPrice)/s.currentPrice*100):null;
+        return `<div style="background:${bg};border-radius:6px;padding:6px 8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">sell${i+1}</div>
+          <div style="font-size:12px;font-weight:600;color:${tc}">¥${l.price.toLocaleString()}</div>
+          ${diffPct!==null?`<div style="font-size:10px;color:${isReached?'var(--red)':diffPct>0?'var(--accent)':'var(--red)'}">${isReached?'到達済':'+'+diffPct.toFixed(1)+'%'}</div>`:''}
+        </div>`;
+      }).join('')}
+      </div>
+    </div>`;
+  }
+
   return `<div class="jp-stock-card ${edgeCls}">
     <div class="jp-sc-top">
       <div>
@@ -4754,6 +4894,8 @@ function jpStockCardHTML(s, compact) {
           <span class="jp-badge ${acctBadgeCls}">${s.account}</span>
           <span class="jp-badge jp-badge-gray">${esc(s.sector)}</span>
           <span class="jp-badge jp-badge-gray">${s.shares.toLocaleString()}株</span>
+          ${sellBadgeHtml}
+          ${earningsHtml}
         </div>
       </div>
       <div class="jp-sc-right">
@@ -4768,6 +4910,8 @@ function jpStockCardHTML(s, compact) {
       <div><div class="jp-detail-label">取得総額</div><div class="jp-detail-val">${jpFmt(cost)}</div></div>
       <div><div class="jp-detail-label">購入日</div><div class="jp-detail-val">${s.buyDate||'—'}</div></div>
     </div>
+    ${nextTargetHtml}
+    ${sellGridHtml}
     ${s.memo ? `<div style="font-size:12px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">${esc(s.memo)}</div>` : ''}
     <div class="jp-card-actions">
       <button class="jp-action-btn" onclick="jpOpenEdit('${s.id}')">編集</button>
