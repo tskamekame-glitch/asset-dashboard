@@ -5041,14 +5041,32 @@ function jpStockCardHTML(s, compact) {
 
 function jpRenderSell() {
   const { sells } = jpLoad();
+  // ── 欠落・不整合フィールドの補完（移行データ・部分保存データ対策）──
+  let needsRepair = false;
+  sells.forEach(s => {
+    if (s.date === undefined && s.sellDate) { s.date = s.sellDate; needsRepair = true; }
+    if (s.sellDate === undefined && s.date) { s.sellDate = s.date; needsRepair = true; }
+    if (!s.date) { s.date = todayStr(); needsRepair = true; }
+    const shares = parseFloat(s.shares) || 0;
+    const sellPrice = parseFloat(s.sellPrice) || 0;
+    const buyPrice = parseFloat(s.buyPrice) || 0;
+    if (typeof s.sellTotal !== 'number' || isNaN(s.sellTotal)) { s.sellTotal = shares * sellPrice; needsRepair = true; }
+    if (typeof s.gain !== 'number' || isNaN(s.gain)) { s.gain = s.sellTotal - shares * buyPrice; needsRepair = true; }
+    if (typeof s.tax !== 'number' || isNaN(s.tax)) {
+      s.tax = (s.account === 'NISA') ? 0 : (s.gain > 0 ? s.gain * JP_TAX : 0);
+      needsRepair = true;
+    }
+  });
+  if (needsRepair) { jpSave({ ...jpLoad(), sells }); }
+
   const emptyEl = document.getElementById('jp-sell-empty');
   const listEl = document.getElementById('jp-sell-list');
   const sumEl = document.getElementById('jp-sell-sum');
   if (sells.length === 0) { emptyEl.style.display = 'block'; listEl.innerHTML = ''; sumEl.innerHTML = ''; return; }
   emptyEl.style.display = 'none';
-  const totalSell = sells.reduce((s,d)=>s+d.sellTotal,0);
-  const totalGain = sells.reduce((s,d)=>s+d.gain,0);
-  const totalTax = sells.reduce((s,d)=>s+d.tax,0);
+  const totalSell = sells.reduce((s,d)=>s+(d.sellTotal||0),0);
+  const totalGain = sells.reduce((s,d)=>s+(d.gain||0),0);
+  const totalTax = sells.reduce((s,d)=>s+(d.tax||0),0);
   const totalNet = totalGain - totalTax;
   const gCls = totalGain >= 0 ? 'c-green' : 'c-red';
   sumEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -5057,10 +5075,18 @@ function jpRenderSell() {
     <div class="jp-sum-card c-amber"><div style="font-size:10px;color:var(--text2);margin-bottom:3px">税金合計</div><div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums">${jpFmt(totalTax)}</div></div>
     <div class="jp-sum-card ${totalNet>=0?'c-green':'c-red'}"><div style="font-size:10px;color:var(--text2);margin-bottom:3px">税引後手取り</div><div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums" class="${totalNet>=0?'up':'down'}">${jpFmtSign(totalNet)}</div></div>
   </div>`;
-  listEl.innerHTML = [...sells].sort((a,b) => b.date.localeCompare(a.date)).map(s => jpSellCardHTML(s)).join('');
+  listEl.innerHTML = [...sells].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(s => jpSellCardHTML(s)).join('');
 }
 
 function jpSellCardHTML(s) {
+  // 防御的フィールド補完（NaN/undefined対策）
+  s.date = s.date || s.sellDate || todayStr();
+  s.shares = parseFloat(s.shares) || 0;
+  s.sellPrice = parseFloat(s.sellPrice) || 0;
+  s.buyPrice = parseFloat(s.buyPrice) || 0;
+  s.sellTotal = (typeof s.sellTotal === 'number' && !isNaN(s.sellTotal)) ? s.sellTotal : s.shares * s.sellPrice;
+  s.gain = (typeof s.gain === 'number' && !isNaN(s.gain)) ? s.gain : s.sellTotal - s.shares * s.buyPrice;
+  s.tax = (typeof s.tax === 'number' && !isNaN(s.tax)) ? s.tax : (s.account === 'NISA' ? 0 : (s.gain > 0 ? s.gain * JP_TAX : 0));
   const net = s.gain - s.tax;
   // 保有日数・年率計算
   let holdDays=null, annualized=null;
