@@ -1710,6 +1710,7 @@ function amRender(){
             +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
               +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
               +staleHtml
+              +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
               +'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
             +'</div>'
           +'</div>'
