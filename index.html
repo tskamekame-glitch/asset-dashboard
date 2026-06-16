@@ -1657,16 +1657,14 @@ function amRender(){
         ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'
          +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">銘柄コード</span>'
          +'<input id="il-code-'+a.id+'" type="text" inputmode="numeric" value="'+esc(a.code||'')+'" placeholder="例:4063" maxlength="6"'
-         +' style="width:70px;padding:4px 8px;font-size:13px;border:1px solid '+(hasSBICode?'var(--accent)':'#e53e3e')+';border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;letter-spacing:0.05em"'
+         +' style="width:70px;padding:4px 8px;font-size:13px;border:1px solid '+(hasSBICode?'var(--accent)':'var(--accent)')+';border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;letter-spacing:0.05em"'
          +' title="SBI CSV照合用コード">'
-         +(hasSBICode?'':'<span style="font-size:10px;color:#e53e3e;font-weight:600;margin-left:4px">← 入力でSBI自動更新</span>')
+         +(hasSBICode?'':'<span style="font-size:10px;color:var(--accent);font-weight:600;margin-left:4px">← 入力でSBI自動更新</span>')
          +'</div>'
         :'';
-      // 手動更新が必要な口座は評価額・更新ボタンを赤系に
-      const amountColor=needsManual?'#e53e3e':'var(--text)';
-      const updateBtnStyle=needsManual
-        ?'padding:6px 14px;background:#e53e3e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap'
-        :'padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap';
+      // 手動更新が必要な口座は評価額テキストを落とす（ボタンは常に青）
+      const amountColor='var(--text)';
+      const updateBtnStyle='padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap';
       const updateBtnLabel=needsManual?'✏️ 手動更新':'更新';
       const unitLabel=isStock?'株数':'数量';
       const priceLabel=isStock?'株価':'単価';
@@ -2150,15 +2148,21 @@ const AM_NAME_TO_CAT_RULES=[
   {pat:/PayPay.*オルカン|オルカン.*PayPay/,        cat:'全世界インデックス'},
   {pat:/SBI.*確定拠出|確定拠出.*SBI/,              cat:'全世界インデックス'},
   {pat:/eMAXIS.*Slim.*全世界|全世界.*eMAXIS/,      cat:'全世界インデックス'},
+  {pat:/S&P.*500|S&amp;P.*500|ＳＰ５００|SP500|米国.*株式/i, cat:'全世界インデックス'},
+  {pat:/FANG|ファング|iFreeNEXT/,                  cat:'全世界インデックス'},
   // ── 日本インデックス ──
   {pat:/TOPIX/,                                    cat:'日本インデックス'},
   {pat:/日本.*インデックス|国内.*インデックス/,    cat:'日本インデックス'},
   {pat:/eMAXIS.*国内|国内.*eMAXIS/,               cat:'日本インデックス'},
   {pat:/DC.*年金|年金.*DC|ＤＣ.*年金|年金.*ＤＣ/, cat:'日本インデックス'},
+  {pat:/日本株式.*モメンタム|モメンタム.*日本|SMT.*日本|日本.*SMT/i, cat:'日本インデックス'},
+  {pat:/日経平均|日経225|日経２２５/,              cat:'日本インデックス'},
   // ── インドインデックス ──
   {pat:/インド|India|ｲﾝﾄﾞ/,                       cat:'インドインデックス'},
   // ── 高配当（一般） ──
   {pat:/高配当|配当/,                              cat:'高配当'},
+  // ── 個別株（AIテーマ・その他テーマ型は個別株扱い）──
+  {pat:/ｉＳベスト|iSベスト|ＡＩ.*ファンド|AIファンド|テーマ型/i, cat:'個別株'},
   // ── 年金・iDeCo ──
   {pat:/iDeCo|ideco|イデコ|企業年金|確定給付/,    cat:'年金'},
   // ── 預り金（証券口座の待機資金）──
@@ -2615,7 +2619,7 @@ async function amApplySBIRows(rows){
       const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'',row.code||'');
       if(score>bestScore){bestScore=score;bestIdx=i;}
     });
-    if(bestIdx<0||bestScore<55){noMatch.push({sbi:row.nameRaw,score:bestScore});return;}
+    if(bestIdx<0||bestScore<55){noMatch.push(row);return;}
 
     const acc=amAccounts[bestIdx];
     const oldVal=acc.amount||0;
@@ -2633,10 +2637,42 @@ async function amApplySBIRows(rows){
     log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:bestScore,acctSuffix:row.acctSuffix});
   });
 
-  if(!updated){
+  // ── 未マッチ銘柄を資産管理に自動追加 ──
+  let added=0;
+  noMatch.forEach(row=>{
+    // カテゴリ推定：nameRaw（全角含む）とnameNorm（半角変換済み）の両方で試みる
+    const guessedCat=amGuessCat(row.nameNorm)||amGuessCat(row.nameRaw)||
+      (row.isFund?'全世界インデックス':'個別株');
+    const validCat=AM_VALID_CATS.includes(guessedCat)?guessedCat:'その他';
+
+    // 表示名：全角英数を半角に変換して使いやすい名前に
+    function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
+    const displayName=toH(row.nameRaw||row.nameNorm);
+
+    // 新しいIDを生成（既存の最大ID+1）
+    const newId=amAccounts.length?Math.max(...amAccounts.map(a=>Number(a.id)||0))+1:1;
+
+    const newAcc={
+      id:newId,
+      name:displayName,
+      cat:validCat,
+      code:row.code||'',
+      amount:row.evalAmt||0,
+      shares:row.shares||0,
+      price:row.price||0,
+      costPrice:row.costPrice||0,
+      note:'',
+      updated:todayStr(),
+      memo:`[SBI自動追加 ${today}]`,
+    };
+    amAccounts.push(newAcc);
+    added++;
+    log.push({sbi:row.nameRaw,am:'【新規追加】'+displayName,val:row.evalAmt,score:0,cat:validCat});
+  });
+
+  if(!updated&&!added){
     showToast('ℹ️ 更新対象なし（既に最新または銘柄未マッチ）',3500);
     console.log('[amSBI] rows:',rows);
-    console.log('[amSBI] noMatch:',noMatch);
     return;
   }
 
@@ -2645,7 +2681,49 @@ async function amApplySBIRows(rows){
   refreshHome();
   pfSyncFromAM();
   await amSaveToSheet();
-  let msg=`✅ SBI CSV: ${updated}件更新`;
+
+  // ── 日本株タブ（jpstock_v1）の currentPrice も更新 ──
+  // SaveFile.csv の株式行（isFund=false）に現在値が含まれているため、
+  // 銘柄コードで jpstock_v1 の stocks と照合して currentPrice を上書きする
+  let jpUpdated=0;
+  try{
+    const jpData=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
+    const jpStocks=jpData.stocks||[];
+    if(jpStocks.length>0){
+      rows.forEach(row=>{
+        if(row.isFund||!row.price)return;
+        const code=String(row.code||'').replace(/[^0-9A-Za-z]/g,'');
+        // コード一致 → 現在値を更新
+        let matched=false;
+        if(code){
+          jpStocks.forEach(s=>{
+            if(String(s.code||'').replace(/[^0-9A-Za-z]/g,'')=== code){
+              s.currentPrice=row.price;
+              matched=true;
+              jpUpdated++;
+            }
+          });
+        }
+        // コード未設定の場合は銘柄名前方一致
+        if(!matched){
+          const toH=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
+          const rowNorm=toH(row.nameNorm||row.nameRaw||'').slice(0,4);
+          jpStocks.forEach(s=>{
+            if(!s.code&&toH(s.name||'').startsWith(rowNorm)){
+              s.currentPrice=row.price;
+              jpUpdated++;
+            }
+          });
+        }
+      });
+      if(jpUpdated>0){
+        localStorage.setItem('jpstock_v1',JSON.stringify(jpData));
+        if(typeof jpRenderAll==='function')try{jpRenderAll();}catch(e){}
+      }
+    }
+  }catch(e){console.error('[SBI→jpstock]',e);}
+
+  let msg=`✅ SBI CSV: ${updated}件更新${added>0?` / ${added}件新規追加`:''}${jpUpdated>0?` / 日本株現在値 ${jpUpdated}件更新`:''}`;
   if(noMatch.length){
     const names=noMatch.map(x=>{
       function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
