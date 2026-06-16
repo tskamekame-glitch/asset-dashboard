@@ -2370,11 +2370,17 @@ function amParseSBICSV(text){
     const nameRaw=c0.replace(/[""]/g,'');
     const nameNorm=toHankaku(nameRaw);
 
+    // 銘柄コード抽出: "4063 信越化" → code="4063", displayName="信越化"
+    // 先頭の英数字4〜6文字（4桁数字 or 英数混在）をコードとして取得
+    const codeMatch=nameNorm.match(/^([0-9A-Za-z]{4,6})\s+(.+)$/);
+    const code=codeMatch?codeMatch[1].replace(/[^0-9A-Za-z]/g,''):'';
+
     const acctSuffix=sectionToAccount(currentSection);
 
     rows.push({
       nameRaw,
       nameNorm,
+      code,
       evalAmt:Math.round(evalAmt),
       shares:isFund?Math.round(shares*10000)/10000:(Math.round(shares)||0),
       price:Math.round(price*100)/100,
@@ -2693,38 +2699,36 @@ async function amApplySBIRows(rows){
   await amSaveToSheet();
 
   // ── 日本株タブ（jpstock_v1）の currentPrice も更新 ──
-  // SaveFile.csv の株式行（isFund=false）に現在値が含まれているため、
-  // 銘柄コードで jpstock_v1 の stocks と照合して currentPrice を上書きする
+  // CSVの株式行・投信行の現在値を銘柄コード/名称で照合して上書きする
   let jpUpdated=0;
   try{
     const jpData=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
     const jpStocks=jpData.stocks||[];
     if(jpStocks.length>0){
+      const toH=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
       rows.forEach(row=>{
-        if(row.isFund||!row.price)return;
-        const code=String(row.code||'').replace(/[^0-9A-Za-z]/g,'');
-        // コード一致 → 現在値を更新
-        let matched=false;
-        if(code){
-          jpStocks.forEach(s=>{
-            if(String(s.code||'').replace(/[^0-9A-Za-z]/g,'')=== code){
-              s.currentPrice=row.price;
-              matched=true;
-              jpUpdated++;
-            }
-          });
-        }
-        // コード未設定の場合は銘柄名前方一致
-        if(!matched){
-          const toH=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
-          const rowNorm=toH(row.nameNorm||row.nameRaw||'').slice(0,4);
-          jpStocks.forEach(s=>{
-            if(!s.code&&toH(s.name||'').startsWith(rowNorm)){
+        if(!row.price)return;
+        const rowCode=String(row.code||'').replace(/[^0-9A-Za-z]/g,'');
+        jpStocks.forEach(s=>{
+          const sCode=String(s.code||'').replace(/[^0-9A-Za-z]/g,'');
+          // ① コード完全一致（最優先）
+          if(rowCode&&sCode&&rowCode===sCode){
+            s.currentPrice=row.price;
+            jpUpdated++;
+            return;
+          }
+          // ② 銘柄名の前方一致（コードなし銘柄・投信用）
+          if(!rowCode||!sCode){
+            const rowName=toH(row.nameNorm||row.nameRaw||'');
+            const sName=toH(s.name||'');
+            // コードを除いた銘柄名部分（"4063 信越化" → "信越化"）と比較
+            const rowNameOnly=rowName.replace(/^[0-9A-Za-z]{4,6}\s+/,'');
+            if(rowNameOnly.length>=2&&(sName.includes(rowNameOnly)||rowNameOnly.includes(sName.slice(0,4)))){
               s.currentPrice=row.price;
               jpUpdated++;
             }
-          });
-        }
+          }
+        });
       });
       if(jpUpdated>0){
         localStorage.setItem('jpstock_v1',JSON.stringify(jpData));
