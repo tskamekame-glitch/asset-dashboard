@@ -652,6 +652,7 @@ tr:last-child td{border-bottom:none}
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
       <button class="btn-sm" onclick="amFixFundUnits()" style="color:#e24b4a;border-color:#e24b4a" title="投資信託の数量(口数)を万口単位に補正">🔧 投信数量修正</button>
+      <button class="btn-sm" onclick="amCheckAnomalies()" style="color:#854F0B;border-color:#854F0B" title="評価額と取得単価のバランスがおかしい口座を検出">⚠️ 異常値チェック</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
     </div>
@@ -2298,6 +2299,44 @@ async function amFixFundUnits(){
   showToast(`✅ ${fixed}件の投信数量・評価額を万口単位に補正しました`,4000);
   console.log('[amFixFundUnits]',log);
 }
+
+// ============================================================
+// 取得単価の異常値チェック
+// 「個別株・高配当・全世界/日本/インドインデックス」のうち、
+// 評価額÷取得総額の比率が極端（10倍超 or 1/10未満）な口座を検出する。
+// 単価・総額の単位ミス（円/株 vs 総額円 等）が原因のことが多い。
+// ============================================================
+function amCheckAnomalies(){
+  const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
+  const anomalies=[];
+  amAccounts.forEach(a=>{
+    if(!(a.costPrice>0))return;
+    const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
+    let costTotal;
+    if(isUnitBased){
+      if(!(a.shares>0))return;
+      costTotal=a.shares*a.costPrice;
+    }else{
+      costTotal=a.costPrice;
+    }
+    const evalTotal=a.amount||0;
+    if(evalTotal<=0||costTotal<=0)return;
+    const ratio=evalTotal/costTotal;
+    if(ratio>10||ratio<0.1){
+      anomalies.push({name:a.name,cat:a.cat,evalTotal,costTotal,ratio,shares:a.shares,price:a.price,costPrice:a.costPrice});
+    }
+  });
+  if(anomalies.length===0){
+    showToast('✅ 異常値は見つかりませんでした',3000);
+    return;
+  }
+  const lines=anomalies.map(x=>{
+    const pct=((x.evalTotal-x.costTotal)/x.costTotal*100);
+    return `「${x.name}」: 評価額${fmt(x.evalTotal)} / 取得額${fmt(Math.round(x.costTotal))}（損益率${pct>=0?'+':''}${pct.toFixed(0)}%）`;
+  });
+  alert(`⚠️ 取得単価の異常が疑われる口座（${anomalies.length}件）\n\n`+lines.join('\n')+'\n\n資産管理タブで該当口座の「取得単価」「数量」を確認・修正してください。\n（推移タブの損益グラフではこれらの口座は自動的に除外されています）');
+  console.log('[amCheckAnomalies]',anomalies);
+}
 // ============================================================
 // SBI証券 CSV → 資産管理（amAccounts）自動更新
 // 実際のフォーマット:
@@ -3814,6 +3853,7 @@ function trCalcSnapshotGain(s){
     const shares=(a.shares>0)?a.shares:(fallback?fallback.shares:0);
     const price=(a.price>0)?a.price:(fallback?fallback.price:0);
     const cat=a.cat||(fallback?fallback.cat:'');
+    const evalTotal=a.amount||0;
 
     // 数量×単価方式の対象カテゴリかどうかで計算方法を決める（shares/priceの有無だけで判定しない）
     const isUnitBased=UNIT_BASED_CATS.includes(cat);
@@ -3827,8 +3867,17 @@ function trCalcSnapshotGain(s){
       // 銀行・預り金等以外の「残高入力方式」カテゴリ: costPriceは総額
       costTotal=cp;
     }
+
+    // ── 異常値ガード ──
+    // 評価額と取得額の比率が極端（10倍以上 or 1/10以下）な場合は、
+    // 単価と総額の単位が混在している等の入力ミスとみなし、この口座を損益計算から除外する
+    if(evalTotal>0&&costTotal>0){
+      const ratio=evalTotal/costTotal;
+      if(ratio>10||ratio<0.1)return;
+    }
+
     hasAny=true;
-    evalSum+=a.amount||0;
+    evalSum+=evalTotal;
     costSum+=costTotal;
   });
   if(!hasAny)return null;
@@ -3919,6 +3968,13 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
     // 数量×単価方式のカテゴリなのに数量が0以下なら計算不能のため除外（誤った巨額損益を防ぐ）
     if(isUnitBased&&!(a.shares>0))return false;
+    // 異常値ガード：評価額と取得額の比率が極端な場合は単位ミスとみなし除外
+    const evalTotal=a.amount||0;
+    const costTotal=isUnitBased?a.shares*a.costPrice:a.costPrice;
+    if(evalTotal>0&&costTotal>0){
+      const ratio=evalTotal/costTotal;
+      if(ratio>10||ratio<0.1)return false;
+    }
     return true;
   }).map(a=>{
     const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
