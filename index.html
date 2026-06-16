@@ -747,7 +747,10 @@ tr:last-child td{border-bottom:none}
   <div class="phead">
     <div class="phead-inner">
       <h1>📈 資産推移グラフ</h1>
-      <button class="btn-accent" onclick="document.getElementById('csvInput2').click()">＋ CSV追加</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="sync-status" id="trSyncStatus" style="display:none"><span class="sync-dot" id="trSyncDot"></span><span id="trSyncText" style="font-size:11px"></span></div>
+        <button class="btn-accent" onclick="document.getElementById('csvInput2').click()">＋ CSV追加</button>
+      </div>
     </div>
   </div>
   <div class="page-inner">
@@ -784,6 +787,7 @@ tr:last-child td{border-bottom:none}
       <div class="card-head"><h2>💹 最新の銘柄別損益</h2></div>
       <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainBarSummary"></div>
       <div class="chart-container" style="min-height:280px"><canvas id="gainBarChart"></canvas></div>
+      <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
@@ -870,7 +874,8 @@ tr:last-child td{border-bottom:none}
   <div class="phead">
     <div class="phead-inner">
       <h1>📈 日本株 収支管理</h1>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="sync-status" id="jpSyncStatus" style="display:none"><span class="sync-dot" id="jpSyncDot"></span><span id="jpSyncText" style="font-size:11px"></span></div>
         <span id="jp-header-sub" style="font-size:11px;color:var(--text3)"></span>
         <button class="btn-accent" onclick="jpShowAddModal()">＋ 追加</button>
       </div>
@@ -2905,7 +2910,7 @@ function amShowLogin(){
   document.getElementById('managerMain').style.display='none';
 }
 function setSyncStatus(state,text){
-  const ids=[['syncStatus','syncDot','syncText'],['cfSyncStatus','cfSyncDot','cfSyncText']];
+  const ids=[['syncStatus','syncDot','syncText'],['cfSyncStatus','cfSyncDot','cfSyncText'],['jpSyncStatus','jpSyncDot','jpSyncText'],['trSyncStatus','trSyncDot','trSyncText']];
   ids.forEach(([stId,dotId,txtId])=>{
     const st=document.getElementById(stId),dot=document.getElementById(dotId),txt=document.getElementById(txtId);
     if(!st||!dot||!txt)return;
@@ -2924,10 +2929,12 @@ async function amFindOrCreateSheet(){
       const hasSlSheet=meta.result.sheets.some(s=>s.properties.title==='sell');
       const hasJpSheet=meta.result.sheets.some(s=>s.properties.title==='jpstock');
       const hasCfSheet=meta.result.sheets.some(s=>s.properties.title==='cashflow');
+      const hasTrSheet=meta.result.sheets.some(s=>s.properties.title==='trend');
       const addReqs=[];
       if(!hasSlSheet)addReqs.push({addSheet:{properties:{title:'sell'}}});
       if(!hasJpSheet)addReqs.push({addSheet:{properties:{title:'jpstock'}}});
       if(!hasCfSheet)addReqs.push({addSheet:{properties:{title:'cashflow'}}});
+      if(!hasTrSheet)addReqs.push({addSheet:{properties:{title:'trend'}}});
       if(addReqs.length)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:addReqs}});
     }catch(e){}
   }catch(e){console.error(e);}
@@ -2944,7 +2951,7 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await jpLoadFromSheet();await cfLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await jpLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
 }
 function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
@@ -3549,7 +3556,46 @@ const TR_CAT_COLORS=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30'
 let snapshots=[];let activeFilter='all';let chartInstances={};
 function trFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP')}
 function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP')}
-function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}}
+function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}trSaveToSheet();}
+
+// ============================================================
+// 推移グラフ（assetSnapshots） Google Sheets 同期
+// 1スナップショット = 1行。accounts配列はJSON文字列としてセルに格納する
+// （口座数が可変で列固定が難しいため）
+// ============================================================
+const TR_SHEET_COLS=['date','filename','total','cats','accounts'];
+async function trSaveToSheet(){
+  if(!amIsOnline||!amSpreadsheetId){setSyncStatus('','未ログイン（ローカル保存のみ）');return;}
+  setSyncStatus('syncing','同期中...');
+  try{
+    const values=[TR_SHEET_COLS,...snapshots.map(s=>[
+      s.date||'', s.filename||'', s.total||0,
+      JSON.stringify(s.cats||{}), JSON.stringify(s.accounts||[])
+    ])];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:E${values.length+50}`,valueInputOption:'RAW',resource:{values}});
+    if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:E5000`});
+    setSyncStatus('ok','同期済み✓');
+  }catch(e){console.warn('trSaveToSheet error',e);setSyncStatus('err','同期失敗');}
+}
+async function trLoadFromSheet(){
+  if(!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'trend!A2:E5000'});
+    const rows=res.result.values||[];
+    if(rows.length===0)return;// Sheetsにデータがなければローカルのものを維持
+    const loaded=rows.filter(r=>r[0]).map(r=>{
+      let cats={},accounts=[];
+      try{cats=JSON.parse(r[3]||'{}');}catch(e){}
+      try{accounts=JSON.parse(r[4]||'[]');}catch(e){}
+      return{date:r[0],filename:r[1]||'',total:parseFloat(r[2])||0,cats,accounts};
+    });
+    snapshots=loaded;
+    snapshots.sort((a,b)=>a.date.localeCompare(b.date));
+    trNormalizeSnapshots(snapshots);
+    localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));
+    if(typeof trRenderAll==='function')try{trRenderAll();}catch(e){}
+  }catch(e){console.warn('trLoadFromSheet error',e);}
+}
 function trLoadFromStorage(){
   try{snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snapshots=[];}
   trNormalizeSnapshots(snapshots);
@@ -3653,6 +3699,11 @@ function trParseCSV(text,filename){
 }
 function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();trRenderAll();refreshHome();}
 function trRenderAll(){
+  if(amIsOnline&&amSpreadsheetId){
+    setSyncStatus('ok','同期済み✓');
+  }else{
+    setSyncStatus('','未ログイン（ローカル保存のみ）');
+  }
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
@@ -3879,17 +3930,40 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
           align:ctx=>data[ctx.dataIndex]>=0?'end':'start',
           color:tickColor,
           font:{size:10,weight:600},
-          formatter:v=>(v>=0?'+':'')+Math.round(v/10000).toLocaleString()+'万'
+          formatter:(v,ctx)=>{
+            const pct=items[ctx.dataIndex].pct;
+            const sign=v>=0?'+':'';
+            return`${sign}${Math.round(v/10000).toLocaleString()}万（${sign}${pct.toFixed(1)}%）`;
+          }
         }
       },
       scales:{
         x:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
         y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}
       },
-      layout:{padding:{top:8,right:36,left:4}}
+      layout:{padding:{top:8,right:80,left:4}}
     },
     plugins:[ChartDataLabels]
   });
+
+  // 銘柄別の詳細カード一覧（金額・損益・損益率を常時表示）
+  const detailEl=document.getElementById('gainBarDetail');
+  if(detailEl){
+    detailEl.innerHTML=items.map(i=>{
+      const sign=i.gain>=0?'+':'';
+      const col=i.gain>=0?'var(--green)':'var(--danger)';
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500">${i.name}</div>
+          <div style="font-size:11px;color:var(--text3)">評価額 ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700;color:${col}">${sign}${trFmt(i.gain)}</div>
+          <div style="font-size:12px;font-weight:600;color:${col}">${sign}${i.pct.toFixed(1)}%</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
 
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
@@ -4590,9 +4664,10 @@ function jpSave(data) {
 
 // ---- Google Sheets 同期 ----
 async function jpSaveToSheet(data) {
-  if (!amSpreadsheetId) return;
+  if (!amSpreadsheetId) { setSyncStatus('', '未ログイン（ローカル保存のみ）'); return; }
   const token = gapi.client && gapi.client.getToken && gapi.client.getToken();
-  if (!token) return;
+  if (!token) { setSyncStatus('', '未ログイン（ローカル保存のみ）'); return; }
+  setSyncStatus('syncing', '同期中...');
   try {
     // stocks: 1行1銘柄 (id,name,code,sector,account,shares,buyPrice,buyDate,currentPrice,memo,sell1,sell2,sell3)
     const sRows = [['id','name','code','sector','account','shares','buyPrice','buyDate','currentPrice','memo','sell1','sell2','sell3']];
@@ -4621,7 +4696,8 @@ async function jpSaveToSheet(data) {
       spreadsheetId: amSpreadsheetId,
       range: `jpstock!O${sellRows.length + 1}:AA1000`
     });
-  } catch(e) { console.warn('jpSaveToSheet error', e); }
+    setSyncStatus('ok', '同期済み✓');
+  } catch(e) { console.warn('jpSaveToSheet error', e); setSyncStatus('err', '同期失敗'); }
 }
 
 async function jpLoadFromSheet() {
@@ -4978,6 +5054,12 @@ async function jpLoadStockChart() {
 }
 
 function jpRenderAll() {
+  // 同期状態の初期表示
+  if(amIsOnline&&amSpreadsheetId){
+    setSyncStatus('ok','同期済み✓');
+  }else{
+    setSyncStatus('','未ログイン（ローカル保存のみ）');
+  }
   jpRenderHome();
   jpRenderHold();
   jpRenderSell();
