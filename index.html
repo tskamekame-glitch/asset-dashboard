@@ -3009,6 +3009,8 @@ async function amSaveToSheet(){
     const values=[['id','name','cat','amount','note','shares','price','updated','code','costPrice'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0])];
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:J${values.length+10}`,valueInputOption:'RAW',resource:{values}});
     if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:J1000`});
+    // 推移グラフの損益計算から除外する銘柄リストをL1セルに保存（端末間で共有するため）
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!L1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
   }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
@@ -3100,6 +3102,12 @@ async function amLoadFromSheet(){
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr(),code:r[8]||'',costPrice:parseFloat(r[9])||0}));
     amSaveToLocal();amRender();
+    // 推移グラフの損益除外リストをL1セルから読み込む（端末間で共有）
+    try{
+      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!L1'});
+      const raw=exRes.result.values?.[0]?.[0];
+      if(raw){trGainExcludeNames=JSON.parse(raw);trSaveGainExclude();}
+    }catch(e){}
   }catch(e){amLoadFromLocal();amRender();}
 }
 async function onSignedIn(){
@@ -3709,6 +3717,33 @@ function pfDeleteEntry(){if(!confirm('削除しますか？'))return;pfData=pfDa
 // ============================================================
 const TR_CAT_COLORS=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780','#2980b9','#8e44ad'];
 let snapshots=[];let activeFilter='all';let chartInstances={};
+
+// ============================================================
+// 投資結果（損益）推移グラフから除外する銘柄リスト
+// 「最新の銘柄別損益」グラフで銘柄をタップすると除外/復帰がトグルされる。
+// 除外された銘柄は取り消し線で表示され、損益計算（折れ線・横棒の合計）から外れる。
+// ============================================================
+let trGainExcludeNames=[];
+function trLoadGainExclude(){
+  try{trGainExcludeNames=JSON.parse(localStorage.getItem('trGainExclude')||'[]');}catch(e){trGainExcludeNames=[];}
+}
+function trSaveGainExclude(){
+  try{localStorage.setItem('trGainExclude',JSON.stringify(trGainExcludeNames));}catch(e){}
+  // Googleログイン中はaccountsシートのL1セルにも保存し、他端末と共有する
+  if(amIsOnline&&amSpreadsheetId){
+    try{
+      gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!L1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
+    }catch(e){console.warn('trSaveGainExclude sheet sync error',e);}
+  }
+}
+function trToggleGainExclude(name){
+  const idx=trGainExcludeNames.indexOf(name);
+  if(idx>=0)trGainExcludeNames.splice(idx,1);
+  else trGainExcludeNames.push(name);
+  trSaveGainExclude();
+  trRenderAll();
+}
+trLoadGainExclude();
 function trFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP')}
 function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP')}
 function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}trSaveToSheet();}
@@ -3961,6 +3996,7 @@ function trCalcSnapshotGain(s){
   const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   let evalSum=0,costSum=0,hasAny=false;
   s.accounts.forEach(a=>{
+    if(trGainExcludeNames.includes(a.name))return;// 除外指定された銘柄はスキップ
     // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
     const fallback=amInfoMap[a.name];
     const cp=(a.costPrice>0)?a.costPrice:(fallback?fallback.costPrice:0);
@@ -4029,9 +4065,13 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   if(summaryEl){
     const sign=latest.gain>=0?'+':'';
     const col=latest.gain>=0?'var(--green)':'var(--danger)';
-    summaryEl.innerHTML=`<span>最新（${gLabels[gLabels.length-1]}）: <b style="color:${col}">${sign}${trFmt(latest.gain)}（${sign}${latest.pct.toFixed(1)}%）</b></span>`
+    let html=`<span>最新（${gLabels[gLabels.length-1]}）: <b style="color:${col}">${sign}${trFmt(latest.gain)}（${sign}${latest.pct.toFixed(1)}%）</b></span>`
       +`<span>取得総額: ${trFmt(latest.costSum)}</span>`
       +`<span>評価総額: ${trFmt(latest.evalSum)}</span>`;
+    if(trGainExcludeNames.length>0){
+      html+=`<div style="width:100%;margin-top:6px;font-size:11px;color:var(--text3)">🚫 除外中: ${trGainExcludeNames.map(n=>esc(n)).join('・')} <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="trGainExcludeNames=[];trSaveGainExclude();trRenderAll();">すべて解除</span></div>`;
+    }
+    summaryEl.innerHTML=html;
   }
 
   chartInstances['gainLine']=new Chart(document.getElementById('gainLineChart'),{
@@ -4106,20 +4146,24 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     else{costTotal=a.costPrice;}
     const gain=evalTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
-    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal};
+    const excluded=trGainExcludeNames.includes(a.name);
+    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded};
   }).sort((a,b)=>b.gain-a.gain);
 
   if(summaryEl){
-    const winCount=items.filter(i=>i.gain>=0).length;
-    const loseCount=items.length-winCount;
-    const totalGain=items.reduce((s,i)=>s+i.gain,0);
+    const activeItems=items.filter(i=>!i.excluded);
+    const winCount=activeItems.filter(i=>i.gain>=0).length;
+    const loseCount=activeItems.length-winCount;
+    const totalGain=activeItems.reduce((s,i)=>s+i.gain,0);
     const sign=totalGain>=0?'+':'';
-    summaryEl.innerHTML=`<span>現在時点 ／ 損益合計: <b style="color:${totalGain>=0?'var(--green)':'var(--danger)'}">${sign}${trFmt(totalGain)}</b> ／ プラス${winCount}件・マイナス${loseCount}件</span>`;
+    const excludedCount=items.length-activeItems.length;
+    summaryEl.innerHTML=`<span>現在時点 ／ 損益合計: <b style="color:${totalGain>=0?'var(--green)':'var(--danger)'}">${sign}${trFmt(totalGain)}</b> ／ プラス${winCount}件・マイナス${loseCount}件${excludedCount>0?` ／ 除外中${excludedCount}件`:''}</span>`+
+      `<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 銘柄名をタップすると損益計算から除外/復帰できます</div>`;
   }
 
   const labels=items.map(i=>i.name);
   const data=items.map(i=>i.gain);
-  const colors=items.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
+  const colors=items.map(i=>i.excluded?'#9b9b97aa':(i.gain>=0?'#0F6E56cc':'#C0392Bcc'));
   const heightPx=Math.max(280,items.length*34+60);
   document.getElementById('gainBarChart').parentElement.style.height=heightPx+'px';
 
@@ -4129,12 +4173,21 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     options:{
       indexAxis:'y',
       responsive:true,maintainAspectRatio:false,
+      onClick:(evt,elements)=>{
+        if(elements&&elements.length){
+          const idx=elements[0].index;
+          trToggleGainExclude(items[idx].name);
+        }
+      },
+      onHover:(evt,elements)=>{evt.native.target.style.cursor=elements.length?'pointer':'default';},
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{label:ctx=>{
           const i=items[ctx.dataIndex];
           const sign=i.gain>=0?'+':'';
-          return[`損益: ${sign}${trFmt(i.gain)}（${sign}${i.pct.toFixed(1)}%）`,`評価額: ${trFmt(i.evalTotal)}`,`取得額: ${trFmt(i.costTotal)}`];
+          const lines=[`損益: ${sign}${trFmt(i.gain)}（${sign}${i.pct.toFixed(1)}%）`,`評価額: ${trFmt(i.evalTotal)}`,`取得額: ${trFmt(i.costTotal)}`];
+          lines.push(i.excluded?'タップで計算対象に戻す':'タップで損益計算から除外');
+          return lines;
         }}},
         datalabels:{
           display:true,
@@ -4143,30 +4196,33 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
           color:tickColor,
           font:{size:10,weight:600},
           formatter:(v,ctx)=>{
-            const pct=items[ctx.dataIndex].pct;
+            const it=items[ctx.dataIndex];
             const sign=v>=0?'+':'';
-            return`${sign}${Math.round(v/10000).toLocaleString()}万（${sign}${pct.toFixed(1)}%）`;
+            const base=`${sign}${Math.round(v/10000).toLocaleString()}万（${sign}${it.pct.toFixed(1)}%）`;
+            return it.excluded?`🚫 ${base}`:base;
           }
         }
       },
       scales:{
         x:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
-        y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}
+        y:{ticks:{color:ctx=>items[ctx.index]?.excluded?'#9b9b97':tickColor,font:{size:11}},grid:{display:false}}
       },
       layout:{padding:{top:8,right:80,left:4}}
     },
     plugins:[ChartDataLabels]
   });
 
-  // 銘柄別の詳細カード一覧（金額・損益・損益率を常時表示）
+  // 銘柄別の詳細カード一覧（金額・損益・損益率を常時表示、タップで除外トグル）
   const detailEl=document.getElementById('gainBarDetail');
   if(detailEl){
     detailEl.innerHTML=items.map(i=>{
       const sign=i.gain>=0?'+':'';
-      const col=i.gain>=0?'var(--green)':'var(--danger)';
-      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border)">
+      const col=i.excluded?'var(--text3)':(i.gain>=0?'var(--green)':'var(--danger)');
+      const nameStyle=i.excluded?'text-decoration:line-through;color:var(--text3)':'';
+      const safeId='gbi_'+i.name.replace(/[^a-zA-Z0-9]/g,'_');
+      return`<div onclick="trToggleGainExclude('${i.name.replace(/'/g,"\\\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer;${i.excluded?'opacity:0.55':''}">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500">${i.name}</div>
+          <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
           <div style="font-size:11px;color:var(--text3)">評価額 ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
