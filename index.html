@@ -4169,13 +4169,16 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const sign=totalGain>=0?'+':'';
     const excludedCount=items.length-activeItems.length;
     summaryEl.innerHTML=`<span>現在時点 ／ 損益合計: <b style="color:${totalGain>=0?'var(--green)':'var(--danger)'}">${sign}${trFmt(totalGain)}</b> ／ プラス${winCount}件・マイナス${loseCount}件${excludedCount>0?` ／ 除外中${excludedCount}件`:''}</span>`+
-      `<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 銘柄名をタップすると損益計算から除外/復帰できます</div>`;
+      `<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 下の一覧で銘柄名をタップするとグラフ・損益計算から除外/復帰できます</div>`;
   }
 
-  const labels=items.map(i=>i.name);
-  const data=items.map(i=>i.gain);
-  const colors=items.map(i=>i.excluded?'#9b9b97aa':(i.gain>=0?'#0F6E56cc':'#C0392Bcc'));
-  const heightPx=Math.max(280,items.length*34+60);
+  // グラフ本体（labels/data/colors）は除外されていない銘柄のみで構成する。
+  // これにより除外銘柄がグラフから完全に消え、残りの銘柄のバーサイズが大きく表示される。
+  const chartItems=items.filter(i=>!i.excluded);
+  const labels=chartItems.map(i=>i.name);
+  const data=chartItems.map(i=>i.gain);
+  const colors=chartItems.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
+  const heightPx=Math.max(280,chartItems.length*34+60);
   document.getElementById('gainBarChart').parentElement.style.height=heightPx+'px';
 
   chartInstances['gainBar']=new Chart(document.getElementById('gainBarChart'),{
@@ -4187,18 +4190,16 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
       onClick:(evt,elements)=>{
         if(elements&&elements.length){
           const idx=elements[0].index;
-          trToggleGainExclude(items[idx].name);
+          trToggleGainExclude(chartItems[idx].name);
         }
       },
       onHover:(evt,elements)=>{evt.native.target.style.cursor=elements.length?'pointer':'default';},
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{label:ctx=>{
-          const i=items[ctx.dataIndex];
+          const i=chartItems[ctx.dataIndex];
           const sign=i.gain>=0?'+':'';
-          const lines=[`損益: ${sign}${trFmt(i.gain)}（${sign}${i.pct.toFixed(1)}%）`,`評価額: ${trFmt(i.evalTotal)}`,`取得額: ${trFmt(i.costTotal)}`];
-          lines.push(i.excluded?'タップで計算対象に戻す':'タップで損益計算から除外');
-          return lines;
+          return[`損益: ${sign}${trFmt(i.gain)}（${sign}${i.pct.toFixed(1)}%）`,`評価額: ${trFmt(i.evalTotal)}`,`取得額: ${trFmt(i.costTotal)}`,'タップで損益計算から除外'];
         }}},
         datalabels:{
           display:true,
@@ -4207,16 +4208,15 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
           color:tickColor,
           font:{size:10,weight:600},
           formatter:(v,ctx)=>{
-            const it=items[ctx.dataIndex];
+            const it=chartItems[ctx.dataIndex];
             const sign=v>=0?'+':'';
-            const base=`${sign}${Math.round(v/10000).toLocaleString()}万（${sign}${it.pct.toFixed(1)}%）`;
-            return it.excluded?`🚫 ${base}`:base;
+            return`${sign}${Math.round(v/10000).toLocaleString()}万（${sign}${it.pct.toFixed(1)}%）`;
           }
         }
       },
       scales:{
         x:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
-        y:{ticks:{color:ctx=>items[ctx.index]?.excluded?'#9b9b97':tickColor,font:{size:11}},grid:{display:false}}
+        y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}
       },
       layout:{padding:{top:8,right:80,left:4}}
     },
