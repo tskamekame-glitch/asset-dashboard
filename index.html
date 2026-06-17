@@ -5706,7 +5706,51 @@ function jpSaveStock() {
     if (idx >= 0) data.stocks[idx] = stock;
   } else { data.stocks.push(stock); }
   jpSave(data); jpCloseAdd(); jpRenderAll();
+  jpSyncToAssetManager(stock);
   showToast('📈 銘柄を保存しました');
+}
+
+// ============================================================
+// 日本株タブの保有株 → 資産管理タブ「個別株」へ自動連携
+// 同一銘柄コード（コードがない場合は同一銘柄名）が資産管理に既にあれば更新、
+// なければ新規口座として個別株カテゴリに追加する。
+// 評価額(amount) = 株数×現在値（現在値未入力時は取得単価で代用）
+// ============================================================
+async function jpSyncToAssetManager(stock){
+  try{
+    const code=(stock.code||'').replace(/[^0-9A-Za-z]/g,'');
+    const price=stock.currentPrice>0?stock.currentPrice:stock.buyPrice;
+    const amount=Math.round(stock.shares*price);
+
+    let target=null;
+    if(code){
+      target=amAccounts.find(a=>String(a.code||'').replace(/[^0-9A-Za-z]/g,'')===code);
+    }
+    if(!target){
+      target=amAccounts.find(a=>a.name===stock.name&&(a.cat==='個別株'||a.cat==='高配当'));
+    }
+
+    if(target){
+      target.shares=stock.shares;
+      target.price=price;
+      target.costPrice=stock.buyPrice;
+      target.amount=amount;
+      target.code=code||target.code;
+      target.updated=todayStr();
+    }else{
+      const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;
+      amAccounts.push({
+        id:newId,name:stock.name,cat:'個別株',code,
+        amount,note:'',shares:stock.shares,price,costPrice:stock.buyPrice,
+        updated:todayStr(),memo:'[日本株タブから自動追加]'
+      });
+    }
+    amSaveToLocal();
+    amRender();
+    refreshHome();
+    pfSyncFromAM();
+    await amSaveToSheet();
+  }catch(e){console.warn('jpSyncToAssetManager error',e);}
 }
 function jpDeleteStock() {
   if (!jpEditingId || !confirm('この銘柄を削除しますか？')) return;
