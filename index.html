@@ -2322,7 +2322,7 @@ function amCheckAnomalies(){
     const evalTotal=a.amount||0;
     if(evalTotal<=0||costTotal<=0)return;
     const ratio=evalTotal/costTotal;
-    if(ratio>10||ratio<0.1){
+    if(ratio>100||ratio<0.01){
       anomalies.push({name:a.name,cat:a.cat,evalTotal,costTotal,ratio,shares:a.shares,price:a.price,costPrice:a.costPrice});
     }
   });
@@ -3869,11 +3869,12 @@ function trCalcSnapshotGain(s){
     }
 
     // ── 異常値ガード ──
-    // 評価額と取得額の比率が極端（10倍以上 or 1/10以下）な場合は、
-    // 単価と総額の単位が混在している等の入力ミスとみなし、この口座を損益計算から除外する
+    // 評価額と取得額の比率が極端（100倍以上 or 1/100以下）な場合のみ、
+    // 単価と総額の単位が混在している等の入力ミスとみなし、この口座を損益計算から除外する。
+    // 持株会等で取得単価が著しく低いケース（数十倍の利益）は正当なデータなので除外しない。
     if(evalTotal>0&&costTotal>0){
       const ratio=evalTotal/costTotal;
-      if(ratio>10||ratio<0.1)return;
+      if(ratio>100||ratio<0.01)return;
     }
 
     hasAny=true;
@@ -3968,12 +3969,13 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
     // 数量×単価方式のカテゴリなのに数量が0以下なら計算不能のため除外（誤った巨額損益を防ぐ）
     if(isUnitBased&&!(a.shares>0))return false;
-    // 異常値ガード：評価額と取得額の比率が極端な場合は単位ミスとみなし除外
+    // 異常値ガード：評価額と取得額の比率が極端（100倍以上）な場合のみ単位ミスとみなし除外
+    // 持株会等で取得単価が著しく低い正当なケース（数十倍の利益）は除外しない
     const evalTotal=a.amount||0;
     const costTotal=isUnitBased?a.shares*a.costPrice:a.costPrice;
     if(evalTotal>0&&costTotal>0){
       const ratio=evalTotal/costTotal;
-      if(ratio>10||ratio<0.1)return false;
+      if(ratio>100||ratio<0.01)return false;
     }
     return true;
   }).map(a=>{
