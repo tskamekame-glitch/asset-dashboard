@@ -2233,6 +2233,10 @@ function amLoadFromLocal(){
   try{amAccounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){amAccounts=[];}
   let migrated=false;
   amAccounts.forEach(a=>{
+    // Step0: 投信カテゴリなのに不正な英字コード（"eMAXIS"等の誤抽出）が入っている場合はクリア
+    // 日本株のコードは4桁数字または英数混在(408A等)だが、すべて英字のみのコードは誤抽出と判断する
+    const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+    if(isIndexFund&&a.code&&/^[A-Za-z]+$/.test(a.code)){a.code='';migrated=true;}
     // Step1: 口座名で強制マッピング（最優先）
     const byName=amGuessCat(a.name);
     if(byName){
@@ -2480,8 +2484,10 @@ function amParseSBICSV(text){
     const nameNorm=toHankaku(nameRaw);
 
     // 銘柄コード抽出: "4063 信越化" → code="4063", displayName="信越化"
-    // 先頭の英数字4〜6文字（4桁数字 or 英数混在）をコードとして取得
-    const codeMatch=nameNorm.match(/^([0-9A-Za-z]{4,6})\s+(.+)$/);
+    // 先頭の英数字4〜6文字（4桁数字 or 英数混在）をコードとして取得。
+    // 投資信託は「eMAXIS Slim 米国株式」のように先頭が英字の銘柄名であり、
+    // 「eMAXIS」のような単語を誤ってコードとして抽出してしまうため、株式のみに限定する。
+    const codeMatch=(!isFund)?nameNorm.match(/^([0-9A-Za-z]{4,6})\s+(.+)$/):null;
     const code=codeMatch?codeMatch[1].replace(/[^0-9A-Za-z]/g,''):'';
 
     const acctSuffix=sectionToAccount(currentSection);
