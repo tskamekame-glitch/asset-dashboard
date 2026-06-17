@@ -3984,8 +3984,11 @@ function trRenderCharts(){
 // 「評価額の合計 − 取得額の合計」で日次の損益を算出する。
 // costPriceが入っていない口座（銀行・預り金等）は損益計算から除外する。
 // ============================================================
-function trCalcSnapshotGain(s){
-  if(!s.accounts||!s.accounts.length)return null;
+// useCurrentAccounts=true の場合、スナップショットの口座構成ではなく
+// 現在のamAccounts全体をそのまま使って計算する（「最新の銘柄別損益」と完全に一致させるため）
+function trCalcSnapshotGain(s,useCurrentAccounts){
+  const sourceAccounts=useCurrentAccounts?(amAccounts||[]):(s.accounts||[]);
+  if(!sourceAccounts.length)return null;
   // 現在の資産管理データから名前→{costPrice,shares,price,cat}の参照マップを作成（フォールバック用）
   const amInfoMap={};
   try{
@@ -3995,7 +3998,7 @@ function trCalcSnapshotGain(s){
   // PayPay系（ポイント運用等）・確定拠出年金（iDeCo/企業DC）は残高入力方式（数量×単価では扱わない）
   const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   let evalSum=0,costSum=0,hasAny=false;
-  s.accounts.forEach(a=>{
+  sourceAccounts.forEach(a=>{
     if(trGainExcludeNames.includes(a.name))return;// 除外指定された銘柄はスキップ
     // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
     const fallback=amInfoMap[a.name];
@@ -4055,6 +4058,14 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   }
   if(canvasWrap)canvasWrap.style.display='block';
   card.style.display='block';
+
+  // 最新ポイントの日付が「今日」の場合のみ、「最新の銘柄別損益」と数値を完全一致させるため
+  // 記録時点のスナップショットではなく現在のamAccountsで再計算する
+  const lastValidIdx=validIdx[validIdx.length-1];
+  if(filtered[lastValidIdx].date===todayStr()){
+    const currentGain=trCalcSnapshotGain(filtered[lastValidIdx],true);
+    if(currentGain)gainData[lastValidIdx]=currentGain;
+  }
 
   const gLabels=validIdx.map(i=>labels[i]);
   const gainLine=validIdx.map(i=>gainData[i].gain);
