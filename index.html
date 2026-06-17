@@ -2737,14 +2737,56 @@ async function amApplySBIRows(rows){
   const log=[];
   const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
 
-  // 同名SBI行が複数ある場合（iFreeNEXT FANG+ 特定/NISA等、または同一銘柄の買い増し）は
-  // セクション情報や買付日で区別し、既存口座への1対1マッチングを行う。
-  // 1つの資産管理口座には1つのCSV行のみマッチさせる（同じ口座が複数行で上書きされるのを防ぐ）
+  // ── 個別株：同一銘柄コードのCSV行を「ロット」として1対1で既存口座に割り当てる ──
+  // 同じコードのCSV行がN件あれば、既存の同コード口座をN件まで使い切り、
+  // 残りは必ず新規ロットとして追加する（行数と一致する口座数を保証する）。
+  const stockRows=rows.filter(r=>!r.isFund&&r.code);
+  const fundOrOtherRows=rows.filter(r=>r.isFund||!r.code);
+
   const noMatch=[];
   const usedAccIdx=new Set();
-  // 個別株は同一コード内で評価額の小さい順にソートしておくと、
-  // 既存の複数口座（買付日違い）との対応がより安定する
-  rows.forEach(row=>{
+
+  // コードごとにグループ化し、既存の同コード口座リストに順番に割り当てる
+  const codeGroups=new Map();
+  stockRows.forEach(row=>{
+    if(!codeGroups.has(row.code))codeGroups.set(row.code,[]);
+    codeGroups.get(row.code).push(row);
+  });
+
+  codeGroups.forEach((groupRows,code)=>{
+    // この銘柄コードに対応する既存の資産管理口座をすべて収集
+    const accIdxList=[];
+    amAccounts.forEach((acc,i)=>{
+      if(String(acc.code||'').replace(/[^0-9A-Za-z]/g,'')===code)accIdxList.push(i);
+    });
+    // CSV行と既存口座を順番に1対1で対応させる
+    groupRows.forEach((row,gi)=>{
+      const accIdx=accIdxList[gi];
+      if(accIdx===undefined||usedAccIdx.has(accIdx)){
+        // 対応する既存口座が無い（CSV行数 > 既存口座数）→ 新規追加対象
+        noMatch.push(row);
+        return;
+      }
+      usedAccIdx.add(accIdx);
+      const acc=amAccounts[accIdx];
+      const oldVal=acc.amount||0;
+      const newVal=row.evalAmt;
+      const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+      if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
+
+      acc.amount=newVal;
+      if(row.shares>0)acc.shares=row.shares;
+      if(row.price>0)acc.price=row.price;
+      if(row.costPrice>0)acc.costPrice=row.costPrice;
+      acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+
+      updated++;
+      log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:100,acctSuffix:row.acctSuffix});
+    });
+  });
+
+  // ── 投信・コードなし銘柄：従来通りスコアベースのマッチング（1対1）──
+  fundOrOtherRows.forEach(row=>{
     let bestIdx=-1,bestScore=0;
     amAccounts.forEach((acc,i)=>{
       if(usedAccIdx.has(i))return;// すでに他のCSV行がマッチ済みの口座は対象外
@@ -2874,7 +2916,7 @@ async function amApplySBIRows(rows){
   if(noMatch.length){
     const names=noMatch.map(x=>{
       function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
-      return toH(x.sbi).slice(0,10);
+      return toH(x.nameRaw||'').slice(0,10);
     }).join('・');
     msg+=` ⚠️未マッチ${noMatch.length}件: ${names}`;
   }
