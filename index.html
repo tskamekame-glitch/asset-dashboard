@@ -653,6 +653,7 @@ tr:last-child td{border-bottom:none}
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
       <button class="btn-sm" onclick="amFixFundUnits()" style="color:#e24b4a;border-color:#e24b4a" title="投資信託の数量(口数)を万口単位に補正">🔧 投信数量修正</button>
       <button class="btn-sm" onclick="amCheckAnomalies()" style="color:#854F0B;border-color:#854F0B" title="評価額と取得単価のバランスがおかしい口座を検出">⚠️ 異常値チェック</button>
+      <button class="btn-sm" onclick="amMigrateConfirmedContribution()" style="color:#0F6E56;border-color:#0F6E56" title="確定拠出年金口座を残高入力方式に変換">🔄 DC年金データ移行</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
     </div>
@@ -1675,10 +1676,10 @@ function amRender(){
       const isStock=a.cat==='個別株'||a.cat==='高配当';
       const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
       const hasSBICode=isStock&&!!(a.code&&a.code.length>0);
-      // PayPay系（ポイント運用等）は数量×単価表示の対象外＝残高入力のまま
-      const PAYPAY_PAT=/PayPay|ペイペイ/;
+      // PayPay系（ポイント運用等）・確定拠出年金（iDeCo/企業DC）は数量×単価表示の対象外＝残高入力のまま
+      const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
       const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
-      // 数量×単価＝評価額 表示の対象: 個別株・高配当・インデックス投信（PayPay系除く）
+      // 数量×単価＝評価額 表示の対象: 個別株・高配当・インデックス投信（PayPay系・確定拠出年金除く）
       const isUnitBased=isStock||(isIndexFund&&!isPayPay);
       // SBI以外の証券会社・サービス保有は手動扱い
       const NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
@@ -1909,7 +1910,7 @@ function amToggleStockFields(){
   const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
   const name=(document.getElementById('fName').value||'');
   const note=(document.getElementById('fNote')?.value||'');
-  const PAYPAY_PAT=/PayPay|ペイペイ/;
+  const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const isPayPay=PAYPAY_PAT.test(name)||PAYPAY_PAT.test(note);
   const isUnitBased=isStock||(isIndexFund&&!isPayPay);
   const sf=document.getElementById('fStockFields');
@@ -1936,7 +1937,7 @@ function amCalcAmount(){
   const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
   const name=(document.getElementById('fName').value||'');
   const note=(document.getElementById('fNote')?.value||'');
-  const PAYPAY_PAT=/PayPay|ペイペイ/;
+  const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const isPayPay=PAYPAY_PAT.test(name)||PAYPAY_PAT.test(note);
   const isUnitBased=isStock||(isIndexFund&&!isPayPay);
   const shares=parseFloat(document.getElementById('fShares').value)||0;
@@ -2270,7 +2271,7 @@ function amReclassifyAll(){
 //       （「更新」ボタン押下でamountも10000倍に汚染されている場合に対応）
 // ============================================================
 async function amFixFundUnits(){
-  const PAYPAY_PAT=/PayPay|ペイペイ/;
+  const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   let fixed=0;
   const log=[];
   amAccounts.forEach(a=>{
@@ -2301,6 +2302,45 @@ async function amFixFundUnits(){
 }
 
 // ============================================================
+// 確定拠出年金（iDeCo/企業DC）口座のデータ移行
+// 「全世界インデックス（SBI確定拠出）」「TOPIX100・インデックス（DC年金）」等は
+// 残高入力方式（PayPay型）に変更したため、以前「数量×単価」で入力していた
+// costPrice（取得単価）を「取得総額」に変換する。
+// 例: shares=82.7663万口, costPrice=43496円/万口 → costPrice=3,600,000円(総額)
+// ============================================================
+async function amMigrateConfirmedContribution(){
+  const PAT=/確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
+  let migrated=0;
+  const log=[];
+  amAccounts.forEach(a=>{
+    const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+    const isTarget=PAT.test(a.name)||PAT.test(a.note||'');
+    if(!isIndexFund||!isTarget)return;
+    if(!(a.shares>0)||!(a.costPrice>0))return;
+    // すでに総額換算済み（costPriceがamountに近い）場合はスキップ
+    if(a.amount>0&&Math.abs(a.costPrice-a.amount)/a.amount<0.5)return;
+
+    const oldCostPrice=a.costPrice;
+    const newCostTotal=Math.round(a.shares*a.costPrice);
+    a.costPrice=newCostTotal;
+    a.updated=todayStr();
+    migrated++;
+    log.push({name:a.name,oldCostPrice,shares:a.shares,newCostTotal});
+  });
+  if(migrated===0){
+    showToast('移行対象はありませんでした（すでに総額形式、または該当口座なし）',3500);
+    return;
+  }
+  amSaveToLocal();
+  amRender();
+  refreshHome();
+  pfSyncFromAM();
+  await amSaveToSheet();
+  showToast(`✅ ${migrated}件の確定拠出年金口座を残高入力方式に変換しました`,4000);
+  console.log('[amMigrateConfirmedContribution]',log);
+}
+
+// ============================================================
 // 取得単価の異常値チェック
 // 「個別株・高配当・全世界/日本/インドインデックス」のうち、
 // 評価額÷取得総額の比率が極端（10倍超 or 1/10未満）な口座を検出する。
@@ -2308,10 +2348,12 @@ async function amFixFundUnits(){
 // ============================================================
 function amCheckAnomalies(){
   const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
+  const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const anomalies=[];
   amAccounts.forEach(a=>{
     if(!(a.costPrice>0))return;
-    const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
+    const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
+    const isUnitBased=UNIT_BASED_CATS.includes(a.cat)&&!isBalanceBased;
     let costTotal;
     if(isUnitBased){
       if(!(a.shares>0))return;
@@ -3843,6 +3885,8 @@ function trCalcSnapshotGain(s){
     (amAccounts||[]).forEach(a=>{if(a.costPrice>0)amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};});
   }catch(e){}
   const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
+  // PayPay系（ポイント運用等）・確定拠出年金（iDeCo/企業DC）は残高入力方式（数量×単価では扱わない）
+  const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   let evalSum=0,costSum=0,hasAny=false;
   s.accounts.forEach(a=>{
     // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
@@ -3855,8 +3899,9 @@ function trCalcSnapshotGain(s){
     const cat=a.cat||(fallback?fallback.cat:'');
     const evalTotal=a.amount||0;
 
-    // 数量×単価方式の対象カテゴリかどうかで計算方法を決める（shares/priceの有無だけで判定しない）
-    const isUnitBased=UNIT_BASED_CATS.includes(cat);
+    // 数量×単価方式の対象カテゴリかどうかで計算方法を決める（PayPay系・確定拠出年金は除く）
+    const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
+    const isUnitBased=UNIT_BASED_CATS.includes(cat)&&!isBalanceBased;
 
     let costTotal;
     if(isUnitBased){
@@ -3964,9 +4009,12 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   card.style.display='block';
 
   const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
+  // PayPay系（ポイント運用等）・確定拠出年金（iDeCo/企業DC）は残高入力方式（数量×単価では扱わない）
+  const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const items=sourceAccounts.filter(a=>{
     if(!(a.costPrice>0))return false;
-    const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
+    const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
+    const isUnitBased=UNIT_BASED_CATS.includes(a.cat)&&!isBalanceBased;
     // 数量×単価方式のカテゴリなのに数量が0以下なら計算不能のため除外（誤った巨額損益を防ぐ）
     if(isUnitBased&&!(a.shares>0))return false;
     // 異常値ガード：評価額と取得額の比率が極端（100倍以上）な場合のみ単位ミスとみなし除外
@@ -3979,7 +4027,8 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     }
     return true;
   }).map(a=>{
-    const isUnitBased=UNIT_BASED_CATS.includes(a.cat);
+    const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
+    const isUnitBased=UNIT_BASED_CATS.includes(a.cat)&&!isBalanceBased;
     let costTotal,evalTotal=a.amount||0;
     if(isUnitBased){costTotal=a.shares*a.costPrice;}
     else{costTotal=a.costPrice;}
