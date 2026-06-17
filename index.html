@@ -2485,11 +2485,13 @@ function amParseSBICSV(text){
     const code=codeMatch?codeMatch[1].replace(/[^0-9A-Za-z]/g,''):'';
 
     const acctSuffix=sectionToAccount(currentSection);
+    const buyDate=(cols[1]||'').replace(/"/g,'').trim();
 
     rows.push({
       nameRaw,
       nameNorm,
       code,
+      buyDate,
       evalAmt:Math.round(evalAmt),
       shares:isFund?Math.round(shares*10000)/10000:(Math.round(shares)||0),
       price:Math.round(price*100)/100,
@@ -2735,17 +2737,23 @@ async function amApplySBIRows(rows){
   const log=[];
   const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
 
-  // 同名SBI行が複数ある場合（iFreeNEXT FANG+ 特定/NISA等）は
-  // セクション情報でPFエントリの(特定/NISA)を区別して対応
+  // 同名SBI行が複数ある場合（iFreeNEXT FANG+ 特定/NISA等、または同一銘柄の買い増し）は
+  // セクション情報や買付日で区別し、既存口座への1対1マッチングを行う。
+  // 1つの資産管理口座には1つのCSV行のみマッチさせる（同じ口座が複数行で上書きされるのを防ぐ）
   const noMatch=[];
+  const usedAccIdx=new Set();
+  // 個別株は同一コード内で評価額の小さい順にソートしておくと、
+  // 既存の複数口座（買付日違い）との対応がより安定する
   rows.forEach(row=>{
     let bestIdx=-1,bestScore=0;
     amAccounts.forEach((acc,i)=>{
+      if(usedAccIdx.has(i))return;// すでに他のCSV行がマッチ済みの口座は対象外
       const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'',row.code||'');
       if(score>bestScore){bestScore=score;bestIdx=i;}
     });
     if(bestIdx<0||bestScore<55){noMatch.push(row);return;}
 
+    usedAccIdx.add(bestIdx);
     const acc=amAccounts[bestIdx];
     const oldVal=acc.amount||0;
     const newVal=row.evalAmt;
@@ -2763,6 +2771,8 @@ async function amApplySBIRows(rows){
   });
 
   // ── 未マッチ銘柄を資産管理に自動追加 ──
+  // 同一コードの個別株が複数件未マッチの場合（買い増し等で口座が1つしかなかった場合）も、
+  // 取得単価が異なる買付ロットとして区別するため、行ごとに別の口座を新規追加する
   let added=0;
   noMatch.forEach(row=>{
     // カテゴリ推定：nameRaw（全角含む）とnameNorm（半角変換済み）の両方で試みる
@@ -2772,7 +2782,21 @@ async function amApplySBIRows(rows){
 
     // 表示名：全角英数を半角に変換して使いやすい名前に
     function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
-    const displayName=toH(row.nameRaw||row.nameNorm);
+    let displayName=toH(row.nameRaw||row.nameNorm);
+    const baseName=displayName;
+    // 同一銘柄が資産管理または今回の新規追加分に既に存在する場合（買い増しロット）は、
+    // 買付日を付けて区別する。既存が1件もない最初の1件は買付日なしのシンプルな名前のままにする。
+    const sameNameExists=amAccounts.some(a=>a.name===baseName||a.name.startsWith(baseName+'（'));
+    if(sameNameExists&&row.buyDate){
+      let candidate=`${baseName}（${row.buyDate}買付）`;
+      // 同じ買付日の口座が既にある場合は連番を付けて重複を避ける
+      let n=2;
+      while(amAccounts.some(a=>a.name===candidate)){
+        candidate=`${baseName}（${row.buyDate}買付${n}）`;
+        n++;
+      }
+      displayName=candidate;
+    }
 
     // 新しいIDを生成（既存の最大ID+1）
     const newId=amAccounts.length?Math.max(...amAccounts.map(a=>Number(a.id)||0))+1:1;
@@ -5706,7 +5730,6 @@ function jpSaveStock() {
     if (idx >= 0) data.stocks[idx] = stock;
   } else { data.stocks.push(stock); }
   jpSave(data); jpCloseAdd(); jpRenderAll();
-  jpSyncToAssetManager(stock);
   showToast('📈 銘柄を保存しました');
 }
 
