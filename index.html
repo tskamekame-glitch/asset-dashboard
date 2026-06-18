@@ -6310,19 +6310,19 @@ const WL_KEY = 'watchlist_v3';
 let wlEditId = null;
 
 const WL_DEFAULT = [
-  {id:'w1',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,sell1:2000,sell2:2473,sell3:3720,target:2473,per:1800,pbr:1200,account:'NISA成長',status:'注文待ち',priority:1,memo:'医療DX独占・来期増益',earningsDate:'2025-07-31'},
-  {id:'w2',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:5032,sell1:5500,sell2:6137,sell3:7900,target:6137,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'配当4.2%・来期+37%増益',earningsDate:'2025-07-31'},
-  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3100,current:3508,sell1:4000,sell2:4689,sell3:5000,target:4689,per:null,pbr:3410,account:'特定',status:'注文待ち',priority:1,memo:'特損一過性・91%買い推奨',earningsDate:'2025-08-07'},
-  {id:'w4',code:'5020',name:'エネオス',shares:200,limit:1200,current:1301,sell1:1400,sell2:1578,sell3:1800,target:1578,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'来期+173%増益・1単元12万',earningsDate:'2025-08-06'},
-  {id:'w5',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:6863,sell1:7307,sell2:8000,sell3:8600,target:7307,per:6951,pbr:6689,account:'特定',status:'指値注文中',priority:2,memo:'▲6.6%急落・TOB5235円サポート',earningsDate:'2025-07-25'},
-  {id:'w6',code:'7974',name:'任天堂',shares:100,limit:6800,current:7697,sell1:9000,sell2:10641,sell3:14200,target:10641,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'▲50%押し目・2027年業績確認後',earningsDate:'2025-08-05'},
-  {id:'w7',code:'5016',name:'JX金属',shares:100,limit:3400,current:3760,sell1:4079,sell2:5200,sell3:5828,target:4079,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'AI半導体薄膜・営業益+45%',earningsDate:''},
-  {id:'w8',code:'9104',name:'商船三井',shares:100,limit:5200,current:5500,sell1:5800,sell2:6500,sell3:7500,target:6500,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・タンカー首位',earningsDate:'2025-08-01'},
-  {id:'w9',code:'1605',name:'INPEX',shares:100,limit:3500,current:3700,sell1:4000,sell2:4500,sell3:5000,target:4009,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・増配発表・原油LNG',earningsDate:'2025-07-31'},
-  {id:'w10',code:'7012',name:'川崎重工業',shares:100,limit:2500,current:2754,sell1:3000,sell2:3758,sell3:4000,target:3758,per:3426,pbr:3461,account:'特定',status:'様子見',priority:3,memo:'防衛・水素・ロボット長期テーマ',earningsDate:'2025-08-01'},
-  {id:'w11',code:'7201',name:'日産自動車',shares:100,limit:300,current:339,sell1:380,sell2:412,sell3:466,target:412,per:null,pbr:null,account:'特定',status:'様子見',priority:3,memo:'赤字・無配・様子見',earningsDate:'2025-08-07'},
-  {id:'w12',code:'9434',name:'SBKK',shares:100,limit:null,current:211,sell1:230,sell2:242,sell3:270,target:242,per:null,pbr:null,account:'みずほ',status:'売却候補',priority:4,memo:'配当4.5%・230〜242円で売却',earningsDate:'2025-08-07'},
-  {id:'w13',code:'9984',name:'SBG',shares:100,limit:null,current:7400,sell1:8000,sell2:8500,sell3:9700,target:6829,per:null,pbr:null,account:'野村',status:'売却候補',priority:4,memo:'⚠️目標超過20%・高値圏で利確',earningsDate:'2025-08-07'},
+  {id:'w1',code:'2413',name:'エムスリー',shares:500,limit:1550,current:1590,sell1:2000,sell2:2473,sell3:3720,target:2473,per:1800,pbr:1200,account:'NISA成長',status:'注文待ち',priority:1,memo:'医療DX独占・来期増益',earningsDate:'2025-07-31',actper:20.5,eps1:73.8,eps2:79.7},
+  {id:'w2',code:'4502',name:'武田薬品工業',shares:200,limit:4500,current:5032,sell1:5500,sell2:6137,sell3:7900,target:6137,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'配当4.2%・27/3期純利益1660億予想(13%減)',earningsDate:'2025-07-31',actper:null,eps1:105.0,eps2:105.1},
+  {id:'w3',code:'6758',name:'ソニーグループ',shares:100,limit:3100,current:3508,sell1:4000,sell2:4689,sell3:5000,target:4689,per:null,pbr:3410,account:'特定',status:'注文待ち',priority:1,memo:'27/3期最高益1兆1600億予想+12.5%',earningsDate:'2025-08-07',actper:null,eps1:81.2,eps2:91.3},
+  {id:'w4',code:'5020',name:'エネオス',shares:200,limit:1200,current:1301,sell1:1400,sell2:1578,sell3:1800,target:1578,per:null,pbr:null,account:'特定',status:'注文待ち',priority:1,memo:'PER予8.2倍・JX金属IPO後・高配当',earningsDate:'2025-08-06',actper:8.2,eps1:null,eps2:null},
+  {id:'w5',code:'4063',name:'信越化学工業',shares:100,limit:6500,current:6863,sell1:7307,sell2:8000,sell3:8600,target:7307,per:6951,pbr:6689,account:'特定',status:'指値注文中',priority:2,memo:'26/3期実績EPS253円・27/3期業績予想未定(中東情勢)',earningsDate:'2025-07-25',actper:null,eps1:253.0,eps2:null},
+  {id:'w6',code:'7974',name:'任天堂',shares:100,limit:6800,current:7697,sell1:9000,sell2:10641,sell3:14200,target:10641,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'26/3期NS2効果EPS3563円・27/3期26%減益2605円予想',earningsDate:'2025-08-05',actper:null,eps1:3563.0,eps2:2605.0},
+  {id:'w7',code:'5016',name:'JX金属',shares:100,limit:3400,current:3760,sell1:4079,sell2:5200,sell3:5828,target:4079,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'AI半導体薄膜・26/3期最高益EPS52円',earningsDate:'',actper:null,eps1:52.3,eps2:null},
+  {id:'w8',code:'9104',name:'商船三井',shares:100,limit:5200,current:5500,sell1:5800,sell2:6500,sell3:7500,target:6500,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'PER予11倍・27/3期EPS623円予想(20%減)・配当205円',earningsDate:'2025-08-01',actper:11.0,eps1:null,eps2:622.7},
+  {id:'w9',code:'1605',name:'INPEX',shares:100,limit:3500,current:3700,sell1:4000,sell2:4500,sell3:5000,target:4009,per:null,pbr:null,account:'特定',status:'指値注文中',priority:2,memo:'配当3.5%・増配発表・原油LNG',earningsDate:'2025-07-31',actper:null,eps1:null,eps2:null},
+  {id:'w10',code:'7012',name:'川崎重工業',shares:100,limit:2500,current:2754,sell1:3000,sell2:3758,sell3:4000,target:3758,per:3426,pbr:3461,account:'特定',status:'様子見',priority:3,memo:'PER予22.3倍・防衛・水素・ロボット長期テーマ',earningsDate:'2025-08-01',actper:22.3,eps1:null,eps2:null},
+  {id:'w11',code:'7201',name:'日産自動車',shares:100,limit:300,current:339,sell1:380,sell2:412,sell3:466,target:412,per:null,pbr:null,account:'特定',status:'様子見',priority:3,memo:'PER予66倍（超高PER）・赤字リスク・様子見',earningsDate:'2025-08-07',actper:66.4,eps1:null,eps2:null},
+  {id:'w12',code:'9434',name:'SBKK',shares:100,limit:null,current:211,sell1:230,sell2:242,sell3:270,target:242,per:null,pbr:null,account:'みずほ',status:'売却候補',priority:4,memo:'配当4.5%・230〜242円で売却',earningsDate:'2025-08-07',actper:null,eps1:null,eps2:null},
+  {id:'w13',code:'9984',name:'SBG',shares:100,limit:null,current:7400,sell1:8000,sell2:8500,sell3:9700,target:6829,per:null,pbr:null,account:'野村',status:'売却候補',priority:4,memo:'⚠️目標超過20%・高値圏で利確',earningsDate:'2025-08-07',actper:null,eps1:null,eps2:null},
 ];
 
 function wlLoad(){
