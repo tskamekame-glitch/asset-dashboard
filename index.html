@@ -3259,23 +3259,22 @@ function pfNisaSaveSettings(s){try{localStorage.setItem('nisaSettings_v4',JSON.s
 
 function pfNisaCollect(){
   // DOMから現在の入力値を収集して保存・再表示
-  const s={tsumitate:[],seichou2026:[],seichou2027:[]};
-  document.querySelectorAll('.nisa-ts-row').forEach(r=>{
+  const s={tsumitate:[],seichou2026:[],seichou2027:[],tsumitate27:[]};
+  document.querySelectorAll('.nisa-tsumitate-row').forEach(r=>{
     const n=r.querySelector('.nisa-name')?.value?.trim();
     const v=parseInt(r.querySelector('.nisa-val')?.value)||0;
     if(n)s.tsumitate.push({name:n,monthly:v});
   });
-  document.querySelectorAll('.nisa-sg26-row').forEach(r=>{
+  document.querySelectorAll('.nisa-seichou2026-row').forEach(r=>{
     const n=r.querySelector('.nisa-name')?.value?.trim();
     const v=parseInt(r.querySelector('.nisa-val')?.value)||0;
     if(n)s.seichou2026.push({name:n,amount:v});
   });
-  document.querySelectorAll('.nisa-sg27-row').forEach(r=>{
+  document.querySelectorAll('.nisa-seichou2027-row').forEach(r=>{
     const n=r.querySelector('.nisa-name')?.value?.trim();
     const v=parseInt(r.querySelector('.nisa-val')?.value)||0;
     if(n)s.seichou2027.push({name:n,amount:v});
   });
-  s.tsumitate27=[];
   document.querySelectorAll('.nisa-tsumitate27-row').forEach(r=>{
     const n=r.querySelector('.nisa-name')?.value?.trim();
     const v=parseInt(r.querySelector('.nisa-val')?.value)||0;
@@ -3283,6 +3282,17 @@ function pfNisaCollect(){
   });
   pfNisaSaveSettings(s);
   pfNisaUpdateTotals(s);
+  if(typeof pfNisaSaveIndicator==='function')pfNisaSaveIndicator();
+}
+
+// 入力のたびに連打されるため、保存表示はデバウンスして短く出す
+let _pfNisaSaveTimer=null;
+function pfNisaSaveIndicator(){
+  const el=document.getElementById('pf-nisa-save-indicator');
+  if(!el)return;
+  el.style.opacity='1';
+  clearTimeout(_pfNisaSaveTimer);
+  _pfNisaSaveTimer=setTimeout(()=>{el.style.opacity='0';},900);
 }
 
 function pfNisaUpdateTotals(s){
@@ -3353,8 +3363,10 @@ function pfRenderNisaSection(){
   function foot(tid,rid,ttxt,rem,color){return`<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;flex-wrap:wrap;gap:4px"><span id="${tid}">${ttxt}</span><span id="${rid}" style="color:${rem>=0?'var(--color-text-primary)':'#e74c3c'}">残り：${pfFmtFull(rem)}</span></div>`;}
 
   el.innerHTML=`
-<div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);letter-spacing:0.06em;margin-bottom:8px">NISA枠 年度別管理</div>
-
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+  <div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);letter-spacing:0.06em">NISA枠 年度別管理</div>
+  <span id="pf-nisa-save-indicator" style="font-size:11px;color:var(--color-text-secondary);opacity:0;transition:opacity 0.3s">✓ 保存しました</span>
+</div>
 <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 14px;margin-bottom:10px">
   <div style="font-size:13px;font-weight:600;margin-bottom:10px">2026年 NISA枠</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -3380,7 +3392,7 @@ function pfRenderNisaSection(){
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
     <div>
       <div style="font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
-      <div id="nisa-tsumitate27-rows">${mkRows(s.tsumitate,'tsumitate27','月')}</div>
+      <div id="nisa-tsumitate27-rows">${mkRows(s.tsumitate27||s.tsumitate,'tsumitate27','月')}</div>
       ${addBtn('tsumitate27')}
       ${bar('nisa-ts27-bar',(tsY27/T)*100,'#185FA5')}
       ${foot('nisa-ts27-total','nisa-ts27-rem','月間合計：'+pfFmtFull(tsM27),T-tsY27,'#185FA5')}
