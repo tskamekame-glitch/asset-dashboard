@@ -6349,12 +6349,25 @@ function wlDownloadCSV(){
   const data=wlLoad();
   if(!data||!data.length){showToast('データがありません',2000);return;}
 
-  const headers=['コード','業種','銘柄名','口座','株数','指値（円）','現在値（円）',
-    'sell1（円）','sell2（円）','sell3（円）','目標株価（円）',
-    '今期1株益','来期1株益','前期営業利益','今期営業利益','来期営業利益',
-    '前期売上','今期売上','来期売上','実績PER','目標PER','時価総額',
-    '理論株価PER','理論株価PBR','四季報見出し①','四季報見出し②',
-    '浮動株比率','ROEの変化','ステータス','優先度','決算日','メモ'];
+  // スプレッドシート「フォーマット（コピーして使用）」の列順に完全一致させる
+  // 「自動計算」列は空欄にしてスプレッドシート側の数式に任せる
+  const headers=[
+    '業種','コード','銘柄名','現株価','実績PER',
+    '今期\n1株益','来期\n1株益',
+    '中間（自動）','目標株価①（自動）','上昇率①（自動）',
+    '前期\n営業利益','今期\n営業利益','来期\n営業利益',
+    '増益率\n3期平均（自動）','来期\n増益率（自動）',
+    '目標PER','目標株価②（自動）','上昇率②（自動）','予想PER（自動）',
+    '四季報\n見出し','四季報\n見出し2',
+    '今期\n売上予想','時価総額','PSR（自動）',
+    '前期\n売上','今期\n売上予想','来期\n売上予想',
+    '増収率（自動）','今期\n営業利益','利益率（自動）','40％ルール（自動）',
+    'ストック\n売上比率','売上\n総利益率',
+    '決算日','90日後（自動）','90日後（自動）',
+    '浮動株比率','前回決算後の動き','ROEの変化',
+    // 以下はスプレッドシートにない当ツール独自項目（末尾に追加）
+    '口座','株数','指値（円）','sell1（円）','sell2（円）','sell3（円）','ステータス','優先度','メモ'
+  ];
 
   const escape=v=>{
     if(v==null||v==='')return '';
@@ -6367,42 +6380,60 @@ function wlDownloadCSV(){
   const rows=[headers.join(',')];
   data.forEach(w=>{
     rows.push([
-      escape(w.code),
-      escape(w.sector),
-      escape(w.name),
+      // ── スプレッドシート列順 ──
+      escape(w.sector),       // 業種
+      escape(w.code),         // コード
+      escape(w.name),         // 銘柄名
+      escape(w.current),      // 現株価
+      escape(w.actper),       // 実績PER
+      escape(w.eps1),         // 今期1株益
+      escape(w.eps2),         // 来期1株益
+      '',                     // 中間（自動）
+      '',                     // 目標株価①（自動）
+      '',                     // 上昇率①（自動）
+      escape(w.op0),          // 前期営業利益
+      escape(w.op1),          // 今期営業利益
+      escape(w.op2),          // 来期営業利益
+      '',                     // 増益率3期平均（自動）
+      '',                     // 来期増益率（自動）
+      escape(w.targetper),    // 目標PER
+      '',                     // 目標株価②（自動）
+      '',                     // 上昇率②（自動）
+      '',                     // 予想PER（自動）
+      escape(w.shikiho1),     // 四季報見出し
+      escape(w.shikiho2),     // 四季報見出し2
+      escape(w.sales1),       // 今期売上予想
+      escape(w.mktcap),       // 時価総額
+      '',                     // PSR（自動）
+      escape(w.sales0),       // 前期売上
+      escape(w.sales1),       // 今期売上予想（再掲）
+      escape(w.sales2),       // 来期売上予想
+      '',                     // 増収率（自動）
+      escape(w.op1),          // 今期営業利益（再掲）
+      '',                     // 利益率（自動）
+      '',                     // 40%ルール（自動）
+      '',                     // ストック売上比率
+      '',                     // 売上総利益率
+      escape(w.earningsDate), // 決算日
+      '',                     // 90日後（自動）
+      '',                     // 90日後（自動）
+      escape(w.floatRatio),   // 浮動株比率
+      '',                     // 前回決算後の動き
+      escape(w.roe),          // ROEの変化
+      // ── 独自項目 ──
       escape(w.account),
       escape(w.shares),
       escape(w.limit),
-      escape(w.current),
       escape(w.sell1),
       escape(w.sell2),
       escape(w.sell3),
-      escape(w.target),
-      escape(w.eps1),
-      escape(w.eps2),
-      escape(w.op0),
-      escape(w.op1),
-      escape(w.op2),
-      escape(w.sales0),
-      escape(w.sales1),
-      escape(w.sales2),
-      escape(w.actper),
-      escape(w.targetper),
-      escape(w.mktcap),
-      escape(w.per),
-      escape(w.pbr),
-      escape(w.shikiho1),
-      escape(w.shikiho2),
-      escape(w.floatRatio),
-      escape(w.roe),
       escape(w.status),
       escape(w.priority),
-      escape(w.earningsDate),
       escape(w.memo),
     ].join(','));
   });
 
-  // BOM付きUTF-8でExcelでも文字化けしないように出力
+  // BOM付きUTF-8でExcel/Numbersでも文字化けしないように出力
   const bom='\uFEFF';
   const csv=bom+rows.join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
