@@ -6166,6 +6166,7 @@ function jpDeleteSell(id) {
     <div style="display:flex;gap:6px">
       <button class="wl-add-btn" onclick="wlSyncFromSheet()" style="font-size:12px;padding:5px 10px">↓ 読込</button>
       <button class="wl-add-btn" onclick="wlSyncToSheet()" style="font-size:12px;padding:5px 10px">↑ 保存</button>
+      <button class="wl-add-btn" onclick="wlDownloadCSV()" style="font-size:12px;padding:5px 10px">↓ CSV</button>
       <button class="wl-add-btn" onclick="wlOpenAdd()">＋ 追加</button>
     </div>
   </div>
@@ -6191,47 +6192,110 @@ function jpDeleteSell(id) {
 <div class="wl-modal-bg" id="wl-modal">
   <div class="wl-modal">
     <h3 id="wl-modal-title">銘柄を追加</h3>
+
+    <!-- 基本情報 -->
+    <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin-bottom:6px">📋 基本情報</div>
     <div class="wl-fg2">
       <div class="wl-frow"><label>銘柄コード</label><input id="wf-code" placeholder="例: 2413" maxlength="6" inputmode="numeric"></div>
-      <div class="wl-frow"><label>銘柄名</label><input id="wf-name" placeholder="例: エムスリー"></div>
+      <div class="wl-frow"><label>業種</label><input id="wf-sector" placeholder="例: 情報通信"></div>
     </div>
+    <div class="wl-frow"><label>銘柄名</label><input id="wf-name" placeholder="例: エムスリー"></div>
     <div class="wl-fg2">
       <div class="wl-frow"><label>株数</label><input id="wf-shares" type="number" placeholder="500" min="1" inputmode="numeric"></div>
       <div class="wl-frow"><label>指値（円）</label><input id="wf-limit" type="number" placeholder="1550" inputmode="numeric"></div>
     </div>
     <div class="wl-fg2">
-      <div class="wl-frow"><label>現在値（円）</label><input id="wf-current" type="number" placeholder="1590" inputmode="numeric"></div>
-      <div class="wl-frow"><label>目標株価（円）</label><input id="wf-target" type="number" placeholder="2473" inputmode="numeric"></div>
+      <div class="wl-frow"><label>現在値（円）</label><input id="wf-current" type="number" placeholder="1590" inputmode="numeric" oninput="wlCalcAuto()"></div>
+      <div class="wl-frow"><label>口座</label>
+        <select id="wf-account">
+          <option>特定</option><option>NISA成長</option><option>NISA積立</option><option>一般</option>
+        </select>
+      </div>
     </div>
-    <div class="wl-frow"><label>口座</label>
-      <select id="wf-account">
-        <option>特定</option><option>NISA成長</option><option>NISA積立</option><option>一般</option>
-      </select>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>状況</label>
+        <select id="wf-status">
+          <option>注文待ち</option><option>指値注文中</option><option>購入済</option><option>購入検討</option><option>様子見</option>
+        </select>
+      </div>
+      <div class="wl-frow"><label>優先順位</label>
+        <select id="wf-priority">
+          <option value="1">1 — 今日購入</option>
+          <option value="2">2 — 今週</option>
+          <option value="3" selected>3 — 後日</option>
+          <option value="4">4 — 長期検討</option>
+        </select>
+      </div>
     </div>
-    <div class="wl-frow"><label>状況</label>
-      <select id="wf-status">
-        <option>注文待ち</option><option>指値注文中</option><option>購入済</option><option>購入検討</option><option>様子見</option>
-      </select>
+
+    <!-- 業績・成長性 -->
+    <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin:10px 0 6px">📈 業績・成長性</div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>今期1株益（円）</label><input id="wf-eps1" type="number" placeholder="例: 119" step="0.1" inputmode="decimal" oninput="wlCalcAuto()"></div>
+      <div class="wl-frow"><label>来期1株益（円）</label><input id="wf-eps2" type="number" placeholder="例: 160" step="0.1" inputmode="decimal" oninput="wlCalcAuto()"></div>
     </div>
-    <div class="wl-frow"><label>優先順位</label>
-      <select id="wf-priority">
-        <option value="1">1 — 今日購入</option>
-        <option value="2">2 — 今週</option>
-        <option value="3" selected>3 — 後日</option>
-        <option value="4">4 — 長期検討</option>
-      </select>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>前期営業利益（百万）</label><input id="wf-op0" type="number" placeholder="例: 143" inputmode="numeric"></div>
+      <div class="wl-frow"><label>今期営業利益（百万）</label><input id="wf-op1" type="number" placeholder="例: 290" inputmode="numeric" oninput="wlCalcAuto()"></div>
     </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>来期営業利益（百万）</label><input id="wf-op2" type="number" placeholder="例: 385" inputmode="numeric" oninput="wlCalcAuto()"></div>
+      <div class="wl-frow"><label style="font-size:10px">来期増益率（自動）</label><input id="wf-opGrowth" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>今期売上予想（百万）</label><input id="wf-sales1" type="number" placeholder="例: 5510" inputmode="numeric" oninput="wlCalcAuto()"></div>
+      <div class="wl-frow"><label>来期売上予想（百万）</label><input id="wf-sales2" type="number" placeholder="例: 6350" inputmode="numeric" oninput="wlCalcAuto()"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>前期売上（百万）</label><input id="wf-sales0" type="number" placeholder="例: 3667" inputmode="numeric"></div>
+      <div class="wl-frow"><label style="font-size:10px">売上増収率（自動）</label><input id="wf-salesGrowth" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label style="font-size:10px">利益率（自動）</label><input id="wf-opMargin" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+      <div class="wl-frow"><label style="font-size:10px">40%ルール（自動）</label><input id="wf-rule40" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+    </div>
+
+    <!-- バリュエーション・目標株価 -->
+    <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin:10px 0 6px">💹 バリュエーション・目標株価</div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>実績PER（倍）</label><input id="wf-actper" type="number" placeholder="例: 38.7" step="0.1" inputmode="decimal"></div>
+      <div class="wl-frow"><label>目標PER（倍）</label><input id="wf-targetper" type="number" placeholder="例: 50" step="0.1" inputmode="decimal" oninput="wlCalcAuto()"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label style="font-size:10px">目標株価①中間（自動）</label><input id="wf-target1auto" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+      <div class="wl-frow"><label style="font-size:10px">目標株価②PER×来期（自動）</label><input id="wf-target2auto" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+    </div>
+    <div class="wl-frow"><label>目標株価（手動・円）</label><input id="wf-target" type="number" placeholder="自動計算値を参考に上書き可" inputmode="numeric"></div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>時価総額（百万）</label><input id="wf-mktcap" type="number" placeholder="例: 2531" inputmode="numeric" oninput="wlCalcAuto()"></div>
+      <div class="wl-frow"><label style="font-size:10px">PSR（自動）</label><input id="wf-psr" readonly placeholder="自動計算" style="background:var(--bg2);color:var(--accent);font-weight:600"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>理論株価PER（円）</label><input id="wf-per" type="number" placeholder="例: 1800" inputmode="numeric"></div>
+      <div class="wl-frow"><label>理論株価PBR（円）</label><input id="wf-pbr" type="number" placeholder="例: 1200" inputmode="numeric"></div>
+    </div>
+
+    <!-- 売却目標 -->
+    <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin:10px 0 6px">🎯 売却目標</div>
     <div class="wl-fg2">
       <div class="wl-frow"><label>売値①堅実（円）</label><input id="wf-sell1" type="number" placeholder="例: 2000" inputmode="numeric"></div>
       <div class="wl-frow"><label>売値②本命（円）</label><input id="wf-sell2" type="number" placeholder="例: 2473" inputmode="numeric"></div>
     </div>
     <div class="wl-frow"><label>売値③強気（円）</label><input id="wf-sell3" type="number" placeholder="例: 3720" inputmode="numeric"></div>
+
+    <!-- 定性情報 -->
+    <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin:10px 0 6px">📰 定性情報</div>
     <div class="wl-fg2">
-      <div class="wl-frow"><label>理論株価PER（円）</label><input id="wf-per" type="number" placeholder="例: 1800" inputmode="numeric"></div>
-      <div class="wl-frow"><label>理論株価PBR（円）</label><input id="wf-pbr" type="number" placeholder="例: 1200" inputmode="numeric"></div>
+      <div class="wl-frow"><label>四季報見出し①</label><input id="wf-shikiho1" placeholder="例: 独自増額"></div>
+      <div class="wl-frow"><label>四季報見出し②</label><input id="wf-shikiho2" placeholder="例: 米国"></div>
+    </div>
+    <div class="wl-fg2">
+      <div class="wl-frow"><label>浮動株比率（%）</label><input id="wf-float" type="number" placeholder="例: 35.5" step="0.1" inputmode="decimal"></div>
+      <div class="wl-frow"><label>ROEの変化</label><input id="wf-roe" placeholder="例: 上昇 15→18%"></div>
     </div>
     <div class="wl-frow"><label>決算発表日</label><input id="wf-earningsDate" type="date" placeholder="例: 2025-07-31"></div>
     <div class="wl-frow"><label>メモ</label><input id="wf-memo" placeholder="例: 業績確認後に購入"></div>
+
     <div class="wl-mbtns">
       <button class="wl-mbtn wl-mbtn-d" id="wl-del-btn" onclick="wlDelete()" style="display:none">削除</button>
       <button class="wl-mbtn" onclick="wlCloseModal()">キャンセル</button>
@@ -6277,6 +6341,83 @@ function wlLoad(){
   }catch{return WL_DEFAULT;}
 }
 function wlSaveData(d){try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}}
+
+// ============================================================
+// 購入検討リスト → CSV ダウンロード
+// ============================================================
+function wlDownloadCSV(){
+  const data=wlLoad();
+  if(!data||!data.length){showToast('データがありません',2000);return;}
+
+  const headers=['コード','業種','銘柄名','口座','株数','指値（円）','現在値（円）',
+    'sell1（円）','sell2（円）','sell3（円）','目標株価（円）',
+    '今期1株益','来期1株益','前期営業利益','今期営業利益','来期営業利益',
+    '前期売上','今期売上','来期売上','実績PER','目標PER','時価総額',
+    '理論株価PER','理論株価PBR','四季報見出し①','四季報見出し②',
+    '浮動株比率','ROEの変化','ステータス','優先度','決算日','メモ'];
+
+  const escape=v=>{
+    if(v==null||v==='')return '';
+    const s=String(v);
+    if(s.includes(',')|| s.includes('"')||s.includes('\n'))
+      return '"'+s.replace(/"/g,'""')+'"';
+    return s;
+  };
+
+  const rows=[headers.join(',')];
+  data.forEach(w=>{
+    rows.push([
+      escape(w.code),
+      escape(w.sector),
+      escape(w.name),
+      escape(w.account),
+      escape(w.shares),
+      escape(w.limit),
+      escape(w.current),
+      escape(w.sell1),
+      escape(w.sell2),
+      escape(w.sell3),
+      escape(w.target),
+      escape(w.eps1),
+      escape(w.eps2),
+      escape(w.op0),
+      escape(w.op1),
+      escape(w.op2),
+      escape(w.sales0),
+      escape(w.sales1),
+      escape(w.sales2),
+      escape(w.actper),
+      escape(w.targetper),
+      escape(w.mktcap),
+      escape(w.per),
+      escape(w.pbr),
+      escape(w.shikiho1),
+      escape(w.shikiho2),
+      escape(w.floatRatio),
+      escape(w.roe),
+      escape(w.status),
+      escape(w.priority),
+      escape(w.earningsDate),
+      escape(w.memo),
+    ].join(','));
+  });
+
+  // BOM付きUTF-8でExcelでも文字化けしないように出力
+  const bom='\uFEFF';
+  const csv=bom+rows.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  const today=new Date();
+  const dateStr=today.getFullYear()+String(today.getMonth()+1).padStart(2,'0')+String(today.getDate()).padStart(2,'0');
+  a.download=`購入検討リスト_${dateStr}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`✅ CSV出力完了（${data.length}件）`,2500);
+}
 function wlUID(){return 'w'+Date.now()+Math.random().toString(36).slice(2,5);}
 function wlFmt(n){if(n==null)return '—';const v=Math.round(n);return v>=10000?'¥'+(v/10000).toFixed(1)+'万':'¥'+v.toLocaleString();}
 function wlFmtEarnings(d){
@@ -6438,8 +6579,15 @@ function wlOpenAdd(){
   wlEditId=null;
   document.getElementById('wl-modal-title').textContent='銘柄を追加';
   document.getElementById('wl-del-btn').style.display='none';
-  ['wf-code','wf-name','wf-memo','wf-earningsDate'].forEach(i=>document.getElementById(i).value='');
-  ['wf-shares','wf-limit','wf-current','wf-target','wf-sell1','wf-sell2','wf-sell3','wf-per','wf-pbr'].forEach(i=>document.getElementById(i).value='');
+  ['wf-code','wf-name','wf-sector','wf-memo','wf-earningsDate',
+   'wf-shikiho1','wf-shikiho2','wf-roe'].forEach(i=>document.getElementById(i).value='');
+  ['wf-shares','wf-limit','wf-current','wf-target',
+   'wf-sell1','wf-sell2','wf-sell3','wf-per','wf-pbr',
+   'wf-eps1','wf-eps2','wf-op0','wf-op1','wf-op2',
+   'wf-sales0','wf-sales1','wf-sales2',
+   'wf-actper','wf-targetper','wf-mktcap','wf-float'].forEach(i=>document.getElementById(i).value='');
+  ['wf-opGrowth','wf-salesGrowth','wf-opMargin','wf-rule40',
+   'wf-target1auto','wf-target2auto','wf-psr'].forEach(i=>{if(document.getElementById(i))document.getElementById(i).value='';});
   document.getElementById('wf-account').value='特定';
   document.getElementById('wf-status').value='購入検討';
   document.getElementById('wf-priority').value='3';
@@ -6467,10 +6615,101 @@ function wlOpenEdit(id){
   document.getElementById('wf-priority').value=s.priority;
   document.getElementById('wf-memo').value=s.memo||'';
   document.getElementById('wf-earningsDate').value=s.earningsDate||'';
+  // 新規項目
+  document.getElementById('wf-sector').value=s.sector||'';
+  document.getElementById('wf-eps1').value=s.eps1||'';
+  document.getElementById('wf-eps2').value=s.eps2||'';
+  document.getElementById('wf-op0').value=s.op0||'';
+  document.getElementById('wf-op1').value=s.op1||'';
+  document.getElementById('wf-op2').value=s.op2||'';
+  document.getElementById('wf-sales0').value=s.sales0||'';
+  document.getElementById('wf-sales1').value=s.sales1||'';
+  document.getElementById('wf-sales2').value=s.sales2||'';
+  document.getElementById('wf-actper').value=s.actper||'';
+  document.getElementById('wf-targetper').value=s.targetper||'';
+  document.getElementById('wf-mktcap').value=s.mktcap||'';
+  document.getElementById('wf-shikiho1').value=s.shikiho1||'';
+  document.getElementById('wf-shikiho2').value=s.shikiho2||'';
+  document.getElementById('wf-float').value=s.floatRatio||'';
+  document.getElementById('wf-roe').value=s.roe||'';
   document.getElementById('wl-modal').classList.add('open');
+  wlCalcAuto();
 }
 
 function wlCloseModal(){document.getElementById('wl-modal').classList.remove('open');}
+
+// ============================================================
+// スプレッドシート互換の自動計算（モーダル内リアルタイム更新）
+// ============================================================
+function wlCalcAuto(){
+  const v=id=>parseFloat(document.getElementById(id)?.value)||0;
+  const eps1=v('wf-eps1'),eps2=v('wf-eps2');
+  const op1=v('wf-op1'),op2=v('wf-op2');
+  const sales0=v('wf-sales0'),sales1=v('wf-sales1'),sales2=v('wf-sales2');
+  const tper=v('wf-targetper'),cur=v('wf-current');
+  const mktcap=v('wf-mktcap');
+
+  // 来期増益率
+  const opGrowthEl=document.getElementById('wf-opGrowth');
+  if(opGrowthEl){
+    if(op1>0&&op2>0){const r=(op2-op1)/op1*100;opGrowthEl.value=(r>=0?'+':'')+r.toFixed(1)+'%';}
+    else opGrowthEl.value='—';
+  }
+
+  // 売上増収率（今期 vs 前期）
+  const salesGrowthEl=document.getElementById('wf-salesGrowth');
+  if(salesGrowthEl){
+    if(sales0>0&&sales1>0){const r=(sales1-sales0)/sales0*100;salesGrowthEl.value=(r>=0?'+':'')+r.toFixed(1)+'%';}
+    else salesGrowthEl.value='—';
+  }
+
+  // 利益率（今期営業利益 / 今期売上）
+  const opMarginEl=document.getElementById('wf-opMargin');
+  if(opMarginEl){
+    if(op1>0&&sales1>0){opMarginEl.value=(op1/sales1*100).toFixed(1)+'%';}
+    else opMarginEl.value='—';
+  }
+
+  // 40%ルール = 売上増収率 + 利益率
+  const rule40El=document.getElementById('wf-rule40');
+  if(rule40El){
+    if(sales0>0&&sales1>0&&op1>0){
+      const rev=(sales1-sales0)/sales0*100;
+      const margin=op1/sales1*100;
+      rule40El.value=(rev+margin).toFixed(1)+'%';
+    }else rule40El.value='—';
+  }
+
+  // 目標株価①中間 = (今期1株益 + 来期1株益) / 2 × 目標PER
+  const t1El=document.getElementById('wf-target1auto');
+  if(t1El){
+    if(eps1>0&&eps2>0&&tper>0){
+      const v1=Math.round((eps1+eps2)/2*tper);
+      t1El.value='¥'+v1.toLocaleString();
+      // 上昇率も計算して表示
+      if(cur>0){const r=(v1-cur)/cur*100;t1El.value+=' ('+(r>=0?'+':'')+r.toFixed(0)+'%)';}
+    }else t1El.value='—';
+  }
+
+  // 目標株価②PER = 来期1株益 × 目標PER
+  const t2El=document.getElementById('wf-target2auto');
+  if(t2El){
+    if(eps2>0&&tper>0){
+      const v2=Math.round(eps2*tper);
+      t2El.value='¥'+v2.toLocaleString();
+      if(cur>0){const r=(v2-cur)/cur*100;t2El.value+=' ('+(r>=0?'+':'')+r.toFixed(0)+'%)';}
+    }else t2El.value='—';
+  }
+
+  // PSR = 時価総額 / 今期売上
+  const psrEl=document.getElementById('wf-psr');
+  if(psrEl){
+    if(mktcap>0&&sales1>0){psrEl.value=(mktcap/sales1).toFixed(1)+'倍';}
+    else psrEl.value='—';
+  }
+}
+
+
 
 function wlSave(){
   const name=document.getElementById('wf-name').value.trim();
@@ -6480,6 +6719,7 @@ function wlSave(){
   const item={
     id:wlEditId||wlUID(),
     code:document.getElementById('wf-code').value.trim(),
+    sector:document.getElementById('wf-sector').value.trim(),
     name,shares,
     limit:parseFloat(document.getElementById('wf-limit').value)||null,
     current:parseFloat(document.getElementById('wf-current').value)||null,
@@ -6494,6 +6734,22 @@ function wlSave(){
     per:parseFloat(document.getElementById('wf-per').value)||null,
     pbr:parseFloat(document.getElementById('wf-pbr').value)||null,
     earningsDate:document.getElementById('wf-earningsDate').value||'',
+    // 新規項目
+    eps1:parseFloat(document.getElementById('wf-eps1').value)||null,
+    eps2:parseFloat(document.getElementById('wf-eps2').value)||null,
+    op0:parseFloat(document.getElementById('wf-op0').value)||null,
+    op1:parseFloat(document.getElementById('wf-op1').value)||null,
+    op2:parseFloat(document.getElementById('wf-op2').value)||null,
+    sales0:parseFloat(document.getElementById('wf-sales0').value)||null,
+    sales1:parseFloat(document.getElementById('wf-sales1').value)||null,
+    sales2:parseFloat(document.getElementById('wf-sales2').value)||null,
+    actper:parseFloat(document.getElementById('wf-actper').value)||null,
+    targetper:parseFloat(document.getElementById('wf-targetper').value)||null,
+    mktcap:parseFloat(document.getElementById('wf-mktcap').value)||null,
+    shikiho1:document.getElementById('wf-shikiho1').value.trim(),
+    shikiho2:document.getElementById('wf-shikiho2').value.trim(),
+    floatRatio:parseFloat(document.getElementById('wf-float').value)||null,
+    roe:document.getElementById('wf-roe').value.trim(),
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
