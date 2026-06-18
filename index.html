@@ -6167,6 +6167,7 @@ function jpDeleteSell(id) {
       <button class="wl-add-btn" onclick="wlSyncFromSheet()" style="font-size:12px;padding:5px 10px">↓ 読込</button>
       <button class="wl-add-btn" onclick="wlSyncToSheet()" style="font-size:12px;padding:5px 10px">↑ 保存</button>
       <button class="wl-add-btn" onclick="wlDownloadCSV()" style="font-size:12px;padding:5px 10px">↓ CSV</button>
+      <button class="wl-add-btn" onclick="wlExportToAnalysisSheet()" style="font-size:12px;padding:5px 10px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer">📊 分析SSへ書込</button>
       <button class="wl-add-btn" onclick="wlOpenAdd()">＋ 追加</button>
     </div>
   </div>
@@ -6448,6 +6449,92 @@ function wlDownloadCSV(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast(`✅ CSV出力完了（${data.length}件）`,2500);
+}
+
+// ============================================================
+// 分析用スプレッドシートへ書き込み
+// ============================================================
+const WL_ANALYSIS_SS_ID='1BqxJ969GJJ1TweGFjs9pUHvnJOVzHKZ9o4pmlZk_Sag';
+const WL_ANALYSIS_SHEET='フォーマット（コピーして使用）';
+
+async function wlExportToAnalysisSheet(){
+  const token=gapi.client&&gapi.client.getToken&&gapi.client.getToken();
+  if(!token){showToast('⚠️ Googleログインが必要です。右上からログインしてください。',3000);return;}
+
+  const data=wlLoad();
+  if(!data||!data.length){showToast('データがありません',2000);return;}
+
+  showToast('📊 スプレッドシートに書き込み中...',2000);
+
+  try{
+    const rows=data.map(w=>[
+      w.sector||'',
+      w.code||'',
+      w.name||'',
+      w.current||'',
+      w.actper||'',
+      w.eps1||'',
+      w.eps2||'',
+      '',
+      '',
+      '',
+      w.op0||'',
+      w.op1||'',
+      w.op2||'',
+      '',
+      '',
+      w.targetper||'',
+      '',
+      '',
+      '',
+      w.shikiho1||'',
+      w.shikiho2||'',
+      w.sales1||'',
+      w.mktcap||'',
+      '',
+      w.sales0||'',
+      w.sales1||'',
+      w.sales2||'',
+      '',
+      w.op1||'',
+      '',
+      '',
+      '',
+      '',
+      w.earningsDate||'',
+      '',
+      '',
+      w.floatRatio||'',
+      '',
+      w.roe||'',
+    ]);
+
+    const writeRange=WL_ANALYSIS_SHEET+'!A3:AM'+(rows.length+2);
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:WL_ANALYSIS_SS_ID,
+      range:writeRange,
+      valueInputOption:'USER_ENTERED',
+      resource:{values:rows}
+    });
+
+    const clearFrom=rows.length+3;
+    if(clearFrom<=500){
+      await gapi.client.sheets.spreadsheets.values.clear({
+        spreadsheetId:WL_ANALYSIS_SS_ID,
+        range:WL_ANALYSIS_SHEET+'!A'+clearFrom+':AM500'
+      });
+    }
+
+    showToast('✅ 分析SSに'+data.length+'件書き込みました',3000);
+    setTimeout(function(){
+      window.open('https://docs.google.com/spreadsheets/d/'+WL_ANALYSIS_SS_ID+'/edit#gid=1758074893','_blank');
+    },500);
+
+  }catch(e){
+    console.error('分析SS書き込みエラー',e);
+    const msg=(e.result&&e.result.error)?e.result.error.message:String(e);
+    showToast('❌ 書き込みエラー: '+msg,5000);
+  }
 }
 function wlUID(){return 'w'+Date.now()+Math.random().toString(36).slice(2,5);}
 function wlFmt(n){if(n==null)return '—';const v=Math.round(n);return v>=10000?'¥'+(v/10000).toFixed(1)+'万':'¥'+v.toLocaleString();}
