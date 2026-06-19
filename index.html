@@ -783,21 +783,20 @@ tr:last-child td{border-bottom:none}
     <div class="card" id="gainLineCard" style="display:none">
       <div class="card-head"><h2>📈 投資結果（損益）推移</h2></div>
       <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainLineSummary"></div>
-      <!-- 左右グラフ -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0 0 4px">
-        <div style="border-right:0.5px solid var(--border);padding:0 0 8px">
-          <div style="padding:4px 12px 2px;font-size:12px;font-weight:700;color:var(--text2)">📈 個別株・高配当</div>
-          <div style="padding:0 12px 4px;font-size:11px;color:var(--text3)" id="gainLineStockSummary"></div>
-          <div style="position:relative;height:180px;padding:0 4px"><canvas id="gainLineStockChart"></canvas></div>
-        </div>
-        <div style="padding:0 0 8px">
-          <div style="padding:4px 12px 2px;font-size:12px;font-weight:700;color:var(--text2)">🌍 インデックス</div>
-          <div style="padding:0 12px 4px;font-size:11px;color:var(--text3)" id="gainLineIndexSummary"></div>
-          <div style="position:relative;height:180px;padding:0 4px"><canvas id="gainLineIndexChart"></canvas></div>
-        </div>
+      <!-- 株グラフ -->
+      <div style="padding:0 0 4px;border-bottom:0.5px solid var(--border)">
+        <div style="padding:4px 16px 2px;font-size:12px;font-weight:700;color:var(--text2)">📈 個別株・高配当</div>
+        <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="gainLineStockSummary"></div>
+        <div style="position:relative;height:160px;padding:0 8px"><canvas id="gainLineStockChart"></canvas></div>
       </div>
-      <!-- 合算グラフ（全体） -->
-      <div style="padding:4px 16px 2px;border-top:0.5px solid var(--border)">
+      <!-- インデックスグラフ -->
+      <div style="padding:0 0 4px;border-bottom:0.5px solid var(--border)">
+        <div style="padding:4px 16px 2px;font-size:12px;font-weight:700;color:var(--text2)">🌍 インデックス</div>
+        <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="gainLineIndexSummary"></div>
+        <div style="position:relative;height:160px;padding:0 8px"><canvas id="gainLineIndexChart"></canvas></div>
+      </div>
+      <!-- 合算グラフ -->
+      <div style="padding:4px 16px 2px">
         <div style="font-size:12px;font-weight:700;color:var(--text2)">💰 合算（株＋インデックス）</div>
       </div>
       <div style="position:relative;height:200px;padding:0 8px 8px"><canvas id="gainLineChart"></canvas></div>
