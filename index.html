@@ -852,6 +852,11 @@ tr:last-child td{border-bottom:none}
       <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutJpSummary"></div>
       <div class="chart-container" style="min-height:240px"><canvas id="donutJpChart"></canvas></div>
     </div>
+    <div class="card" id="donutIndiaCard" style="display:none">
+      <div class="card-head"><h2>🇮🇳 インドインデックス 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutIndiaSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutIndiaChart"></canvas></div>
+    </div>
     <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
     <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前月比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
     <div style="display:none;margin-bottom:12px" id="exportBar">
@@ -3984,7 +3989,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -4068,7 +4073,10 @@ function trRenderCharts(){
     ];
     function buildDonut(canvasId,cardId,summaryId,catName,tickColor,isDark){
       trDestroyChart(canvasId);
-      const accs=(amAccounts||[]).filter(a=>a.cat===catName&&(a.amount||0)>0);
+      // 評価額降順でソート
+      const accs=(amAccounts||[])
+        .filter(a=>a.cat===catName&&(a.amount||0)>0)
+        .sort((a,b)=>b.amount-a.amount);
       const card=document.getElementById(cardId);
       if(!accs.length){if(card)card.style.display='none';return;}
       if(card)card.style.display='block';
@@ -4078,32 +4086,69 @@ function trRenderCharts(){
       const colors=accs.map((_,i)=>PALETTE[i%PALETTE.length]);
       const sumEl=document.getElementById(summaryId);
       if(sumEl)sumEl.textContent='合計 '+trFmt(total)+' / '+accs.length+'銘柄';
+      // グラフ高さを銘柄数に応じて調整（凡例が多い場合に備える）
+      const legendRows=Math.ceil(accs.length/3);
+      const chartH=Math.max(260,220+legendRows*20);
+      const wrap=document.getElementById(canvasId)?.parentElement;
+      if(wrap)wrap.style.minHeight=chartH+'px';
       chartInstances[canvasId]=new Chart(document.getElementById(canvasId),{
         type:'doughnut',
         data:{labels:labels2,datasets:[{data:data2,backgroundColor:colors,borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},
         options:{
           responsive:true,
           plugins:{
-            legend:{position:'bottom',labels:{font:{size:11},padding:6,boxWidth:10,usePointStyle:true,color:tickColor}},
+            legend:{
+              position:'bottom',
+              labels:{
+                font:{size:11},padding:8,boxWidth:10,usePointStyle:true,color:tickColor,
+                // 凡例も銘柄名をフルで表示
+                generateLabels:chart=>{
+                  const ds=chart.data.datasets[0];
+                  return chart.data.labels.map((lbl,i)=>{
+                    const v=ds.data[i];
+                    const t=ds.data.reduce((a,b)=>a+b,0);
+                    const p=(v/t*100).toFixed(1);
+                    return{
+                      text:lbl+' '+p+'%',
+                      fillStyle:ds.backgroundColor[i],
+                      strokeStyle:ds.borderColor||'#fff',
+                      lineWidth:1,
+                      hidden:false,
+                      index:i
+                    };
+                  });
+                }
+              }
+            },
             tooltip:{enabled:true,callbacks:{label:ctx=>{
               const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
               const p=(ctx.raw/t*100).toFixed(1);
               return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';
             }},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},
             datalabels:{
-              color:'#fff',font:{size:10,weight:'600'},
-              textShadowBlur:2,textShadowColor:'rgba(0,0,0,0.5)',
+              color:'#fff',
+              font:(ctx)=>{
+                // スライスが大きいほど文字を大きく
+                const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
+                const p=ctx.dataset.data[ctx.dataIndex]/t*100;
+                return{size:p>=10?12:p>=7?10:9,weight:'600'};
+              },
+              textShadowBlur:3,textShadowColor:'rgba(0,0,0,0.7)',
               formatter:(v,ctx)=>{
                 const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
                 const p=(v/t*100);
+                // 5%未満は非表示
                 if(p<5)return'';
                 const name=labels2[ctx.dataIndex];
-                const short=name.length>7?name.slice(0,6)+'…':name;
+                // スライスサイズに応じて表示文字数を調整
+                const maxLen=p>=15?12:p>=10?9:p>=7?7:5;
+                const short=name.length>maxLen?name.slice(0,maxLen-1)+'…':name;
                 return short+'\n'+p.toFixed(1)+'%';
               }
             }
           },
-          cutout:'55%'
+          cutout:'52%',
+          layout:{padding:8}
         },
         plugins:[ChartDataLabels]
       });
@@ -4112,6 +4157,7 @@ function trRenderCharts(){
     buildDonut('donutDivChart','donutDivCard','donutDivSummary','高配当',tickColor,isDark);
     buildDonut('donutGlobalChart','donutGlobalCard','donutGlobalSummary','全世界インデックス',tickColor,isDark);
     buildDonut('donutJpChart','donutJpCard','donutJpSummary','日本インデックス',tickColor,isDark);
+    buildDonut('donutIndiaChart','donutIndiaCard','donutIndiaSummary','インドインデックス',tickColor,isDark);
   })();
   trRenderGainLineChart(filtered,labels,tickColor,gridColor);
   trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
