@@ -4063,59 +4063,119 @@ function trRenderCharts(){
   const TR_DONUT_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
   const latest=filtered[filtered.length-1];
   const catEntries=TR_DONUT_CAT_ORDER.filter(c=>latest.cats[c]>0).map(c=>[c,latest.cats[c]]).concat(Object.entries(latest.cats).filter(([c,v])=>v>0&&!TR_DONUT_CAT_ORDER.includes(c)).sort((a,b)=>b[1]-a[1]));
-  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels]});
-  // ── 銘柄別保有円グラフ（4種） ──
+  // 最新内訳donutの中央テキストプラグイン
+  const donutCenterPlugin={id:'donutCenter',afterDraw(chart){
+    const{ctx,chartArea:{top,bottom,left,right}}=chart;
+    const total=chart.config.options.plugins.donutCenter?.total;
+    const color=chart.config.options.plugins.donutCenter?.color||'#333';
+    if(!total)return;
+    const cx=(left+right)/2,cy=(top+bottom)/2;
+    ctx.save();
+    ctx.font='bold 13px sans-serif';ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(Math.round(total/10000).toLocaleString()+'万円',cx,cy-9);
+    ctx.font='10px sans-serif';ctx.fillStyle=color+'99';
+    ctx.fillText('評価総額',cx,cy+10);
+    ctx.restore();
+  }};
+  const donutTotal=catEntries.reduce((s,[,v])=>s+v,0);
+  const donutTextColor=isDark?'#e5e5ea':'#1c1c1e';
+  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{donutCenter:{total:donutTotal,color:donutTextColor},legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels,donutCenterPlugin]});
+  // ── 銘柄別保有円グラフ（5種）──
   (function renderBrandDonuts(){
     const PALETTE=[
       '#E24B4A','#2980b9','#0F6E56','#EF9F27','#8B5CF6','#D4537E','#185FA5','#27AE60',
       '#E67E22','#1ABC9C','#9B59B6','#F39C12','#2ECC71','#E74C3C','#3498DB','#1F618D',
       '#A93226','#117A65','#7D3C98','#B7950B','#1A5276','#4A235A','#0E6655','#784212'
     ];
+
+    // ── 中央合計テキストを描画するカスタムプラグイン ──
+    const centerTextPlugin={
+      id:'centerText',
+      afterDraw(chart){
+        const{ctx,chartArea:{top,bottom,left,right}}=chart;
+        const total=chart.config.options.plugins.centerText?.total;
+        const label=chart.config.options.plugins.centerText?.label||'合計';
+        const color=chart.config.options.plugins.centerText?.color||'#333';
+        if(!total)return;
+        const cx=(left+right)/2, cy=(top+bottom)/2;
+        ctx.save();
+        // 合計金額
+        const totalStr=Math.round(total/10000).toLocaleString()+'万円';
+        ctx.font='bold 14px sans-serif';
+        ctx.fillStyle=color;
+        ctx.textAlign='center';
+        ctx.textBaseline='middle';
+        ctx.fillText(totalStr,cx,cy-9);
+        // ラベル
+        ctx.font='11px sans-serif';
+        ctx.fillStyle=color+'99';
+        ctx.fillText(label,cx,cy+11);
+        ctx.restore();
+      }
+    };
+
+    // ── 銘柄名を正規化（末尾の「（日付買付）」「2」等を除いた基本名を返す） ──
+    function baseName(name){
+      return name
+        .replace(/（\d{4}\/\d{2}\/\d{2}買付[^）]*）/g,'')  // （2026/06/17買付）
+        .replace(/\s*買付\d*$/,'')
+        .replace(/\s+\d+$/,'')   // 末尾の連番 " 2" など
+        .trim();
+    }
+
     function buildDonut(canvasId,cardId,summaryId,catName,tickColor,isDark){
       trDestroyChart(canvasId);
-      // 評価額降順でソート
-      const accs=(amAccounts||[])
-        .filter(a=>a.cat===catName&&(a.amount||0)>0)
-        .sort((a,b)=>b.amount-a.amount);
+      const raw=(amAccounts||[]).filter(a=>a.cat===catName&&(a.amount||0)>0);
       const card=document.getElementById(cardId);
-      if(!accs.length){if(card)card.style.display='none';return;}
+      if(!raw.length){if(card)card.style.display='none';return;}
       if(card)card.style.display='block';
-      const total=accs.reduce((s,a)=>s+a.amount,0);
-      const labels2=accs.map(a=>a.name);
-      const data2=accs.map(a=>a.amount);
-      const colors=accs.map((_,i)=>PALETTE[i%PALETTE.length]);
+
+      // ── 同一銘柄（baseName一致）を集約 ──
+      const merged={};
+      raw.forEach(a=>{
+        const key=baseName(a.name);
+        if(!merged[key])merged[key]=0;
+        merged[key]+=a.amount;
+      });
+
+      // 評価額降順でソート
+      const entries=Object.entries(merged).sort((a,b)=>b[1]-a[1]);
+      const labels2=entries.map(([n])=>n);
+      const data2=entries.map(([,v])=>v);
+      const colors=entries.map((_,i)=>PALETTE[i%PALETTE.length]);
+      const total=data2.reduce((s,v)=>s+v,0);
+      const mergedCount=entries.length;
+      const rawCount=raw.length;
+
       const sumEl=document.getElementById(summaryId);
-      if(sumEl)sumEl.textContent='合計 '+trFmt(total)+' / '+accs.length+'銘柄';
-      // グラフ高さを銘柄数に応じて調整（凡例が多い場合に備える）
-      const legendRows=Math.ceil(accs.length/3);
-      const chartH=Math.max(260,220+legendRows*20);
+      if(sumEl)sumEl.textContent='合計 '+trFmt(total)+' / '+mergedCount+'銘柄'+(rawCount>mergedCount?' ('+rawCount+'口座)':'');
+
+      // グラフ高さを銘柄数に応じて調整
+      const legendRows=Math.ceil(mergedCount/2);
+      const chartH=Math.max(300,260+legendRows*22);
       const wrap=document.getElementById(canvasId)?.parentElement;
       if(wrap)wrap.style.minHeight=chartH+'px';
+
+      const textColor=isDark?'#e5e5ea':'#1c1c1e';
+
       chartInstances[canvasId]=new Chart(document.getElementById(canvasId),{
         type:'doughnut',
         data:{labels:labels2,datasets:[{data:data2,backgroundColor:colors,borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},
         options:{
           responsive:true,
           plugins:{
+            centerText:{total,label:mergedCount+'銘柄',color:textColor},
             legend:{
               position:'bottom',
               labels:{
-                font:{size:11},padding:8,boxWidth:10,usePointStyle:true,color:tickColor,
-                // 凡例も銘柄名をフルで表示
+                font:{size:11},padding:10,boxWidth:10,usePointStyle:true,color:tickColor,
                 generateLabels:chart=>{
                   const ds=chart.data.datasets[0];
                   return chart.data.labels.map((lbl,i)=>{
                     const v=ds.data[i];
                     const t=ds.data.reduce((a,b)=>a+b,0);
                     const p=(v/t*100).toFixed(1);
-                    return{
-                      text:lbl+' '+p+'%',
-                      fillStyle:ds.backgroundColor[i],
-                      strokeStyle:ds.borderColor||'#fff',
-                      lineWidth:1,
-                      hidden:false,
-                      index:i
-                    };
+                    return{text:lbl+' '+p+'%',fillStyle:ds.backgroundColor[i],strokeStyle:'transparent',lineWidth:0,hidden:false,index:i};
                   });
                 }
               }
@@ -4124,35 +4184,33 @@ function trRenderCharts(){
               const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
               const p=(ctx.raw/t*100).toFixed(1);
               return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';
-            }},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},
+            }},backgroundColor:'rgba(0,0,0,0.8)',padding:10,cornerRadius:8,displayColors:true},
             datalabels:{
               color:'#fff',
-              font:(ctx)=>{
-                // スライスが大きいほど文字を大きく
+              font:ctx=>{
                 const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
                 const p=ctx.dataset.data[ctx.dataIndex]/t*100;
-                return{size:p>=10?12:p>=7?10:9,weight:'600'};
+                return{size:p>=15?13:p>=10?11:p>=7?10:9,weight:'700'};
               },
-              textShadowBlur:3,textShadowColor:'rgba(0,0,0,0.7)',
+              textShadowBlur:4,textShadowColor:'rgba(0,0,0,0.8)',
               formatter:(v,ctx)=>{
                 const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
                 const p=(v/t*100);
-                // 5%未満は非表示
                 if(p<5)return'';
                 const name=labels2[ctx.dataIndex];
-                // スライスサイズに応じて表示文字数を調整
-                const maxLen=p>=15?12:p>=10?9:p>=7?7:5;
+                const maxLen=p>=20?14:p>=12?10:p>=8?8:6;
                 const short=name.length>maxLen?name.slice(0,maxLen-1)+'…':name;
                 return short+'\n'+p.toFixed(1)+'%';
               }
             }
           },
-          cutout:'52%',
-          layout:{padding:8}
+          cutout:'58%',
+          layout:{padding:10}
         },
-        plugins:[ChartDataLabels]
+        plugins:[ChartDataLabels,centerTextPlugin]
       });
     }
+
     buildDonut('donutStockChart','donutStockCard','donutStockSummary','個別株',tickColor,isDark);
     buildDonut('donutDivChart','donutDivCard','donutDivSummary','高配当',tickColor,isDark);
     buildDonut('donutGlobalChart','donutGlobalCard','donutGlobalSummary','全世界インデックス',tickColor,isDark);
