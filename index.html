@@ -4062,7 +4062,8 @@ function trRenderCharts(){
   const TR_DONUT_CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
   const TR_DONUT_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
   const latest=filtered[filtered.length-1];
-  const catEntries=TR_DONUT_CAT_ORDER.filter(c=>latest.cats[c]>0).map(c=>[c,latest.cats[c]]).concat(Object.entries(latest.cats).filter(([c,v])=>v>0&&!TR_DONUT_CAT_ORDER.includes(c)).sort((a,b)=>b[1]-a[1]));
+  // 金額降順でソート（固定カテゴリ順を廃止）
+  const catEntries=Object.entries(latest.cats).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   // 最新内訳donutの中央テキストプラグイン
   const donutCenterPlugin={id:'donutCenter',afterDraw(chart){
     const{ctx,chartArea:{top,bottom,left,right}}=chart;
