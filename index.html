@@ -788,19 +788,19 @@ tr:last-child td{border-bottom:none}
         <div style="border-right:0.5px solid var(--border);padding:0 0 8px">
           <div style="padding:4px 12px 2px;font-size:12px;font-weight:700;color:var(--text2)">📈 個別株・高配当</div>
           <div style="padding:0 12px 4px;font-size:11px;color:var(--text3)" id="gainLineStockSummary"></div>
-          <div class="chart-container" style="height:200px;padding:0 4px"><canvas id="gainLineStockChart"></canvas></div>
+          <div style="position:relative;height:180px;padding:0 4px"><canvas id="gainLineStockChart"></canvas></div>
         </div>
         <div style="padding:0 0 8px">
           <div style="padding:4px 12px 2px;font-size:12px;font-weight:700;color:var(--text2)">🌍 インデックス</div>
           <div style="padding:0 12px 4px;font-size:11px;color:var(--text3)" id="gainLineIndexSummary"></div>
-          <div class="chart-container" style="height:200px;padding:0 4px"><canvas id="gainLineIndexChart"></canvas></div>
+          <div style="position:relative;height:180px;padding:0 4px"><canvas id="gainLineIndexChart"></canvas></div>
         </div>
       </div>
       <!-- 合算グラフ（全体） -->
       <div style="padding:4px 16px 2px;border-top:0.5px solid var(--border)">
         <div style="font-size:12px;font-weight:700;color:var(--text2)">💰 合算（株＋インデックス）</div>
       </div>
-      <div class="chart-container" style="height:180px"><canvas id="gainLineChart"></canvas></div>
+      <div style="position:relative;height:200px;padding:0 8px 8px"><canvas id="gainLineChart"></canvas></div>
     </div>
     <!-- 最新日の銘柄別損益（プラス/マイナス） -->
     <div class="card" id="gainBarCard" style="display:none">
@@ -4121,178 +4121,160 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   trDestroyChart('gainLineIndex');
   const card=document.getElementById('gainLineCard');
   const summaryEl=document.getElementById('gainLineSummary');
-  const canvasWrap=document.getElementById('gainLineChart')?.parentElement;
 
-  const gainData=filtered.map(s=>trCalcSnapshotGain(s));
+  // 全銘柄・株のみ・インデックスのみ で損益計算
+  const gainData     =filtered.map(s=>trCalcSnapshotGain(s,false,null));
+  const gainDataStock=filtered.map(s=>trCalcSnapshotGain(s,false,'stock'));
+  const gainDataIndex=filtered.map(s=>trCalcSnapshotGain(s,false,'index'));
+
   const validIdx=gainData.map((g,i)=>g?i:null).filter(i=>i!==null);
 
   if(validIdx.length===0){
     card.style.display='block';
-    if(canvasWrap)canvasWrap.style.display='none';
-    if(summaryEl)summaryEl.innerHTML=`<span style="color:var(--text3)">取得単価が入力された口座を含む記録がまだありません。</span>`;
+    if(summaryEl)summaryEl.innerHTML='<span style="color:var(--text3)">取得単価が入力された口座を含む記録がまだありません。</span>';
     return;
   }
-  if(canvasWrap)canvasWrap.style.display='block';
   card.style.display='block';
 
-  // 最新ポイントが今日ならamAccountsで再計算
+  // 最新ポイントが今日 → amAccountsで上書き
   const lastValidIdx=validIdx[validIdx.length-1];
   if(filtered[lastValidIdx].date===todayStr()){
-    const cur=trCalcSnapshotGain(filtered[lastValidIdx],true);
+    const cur =trCalcSnapshotGain(filtered[lastValidIdx],true,null);
     const curS=trCalcSnapshotGain(filtered[lastValidIdx],true,'stock');
     const curI=trCalcSnapshotGain(filtered[lastValidIdx],true,'index');
-    if(cur)gainData[lastValidIdx]=cur;
+    if(cur) gainData[lastValidIdx]=cur;
     if(curS)gainDataStock[lastValidIdx]=curS;
     if(curI)gainDataIndex[lastValidIdx]=curI;
   }
 
-  const gainDataStock=filtered.map(s=>trCalcSnapshotGain(s,false,'stock'));
-  const gainDataIndex=filtered.map(s=>trCalcSnapshotGain(s,false,'index'));
-  // 最新が今日なら再計算
-  if(filtered[lastValidIdx].date===todayStr()){
-    const curS=trCalcSnapshotGain(filtered[lastValidIdx],true,'stock');
-    const curI=trCalcSnapshotGain(filtered[lastValidIdx],true,'index');
-    if(curS)gainDataStock[lastValidIdx]=curS;
-    if(curI)gainDataIndex[lastValidIdx]=curI;
-  }
+  const gLabels    =validIdx.map(i=>labels[i]);
+  const gainLine   =validIdx.map(i=>gainData[i]      ?gainData[i].gain      :null);
+  const pctLine    =validIdx.map(i=>gainData[i]      ?gainData[i].pct       :0);
+  const stockLine  =validIdx.map(i=>gainDataStock[i] ?gainDataStock[i].gain :null);
+  const stockPctLine=validIdx.map(i=>gainDataStock[i]?gainDataStock[i].pct  :0);
+  const indexLine  =validIdx.map(i=>gainDataIndex[i] ?gainDataIndex[i].gain :null);
+  const indexPctLine=validIdx.map(i=>gainDataIndex[i]?gainDataIndex[i].pct  :0);
 
-  const gLabels=validIdx.map(i=>labels[i]);
-  const gainLine=validIdx.map(i=>gainData[i]?gainData[i].gain:null);
-  const pctLine=validIdx.map(i=>gainData[i]?gainData[i].pct:0);
-  const stockLine=validIdx.map(i=>gainDataStock[i]?gainDataStock[i].gain:null);
-  const stockPctLine=validIdx.map(i=>gainDataStock[i]?gainDataStock[i].pct:0);
-  const indexLine=validIdx.map(i=>gainDataIndex[i]?gainDataIndex[i].gain:null);
-  const indexPctLine=validIdx.map(i=>gainDataIndex[i]?gainDataIndex[i].pct:0);
-
-  const latest=gainData[lastValidIdx];
   const latestS=gainDataStock[lastValidIdx];
   const latestI=gainDataIndex[lastValidIdx];
 
-  // ── サマリー（除外情報のみ） ──
+  // ── 除外バナー ──
   if(summaryEl){
     let html='';
     if(trGainExcludeNames.length>0){
-      html+=`<span style="font-size:11px">🚫 除外中: ${trGainExcludeNames.map(n=>esc(n)).join('・')} <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="trGainExcludeNames=[];trSaveGainExclude();trRenderAll();">すべて解除</span></span>`;
+      html=`<span style="font-size:11px">🚫 除外中: ${trGainExcludeNames.map(n=>esc(n)).join('・')} <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="trGainExcludeNames=[];trSaveGainExclude();trRenderAll();">すべて解除</span></span>`;
     }
     summaryEl.innerHTML=html;
   }
 
   // ── 株サマリー ──
   const stockSumEl=document.getElementById('gainLineStockSummary');
-  if(stockSumEl&&latestS){
-    const sign=latestS.gain>=0?'+':'';
-    const col=latestS.gain>=0?'var(--green)':'var(--danger)';
-    stockSumEl.innerHTML=`最新: <b style="color:${col}">${sign}${trFmt(latestS.gain)}（${sign}${latestS.pct.toFixed(1)}%）</b>`;
+  if(stockSumEl){
+    if(latestS){
+      const s=latestS.gain>=0?'+':'';const c=latestS.gain>=0?'var(--green)':'var(--danger)';
+      stockSumEl.innerHTML=`最新: <b style="color:${c}">${s}${trFmt(latestS.gain)}（${s}${latestS.pct.toFixed(1)}%）</b>`;
+    }else{stockSumEl.innerHTML='';}
   }
 
   // ── インデックスサマリー ──
   const indexSumEl=document.getElementById('gainLineIndexSummary');
-  if(indexSumEl&&latestI){
-    const sign=latestI.gain>=0?'+':'';
-    const col=latestI.gain>=0?'var(--green)':'var(--danger)';
-    indexSumEl.innerHTML=`最新: <b style="color:${col}">${sign}${trFmt(latestI.gain)}（${sign}${latestI.pct.toFixed(1)}%）</b>`;
+  if(indexSumEl){
+    if(latestI){
+      const s=latestI.gain>=0?'+':'';const c=latestI.gain>=0?'var(--green)':'var(--danger)';
+      indexSumEl.innerHTML=`最新: <b style="color:${c}">${s}${trFmt(latestI.gain)}（${s}${latestI.pct.toFixed(1)}%）</b>`;
+    }else{indexSumEl.innerHTML='';}
   }
 
-  // ── グラフ生成サブ関数 ──
-  function makeLineChart(canvasId,key,data,pctData,color,fillPos,fillNeg){
-    trDestroyChart(key);
+  // ── サブグラフ生成 ──
+  function makeLineChart(canvasId,key,data,pctData,lineColor,fillColor){
     const canvas=document.getElementById(canvasId);
     if(!canvas)return;
-    const hasData=data.some(v=>v!==null&&v!==undefined);
-    if(!hasData){canvas.parentElement.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:11px;color:var(--text3)">データなし</div>';return;}
+    const hasData=data.some(v=>v!==null);
+    if(!hasData){
+      canvas.style.display='none';
+      const msg=canvas.parentElement.querySelector('.no-data-msg');
+      if(!msg){const d=document.createElement('div');d.className='no-data-msg';d.style.cssText='text-align:center;padding:40px 0;font-size:12px;color:var(--text3)';d.textContent='データなし（記録がありません）';canvas.parentElement.appendChild(d);}
+      return;
+    }
+    canvas.style.display='';
     chartInstances[key]=new Chart(canvas,{
       type:'line',
       data:{labels:gLabels,datasets:[{
-        label:'損益額',data,
-        borderColor:color,
-        backgroundColor:data.map(v=>v===null?'transparent':v>=0?fillPos:fillNeg),
-        borderWidth:2,pointRadius:3,
-        pointBackgroundColor:data.map(v=>v===null?'transparent':v>=0?color:'#C0392B'),
-        fill:true,tension:0.25,
-        segment:{borderColor:ctx=>{
-          const v0=ctx.p0.parsed.y,v1=ctx.p1.parsed.y;
-          return(v0<0||v1<0)?'#C0392B':color;
-        }}
+        label:'損益',data,
+        borderColor:lineColor,
+        backgroundColor:data.map(v=>v===null?'transparent':v>=0?fillColor:'rgba(192,57,43,0.10)'),
+        borderWidth:2.5,pointRadius:3,pointHoverRadius:5,
+        pointBackgroundColor:data.map(v=>v===null?'transparent':v>=0?lineColor:'#C0392B'),
+        fill:true,tension:0.25,spanGaps:false,
+        segment:{borderColor:ctx=>(ctx.p0.parsed.y<0||ctx.p1.parsed.y<0)?'#C0392B':lineColor}
       }]},
       options:{
         responsive:true,maintainAspectRatio:false,
         plugins:{
           legend:{display:false},
           tooltip:{callbacks:{label:ctx=>{
-            const idx=ctx.dataIndex;
-            const v=data[idx];const p=pctData[idx];
+            const v=data[ctx.dataIndex];const p=pctData[ctx.dataIndex];
             if(v===null)return'';
-            const sign=v>=0?'+':'';
-            return[`損益: ${sign}${trFmt(v)}`,`損益率: ${sign}${p.toFixed(1)}%`];
+            const s=v>=0?'+':'';
+            return[`損益: ${s}${trFmt(v)}`,`損益率: ${s}${p.toFixed(1)}%`];
           }}},
           datalabels:{display:false}
         },
         scales:{
-          y:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:9}},grid:{color:gridColor},grace:'10%'},
-          x:{ticks:{color:tickColor,font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:6},grid:{display:false}}
+          y:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:9}},grid:{color:gridColor},grace:'15%'},
+          x:{ticks:{color:tickColor,font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:5},grid:{display:false}}
         },
-        layout:{padding:{top:4,right:4,left:0,bottom:0}}
+        layout:{padding:{top:4,right:50,left:0,bottom:0}}
       },
       plugins:[ChartDataLabels]
     });
   }
 
   makeLineChart('gainLineStockChart','gainLineStock',stockLine,stockPctLine,
-    '#E24B4A','rgba(226,75,74,0.12)','rgba(192,57,43,0.08)');
+    '#E24B4A','rgba(226,75,74,0.12)');
   makeLineChart('gainLineIndexChart','gainLineIndex',indexLine,indexPctLine,
-    '#2980b9','rgba(41,128,185,0.12)','rgba(192,57,43,0.08)');
+    '#2980b9','rgba(41,128,185,0.12)');
 
-  // ── 合算グラフ（既存gainLineChart） ──
-  // 株とインデックスを2データセットで重ねてさらに比較しやすく
+  // ── 合算グラフ（株・インデックス・合算の3ライン） ──
   const hasStock=stockLine.some(v=>v!==null);
   const hasIndex=indexLine.some(v=>v!==null);
   const datasets=[];
-  if(hasStock) datasets.push({
-    label:'株',data:stockLine,
-    borderColor:'#E24B4A',backgroundColor:'rgba(226,75,74,0.08)',
-    borderWidth:2,pointRadius:3,pointBackgroundColor:'#E24B4A',
-    fill:false,tension:0.25
-  });
-  if(hasIndex) datasets.push({
-    label:'インデックス',data:indexLine,
-    borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,0.08)',
-    borderWidth:2,pointRadius:3,pointBackgroundColor:'#2980b9',
-    fill:false,tension:0.25
-  });
-  // 合算を追加
+  if(hasStock) datasets.push({label:'株',data:stockLine,borderColor:'#E24B4A',backgroundColor:'transparent',borderWidth:2,pointRadius:2,fill:false,tension:0.25,spanGaps:false});
+  if(hasIndex) datasets.push({label:'インデックス',data:indexLine,borderColor:'#2980b9',backgroundColor:'transparent',borderWidth:2,pointRadius:2,fill:false,tension:0.25,spanGaps:false});
   datasets.push({
     label:'合算',data:gainLine,
     borderColor:'#0F6E56',backgroundColor:'rgba(15,110,86,0.08)',
-    borderWidth:2.5,pointRadius:4,pointBackgroundColor:gainLine.map(v=>v===null?'transparent':v>=0?'#0F6E56':'#C0392B'),
-    fill:true,tension:0.25,borderDash:[],
+    borderWidth:2.5,pointRadius:3,
+    pointBackgroundColor:gainLine.map(v=>v===null?'transparent':v>=0?'#0F6E56':'#C0392B'),
+    fill:true,tension:0.25,spanGaps:false,
     segment:{borderColor:ctx=>(ctx.p0.parsed.y<0||ctx.p1.parsed.y<0)?'#C0392B':'#0F6E56'}
   });
 
-  chartInstances['gainLine']=new Chart(document.getElementById('gainLineChart'),{
-    type:'line',
-    data:{labels:gLabels,datasets},
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{
-        legend:{display:true,position:'top',labels:{
-          boxWidth:14,font:{size:11},color:tickColor,
-          usePointStyle:true,pointStyle:'circle'
-        }},
-        tooltip:{callbacks:{label:ctx=>{
-          const v=ctx.parsed.y;if(v===null)return'';
-          const sign=v>=0?'+':'';
-          return`${ctx.dataset.label}: ${sign}${trFmt(v)}`;
-        }}},
-        datalabels:{display:false}
+  const gainLineCanvas=document.getElementById('gainLineChart');
+  if(gainLineCanvas){
+    chartInstances['gainLine']=new Chart(gainLineCanvas,{
+      type:'line',
+      data:{labels:gLabels,datasets},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{display:true,position:'top',labels:{boxWidth:12,font:{size:11},color:tickColor,usePointStyle:true,pointStyle:'circle',padding:12}},
+          tooltip:{callbacks:{label:ctx=>{
+            const v=ctx.parsed.y;if(v===null)return'';
+            const s=v>=0?'+':'';
+            return`${ctx.dataset.label}: ${s}${trFmt(v)}`;
+          }}},
+          datalabels:{display:false}
+        },
+        scales:{
+          y:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor},grace:'10%'},
+          x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}
+        },
+        layout:{padding:{top:4,right:8}}
       },
-      scales:{
-        y:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor},grace:'10%'},
-        x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}
-      },
-      layout:{padding:{top:4,right:8}}
-    },
-    plugins:[ChartDataLabels]
-  });
+      plugins:[ChartDataLabels]
+    });
+  }
 }
 
 function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
