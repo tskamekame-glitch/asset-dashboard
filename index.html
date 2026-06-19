@@ -831,6 +831,27 @@ tr:last-child td{border-bottom:none}
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
     <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div></div>
+    <!-- 銘柄別保有円グラフ（4種） -->
+    <div class="card" id="donutStockCard" style="display:none">
+      <div class="card-head"><h2>📈 個別株 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutStockSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutStockChart"></canvas></div>
+    </div>
+    <div class="card" id="donutDivCard" style="display:none">
+      <div class="card-head"><h2>💎 高配当株 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutDivSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutDivChart"></canvas></div>
+    </div>
+    <div class="card" id="donutGlobalCard" style="display:none">
+      <div class="card-head"><h2>🌍 全世界インデックス 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutGlobalSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutGlobalChart"></canvas></div>
+    </div>
+    <div class="card" id="donutJpCard" style="display:none">
+      <div class="card-head"><h2>🗾 日本インデックス 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutJpSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutJpChart"></canvas></div>
+    </div>
     <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
     <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前月比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
     <div style="display:none;margin-bottom:12px" id="exportBar">
@@ -3963,7 +3984,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','gainLineCard','gainBarCard','barCard','donutCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -4038,6 +4059,60 @@ function trRenderCharts(){
   const latest=filtered[filtered.length-1];
   const catEntries=TR_DONUT_CAT_ORDER.filter(c=>latest.cats[c]>0).map(c=>[c,latest.cats[c]]).concat(Object.entries(latest.cats).filter(([c,v])=>v>0&&!TR_DONUT_CAT_ORDER.includes(c)).sort((a,b)=>b[1]-a[1]));
   chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels]});
+  // ── 銘柄別保有円グラフ（4種） ──
+  (function renderBrandDonuts(){
+    const PALETTE=[
+      '#E24B4A','#2980b9','#0F6E56','#EF9F27','#8B5CF6','#D4537E','#185FA5','#27AE60',
+      '#E67E22','#1ABC9C','#9B59B6','#F39C12','#2ECC71','#E74C3C','#3498DB','#1F618D',
+      '#A93226','#117A65','#7D3C98','#B7950B','#1A5276','#4A235A','#0E6655','#784212'
+    ];
+    function buildDonut(canvasId,cardId,summaryId,catName,tickColor,isDark){
+      trDestroyChart(canvasId);
+      const accs=(amAccounts||[]).filter(a=>a.cat===catName&&(a.amount||0)>0);
+      const card=document.getElementById(cardId);
+      if(!accs.length){if(card)card.style.display='none';return;}
+      if(card)card.style.display='block';
+      const total=accs.reduce((s,a)=>s+a.amount,0);
+      const labels2=accs.map(a=>a.name);
+      const data2=accs.map(a=>a.amount);
+      const colors=accs.map((_,i)=>PALETTE[i%PALETTE.length]);
+      const sumEl=document.getElementById(summaryId);
+      if(sumEl)sumEl.textContent='合計 '+trFmt(total)+' / '+accs.length+'銘柄';
+      chartInstances[canvasId]=new Chart(document.getElementById(canvasId),{
+        type:'doughnut',
+        data:{labels:labels2,datasets:[{data:data2,backgroundColor:colors,borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},
+        options:{
+          responsive:true,
+          plugins:{
+            legend:{position:'bottom',labels:{font:{size:11},padding:6,boxWidth:10,usePointStyle:true,color:tickColor}},
+            tooltip:{enabled:true,callbacks:{label:ctx=>{
+              const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
+              const p=(ctx.raw/t*100).toFixed(1);
+              return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';
+            }},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},
+            datalabels:{
+              color:'#fff',font:{size:10,weight:'600'},
+              textShadowBlur:2,textShadowColor:'rgba(0,0,0,0.5)',
+              formatter:(v,ctx)=>{
+                const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
+                const p=(v/t*100);
+                if(p<5)return'';
+                const name=labels2[ctx.dataIndex];
+                const short=name.length>7?name.slice(0,6)+'…':name;
+                return short+'\n'+p.toFixed(1)+'%';
+              }
+            }
+          },
+          cutout:'55%'
+        },
+        plugins:[ChartDataLabels]
+      });
+    }
+    buildDonut('donutStockChart','donutStockCard','donutStockSummary','個別株',tickColor,isDark);
+    buildDonut('donutDivChart','donutDivCard','donutDivSummary','高配当',tickColor,isDark);
+    buildDonut('donutGlobalChart','donutGlobalCard','donutGlobalSummary','全世界インデックス',tickColor,isDark);
+    buildDonut('donutJpChart','donutJpCard','donutJpSummary','日本インデックス',tickColor,isDark);
+  })();
   trRenderGainLineChart(filtered,labels,tickColor,gridColor);
   trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
