@@ -788,10 +788,27 @@ tr:last-child td{border-bottom:none}
     <!-- 最新日の銘柄別損益（プラス/マイナス） -->
     <div class="card" id="gainBarCard" style="display:none">
       <div class="card-head"><h2>💹 最新の銘柄別損益</h2></div>
-      <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainBarSummary"></div>
-      <div style="max-height:420px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
-        <div class="chart-container" style="min-height:280px"><canvas id="gainBarChart"></canvas></div>
+      <div style="padding:0 16px 10px" id="gainBarSummary"></div>
+
+      <!-- 株グラフ -->
+      <div style="padding:0 16px 4px">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);letter-spacing:0.05em">📈 個別株・高配当</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px" id="gainBarStockSummary"></div>
       </div>
+      <div style="max-height:380px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+        <div class="chart-container" style="min-height:200px"><canvas id="gainBarChart"></canvas></div>
+      </div>
+
+      <!-- インデックスグラフ -->
+      <div style="padding:8px 16px 4px;margin-top:4px;border-top:0.5px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);letter-spacing:0.05em">🌍 インデックス・投信</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px" id="gainBarIndexSummary"></div>
+      </div>
+      <div style="max-height:280px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+        <div class="chart-container" style="min-height:160px"><canvas id="gainBarIndexChart"></canvas></div>
+      </div>
+
+      <!-- 詳細一覧 -->
       <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
@@ -4144,140 +4161,178 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
 // ============================================================
 function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   trDestroyChart('gainBar');
+  trDestroyChart('gainBarIndex');
   const card=document.getElementById('gainBarCard');
   const summaryEl=document.getElementById('gainBarSummary');
+  const stockSummaryEl=document.getElementById('gainBarStockSummary');
+  const indexSummaryEl=document.getElementById('gainBarIndexSummary');
   const detailEl0=document.getElementById('gainBarDetail');
-  const canvasWrap=document.getElementById('gainBarChart')?.parentElement;
 
-  // 「最新」は現在の資産管理データ（amAccounts）を直接使う
-  // ＝ユーザーが資産管理タブで入力した最新のcostPrice・評価額がそのまま反映される
   const sourceAccounts=(amAccounts&&amAccounts.length)?amAccounts:null;
   if(!sourceAccounts||!sourceAccounts.some(a=>a.costPrice>0)){
     card.style.display='block';
     if(summaryEl)summaryEl.innerHTML='';
-    if(canvasWrap)canvasWrap.style.display='none';
     if(detailEl0)detailEl0.innerHTML=`<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3)">
-      ${!sourceAccounts ? '資産管理データが読み込まれていません。一度ログイン・同期してから再度開いてください。' : '取得単価（取得価格・取得株価）が入力された口座がありません。資産管理タブで取得単価を入力すると表示されます。'}
+      ${!sourceAccounts?'資産管理データが読み込まれていません。':'取得単価が入力された口座がありません。'}
     </div>`;
     return;
   }
-  if(canvasWrap)canvasWrap.style.display='block';
   card.style.display='block';
 
   const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
-  // PayPay系（ポイント運用等）・確定拠出年金（iDeCo/企業DC）は残高入力方式（数量×単価では扱わない）
   const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
-  const items=sourceAccounts.filter(a=>{
+  const STOCK_CATS=['個別株','高配当'];
+  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
+
+  // 各銘柄の損益を計算
+  const allItems=sourceAccounts.filter(a=>{
     if(!(a.costPrice>0))return false;
     const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
     const isUnitBased=UNIT_BASED_CATS.includes(a.cat)&&!isBalanceBased;
-    // 数量×単価方式のカテゴリなのに数量が0以下なら計算不能のため除外（誤った巨額損益を防ぐ）
     if(isUnitBased&&!(a.shares>0))return false;
-    // 異常値ガード：評価額と取得額の比率が極端（100倍以上）な場合のみ単位ミスとみなし除外
-    // 持株会等で取得単価が著しく低い正当なケース（数十倍の利益）は除外しない
     const evalTotal=a.amount||0;
     const costTotal=isUnitBased?a.shares*a.costPrice:a.costPrice;
-    if(evalTotal>0&&costTotal>0){
-      const ratio=evalTotal/costTotal;
-      if(ratio>100||ratio<0.01)return false;
-    }
+    if(evalTotal>0&&costTotal>0){const ratio=evalTotal/costTotal;if(ratio>100||ratio<0.01)return false;}
     return true;
   }).map(a=>{
     const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
     const isUnitBased=UNIT_BASED_CATS.includes(a.cat)&&!isBalanceBased;
-    let costTotal,evalTotal=a.amount||0;
-    if(isUnitBased){costTotal=a.shares*a.costPrice;}
-    else{costTotal=a.costPrice;}
+    const costTotal=isUnitBased?a.shares*a.costPrice:a.costPrice;
+    const evalTotal=a.amount||0;
     const gain=evalTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
     const excluded=trGainExcludeNames.includes(a.name);
-    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded};
+    const isStock=STOCK_CATS.includes(a.cat);
+    const isIndex=INDEX_CATS.includes(a.cat);
+    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded,isStock,isIndex};
   }).sort((a,b)=>b.gain-a.gain);
 
+  const stockItems=allItems.filter(i=>i.isStock);
+  const indexItems=allItems.filter(i=>i.isIndex);
+  const otherItems=allItems.filter(i=>!i.isStock&&!i.isIndex);
+
+  // ── トップサマリー（株 vs インデックス 比較） ──
+  const activeAll=allItems.filter(i=>!i.excluded);
+  const activeStock=stockItems.filter(i=>!i.excluded);
+  const activeIndex=indexItems.filter(i=>!i.excluded);
+  const totalGain=activeAll.reduce((s,i)=>s+i.gain,0);
+  const stockGain=activeStock.reduce((s,i)=>s+i.gain,0);
+  const indexGain=activeIndex.reduce((s,i)=>s+i.gain,0);
+  const stockCost=activeStock.reduce((s,i)=>s+i.costTotal,0);
+  const indexCost=activeIndex.reduce((s,i)=>s+i.costTotal,0);
+  const stockPct=stockCost>0?stockGain/stockCost*100:0;
+  const indexPct=indexCost>0?indexGain/indexCost*100:0;
+  const totalExcluded=allItems.length-activeAll.length;
+
+  const fmtGain=(g,p)=>{
+    const s=g>=0?'+':'';
+    const col=g>=0?'var(--green)':'var(--danger)';
+    return`<span style="color:${col};font-weight:700">${s}${trFmt(g)}</span><span style="color:${col};font-size:11px;margin-left:4px">(${s}${p.toFixed(1)}%)</span>`;
+  };
+
   if(summaryEl){
-    const activeItems=items.filter(i=>!i.excluded);
-    const winCount=activeItems.filter(i=>i.gain>=0).length;
-    const loseCount=activeItems.length-winCount;
-    const totalGain=activeItems.reduce((s,i)=>s+i.gain,0);
-    const sign=totalGain>=0?'+':'';
-    const excludedCount=items.length-activeItems.length;
-    summaryEl.innerHTML=`<span>現在時点 ／ 損益合計: <b style="color:${totalGain>=0?'var(--green)':'var(--danger)'}">${sign}${trFmt(totalGain)}</b> ／ プラス${winCount}件・マイナス${loseCount}件${excludedCount>0?` ／ 除外中${excludedCount}件`:''}</span>`+
-      `<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 下の一覧で銘柄名をタップするとグラフ・損益計算から除外/復帰できます</div>`;
+    summaryEl.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">📈 株合計</div>
+        <div style="font-size:14px">${fmtGain(stockGain,stockPct)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🌍 指数合計</div>
+        <div style="font-size:14px">${fmtGain(indexGain,indexPct)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">💰 総合計</div>
+        <div style="font-size:14px">${fmtGain(totalGain,totalGain/(stockCost+indexCost||1)*100)}</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3)">💡 下の一覧の銘柄名タップで除外/復帰${totalExcluded>0?` ／ 除外中${totalExcluded}件`:''}</div>`;
   }
 
-  // グラフ本体（labels/data/colors）は除外されていない銘柄のみで構成する。
-  // これにより除外銘柄がグラフから完全に消え、残りの銘柄のバーサイズが大きく表示される。
-  const chartItems=items.filter(i=>!i.excluded);
-  const labels=chartItems.map(i=>i.name);
-  const data=chartItems.map(i=>i.gain);
-  const colors=chartItems.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
-  const heightPx=Math.max(280,chartItems.length*34+60);
-  document.getElementById('gainBarChart').parentElement.style.minHeight=heightPx+'px';
-
-  chartInstances['gainBar']=new Chart(document.getElementById('gainBarChart'),{
-    type:'bar',
-    data:{labels,datasets:[{label:'損益額',data,backgroundColor:colors,borderRadius:4}]},
-    options:{
-      indexAxis:'y',
-      responsive:true,maintainAspectRatio:false,
-      onClick:(evt,elements)=>{
-        if(elements&&elements.length){
-          const idx=elements[0].index;
-          trToggleGainExclude(chartItems[idx].name);
-        }
-      },
-      onHover:(evt,elements)=>{evt.native.target.style.cursor=elements.length?'pointer':'default';},
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>{
-          const i=chartItems[ctx.dataIndex];
-          const sign=i.gain>=0?'+':'';
-          return[`損益: ${sign}${trFmt(i.gain)}（${sign}${i.pct.toFixed(1)}%）`,`評価額: ${trFmt(i.evalTotal)}`,`取得額: ${trFmt(i.costTotal)}`,'タップで損益計算から除外'];
-        }}},
-        datalabels:{
-          display:true,
-          anchor:ctx=>data[ctx.dataIndex]>=0?'end':'start',
-          align:ctx=>data[ctx.dataIndex]>=0?'end':'start',
-          color:tickColor,
-          font:{size:10,weight:600},
-          formatter:(v,ctx)=>{
-            const it=chartItems[ctx.dataIndex];
-            const sign=v>=0?'+':'';
-            return`${sign}${Math.round(v/10000).toLocaleString()}万（${sign}${it.pct.toFixed(1)}%）`;
+  // ── サブ関数: 横棒グラフ描画 ──
+  function renderHBar(canvasId,destroyKey,items,summarySlot){
+    const activeItems=items.filter(i=>!i.excluded);
+    if(summarySlot){
+      const g=activeItems.reduce((s,i)=>s+i.gain,0);
+      const c=activeItems.reduce((s,i)=>s+i.costTotal,0);
+      const p=c>0?g/c*100:0;
+      const s2=g>=0?'+':'';
+      const col=g>=0?'var(--green)':'var(--danger)';
+      summarySlot.innerHTML=`損益合計: <span style="color:${col};font-weight:600">${s2}${trFmt(g)}</span>（${s2}${p.toFixed(1)}%）/ ${activeItems.length}銘柄`;
+    }
+    const canvas=document.getElementById(canvasId);
+    if(!canvas)return;
+    if(!activeItems.length){canvas.parentElement.style.minHeight='60px';canvas.parentElement.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:var(--text3)">データなし</div>';return;}
+    const labels=activeItems.map(i=>i.name);
+    const data=activeItems.map(i=>i.gain);
+    const colors=activeItems.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
+    const heightPx=Math.max(160,activeItems.length*34+50);
+    canvas.parentElement.style.minHeight=heightPx+'px';
+    chartInstances[destroyKey]=new Chart(canvas,{
+      type:'bar',
+      data:{labels,datasets:[{label:'損益額',data,backgroundColor:colors,borderRadius:4}]},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        onClick:(evt,elements)=>{
+          if(elements&&elements.length){trToggleGainExclude(activeItems[elements[0].index].name);}
+        },
+        onHover:(evt,elements)=>{evt.native.target.style.cursor=elements.length?'pointer':'default';},
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>{
+            const it=activeItems[ctx.dataIndex];const s2=it.gain>=0?'+':'';
+            return[`損益: ${s2}${trFmt(it.gain)}（${s2}${it.pct.toFixed(1)}%）`,`評価額: ${trFmt(it.evalTotal)}`,`取得額: ${trFmt(it.costTotal)}`,'タップで除外'];
+          }}},
+          datalabels:{display:true,
+            anchor:ctx=>data[ctx.dataIndex]>=0?'end':'start',
+            align:ctx=>data[ctx.dataIndex]>=0?'end':'start',
+            color:tickColor,font:{size:10,weight:600},
+            formatter:(v,ctx)=>{const it=activeItems[ctx.dataIndex];const s2=v>=0?'+':'';return`${s2}${Math.round(v/10000).toLocaleString()}万（${s2}${it.pct.toFixed(1)}%）`;}
           }
-        }
+        },
+        scales:{
+          x:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
+          y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}
+        },
+        layout:{padding:{top:6,right:80,left:4}}
       },
-      scales:{
-        x:{ticks:{callback:v=>(v>=0?'+':'')+'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
-        y:{ticks:{color:tickColor,font:{size:11}},grid:{display:false}}
-      },
-      layout:{padding:{top:8,right:80,left:4}}
-    },
-    plugins:[ChartDataLabels]
-  });
+      plugins:[ChartDataLabels]
+    });
+  }
 
-  // 銘柄別の詳細カード一覧（金額・損益・損益率を常時表示、タップで除外トグル）
+  renderHBar('gainBarChart','gainBar',stockItems,stockSummaryEl);
+  renderHBar('gainBarIndexChart','gainBarIndex',indexItems,indexSummaryEl);
+
+  // ── 詳細一覧（株→インデックス→その他 の順） ──
+  const renderDetail=(items,label)=>{
+    if(!items.length)return'';
+    return`<div style="font-size:11px;font-weight:700;color:var(--text3);padding:8px 0 4px;letter-spacing:0.05em">${label}</div>`
+      +items.map(i=>{
+        const sign=i.gain>=0?'+':'';
+        const col=i.excluded?'var(--text3)':(i.gain>=0?'var(--green)':'var(--danger)');
+        const nameStyle=i.excluded?'text-decoration:line-through;color:var(--text3)':'';
+        const catBadge=`<span style="font-size:10px;color:var(--text3);margin-left:6px">${i.cat}</span>`;
+        return`<div onclick="trToggleGainExclude('${i.name.replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer;${i.excluded?'opacity:0.55':''}">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${catBadge}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
+            <div style="font-size:11px;color:var(--text3)">評価額 ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:14px;font-weight:700;color:${col}">${sign}${trFmt(i.gain)}</div>
+            <div style="font-size:12px;font-weight:600;color:${col}">${sign}${i.pct.toFixed(1)}%</div>
+          </div>
+        </div>`;
+      }).join('');
+  };
+
   const detailEl=document.getElementById('gainBarDetail');
   if(detailEl){
-    detailEl.innerHTML=items.map(i=>{
-      const sign=i.gain>=0?'+':'';
-      const col=i.excluded?'var(--text3)':(i.gain>=0?'var(--green)':'var(--danger)');
-      const nameStyle=i.excluded?'text-decoration:line-through;color:var(--text3)':'';
-      const safeId='gbi_'+i.name.replace(/[^a-zA-Z0-9]/g,'_');
-      return`<div onclick="trToggleGainExclude('${i.name.replace(/'/g,"\\\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer;${i.excluded?'opacity:0.55':''}">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
-          <div style="font-size:11px;color:var(--text3)">評価額 ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:14px;font-weight:700;color:${col}">${sign}${trFmt(i.gain)}</div>
-          <div style="font-size:12px;font-weight:600;color:${col}">${sign}${i.pct.toFixed(1)}%</div>
-        </div>
-      </div>`;
-    }).join('');
+    detailEl.innerHTML=
+      renderDetail(stockItems,'📈 個別株・高配当')
+      +renderDetail(indexItems,'🌍 インデックス・投信')
+      +renderDetail(otherItems,'その他');
   }
 }
-
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
   // 個別株グラフから完全除外する口座名（PayPay系投信など）
   const EXCLUDE_FROM_CAT={'個別株':['オルカンPayPay','インド(SBI)','全世界PayPay','全世界インデックス']};
