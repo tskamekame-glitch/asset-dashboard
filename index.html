@@ -519,6 +519,7 @@ tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
   <button class="nav-btn" data-tab="cashflow" onclick="switchTab('cashflow')"><span class="ni">💸</span>収支</button>
   <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>購入検討</button>
+  <button class="nav-btn" data-tab="returns" onclick="switchTab('returns')"><span class="ni">📅</span>収益レポート</button>
 </nav>
 
 <!-- ============================================================
@@ -788,7 +789,9 @@ tr:last-child td{border-bottom:none}
     <div class="card" id="gainBarCard" style="display:none">
       <div class="card-head"><h2>💹 最新の銘柄別損益</h2></div>
       <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainBarSummary"></div>
-      <div class="chart-container" style="min-height:280px"><canvas id="gainBarChart"></canvas></div>
+      <div style="max-height:420px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+        <div class="chart-container" style="min-height:280px"><canvas id="gainBarChart"></canvas></div>
+      </div>
       <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
@@ -1540,6 +1543,7 @@ function switchTab(tab){
   if(tab==='portfolio')pfRender();
   if(tab==='jpstock')jpRenderAll();
   if(tab==='trend')trRenderAll();
+  if(tab==='returns')retRender();
 }
 
 // ============================================================
@@ -1750,7 +1754,7 @@ function amRender(){
               +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
               +staleHtml
               +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
-              +'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
+              +'<div style="display:flex;gap:3px;margin-bottom:2px">'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',-1)" title="上に移動" style="padding:4px 7px;font-size:12px">▲</button>'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',1)" title="下に移動" style="padding:4px 7px;font-size:12px">▼</button>'+'</div>'+'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
             +'</div>'
           +'</div>'
         +'</div>';
@@ -1894,6 +1898,23 @@ async function saveAccount(){
   if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,updated:todayStr()};}
   else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();
+}
+function amMoveAccount(id,dir){
+  const idx=amAccounts.findIndex(a=>a.id===id);
+  if(idx<0)return;
+  const cat=amAccounts[idx].cat;
+  // 同カテゴリ内での移動
+  const samecat=amAccounts.map((a,i)=>({a,i})).filter(x=>x.a.cat===cat);
+  const posInCat=samecat.findIndex(x=>x.a.id===id);
+  const targetPos=posInCat+dir;
+  if(targetPos<0||targetPos>=samecat.length)return;
+  // グローバルインデックスで入れ替え
+  const globalA=samecat[posInCat].i;
+  const globalB=samecat[targetPos].i;
+  [amAccounts[globalA],amAccounts[globalB]]=[amAccounts[globalB],amAccounts[globalA]];
+  amSaveToLocal();
+  amSaveToSheet();
+  amRender();
 }
 function amConfirmDelete(id){
   const a=amAccounts.find(x=>x.id===id);
@@ -4191,7 +4212,7 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   const data=chartItems.map(i=>i.gain);
   const colors=chartItems.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
   const heightPx=Math.max(280,chartItems.length*34+60);
-  document.getElementById('gainBarChart').parentElement.style.height=heightPx+'px';
+  document.getElementById('gainBarChart').parentElement.style.minHeight=heightPx+'px';
 
   chartInstances['gainBar']=new Chart(document.getElementById('gainBarChart'),{
     type:'bar',
@@ -7714,6 +7735,302 @@ window.pfRender=function(){
   _origPfRender&&_origPfRender();
   try{pfRenderRebalance();}catch(e){}
 };
+</script>
+
+<!-- ============================================================ -->
+<!-- 年間収益レポートタブ -->
+<!-- ============================================================ -->
+<div class="panel" id="tab-returns">
+  <div class="phead"><div class="phead-inner">
+    <h1>📅 年間収益レポート</h1>
+    <div style="display:flex;gap:6px;align-items:center">
+      <select id="ret-year-sel" onchange="retRender()" style="padding:6px 10px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);outline:none"></select>
+      <button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="retRender()">🔄 更新</button>
+    </div>
+  </div></div>
+
+  <!-- サマリーカード -->
+  <div id="ret-summary" style="padding:14px 16px 0"></div>
+
+  <!-- 年別バーチャート -->
+  <div style="padding:0 16px 14px">
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">年別収益推移</div>
+    <canvas id="ret-bar-chart" style="width:100%;max-height:200px"></canvas>
+  </div>
+
+  <!-- 内訳テーブル -->
+  <div style="padding:0 16px 20px">
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">収益内訳</div>
+    <div id="ret-breakdown" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- 口座別内訳 -->
+  <div style="padding:0 16px 20px">
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">口座別損益</div>
+    <div id="ret-by-account"></div>
+  </div>
+
+  <!-- 銘柄別売却履歴 -->
+  <div style="padding:0 16px 40px">
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">銘柄別売却履歴（選択年）</div>
+    <div id="ret-sell-list"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 年間収益レポート
+// ============================================================
+
+function retGatherData(){
+  // 1. slData（売却収支タブ）: {gain, date, account, name, cat}
+  let slRaw=[];
+  try{slRaw=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');}catch(e){}
+
+  // 2. jp.sells（日本株P&L）: {gain, tax, date, account, name, code, type}
+  let jpSells=[];
+  try{const d=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');jpSells=d.sells||[];}catch(e){}
+
+  // 3. amAccounts（現在の保有資産）: 含み益を計算
+  let amAccs=[];
+  try{amAccs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){}
+
+  // 売却記録を統一フォーマットに変換
+  const sells=[];
+
+  slRaw.forEach(r=>{
+    const yr=r.date?(new Date(r.date)).getFullYear():null;
+    sells.push({
+      yr, date:r.date||'', name:r.name||'', account:r.account||'—',
+      gain:r.gain||0, tax:r.tax||0, netGain:(r.gain||0)-(r.tax||0),
+      sellTotal:r.sellTotal||0, cost:r.cost||0,
+      src:'sell', cat:r.cat||'株式'
+    });
+  });
+
+  jpSells.forEach(r=>{
+    const yr=r.date?(new Date(r.date)).getFullYear():null;
+    const g=r.gain||0;
+    const t=r.tax||0;
+    sells.push({
+      yr, date:r.date||'', name:r.name||'', account:r.account||'—',
+      gain:g, tax:t, netGain:g-t,
+      sellTotal:r.sellTotal||r.sellPrice*(r.shares||0)||0,
+      cost:(r.buyPrice||0)*(r.shares||0),
+      src:'jp', cat:r.type==='index'?'インデックス':'株式'
+    });
+  });
+
+  // 含み益（現在保有）
+  const unrealized=amAccs.map(a=>{
+    const mktVal=a.amount||0;
+    const cost=a.costPrice>0&&a.shares>0?a.costPrice*a.shares:a.costPrice>0?a.costPrice:0;
+    return {
+      name:a.name||'', account:a.cat||'—',
+      mktVal, cost, unrealizedGain:cost>0?mktVal-cost:0
+    };
+  });
+
+  return {sells, unrealized};
+}
+
+function retGetYears(sells){
+  const yrs=new Set(sells.map(s=>s.yr).filter(y=>y));
+  const cur=new Date().getFullYear();
+  yrs.add(cur);
+  return [...yrs].sort((a,b)=>b-a);
+}
+
+function retFmt(n,showSign=true){
+  if(n==null||isNaN(n))return '—';
+  const sign=showSign&&n>0?'＋':'';
+  return sign+Math.round(n).toLocaleString()+'円';
+}
+function retFmtRate(n){
+  if(n==null||isNaN(n)||!isFinite(n))return '—';
+  return (n>=0?'＋':'')+n.toFixed(1)+'%';
+}
+function retColor(n){return n>=0?'var(--red)':'var(--blue)';}
+
+function retRender(){
+  const {sells,unrealized}=retGatherData();
+  const years=retGetYears(sells);
+
+  // 年セレクタ更新
+  const sel=document.getElementById('ret-year-sel');
+  const curVal=sel.value;
+  sel.innerHTML=years.map(y=>`<option value="${y}">${y}年</option>`).join('');
+  if(curVal&&years.includes(parseInt(curVal)))sel.value=curVal;
+  const selYear=parseInt(sel.value)||new Date().getFullYear();
+
+  // 全年集計
+  const allYearMap={};
+  years.forEach(y=>{allYearMap[y]={yr:y,realGain:0,realNet:0,tax:0,cnt:0};});
+  sells.forEach(s=>{
+    if(!s.yr)return;
+    if(!allYearMap[s.yr])allYearMap[s.yr]={yr:s.yr,realGain:0,realNet:0,tax:0,cnt:0};
+    allYearMap[s.yr].realGain+=s.gain;
+    allYearMap[s.yr].realNet+=s.netGain;
+    allYearMap[s.yr].tax+=s.tax;
+    allYearMap[s.yr].cnt++;
+  });
+
+  // 含み益合計
+  const totalUnrealized=unrealized.reduce((s,a)=>s+a.unrealizedGain,0);
+  const totalCost=unrealized.reduce((s,a)=>s+a.cost,0);
+  const totalMkt=unrealized.reduce((s,a)=>s+a.mktVal,0);
+
+  // 選択年の売却
+  const yrSells=sells.filter(s=>s.yr===selYear);
+  const yrGain=yrSells.reduce((s,r)=>s+r.gain,0);
+  const yrTax=yrSells.reduce((s,r)=>s+r.tax,0);
+  const yrNet=yrSells.reduce((s,r)=>s+r.netGain,0);
+
+  // ── サマリーカード ──
+  const summaryEl=document.getElementById('ret-summary');
+  summaryEl.innerHTML=`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${selYear}年 確定損益（税引前）</div>
+      <div style="font-size:20px;font-weight:700;color:${retColor(yrGain)}">${retFmt(yrGain)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">税額 ${retFmt(yrTax,false)} → 税引後 <span style="color:${retColor(yrNet)};font-weight:600">${retFmt(yrNet)}</span></div>
+    </div>
+    <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border2)">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">現在の含み益（保有資産）</div>
+      <div style="font-size:20px;font-weight:700;color:${retColor(totalUnrealized)}">${retFmt(totalUnrealized)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">評価額 ${retFmt(totalMkt,false)} / 利回り <span style="color:${retColor(totalUnrealized)};font-weight:600">${totalCost>0?retFmtRate(totalUnrealized/totalCost*100):'—'}</span></div>
+    </div>
+  </div>
+  <div style="background:var(--bg2);border-radius:10px;padding:14px;border:1px solid var(--border2);margin-bottom:14px">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:6px">全期間トータル収益（確定＋含み益）</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:baseline">
+      ${(()=>{
+        const allGain=Object.values(allYearMap).reduce((s,y)=>s+y.realGain,0);
+        const allNet=Object.values(allYearMap).reduce((s,y)=>s+y.realNet,0);
+        const total=allNet+totalUnrealized;
+        return `
+          <div><div style="font-size:10px;color:var(--text3)">確定損益累計（税引後）</div><div style="font-size:18px;font-weight:700;color:${retColor(allNet)}">${retFmt(allNet)}</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">含み益</div><div style="font-size:18px;font-weight:700;color:${retColor(totalUnrealized)}">${retFmt(totalUnrealized)}</div></div>
+          <div><div style="font-size:10px;color:var(--text3)">合計</div><div style="font-size:22px;font-weight:800;color:${retColor(total)}">${retFmt(total)}</div></div>
+        `;
+      })()}
+    </div>
+  </div>`;
+
+  // ── 年別バーチャート ──
+  const canvas=document.getElementById('ret-bar-chart');
+  const sortedYears=[...years].sort((a,b)=>a-b);
+  const barData=sortedYears.map(y=>allYearMap[y]||{yr:y,realNet:0,realGain:0});
+  const maxAbs=Math.max(...barData.map(d=>Math.abs(d.realNet)),1);
+  const barH=160;
+  const barW=Math.max(40,Math.min(80,Math.floor((canvas.offsetWidth||320)/sortedYears.length)-8));
+  canvas.width=canvas.offsetWidth||320;
+  canvas.height=barH+30;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const totalW=barData.length*(barW+8);
+  const offsetX=(canvas.width-totalW)/2;
+  barData.forEach((d,i)=>{
+    const x=offsetX+i*(barW+8);
+    const ratio=d.realNet/maxAbs;
+    const h=Math.max(2,Math.abs(ratio)*(barH*0.85));
+    const pos=d.realNet>=0;
+    ctx.fillStyle=pos?'rgba(200,50,50,0.75)':'rgba(50,100,200,0.75)';
+    ctx.beginPath();
+    ctx.roundRect(x,pos?barH*0.5-h:barH*0.5,barW,h,4);
+    ctx.fill();
+    ctx.fillStyle='rgba(150,150,150,0.3)';
+    ctx.fillRect(offsetX-4,barH*0.5,totalW+8,1);
+    ctx.fillStyle='var(--text2,#666)';
+    ctx.font=`10px sans-serif`;
+    ctx.textAlign='center';
+    ctx.fillText(String(d.yr),x+barW/2,barH+18);
+    if(d.realNet!==0){
+      ctx.fillStyle=pos?'rgba(180,30,30,0.9)':'rgba(30,80,180,0.9)';
+      ctx.font=`bold 9px sans-serif`;
+      const label=(d.realNet>=0?'+':'')+Math.round(d.realNet/10000)+'万';
+      ctx.fillText(label,x+barW/2,pos?barH*0.5-h-4:barH*0.5+h+12);
+    }
+  });
+
+  // ── 内訳テーブル（全年）──
+  const brkEl=document.getElementById('ret-breakdown');
+  const brkRows=sortedYears.map(y=>{
+    const d=allYearMap[y]||{realGain:0,realNet:0,tax:0,cnt:0};
+    return `<tr>
+      <td style="padding:8px 10px;font-weight:600">${y}年</td>
+      <td style="padding:8px 10px;text-align:right;color:${retColor(d.realGain)}">${retFmt(d.realGain)}</td>
+      <td style="padding:8px 10px;text-align:right;color:var(--text3)">${retFmt(d.tax,false)}</td>
+      <td style="padding:8px 10px;text-align:right;color:${retColor(d.realNet)};font-weight:700">${retFmt(d.realNet)}</td>
+      <td style="padding:8px 10px;text-align:right;color:var(--text3)">${d.cnt}件</td>
+    </tr>`;
+  }).reverse().join('');
+  brkEl.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="border-bottom:1px solid var(--border2)">
+      <th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500">年</th>
+      <th style="padding:6px 10px;text-align:right;color:var(--text3);font-weight:500">確定損益（税前）</th>
+      <th style="padding:6px 10px;text-align:right;color:var(--text3);font-weight:500">税額</th>
+      <th style="padding:6px 10px;text-align:right;color:var(--text3);font-weight:500">税引後</th>
+      <th style="padding:6px 10px;text-align:right;color:var(--text3);font-weight:500">件数</th>
+    </tr></thead>
+    <tbody>${brkRows}</tbody>
+  </table>`;
+
+  // ── 口座別損益（選択年）──
+  const accMap={};
+  yrSells.forEach(s=>{
+    if(!accMap[s.account])accMap[s.account]={gain:0,tax:0,net:0,cnt:0};
+    accMap[s.account].gain+=s.gain;
+    accMap[s.account].tax+=s.tax;
+    accMap[s.account].net+=s.netGain;
+    accMap[s.account].cnt++;
+  });
+  // 含み益も口座別に
+  const unrAccMap={};
+  unrealized.forEach(a=>{
+    if(!unrAccMap[a.account])unrAccMap[a.account]={unr:0,cost:0,mkt:0};
+    unrAccMap[a.account].unr+=a.unrealizedGain;
+    unrAccMap[a.account].cost+=a.cost;
+    unrAccMap[a.account].mkt+=a.mktVal;
+  });
+  const accKeys=[...new Set([...Object.keys(accMap),...Object.keys(unrAccMap)])];
+  const accEl=document.getElementById('ret-by-account');
+  accEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">
+  ${accKeys.map(acc=>{
+    const s=accMap[acc]||{gain:0,tax:0,net:0,cnt:0};
+    const u=unrAccMap[acc]||{unr:0,cost:0,mkt:0};
+    return `<div style="background:var(--bg2);border-radius:8px;padding:12px 14px;border:1px solid var(--border2)">
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px">${acc}</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+        ${s.cnt>0?`<div><span style="color:var(--text3)">確定損益(税後)</span> <span style="color:${retColor(s.net)};font-weight:600">${retFmt(s.net)}</span></div>`:''}
+        ${u.mkt>0?`<div><span style="color:var(--text3)">含み益</span> <span style="color:${retColor(u.unr)};font-weight:600">${retFmt(u.unr)}</span></div>`:''}
+        ${u.cost>0?`<div><span style="color:var(--text3)">利回り</span> <span style="color:${retColor(u.unr)};font-weight:600">${retFmtRate(u.unr/u.cost*100)}</span></div>`:''}
+      </div>
+    </div>`;
+  }).join('')}
+  </div>`;
+
+  // ── 銘柄別売却一覧（選択年）──
+  const listEl=document.getElementById('ret-sell-list');
+  if(yrSells.length===0){
+    listEl.innerHTML=`<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">${selYear}年の売却記録はありません</div>`;
+  }else{
+    const sorted=[...yrSells].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    listEl.innerHTML=`<div style="display:flex;flex-direction:column;gap:6px">
+    ${sorted.map(s=>`
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 14px;border:1px solid var(--border2);display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${s.date} · ${s.account} · ${s.cat}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700;color:${retColor(s.gain)}">${retFmt(s.gain)}</div>
+          <div style="font-size:11px;color:var(--text3)">税後 ${retFmt(s.netGain)}</div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+}
 </script>
 </body>
 </html>
