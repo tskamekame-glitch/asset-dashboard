@@ -4547,8 +4547,31 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   }
 
   // ── サブ関数: 横棒グラフ描画 ──
+  // 銘柄名の末尾「（日付買付）」「連番」を除去した基本名
+  function hBarBaseName(name){
+    return name
+      .replace(/（\d{4}\/\d{2}\/\d{2}買付[^）]*）/g,'')
+      .replace(/\s*買付\d*$/,'')
+      .replace(/^\d{4}\s+/,'')   // 先頭の証券コード "5016 JX金属" → "JX金属"
+      .replace(/\s+\d+$/,'')
+      .trim();
+  }
   function renderHBar(canvasId,destroyKey,items,summarySlot){
-    const activeItems=items.filter(i=>!i.excluded);
+    const rawActive=items.filter(i=>!i.excluded);
+    // ── 同一baseName銘柄を集約 ──
+    const mergedMap={};
+    rawActive.forEach(i=>{
+      const key=hBarBaseName(i.name);
+      if(!mergedMap[key]){
+        mergedMap[key]={name:key,gain:0,pct:0,evalTotal:0,costTotal:0,excluded:false,isStock:i.isStock,isIndex:i.isIndex,cat:i.cat};
+      }
+      mergedMap[key].gain+=i.gain;
+      mergedMap[key].evalTotal+=i.evalTotal;
+      mergedMap[key].costTotal+=i.costTotal;
+    });
+    // pctを再計算
+    Object.values(mergedMap).forEach(m=>{m.pct=m.costTotal>0?m.gain/m.costTotal*100:0;});
+    const activeItems=Object.values(mergedMap).sort((a,b)=>b.gain-a.gain);
     if(summarySlot){
       const g=activeItems.reduce((s,i)=>s+i.gain,0);
       const c=activeItems.reduce((s,i)=>s+i.costTotal,0);
