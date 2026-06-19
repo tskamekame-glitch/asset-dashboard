@@ -4401,28 +4401,22 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
             return[`損益: ${s2}${trFmt(it.gain)}（${s2}${it.pct.toFixed(1)}%）`,`評価額: ${trFmt(it.evalTotal)}`,`取得額: ${trFmt(it.costTotal)}`,'タップで除外'];
           }}},
           datalabels:{
-            display:true,
-            // バーの中央に銘柄名と損益を2行表示（枠外に飛び出さない）
-            anchor:'center',
-            align:'center',
+            // バーの右端（プラス）or 左端（マイナス）の内側に損益率だけ表示
+            anchor:ctx=>data[ctx.dataIndex]>=0?'end':'start',
+            align:ctx=>data[ctx.dataIndex]>=0?'start':'end',
             color:'#fff',
-            font:{size:10,weight:600},
-            textShadowBlur:3,
-            textShadowColor:'rgba(0,0,0,0.5)',
+            font:{size:9,weight:600},
+            textShadowBlur:2,
+            textShadowColor:'rgba(0,0,0,0.6)',
+            padding:{left:3,right:3},
             formatter:(v,ctx)=>{
               const it=activeItems[ctx.dataIndex];
               const s2=v>=0?'+':'';
-              const gain=`${s2}${Math.round(Math.abs(v)/10000).toLocaleString()}万(${s2}${it.pct.toFixed(1)}%)`;
-              // 銘柄名は8文字まで、超える場合は省略
-              const nameShort=it.name.length>8?it.name.slice(0,7)+'…':it.name;
-              return[nameShort,gain];
+              return`${s2}${it.pct.toFixed(1)}%`;
             },
-            // バーが小さい場合は非表示
             display:ctx=>{
-              const chart=ctx.chart;
-              const meta=chart.getDatasetMeta(0);
-              const bar=meta.data[ctx.dataIndex];
-              return bar?bar.width>50:false;
+              const bar=ctx.chart.getDatasetMeta(0).data[ctx.dataIndex];
+              return bar?bar.width>28:false;
             }
           }
         },
@@ -4432,10 +4426,19 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
             grid:{color:gridColor}
           },
           y:{
-            display:false  // y軸ラベル非表示（datalabels内に銘柄名を表示）
+            ticks:{
+              color:tickColor,
+              font:{size:10},
+              // 銘柄名が長い場合は省略
+              callback:(v,i)=>{
+                const name=labels[i]||'';
+                return name.length>9?name.slice(0,8)+'…':name;
+              }
+            },
+            grid:{display:false}
           }
         },
-        layout:{padding:{top:4,right:4,left:4,bottom:4}}
+        layout:{padding:{top:4,right:8,left:0,bottom:4}}
       },
       plugins:[ChartDataLabels]
     });
