@@ -6160,22 +6160,21 @@ function jpSellCardHTML(s) {
   // 防御的フィールド補完（NaN/undefined対策）
   s.date = s.date || s.sellDate || todayStr();
   // インデックス金額記録判定：type='index' かつ buyAmount or sellTotal が有効な数値の場合
-  const buyAmtRaw = parseFloat(s.buyAmount);
-  const sellAmtRaw = parseFloat(s.sellTotal);
-  const isIdxAmount = s.type==='index' && (
-    (buyAmtRaw > 0) || (sellAmtRaw > 0) ||
-    (s.buyAmount != null && s.sellTotal != null)
-  );
+  // インデックス金額記録判定：type='index' かつ (buyAmount or buyPrice が有効 or shares=null)
+  const buyAmtRaw = parseFloat(s.buyAmount) > 0 ? parseFloat(s.buyAmount) : parseFloat(s.buyPrice) > 0 && !s.shares ? parseFloat(s.buyPrice) : 0;
+  const sellAmtRaw = parseFloat(s.sellTotal) || 0;
+  const isIdxAmount = s.type === 'index' && (buyAmtRaw > 0 || sellAmtRaw > 0 || !s.shares);
 
   if(isIdxAmount){
-    // インデックス金額記録モード
     const buyAmt = buyAmtRaw || 0;
     const sellAmt = sellAmtRaw || 0;
     s.buyAmount = buyAmt;
     s.sellTotal = sellAmt;
-    s.gain = (typeof s.gain==='number'&&!isNaN(s.gain)&&(s.gain!==0||buyAmt===0)) ? s.gain : sellAmt - buyAmt;
+    // gain: sellAmt>0なら再計算、sellAmt=0の場合は保存済みのgainを使う
+    s.gain = sellAmt > 0 ? sellAmt - buyAmt : (typeof s.gain==='number'&&!isNaN(s.gain) ? s.gain : 0);
+    s.tax = sellAmt > 0 ? (s.account==='NISA'?0:(s.gain>0?s.gain*JP_TAX:0)) : (typeof s.tax==='number'&&!isNaN(s.tax)?s.tax:0);
     s.sellPrice = 0;
-    s.buyPrice = buyAmt; // 表示用
+    s.buyPrice = buyAmt;
     s.shares = 0;
   }else{
     // 株モード
@@ -6210,13 +6209,17 @@ function jpSellCardHTML(s) {
         <div class="jp-badges">
           <span class="jp-badge jp-badge-sell">売却済み</span>
           <span class="jp-badge jp-badge-hold">${s.account}</span>
-          <span class="jp-badge jp-badge-gray">${s.type==='index'&&s.buyAmount!=null?'金額記録':'株'}${s.type!=='index'||s.buyAmount==null?s.shares?s.shares.toLocaleString()+'株':'-':''}</span>
+          <span class="jp-badge jp-badge-gray">${isIdxAmount?'金額記録':(s.shares?s.shares.toLocaleString()+'株':'株-')}</span>
         </div>
       </div>
       <div class="jp-sc-right">
-        <div class="jp-sc-val">${jpFmt(s.sellTotal)}</div>
-        <div class="jp-sc-label">売却金額</div>
-        <div style="font-size:12px;font-weight:600;margin-top:3px" class="${s.gain>=0?'up':'down'}">${jpFmtSign(s.gain)}</div>
+        ${isIdxAmount&&!s.sellTotal
+          ?`<div style="font-size:12px;font-weight:600;color:var(--danger)">売却金額<br>未入力</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">↓編集で入力</div>`
+          :`<div class="jp-sc-val">${jpFmt(s.sellTotal)}</div>
+            <div class="jp-sc-label">売却金額</div>
+            <div style="font-size:12px;font-weight:600;margin-top:3px" class="${s.gain>=0?'up':'down'}">${jpFmtSign(s.gain)}</div>`
+        }
       </div>
     </div>
     <div class="jp-detail-grid">
