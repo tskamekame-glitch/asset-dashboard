@@ -6106,17 +6106,23 @@ function jpRenderSell() {
     if (!s.date) { s.date = todayStr(); needsRepair = true; }
 
     // インデックス金額記録（buyAmount/sellTotalを直接保持）は株数×単価で上書きしない
-    const isIdxDirect = s.type === 'index' && (s.buyAmount > 0 || s.sellTotal > 0);
+    // インデックス：buyAmount or buyPrice(=取得金額として保存) or sellTotalがあれば株数計算をスキップ
+    const isIdxDirect = s.type === 'index' && (s.buyAmount > 0 || s.sellTotal > 0 || (s.buyPrice > 0 && !s.shares));
     if (isIdxDirect) {
-      const buyAmt = parseFloat(s.buyAmount) || 0;
+      const buyAmt = parseFloat(s.buyAmount) || parseFloat(s.buyPrice) || 0;
       const sellAmt = parseFloat(s.sellTotal) || 0;
-      const gain = sellAmt - buyAmt;
-      if (typeof s.gain !== 'number' || isNaN(s.gain)) { s.gain = gain; needsRepair = true; }
-      if (typeof s.tax !== 'number' || isNaN(s.tax)) {
-        s.tax = s.account === 'NISA' ? 0 : (s.gain > 0 ? s.gain * JP_TAX : 0);
-        needsRepair = true;
+      // sellTotalが0でもbuyAmountがあれば取得金額として保持（まだ売却金額未入力）
+      if (buyAmt > 0 && sellAmt > 0) {
+        const gain = sellAmt - buyAmt;
+        if (typeof s.gain !== 'number' || isNaN(s.gain) || (s.sellTotal === 0 && s.gain === 0)) {
+          s.gain = gain; needsRepair = true;
+        }
+        if (typeof s.tax !== 'number' || isNaN(s.tax)) {
+          s.tax = s.account === 'NISA' ? 0 : (s.gain > 0 ? s.gain * JP_TAX : 0);
+          needsRepair = true;
+        }
       }
-      return; // 以降の株数×単価計算をスキップ
+      return; // 株数×単価での上書きは常にスキップ
     }
 
     const shares = parseFloat(s.shares) || 0;
@@ -6768,8 +6774,11 @@ function jpRecordSell() {
       const s=data.sells[idx];
       if((typeof jpSellMode!=='undefined')&&jpSellMode==='index'){
         // インデックスモード：金額直接入力で更新
+        // jpIdxInputModeが'unit'の場合はjpCalcIdxUnitが内部的にbuy-amount/sell-amountに値を書き込む
+        if(typeof jpIdxInputMode!=='undefined'&&jpIdxInputMode==='unit') jpCalcIdxUnit();
         const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
         const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
+        if(!buyAmount&&!sellAmount){alert('取得金額と売却金額を入力してください');return;}
         const gain=sellAmount-buyAmount;
         const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
         data.sells[idx]={...s,type:'index',buyAmount,sellTotal:sellAmount,gain,tax,
@@ -6816,6 +6825,8 @@ function jpRecordSell() {
   if(!name){alert('銘柄名は必須です');return;}
 
   if((typeof jpSellMode!=='undefined')&&jpSellMode==='index'){
+    // unit入力モードの場合は先に計算してbuy-amount/sell-amountを更新
+    if(typeof jpIdxInputMode!=='undefined'&&jpIdxInputMode==='unit') jpCalcIdxUnit();
     // インデックスモード：取得金額・売却金額直接入力
     const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
     const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
