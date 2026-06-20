@@ -5474,13 +5474,13 @@ async function jpSaveToSheet(data) {
     });
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: amSpreadsheetId,
-      range: `jpstock!O1:AA${sellRows.length + 200}`,
+      range: `jpstock!O1:AC${sellRows.length + 200}`,
       valueInputOption: 'RAW',
       resource: { values: sellRows }
     });
     if (sellRows.length < 200) await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: amSpreadsheetId,
-      range: `jpstock!O${sellRows.length + 1}:AA1000`
+      range: `jpstock!O${sellRows.length + 1}:AC1000`
     });
     setSyncStatus('ok', '同期済み✓');
   } catch(e) { console.warn('jpSaveToSheet error', e); setSyncStatus('err', '同期失敗'); }
@@ -5491,7 +5491,7 @@ async function jpLoadFromSheet() {
   try {
     const res = await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: amSpreadsheetId,
-      range: 'jpstock!A1:AA1000'
+      range: 'jpstock!A1:AC1000'
     });
     const rows = res.result.values || [];
     if (rows.length < 2) return; // ヘッダーのみ or 空
