@@ -1052,7 +1052,12 @@ tr:last-child td{border-bottom:none}
       <div class="pf-modal-title" id="jp-add-title">銘柄を追加</div>
       <button onclick="jpCloseAdd()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
     </div>
-    <div class="form-group"><label class="form-label">銘柄コード（例：7203）</label><input class="form-input" id="jp-f-code" inputmode="numeric" maxlength="6" placeholder="4桁の証券コード" oninput="jpOnCode()"></div>
+    <!-- 種別切替タブ -->
+    <div style="display:flex;gap:6px;margin-bottom:12px;background:var(--bg2);border-radius:8px;padding:4px">
+      <button id="jp-tab-stock" onclick="jpSetAddMode('stock')" style="flex:1;padding:6px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff">📈 個別株</button>
+      <button id="jp-tab-index" onclick="jpSetAddMode('index')" style="flex:1;padding:6px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--text2)">🌍 インデックス・投信</button>
+    </div>
+    <div class="form-group"><label class="form-label">銘柄コード</label><input class="form-input" id="jp-f-code" inputmode="numeric" maxlength="12" placeholder="7203 or 03319A など" oninput="jpOnCode()"></div>
     <div class="form-group"><label class="form-label">銘柄名 *</label><input class="form-input" id="jp-f-name" placeholder="トヨタ自動車"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div class="form-group"><label class="form-label">セクター</label>
@@ -1061,6 +1066,7 @@ tr:last-child td{border-bottom:none}
           <option>金融・保険</option><option>不動産</option><option>商社</option>
           <option>食品・消費</option><option>医薬・ヘルス</option><option>エネルギー</option>
           <option>建設・素材</option><option selected>その他</option>
+          <option>全世界インデックス</option><option>日本インデックス</option><option>インドインデックス</option>
         </select>
       </div>
       <div class="form-group"><label class="form-label">口座</label>
@@ -1071,18 +1077,35 @@ tr:last-child td{border-bottom:none}
         </select>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="form-group"><label class="form-label">購入株数 *</label><input class="form-input" type="number" id="jp-f-shares" inputmode="numeric" placeholder="100" oninput="jpCalcCost()"></div>
-      <div class="form-group"><label class="form-label">取得単価（円）*</label><input class="form-input" type="number" id="jp-f-buy" inputmode="decimal" placeholder="1500" step="0.1" oninput="jpCalcCost()"></div>
+    <!-- 株モード入力 -->
+    <div id="jp-add-stock-inputs">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">購入株数 *</label><input class="form-input" type="number" id="jp-f-shares" inputmode="numeric" placeholder="100" oninput="jpCalcCost()"></div>
+        <div class="form-group"><label class="form-label">取得単価（円）*</label><input class="form-input" type="number" id="jp-f-buy" inputmode="decimal" placeholder="1500" step="0.1" oninput="jpCalcCost()"></div>
+      </div>
+      <div class="form-group"><label class="form-label">購入日</label><input class="form-input" type="date" id="jp-f-buydate"></div>
+      <div id="jp-cost-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:none;font-size:13px">
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">取得総額</span><span id="jp-c-cost" style="font-weight:600"></span></div>
+      </div>
+      <div class="form-group"><label class="form-label">現在値（円）※任意</label><input class="form-input" type="number" id="jp-f-current" inputmode="decimal" placeholder="入力すると含み損益を自動計算" step="0.1" oninput="jpCalcUnrealized()"></div>
+      <div id="jp-unrealized-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:none;font-size:13px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">含み損益</span><span id="jp-c-unrealized" style="font-weight:600"></span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">損益率</span><span id="jp-c-rate" style="font-weight:600"></span></div>
+      </div>
     </div>
-    <div class="form-group"><label class="form-label">購入日</label><input class="form-input" type="date" id="jp-f-buydate"></div>
-    <div id="jp-cost-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:none;font-size:13px">
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">取得総額</span><span id="jp-c-cost" style="font-weight:600"></span></div>
-    </div>
-    <div class="form-group"><label class="form-label">現在値（円）※任意</label><input class="form-input" type="number" id="jp-f-current" inputmode="decimal" placeholder="入力すると含み損益を自動計算" step="0.1" oninput="jpCalcUnrealized()"></div>
-    <div id="jp-unrealized-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:none;font-size:13px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">含み損益</span><span id="jp-c-unrealized" style="font-weight:600"></span></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">損益率</span><span id="jp-c-rate" style="font-weight:600"></span></div>
+    <!-- インデックスモード入力 -->
+    <div id="jp-add-index-inputs" style="display:none">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">📊 SBIの投資信託画面の「取得金額」「評価額」を入力してください</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">取得金額（円）*</label><input class="form-input" type="number" id="jp-f-buy-amount" inputmode="numeric" placeholder="1000000" oninput="jpCalcIndex()"></div>
+        <div class="form-group"><label class="form-label">評価額（円）*</label><input class="form-input" type="number" id="jp-f-eval-amount" inputmode="numeric" placeholder="1200000" oninput="jpCalcIndex()"></div>
+      </div>
+      <div class="form-group"><label class="form-label">購入日</label><input class="form-input" type="date" id="jp-f-buydate-idx"></div>
+      <div id="jp-index-calc-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:none;font-size:13px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">評価額</span><span id="jp-ic-eval" style="font-weight:600"></span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">含み損益</span><span id="jp-ic-gain" style="font-weight:600"></span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">損益率</span><span id="jp-ic-rate" style="font-weight:600"></span></div>
+      </div>
     </div>
     <!-- 売却目標価格 -->
     <div style="margin-bottom:10px">
@@ -5802,8 +5825,14 @@ function jpRenderHome() {
   const { stocks, sells } = jpLoad();
   let totalCost = 0, totalEval = 0;
   stocks.forEach(s => {
-    totalCost += s.shares * s.buyPrice;
-    totalEval += s.currentPrice ? s.shares * s.currentPrice : s.shares * s.buyPrice;
+    if(s.type==='index'){
+      // インデックスは取得金額・評価額を直接加算
+      totalCost += s.buyAmount||s.buyPrice||0;
+      totalEval += s.evalAmount||(s.buyAmount||s.buyPrice||0);
+    }else{
+      totalCost += (s.shares||0) * (s.buyPrice||0);
+      totalEval += s.currentPrice ? (s.shares||0)*s.currentPrice : (s.shares||0)*(s.buyPrice||0);
+    }
   });
   const unrealized = totalEval - totalCost;
   const unrealizedRate = totalCost > 0 ? (unrealized / totalCost) * 100 : 0;
@@ -5915,10 +5944,20 @@ function jpCheckAlerts(stocks){
 }
 
 function jpStockCardHTML(s, compact) {
-  const cost = s.shares * s.buyPrice;
-  const evalVal = s.currentPrice ? s.shares * s.currentPrice : null;
-  const gain = evalVal !== null ? evalVal - cost : null;
-  const gainPct = gain !== null && cost > 0 ? (gain/cost)*100 : null;
+  const isIdx = s.type==='index';
+  let cost, evalVal, gain, gainPct;
+  if(isIdx){
+    // インデックス：取得金額・評価額から直接計算
+    cost = s.buyAmount||s.buyPrice||0;
+    evalVal = s.evalAmount||null;
+    gain = evalVal!==null ? evalVal-cost : null;
+    gainPct = gain!==null&&cost>0 ? (gain/cost)*100 : null;
+  }else{
+    cost = s.shares * s.buyPrice;
+    evalVal = s.currentPrice ? s.shares * s.currentPrice : null;
+    gain = evalVal !== null ? evalVal - cost : null;
+    gainPct = gain !== null && cost > 0 ? (gain/cost)*100 : null;
+  }
   const edgeCls = gain === null ? 'jp-card-hold' : (gain >= 0 ? 'jp-card-up' : 'jp-card-down');
   const acctBadgeCls = s.account === 'NISA' ? 'jp-badge-nisa' : 'jp-badge-hold';
 
@@ -5994,7 +6033,7 @@ function jpStockCardHTML(s, compact) {
         <div class="jp-badges">
           <span class="jp-badge ${acctBadgeCls}">${s.account}</span>
           <span class="jp-badge jp-badge-gray">${esc(s.sector)}</span>
-          <span class="jp-badge jp-badge-gray">${s.shares.toLocaleString()}株</span>
+          ${isIdx?'<span class="jp-badge jp-badge-gray">📊インデックス</span>':`<span class="jp-badge jp-badge-gray">${s.shares?s.shares.toLocaleString()+'株':'—'}</span>`}
           ${sellBadgeHtml}
           ${earningsHtml}
         </div>
@@ -6006,9 +6045,14 @@ function jpStockCardHTML(s, compact) {
       </div>
     </div>
     ${!compact ? `<div class="jp-detail-grid">
-      <div><div class="jp-detail-label">取得単価</div><div class="jp-detail-val">¥${s.buyPrice.toLocaleString()}</div></div>
-      ${s.currentPrice ? `<div><div class="jp-detail-label">現在値</div><div class="jp-detail-val">¥${s.currentPrice.toLocaleString()}</div></div>` : ''}
-      <div><div class="jp-detail-label">取得総額</div><div class="jp-detail-val">${jpFmt(cost)}</div></div>
+      ${isIdx?`
+        <div><div class="jp-detail-label">取得金額</div><div class="jp-detail-val">${jpFmt(s.buyAmount||0)}</div></div>
+        <div><div class="jp-detail-label">評価額</div><div class="jp-detail-val">${s.evalAmount?jpFmt(s.evalAmount):'—'}</div></div>
+      `:`
+        <div><div class="jp-detail-label">取得単価</div><div class="jp-detail-val">¥${s.buyPrice.toLocaleString()}</div></div>
+        ${s.currentPrice ? `<div><div class="jp-detail-label">現在値</div><div class="jp-detail-val">¥${s.currentPrice.toLocaleString()}</div></div>` : ''}
+        <div><div class="jp-detail-label">取得総額</div><div class="jp-detail-val">${jpFmt(cost)}</div></div>
+      `}
       <div><div class="jp-detail-label">購入日</div><div class="jp-detail-val">${s.buyDate||'—'}</div></div>
     </div>
     ${nextTargetHtml}
@@ -6063,29 +6107,43 @@ function jpRenderSell() {
 function jpSellCardHTML(s) {
   // 防御的フィールド補完（NaN/undefined対策）
   s.date = s.date || s.sellDate || todayStr();
-  const isIdxAmount = s.type==='index' && s.buyAmount!=null;
-  s.shares = isIdxAmount ? 0 : (parseFloat(s.shares) || 0);
-  s.sellPrice = parseFloat(s.sellPrice) || 0;
-  s.buyPrice = parseFloat(s.buyPrice) || 0;
-  // インデックス（金額記録）はbuyAmountとsellTotalを優先
+  // インデックス金額記録判定：type='index' かつ buyAmount or sellTotal が有効な数値の場合
+  const buyAmtRaw = parseFloat(s.buyAmount);
+  const sellAmtRaw = parseFloat(s.sellTotal);
+  const isIdxAmount = s.type==='index' && (
+    (buyAmtRaw > 0) || (sellAmtRaw > 0) ||
+    (s.buyAmount != null && s.sellTotal != null)
+  );
+
   if(isIdxAmount){
-    s.sellTotal = (typeof s.sellTotal==='number'&&!isNaN(s.sellTotal))?s.sellTotal:(parseFloat(s.buyAmount)||0);
-    s.gain = (typeof s.gain==='number'&&!isNaN(s.gain))?s.gain:s.sellTotal-(parseFloat(s.buyAmount)||0);
+    // インデックス金額記録モード
+    const buyAmt = buyAmtRaw || 0;
+    const sellAmt = sellAmtRaw || 0;
+    s.buyAmount = buyAmt;
+    s.sellTotal = sellAmt;
+    s.gain = (typeof s.gain==='number'&&!isNaN(s.gain)&&(s.gain!==0||buyAmt===0)) ? s.gain : sellAmt - buyAmt;
+    s.sellPrice = 0;
+    s.buyPrice = buyAmt; // 表示用
+    s.shares = 0;
   }else{
-    s.sellTotal = (typeof s.sellTotal === 'number' && !isNaN(s.sellTotal)) ? s.sellTotal : s.shares * s.sellPrice;
-    s.gain = (typeof s.gain === 'number' && !isNaN(s.gain)) ? s.gain : s.sellTotal - s.shares * s.buyPrice;
+    // 株モード
+    s.shares = parseFloat(s.shares) || 0;
+    s.sellPrice = parseFloat(s.sellPrice) || 0;
+    s.buyPrice = parseFloat(s.buyPrice) || 0;
+    s.sellTotal = (typeof s.sellTotal==='number'&&!isNaN(s.sellTotal)&&s.sellTotal>0) ? s.sellTotal : s.shares*s.sellPrice;
+    s.gain = (typeof s.gain==='number'&&!isNaN(s.gain)) ? s.gain : s.sellTotal - s.shares*s.buyPrice;
   }
-  s.tax = (typeof s.tax === 'number' && !isNaN(s.tax)) ? s.tax : (s.account === 'NISA' ? 0 : (s.gain > 0 ? s.gain * JP_TAX : 0));
+  s.tax = (typeof s.tax==='number'&&!isNaN(s.tax)) ? s.tax : (s.account==='NISA'?0:(s.gain>0?s.gain*JP_TAX:0));
   const net = s.gain - s.tax;
   // 保有日数・年率計算
   let holdDays=null, annualized=null;
   if(s.buyDate&&s.date){
     const bd=new Date(s.buyDate),sd=new Date(s.date);
     holdDays=Math.round((sd-bd)/(1000*60*60*24));
-    const costBasis=isIdxAmount?(parseFloat(s.buyAmount)||0):s.shares*s.buyPrice;
+    const costBasis=isIdxAmount?s.buyAmount:s.shares*s.buyPrice;
     if(holdDays>0&&costBasis>0&&s.sellTotal>0){
       const years=holdDays/365.25;
-      annualized=(Math.pow((s.sellTotal/costBasis),1/years)-1)*100;
+      annualized=(Math.pow(s.sellTotal/costBasis,1/years)-1)*100;
     }
   }
   const holdDaysHtml=holdDays!==null?`<div><div class="jp-detail-label">保有日数</div><div class="jp-detail-val">${holdDays}日</div></div>`:'';
@@ -6110,10 +6168,15 @@ function jpSellCardHTML(s) {
       </div>
     </div>
     <div class="jp-detail-grid">
-      <div><div class="jp-detail-label">売却単価</div><div class="jp-detail-val">¥${s.sellPrice.toLocaleString()}</div></div>
-      <div><div class="jp-detail-label">取得単価</div><div class="jp-detail-val">¥${s.buyPrice.toLocaleString()}</div></div>
+      ${isIdxAmount?`
+        <div><div class="jp-detail-label">取得金額</div><div class="jp-detail-val">${jpFmt(s.buyAmount)}</div></div>
+        <div><div class="jp-detail-label">売却金額</div><div class="jp-detail-val">${jpFmt(s.sellTotal)}</div></div>
+      `:`
+        <div><div class="jp-detail-label">売却単価</div><div class="jp-detail-val">¥${s.sellPrice.toLocaleString()}</div></div>
+        <div><div class="jp-detail-label">取得単価</div><div class="jp-detail-val">¥${s.buyPrice.toLocaleString()}</div></div>
+      `}
       <div><div class="jp-detail-label">税金</div><div class="jp-detail-val">${s.account==='NISA'?'非課税':jpFmt(s.tax)}</div></div>
-      <div><div class="jp-detail-label">税引後手取り</div><div class="jp-detail-val" style="font-weight:700">${jpFmt(net)}</div></div>
+      <div><div class="jp-detail-label">税引後手取り</div><div class="jp-detail-val" style="font-weight:700;color:${net>=0?'var(--green)':'var(--red)'}">${jpFmtSign(net)}</div></div>
       ${buyDateHtml}${sellDateHtml}${holdDaysHtml}${annualizedHtml}
     </div>
     ${s.memo?`<div style="font-size:12px;color:var(--text2);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">💬 ${esc(s.memo)}</div>`:''}
@@ -6187,8 +6250,40 @@ function jpDrawDonut(canvasId, entries, colors) {
 
 // --- ADD/EDIT MODAL ---
 let jpEditingId = null;
+let jpAddMode = 'stock'; // 'stock' or 'index'
+
+function jpSetAddMode(mode){
+  jpAddMode=mode;
+  const isIdx=mode==='index';
+  document.getElementById('jp-add-stock-inputs').style.display=isIdx?'none':'block';
+  document.getElementById('jp-add-index-inputs').style.display=isIdx?'block':'none';
+  const tStock=document.getElementById('jp-tab-stock');
+  const tIdx=document.getElementById('jp-tab-index');
+  if(tStock){tStock.style.background=isIdx?'transparent':'var(--accent)';tStock.style.color=isIdx?'var(--text2)':'#fff';}
+  if(tIdx){tIdx.style.background=isIdx?'var(--accent)':'transparent';tIdx.style.color=isIdx?'#fff':'var(--text2)';}
+}
+
+function jpCalcIndex(){
+  const buyAmt=parseFloat(document.getElementById('jp-f-buy-amount')?.value)||0;
+  const evalAmt=parseFloat(document.getElementById('jp-f-eval-amount')?.value)||0;
+  const box=document.getElementById('jp-index-calc-box');
+  if(buyAmt>0&&evalAmt>0){
+    const gain=evalAmt-buyAmt;
+    const rate=gain/buyAmt*100;
+    box.style.display='block';
+    document.getElementById('jp-ic-eval').textContent=jpFmt(evalAmt);
+    const gEl=document.getElementById('jp-ic-gain');
+    gEl.textContent=(gain>=0?'+':'')+jpFmt(gain);
+    gEl.style.color=gain>=0?'var(--green)':'var(--red)';
+    const rEl=document.getElementById('jp-ic-rate');
+    rEl.textContent=(rate>=0?'+':'')+rate.toFixed(2)+'%';
+    rEl.style.color=rate>=0?'var(--green)':'var(--red)';
+  }else{box.style.display='none';}
+}
+
 function jpShowAddModal() {
   jpEditingId = null;
+  jpSetAddMode('stock');
   document.getElementById('jp-add-title').textContent = '銘柄を追加';
   document.getElementById('jp-add-del-wrap').style.display = 'none';
   ['jp-f-code','jp-f-name','jp-f-memo','jp-f-sell1','jp-f-sell2','jp-f-sell3'].forEach(id => document.getElementById(id).value = '');
@@ -6198,8 +6293,12 @@ function jpShowAddModal() {
   document.getElementById('jp-f-buy').value = '';
   document.getElementById('jp-f-current').value = '';
   document.getElementById('jp-f-buydate').value = todayStr();
+  document.getElementById('jp-f-buy-amount').value = '';
+  document.getElementById('jp-f-eval-amount').value = '';
+  document.getElementById('jp-f-buydate-idx').value = todayStr();
   document.getElementById('jp-cost-box').style.display = 'none';
   document.getElementById('jp-unrealized-box').style.display = 'none';
+  document.getElementById('jp-index-calc-box').style.display = 'none';
   document.getElementById('jpAddModal').classList.add('open');
 }
 function jpOpenEdit(id) {
@@ -6207,21 +6306,30 @@ function jpOpenEdit(id) {
   const s = stocks.find(x => x.id === id);
   if (!s) return;
   jpEditingId = id;
+  const isIdx = s.type==='index';
+  jpSetAddMode(isIdx?'index':'stock');
   document.getElementById('jp-add-title').textContent = '銘柄を編集';
   document.getElementById('jp-add-del-wrap').style.display = 'block';
   document.getElementById('jp-f-code').value = s.code || '';
   document.getElementById('jp-f-name').value = s.name;
-  document.getElementById('jp-f-sector').value = s.sector;
+  document.getElementById('jp-f-sector').value = s.sector||'その他';
   document.getElementById('jp-f-account').value = s.account;
-  document.getElementById('jp-f-shares').value = s.shares;
-  document.getElementById('jp-f-buy').value = s.buyPrice;
-  document.getElementById('jp-f-current').value = s.currentPrice || '';
-  document.getElementById('jp-f-buydate').value = s.buyDate || '';
   document.getElementById('jp-f-memo').value = s.memo || '';
   document.getElementById('jp-f-sell1').value = s.sell1 || '';
   document.getElementById('jp-f-sell2').value = s.sell2 || '';
   document.getElementById('jp-f-sell3').value = s.sell3 || '';
-  jpCalcCost(); jpCalcUnrealized();
+  if(isIdx){
+    document.getElementById('jp-f-buy-amount').value = s.buyAmount||s.buyPrice||'';
+    document.getElementById('jp-f-eval-amount').value = s.evalAmount||'';
+    document.getElementById('jp-f-buydate-idx').value = s.buyDate||'';
+    jpCalcIndex();
+  }else{
+    document.getElementById('jp-f-shares').value = s.shares;
+    document.getElementById('jp-f-buy').value = s.buyPrice;
+    document.getElementById('jp-f-current').value = s.currentPrice || '';
+    document.getElementById('jp-f-buydate').value = s.buyDate || '';
+    jpCalcCost(); jpCalcUnrealized();
+  }
   document.getElementById('jpAddModal').classList.add('open');
 }
 function jpCloseAdd() { document.getElementById('jpAddModal').classList.remove('open'); }
@@ -6273,38 +6381,71 @@ function jpCalcUnrealized() {
 }
 function jpSaveStock() {
   const name = document.getElementById('jp-f-name').value.trim();
-  const shares = parseFloat(document.getElementById('jp-f-shares').value);
-  const buyPrice = parseFloat(document.getElementById('jp-f-buy').value);
-  // Highlight missing fields
-  ['jp-f-name','jp-f-shares','jp-f-buy'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.borderColor = '';
-  });
-  const missing = [];
-  if (!name) { document.getElementById('jp-f-name').style.borderColor='#ef4444'; missing.push('銘柄名'); }
-  if (!shares) { document.getElementById('jp-f-shares').style.borderColor='#ef4444'; missing.push('購入株数'); }
-  if (!buyPrice) { document.getElementById('jp-f-buy').style.borderColor='#ef4444'; missing.push('取得単価'); }
-  if (missing.length) { alert(missing.join('・') + ' を入力してください'); return; }
+  if(!name){ document.getElementById('jp-f-name').style.borderColor='#ef4444'; alert('銘柄名を入力してください'); return; }
+  document.getElementById('jp-f-name').style.borderColor='';
+
+  const isIdx=(typeof jpAddMode!=='undefined')&&jpAddMode==='index';
   const data = jpLoad();
-  const stock = {
-    id: jpEditingId || jpUID(),
-    code: document.getElementById('jp-f-code').value.trim(),
-    name, shares, buyPrice,
-    sector: document.getElementById('jp-f-sector').value,
-    account: document.getElementById('jp-f-account').value,
-    currentPrice: parseFloat(document.getElementById('jp-f-current').value) || null,
-    buyDate: document.getElementById('jp-f-buydate').value,
-    memo: document.getElementById('jp-f-memo').value.trim(),
-    sell1: parseFloat(document.getElementById('jp-f-sell1').value) || null,
-    sell2: parseFloat(document.getElementById('jp-f-sell2').value) || null,
-    sell3: parseFloat(document.getElementById('jp-f-sell3').value) || null,
-  };
+  let stock;
+
+  if(isIdx){
+    // インデックスモード：取得金額・評価額を直接入力
+    const buyAmount=parseFloat(document.getElementById('jp-f-buy-amount').value)||0;
+    const evalAmount=parseFloat(document.getElementById('jp-f-eval-amount').value)||0;
+    if(!buyAmount||!evalAmount){
+      alert('取得金額と評価額を入力してください');return;
+    }
+    const gain=evalAmount-buyAmount;
+    stock={
+      id: jpEditingId||jpUID(),
+      type:'index',
+      code: document.getElementById('jp-f-code').value.trim(),
+      name,
+      sector: document.getElementById('jp-f-sector').value,
+      account: document.getElementById('jp-f-account').value,
+      // インデックス用フィールド
+      buyAmount,       // 取得金額（合計）
+      evalAmount,      // 評価額（現在）
+      gain,            // 含み損益
+      // 株モードとの互換性のため下記は設定
+      shares: null,
+      buyPrice: buyAmount,  // 取得単価として取得金額を代入（資産管理連携用）
+      currentPrice: null,
+      buyDate: document.getElementById('jp-f-buydate-idx').value,
+      memo: document.getElementById('jp-f-memo').value.trim(),
+      sell1:null,sell2:null,sell3:null,
+    };
+  }else{
+    // 株モード（従来通り）
+    const shares=parseFloat(document.getElementById('jp-f-shares').value);
+    const buyPrice=parseFloat(document.getElementById('jp-f-buy').value);
+    ['jp-f-shares','jp-f-buy'].forEach(id=>{document.getElementById(id).style.borderColor='';});
+    const missing=[];
+    if(!shares){document.getElementById('jp-f-shares').style.borderColor='#ef4444';missing.push('購入株数');}
+    if(!buyPrice){document.getElementById('jp-f-buy').style.borderColor='#ef4444';missing.push('取得単価');}
+    if(missing.length){alert(missing.join('・')+' を入力してください');return;}
+    stock={
+      id: jpEditingId||jpUID(),
+      type:'stock',
+      code: document.getElementById('jp-f-code').value.trim(),
+      name,shares,buyPrice,
+      sector: document.getElementById('jp-f-sector').value,
+      account: document.getElementById('jp-f-account').value,
+      currentPrice: parseFloat(document.getElementById('jp-f-current').value)||null,
+      buyDate: document.getElementById('jp-f-buydate').value,
+      memo: document.getElementById('jp-f-memo').value.trim(),
+      sell1: parseFloat(document.getElementById('jp-f-sell1').value)||null,
+      sell2: parseFloat(document.getElementById('jp-f-sell2').value)||null,
+      sell3: parseFloat(document.getElementById('jp-f-sell3').value)||null,
+    };
+  }
+
   if (jpEditingId) {
     const idx = data.stocks.findIndex(s => s.id === jpEditingId);
     if (idx >= 0) data.stocks[idx] = stock;
   } else { data.stocks.push(stock); }
   jpSave(data); jpCloseAdd(); jpRenderAll();
-  showToast('📈 銘柄を保存しました');
+  showToast(isIdx?'📊 インデックスを保存しました':'📈 銘柄を保存しました');
 }
 
 // ============================================================
@@ -6430,14 +6571,17 @@ function jpEditSell(id){
   jpSellEditId=id;
   document.getElementById('jp-sell-modal-title').textContent='売却記録を編集';
   document.getElementById('jp-sell-info').innerHTML=`<div style="font-size:12px;color:var(--text2)">編集モード：${esc(s.name)}</div>`;
-  // 種別によってモード切り替え
-  const isIdx=s.type==='index'&&s.buyAmount!=null;
+  // type='index'なら必ずインデックスモードで開く
+  const isIdx=s.type==='index';
   jpSellMode=isIdx?'index':'stock';
   document.getElementById('jp-stock-inputs').style.display=isIdx?'none':'block';
   document.getElementById('jp-index-inputs').style.display=isIdx?'block':'none';
   if(isIdx){
-    document.getElementById('jp-s-buy-amount').value=s.buyAmount||'';
-    document.getElementById('jp-s-sell-amount').value=s.sellTotal||'';
+    // buyAmount優先、なければbuyPrice（旧データ互換）を使用
+    const ba=s.buyAmount>0?s.buyAmount:(s.buyPrice||'');
+    const sa=s.sellTotal>0?s.sellTotal:'';
+    document.getElementById('jp-s-buy-amount').value=ba;
+    document.getElementById('jp-s-sell-amount').value=sa;
   }else{
     document.getElementById('jp-s-shares').value=s.shares;
     document.getElementById('jp-s-hint').textContent='';
@@ -6464,7 +6608,13 @@ function jpCalcSell() {
     // インデックスモード：金額直接入力
     costBasis=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
     sellTotal=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
-    account=document.getElementById('jp-sd-account')?.value||'特定口座';
+    // 編集モードは既存レコードのaccount、新規はフォームから取得
+    if(jpSellEditId){
+      const {sells}=jpLoad();const se=sells.find(x=>x.id===jpSellEditId);
+      if(se)account=se.account;
+    }else{
+      account=document.getElementById('jp-sd-account')?.value||'特定口座';
+    }
     valid=costBasis>0&&sellTotal>0;
   }else{
     // 株モード：株数×単価
@@ -6527,10 +6677,22 @@ function jpRecordSell() {
     const idx=data.sells.findIndex(x=>x.id===jpSellEditId);
     if(idx>=0){
       const s=data.sells[idx];
-      const sellTotal=sellSh*sellPr;
-      const gain=sellTotal-sellSh*s.buyPrice;
-      const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
-      data.sells[idx]={...s,shares:sellSh,sellPrice:sellPr,sellTotal,gain,tax,date:sellDate,buyDate,memo,reflection};
+      if((typeof jpSellMode!=='undefined')&&jpSellMode==='index'){
+        // インデックスモード：金額直接入力で更新
+        const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
+        const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
+        const gain=sellAmount-buyAmount;
+        const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
+        data.sells[idx]={...s,type:'index',buyAmount,sellTotal:sellAmount,gain,tax,
+          shares:null,sellPrice:null,buyPrice:buyAmount,
+          date:sellDate,buyDate,memo,reflection};
+      }else{
+        // 株モード（従来通り）
+        const sellTotal=sellSh*sellPr;
+        const gain=sellTotal-sellSh*s.buyPrice;
+        const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
+        data.sells[idx]={...s,shares:sellSh,sellPrice:sellPr,sellTotal,gain,tax,date:sellDate,buyDate,memo,reflection};
+      }
     }
     jpSave(data);jpCloseSell();jpRenderAll();showToast('✅ 売却記録を更新しました');
     return;
