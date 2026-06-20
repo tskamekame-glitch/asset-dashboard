@@ -6710,6 +6710,9 @@ function jpCalcIdxUnit(){
   jpCalcSell();
 }
 
+// 計算済み値をグローバルに保持（保存時に使用）
+let _jpCalcResult={sellTotal:0,costBasis:0,account:'特定口座',valid:false};
+
 function jpCalcSell() {
   const buyDate = document.getElementById('jp-s-buydate').value;
   const sellDate = document.getElementById('jp-s-date').value;
@@ -6770,6 +6773,8 @@ function jpCalcSell() {
       document.getElementById('jp-sc-annualized').textContent='—';
     }
   }else{box.style.display='none';}
+  // 計算結果をグローバルに保存
+  _jpCalcResult={sellTotal,costBasis,account,valid};
 }
 function jpRecordSell() {
   const sellSh = parseFloat(document.getElementById('jp-s-shares').value);
@@ -6793,10 +6798,11 @@ function jpRecordSell() {
       // インデックス判定：jpSellMode または既存レコードのtypeで判断
       const saveAsIdx=(jpSellMode==='index')||s.type==='index';
       if(saveAsIdx){
-        // インデックスモード：金額直接入力で更新
+        // インデックスモード：まず再計算してから値を取得
         if(typeof jpIdxInputMode!=='undefined'&&jpIdxInputMode==='unit') jpCalcIdxUnit();
-        const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
-        const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
+        jpCalcSell(); // 最新値で再計算
+        const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||_jpCalcResult.costBasis||0;
+        const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||_jpCalcResult.sellTotal||0;
         if(!sellAmount){alert('売却金額を入力してください');return;}
         const gain=sellAmount-buyAmount;
         const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
@@ -6844,11 +6850,10 @@ function jpRecordSell() {
   if(!name){alert('銘柄名は必須です');return;}
 
   if((typeof jpSellMode!=='undefined')&&jpSellMode==='index'){
-    // unit入力モードの場合は先に計算してbuy-amount/sell-amountを更新
     if(typeof jpIdxInputMode!=='undefined'&&jpIdxInputMode==='unit') jpCalcIdxUnit();
-    // インデックスモード：取得金額・売却金額直接入力
-    const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
-    const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
+    jpCalcSell();
+    const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||_jpCalcResult.costBasis||0;
+    const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||_jpCalcResult.sellTotal||0;
     if(!buyAmount||!sellAmount){alert('取得金額と売却金額は必須です');return;}
     const gain=sellAmount-buyAmount;
     const tax=account==='NISA'?0:(gain>0?gain*JP_TAX:0);
