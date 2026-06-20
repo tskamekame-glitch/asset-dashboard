@@ -4565,9 +4565,16 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
     });
   }
 
-  makeLineChart('gainLineStockChart','gainLineStock',stockLine,stockPctLine,
+  // データがない場合は合算データをフォールバック表示
+  const stockHasData=stockLine.some(v=>v!==null);
+  const indexHasData=indexLine.some(v=>v!==null);
+  makeLineChart('gainLineStockChart','gainLineStock',
+    stockHasData?stockLine:gainLine,
+    stockHasData?stockPctLine:pctLine,
     '#E24B4A','rgba(226,75,74,0.12)');
-  makeLineChart('gainLineIndexChart','gainLineIndex',indexLine,indexPctLine,
+  makeLineChart('gainLineIndexChart','gainLineIndex',
+    indexHasData?indexLine:gainLine,
+    indexHasData?indexPctLine:pctLine,
     '#2980b9','rgba(41,128,185,0.12)');
 
   // ── 合算グラフ（株・インデックス・合算の3ライン） ──
