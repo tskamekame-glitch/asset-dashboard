@@ -4459,11 +4459,22 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   const gainDataStock=filtered.map(s=>trCalcSnapshotGain(s,false,'stock'));
   const gainDataIndex=filtered.map(s=>trCalcSnapshotGain(s,false,'index'));
 
+  // スナップショットにaccountsがない場合、現在のamAccountsで最新点を補完
+  const lastIdx=filtered.length-1;
+  if(!gainData[lastIdx]){
+    const cur=trCalcSnapshotGain(filtered[lastIdx],true,null);
+    const curS=trCalcSnapshotGain(filtered[lastIdx],true,'stock');
+    const curI=trCalcSnapshotGain(filtered[lastIdx],true,'index');
+    if(cur) gainData[lastIdx]=cur;
+    if(curS)gainDataStock[lastIdx]=curS;
+    if(curI)gainDataIndex[lastIdx]=curI;
+  }
+
   const validIdx=gainData.map((g,i)=>g?i:null).filter(i=>i!==null);
 
   if(validIdx.length===0){
     card.style.display='block';
-    if(summaryEl)summaryEl.innerHTML='<span style="color:var(--text3)">取得単価が入力された口座を含む記録がまだありません。</span>';
+    if(summaryEl)summaryEl.innerHTML='<span style="color:var(--text3)">取得単価が入力された口座を含む記録がまだありません。資産管理タブで取得単価を入力してください。</span>';
     return;
   }
   card.style.display='block';
@@ -4521,17 +4532,24 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   function makeLineChart(canvasId,key,data,pctData,lineColor,fillColor){
     const canvas=document.getElementById(canvasId);
     if(!canvas)return;
+    if(chartInstances[key]){chartInstances[key].destroy();chartInstances[key]=null;}
     const hasData=data.some(v=>v!==null);
+    // メッセージ要素のクリア
+    const oldMsg=canvas.parentElement.querySelector('.line-empty');
+    if(oldMsg)oldMsg.remove();
     if(!hasData){
       canvas.style.display='none';
-      const msg=canvas.parentElement.querySelector('.no-data-msg');
-      if(!msg){const d=document.createElement('div');d.className='no-data-msg';d.style.cssText='text-align:center;padding:40px 0;font-size:12px;color:var(--text3)';d.textContent='データなし（記録がありません）';canvas.parentElement.appendChild(d);}
+      const msg=document.createElement('div');
+      msg.className='line-empty';
+      msg.style.cssText='text-align:center;padding:40px 0;font-size:12px;color:var(--text3)';
+      msg.textContent='データなし（記録がありません）';
+      canvas.parentElement.appendChild(msg);
       return;
     }
     canvas.style.display='';
-    // 以前のno-data-msgをクリア
-    const oldMsg=canvas.parentElement.querySelector('.no-data-msg');
-    if(oldMsg)oldMsg.remove();
+    // Chart.jsがサイズを正しく取得できるよう明示的にheightを設定
+    const ph=canvas.parentElement;
+    if(ph&&ph.style.height){canvas.style.height=ph.style.height;}
     chartInstances[key]=new Chart(canvas,{
       type:'line',
       data:{labels:gLabels,datasets:[{
@@ -4693,7 +4711,9 @@ function trRenderSimChart(){
 
   // グラフ描画
   trDestroyChart('sim');
-  const cagrLabel=`実績利回り（${cagrSign}${(actualCAGR*100).toFixed(1)}%/年）`;
+  const _cagrPct2=actualCAGR*100;
+  const _cagrSign2=_cagrPct2>=0?'+':'';
+  const cagrLabel=`実績利回り（${_cagrSign2}${_cagrPct2.toFixed(1)}%/年）`;
   // 実績期間とX軸ラベルの区切り点
   const splitIdx=labels.length-1;
   chartInstances['sim']=new Chart(document.getElementById('simChart'),{type:'line',data:{labels:extLabels,datasets:[
@@ -4934,12 +4954,25 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     }
     const canvas=document.getElementById(canvasId);
     if(!canvas)return;
-    if(!activeItems.length){canvas.parentElement.style.minHeight='60px';canvas.parentElement.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:var(--text3)">データなし</div>';return;}
+    if(!activeItems.length){
+      canvas.style.display='none';
+      canvas.parentElement.style.minHeight='60px';
+      // canvasは削除せずメッセージdivを追加
+      let msg=canvas.parentElement.querySelector('.hbar-empty');
+      if(!msg){msg=document.createElement('div');msg.className='hbar-empty';msg.style.cssText='padding:12px;text-align:center;font-size:12px;color:var(--text3)';msg.textContent='データなし';canvas.parentElement.appendChild(msg);}
+      return;
+    }
+    canvas.style.display='';
+    const oldMsg=canvas.parentElement.querySelector('.hbar-empty');
+    if(oldMsg)oldMsg.remove();
     const labels=activeItems.map(i=>i.name);
     const data=activeItems.map(i=>i.gain);
     const colors=activeItems.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
     const heightPx=Math.max(160,activeItems.length*34+50);
     canvas.parentElement.style.minHeight=heightPx+'px';
+    canvas.parentElement.style.height=heightPx+'px';
+    canvas.style.width='100%';
+    canvas.style.height=heightPx+'px';
     chartInstances[destroyKey]=new Chart(canvas,{
       type:'bar',
       data:{labels,datasets:[{label:'損益額',data,backgroundColor:colors,borderRadius:4}]},
@@ -5040,7 +5073,11 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
     ?s.accounts.filter(a=>a.cat===catName&&!excludeList.some(ex=>a.name===ex||a.name.includes(ex))).map(a=>a.name)
     :[]))];
 
-  const card=document.getElementById(cardId);if(!accountNames.length){card.style.display='none';return;}card.style.display='block';
+  const card=document.getElementById(cardId);
+  // accountsがなくてもcats合計データがあれば表示する
+  const hasCatData=filtered.some(s=>s.cats&&s.cats[catName]>0);
+  if(!accountNames.length&&!hasCatData){card.style.display='none';return;}
+  card.style.display='block';
   const colors=['#185FA5','#0F6E56','#BA7517','#533C89','#D4537E','#D85A30','#888780'];
   // 口座別ラインは最初は非表示（凡例クリックで表示）
   const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{if(!s.accounts)return 0;const acct=s.accounts.find(a=>a.name===name&&a.cat===catName);return acct?acct.amount:0;}),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:1.5,pointRadius:2,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3,hidden:true}));
