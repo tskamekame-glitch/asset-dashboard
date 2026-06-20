@@ -4188,8 +4188,8 @@ function trRenderCharts(){
       // 1年後予測
       +`<div style="background:rgba(186,117,23,0.08);border-radius:8px;padding:8px 10px">`
       +`<div style="font-size:10px;color:var(--text3);margin-bottom:2px">🔮 1年後予測（実績利回り）</div>`
-      +`<div style="font-size:16px;font-weight:700;color:var(--amber)">${Math.round(oneYearLater/10000).toLocaleString()}<span style="font-size:12px">万円</span></div>`
-      +`<div style="font-size:10px;color:var(--text3);margin-top:2px">${oneYearStr}目途 / 目標利回りなら${Math.round(oneYearTarget/10000).toLocaleString()}万</div>`
+      +`<div style="font-size:16px;font-weight:700;color:var(--amber)">${fmtOku(oneYearLater)}</div>`
+      +`<div style="font-size:10px;color:var(--text3);margin-top:2px">${oneYearStr}目途 / 目標利回りなら${fmtOku(oneYearTarget)}</div>`
       +`</div></div>`
       // 目標vs実績の差分
       +`<span style="font-size:11px;color:var(--text2)">基準日：${labels[0]}</span>`
@@ -4633,6 +4633,19 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   }
 }
 
+// 億円対応フォーマット（¥なし、sign=true で符号付き）
+function fmtOku(n,sign){
+  const v=Math.round(n);
+  const abs=Math.abs(v);
+  const pre=sign?(v>=0?'+':''):'' ;
+  if(abs>=1e8){
+    const oku=Math.floor(abs/1e8);
+    const man=Math.round((abs-oku*1e8)/1e4);
+    const body=man===0?oku+'億円':oku+'億'+man+'万円';
+    return pre+body;
+  }
+  return pre+Math.round(abs/10000).toLocaleString()+'万';
+}
 function trRenderSimChart(){
   const filtered=getFiltered();if(!filtered||filtered.length<2)return;
   const labels=filtered.map(s=>s.date);
@@ -4694,13 +4707,13 @@ function trRenderSimChart(){
       </div>
       <div style="background:rgba(15,110,86,0.08);border-radius:8px;padding:10px;border:0.5px solid var(--border)">
         <div style="font-size:10px;color:var(--text3);margin-bottom:2px">📈 実績利回り予測（${horizonYears}年後）</div>
-        <div style="font-size:16px;font-weight:700;color:var(--green)">${Math.round(actualFinal/10000).toLocaleString()}<span style="font-size:11px">万円</span></div>
-        <div style="font-size:10px;color:var(--green);margin-top:2px">${actualGain>=0?'+':''}${Math.round(actualGain/10000).toLocaleString()}万（${endLabel}目途）</div>
+        <div style="font-size:16px;font-weight:700;color:var(--green)">${fmtOku(actualFinal)}</div>
+        <div style="font-size:10px;color:var(--green);margin-top:2px">${fmtOku(actualGain,true)}（${endLabel}目途）</div>
       </div>
       <div style="background:rgba(186,117,23,0.08);border-radius:8px;padding:10px;border:0.5px solid var(--border)">
         <div style="font-size:10px;color:var(--text3);margin-bottom:2px">🎯 目標利回り予測（${horizonYears}年後）</div>
-        <div style="font-size:16px;font-weight:700;color:var(--amber)">${Math.round(targetFinal/10000).toLocaleString()}<span style="font-size:11px">万円</span></div>
-        <div style="font-size:10px;color:var(--amber);margin-top:2px">${targetGain>=0?'+':''}${Math.round(targetGain/10000).toLocaleString()}万（年率${(yieldRate*100).toFixed(1)}%）</div>
+        <div style="font-size:16px;font-weight:700;color:var(--amber)">${fmtOku(targetFinal)}</div>
+        <div style="font-size:10px;color:var(--amber);margin-top:2px">${fmtOku(targetGain,true)}（年率${(yieldRate*100).toFixed(1)}%）</div>
       </div>
     </div>`;
   }
