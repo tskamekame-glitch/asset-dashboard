@@ -3938,8 +3938,8 @@ function trFmt(n){
     const sign=v<0?'-':'';
     const oku=Math.floor(Math.abs(v)/1e8);
     const man=Math.round((Math.abs(v)-oku*1e8)/1e4);
-    if(man===0)return sign+'¥'+oku.toLocaleString()+'億円';
-    return sign+'¥'+oku.toLocaleString()+'億'+man.toLocaleString()+'万円';
+    if(man===0)return sign+oku.toLocaleString()+'億円';
+    return sign+oku.toLocaleString()+'億'+man.toLocaleString()+'万円';
   }
   return'¥'+v.toLocaleString('ja-JP');
 }
@@ -4140,7 +4140,7 @@ function trRenderCharts(){
     legend:{display:false},
     tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},
     datalabels:{display:false}
-  },scales:{y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?'¥'+ok+'億':'¥'+ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  },scales:{y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
 
   // ── シミュレーション用のCAGR計算 ──
   const yieldRate=(parseFloat(document.getElementById('yieldSlider')?document.getElementById('yieldSlider').value:7)||7)/100;
@@ -4209,7 +4209,7 @@ function trRenderCharts(){
   const presentCats=TR_BAR_CAT_ORDER.filter(c=>snapshots.some(s=>s.cats&&s.cats[c]>0));
   const extraCats=[...new Set(snapshots.flatMap(s=>Object.keys(s.cats||{})))].filter(c=>!TR_BAR_CAT_ORDER.includes(c));
   const orderedCats=[...presentCats,...extraCats];
-  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:orderedCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_BAR_CAT_COLORS[cat]||TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?'¥'+ok+'億':'¥'+ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:orderedCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_BAR_CAT_COLORS[cat]||TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
   trDestroyChart('donut');
   const TR_DONUT_CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
   const TR_DONUT_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
@@ -4733,7 +4733,7 @@ function trRenderSimChart(){
     // 実績区間と予測区間を視覚的に区別する縦線
     annotation:void 0
   },scales:{
-    y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?'¥'+ok+'億':'¥'+ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
+    y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
     x:{ticks:{color:tickColor,font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:horizonYears<=2?12:horizonYears<=5?8:6},grid:{display:false}}
   },layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
 }
@@ -5087,7 +5087,7 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
       datalabels:{display:false}
     },
     scales:{
-      y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?'¥'+ok+'億':'¥'+ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
+      y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
       x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
     },
     layout:{padding:{top:8,right:8}}
