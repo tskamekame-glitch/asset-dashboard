@@ -779,6 +779,12 @@ tr:last-child td{border-bottom:none}
   <div style="padding:0 16px 8px;display:flex;gap:12px;flex-wrap:wrap" id="yieldSummary"></div>
   <div class="chart-container"><canvas id="lineChart"></canvas></div>
 </div>
+    <!-- 週次収支 -->
+    <div class="card" id="weeklyCard" style="display:none">
+      <div class="card-head"><h2>📅 週次収支</h2></div>
+      <div style="padding:0 16px 8px;font-size:11px;color:var(--text3)">CSVアップロードデータから週ごとの資産増減を自動集計します</div>
+      <div id="weeklyContent" style="padding:0 8px 12px"></div>
+    </div>
     <!-- 投資結果（損益）推移 -->
     <div class="card" id="gainLineCard" style="display:none">
       <div class="card-head"><h2>📈 投資結果（損益）推移</h2></div>
@@ -4060,7 +4066,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -4290,6 +4296,7 @@ function trRenderCharts(){
     buildDonut('donutIndiaChart','donutIndiaCard','donutIndiaSummary','インドインデックス',tickColor,isDark);
   })();
   trRenderGainLineChart(filtered,labels,tickColor,gridColor);
+  trRenderWeekly(filtered);
   trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
   trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);
@@ -4525,6 +4532,92 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
       plugins:[ChartDataLabels]
     });
   }
+}
+
+function trRenderWeekly(filtered){
+  const el=document.getElementById('weeklyContent');
+  if(!el)return;
+  if(!filtered||filtered.length<2){el.innerHTML='<div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">データが2件以上必要です</div>';return;}
+
+  function getWeekKey(dateStr){
+    const d=new Date(dateStr);
+    const day=d.getDay()||7;
+    const mon=new Date(d);
+    mon.setDate(d.getDate()-day+1);
+    return mon.toISOString().slice(0,10);
+  }
+
+  const byWeek={};
+  filtered.forEach(s=>{
+    if(!s.date||!s.total)return;
+    const wk=getWeekKey(s.date);
+    if(!byWeek[wk]){byWeek[wk]={first:s,last:s,dates:[s.date]};}
+    else{
+      if(s.date<byWeek[wk].first.date)byWeek[wk].first=s;
+      if(s.date>byWeek[wk].last.date)byWeek[wk].last=s;
+      byWeek[wk].dates.push(s.date);
+    }
+  });
+
+  const sortedKeys=Object.keys(byWeek).sort((a,b)=>a.localeCompare(b));
+  const weekKeys=[...sortedKeys].reverse();
+  let html='';
+
+  // 直近4週サマリー
+  const recentKeys=sortedKeys.slice(-4).reverse();
+  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:12px">';
+  recentKeys.forEach(wk=>{
+    const w=byWeek[wk];
+    const prevKey=sortedKeys[sortedKeys.indexOf(wk)-1];
+    const prevLast=prevKey?byWeek[prevKey].last:null;
+    const startVal=prevLast?prevLast.total:w.first.total;
+    const endVal=w.last.total;
+    const diff=endVal-startVal;
+    const pct=startVal>0?diff/startVal*100:0;
+    const col=diff>=0?'var(--green)':'var(--danger)';
+    const sign=diff>=0?'+':'';
+    const d=new Date(wk);
+    const label=(d.getMonth()+1)+'/'+(d.getDate())+'〜週';
+    html+=`<div style="background:var(--bg2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div>
+      <div style="font-size:14px;font-weight:700;color:${col}">${sign}${Math.round(diff/10000).toLocaleString()}万</div>
+      <div style="font-size:11px;color:${col}">${sign}${pct.toFixed(1)}%</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${trFmt(endVal)}</div>
+    </div>`;
+  });
+  html+='</div>';
+
+  // 週別一覧
+  html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="border-bottom:1px solid var(--border)">'
+    +'<th style="text-align:left;padding:6px 4px;color:var(--text3);font-weight:600">週（月曜起点）</th>'
+    +'<th style="text-align:right;padding:6px 4px;color:var(--text3);font-weight:600">週末残高</th>'
+    +'<th style="text-align:right;padding:6px 4px;color:var(--text3);font-weight:600">増減</th>'
+    +'<th style="text-align:right;padding:6px 4px;color:var(--text3);font-weight:600">増減率</th>'
+    +'<th style="text-align:right;padding:6px 4px;color:var(--text3);font-weight:600">記録数</th>'
+    +'</tr></thead><tbody>';
+
+  weekKeys.forEach(wk=>{
+    const w=byWeek[wk];
+    const prevKey=sortedKeys[sortedKeys.indexOf(wk)-1];
+    const prevLast=prevKey?byWeek[prevKey].last:null;
+    const startVal=prevLast?prevLast.total:w.first.total;
+    const endVal=w.last.total;
+    const diff=endVal-startVal;
+    const pct=startVal>0?diff/startVal*100:0;
+    const col=diff>=0?'var(--green)':'var(--danger)';
+    const sign=diff>=0?'+':'';
+    const d=new Date(wk);
+    const label=d.getFullYear()+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')+'〜';
+    html+=`<tr style="border-bottom:0.5px solid var(--border)">
+      <td style="padding:7px 4px;color:var(--text1)">${label}</td>
+      <td style="padding:7px 4px;text-align:right;font-variant-numeric:tabular-nums">${trFmt(endVal)}</td>
+      <td style="padding:7px 4px;text-align:right;color:${col};font-weight:600">${prevLast?sign+trFmt(Math.abs(diff)):'—'}</td>
+      <td style="padding:7px 4px;text-align:right;color:${col}">${prevLast?sign+pct.toFixed(1)+'%':'—'}</td>
+      <td style="padding:7px 4px;text-align:right;color:var(--text3)">${w.dates.length}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
 }
 
 function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
