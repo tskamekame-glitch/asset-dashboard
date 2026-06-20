@@ -765,20 +765,37 @@ tr:last-child td{border-bottom:none}
       <button class="filter-btn" data-f="6m" onclick="setFilter('6m')">6ヶ月</button>
       <button class="filter-btn" data-f="3m" onclick="setFilter('3m')">3ヶ月</button>
     </div>
+    <!-- 総資産推移グラフ（短期確認用） -->
     <div class="card" id="lineCard" style="display:none">
-  <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <h2>総資産推移</h2>
-    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
-      <span>目標利回り</span>
-      <input type="range" id="yieldSlider" min="1" max="15" value="7" step="0.5"
-        style="width:80px;accent-color:var(--amber)"
-        oninput="document.getElementById('yieldVal').textContent=this.value+'%';trRenderCharts()">
-      <span id="yieldVal" style="min-width:32px;font-weight:600;color:var(--amber)">7%</span>
+      <div class="card-head"><h2>📈 総資産推移</h2></div>
+      <div class="chart-container"><canvas id="lineChart"></canvas></div>
     </div>
-  </div>
-  <div style="padding:0 16px 8px;display:flex;gap:12px;flex-wrap:wrap" id="yieldSummary"></div>
-  <div class="chart-container"><canvas id="lineChart"></canvas></div>
-</div>
+    <!-- 総資産シミュレーション -->
+    <div class="card" id="simCard" style="display:none">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h2>🔮 総資産シミュレーション</h2>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+          <span>目標利回り</span>
+          <input type="range" id="yieldSlider" min="1" max="15" value="7" step="0.5"
+            style="width:80px;accent-color:var(--amber)"
+            oninput="document.getElementById('yieldVal').textContent=this.value+'%';trRenderCharts()">
+          <span id="yieldVal" style="min-width:32px;font-weight:600;color:var(--amber)">7%</span>
+        </div>
+      </div>
+      <!-- CAGR + 予測期間選択 -->
+      <div style="padding:0 16px 8px" id="yieldSummary"></div>
+      <!-- 予測期間ボタン -->
+      <div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="filter-btn active" id="sim-btn-1" onclick="setSimHorizon(1)">1年後</button>
+        <button class="filter-btn" id="sim-btn-2" onclick="setSimHorizon(2)">2年後</button>
+        <button class="filter-btn" id="sim-btn-5" onclick="setSimHorizon(5)">5年後</button>
+        <button class="filter-btn" id="sim-btn-10" onclick="setSimHorizon(10)">10年後</button>
+      </div>
+      <!-- シミュレーション結果カード -->
+      <div style="padding:0 16px 8px" id="simResult"></div>
+      <!-- グラフ -->
+      <div class="chart-container"><canvas id="simChart"></canvas></div>
+    </div>
     <!-- 週次収支 -->
     <div class="card" id="weeklyCard" style="display:none">
       <div class="card-head"><h2>📅 週次収支</h2></div>
@@ -4066,7 +4083,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -4085,6 +4102,16 @@ function trRenderSummary(){
   document.getElementById('trSummaryGrid').innerHTML=`<div class="metric"><div class="label">現在の総資産</div><div class="value">${trFmt(latest.total)}</div><div class="sub">${latest.date}</div></div><div class="metric"><div class="label">期間増減</div><div class="value ${diff>=0?'up':'down'}">${trFmtDiff(diff)}</div><div class="sub ${diff>=0?'up':'down'}">${diff>=0?'＋':''}${diffPct.toFixed(1)}%</div></div><div class="metric"><div class="label">前回比</div><div class="value ${monthDiff===null?'':monthDiff>=0?'up':'down'}">${monthDiff===null?'—':trFmtDiff(monthDiff)}</div><div class="sub">${prev?prev.date:'—'}</div></div>`;
 }
 function trDestroyChart(key){if(chartInstances[key]){chartInstances[key].destroy();chartInstances[key]=null;}}
+let _simHorizon=1;
+function setSimHorizon(years){
+  _simHorizon=years;
+  ['1','2','5','10'].forEach(y=>{
+    const btn=document.getElementById('sim-btn-'+y);
+    if(btn)btn.classList.toggle('active',String(y)===String(years));
+  });
+  trRenderSimChart();
+}
+
 function trRenderCharts(){
   const filtered=getFiltered();if(!filtered.length)return;
   const labels=filtered.map(s=>s.date),totals=filtered.map(s=>s.total);
@@ -4092,8 +4119,18 @@ function trRenderCharts(){
   const isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
   const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
   const tickColor=isDark?'#636366':'#9b9b97';
+
+  // ── 総資産推移グラフ（短期確認用・シンプル） ──
   trDestroyChart('line');
-  // 複利ラインの計算
+  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[
+    {label:'実績',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}
+  ]},options:{responsive:true,plugins:{
+    legend:{display:false},
+    tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},
+    datalabels:{display:false}
+  },scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+
+  // ── シミュレーション用のCAGR計算 ──
   const yieldRate=(parseFloat(document.getElementById('yieldSlider')?document.getElementById('yieldSlider').value:7)||7)/100;
   const baseTotal=totals[0];
   const baseDate=new Date(labels[0]);
@@ -4147,40 +4184,8 @@ function trRenderCharts(){
       +`<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${yieldDiff>=0?'rgba(15,110,86,0.1)':'rgba(192,57,43,0.1)'};color:${col};font-weight:600">`
       +`${yieldDiff>=0?'📈 目標超過':'📉 目標未達'} ${sign}${Math.round(yieldDiff/10000).toLocaleString()}万円</span>`;
   }
-  // 実績CAGRラインを1年後まで延長
-  const extLabels=[...labels];
-  const extTotals=[...totals];
-  const extCompound=[...compoundLine];
-  const extActual=labels.map(()=>null); // 実績と同じ点
-  // 実績期間内のCAGRライン
-  const actualLine=labels.map(label=>{
-    const d=new Date(label);
-    const yr=(d-firstDate)/(1000*60*60*24*365.25);
-    return Math.round(firstTotal*Math.pow(1+actualCAGR,yr));
-  });
-  // 予測部分（最終日〜1年後）を月ごとに追加
-  const predMonths=12;
-  for(let m=1;m<=predMonths;m++){
-    const pd=new Date(lastDate);
-    pd.setMonth(pd.getMonth()+m);
-    const predLabel=pd.toISOString().slice(0,10);
-    const yr=(pd-firstDate)/(1000*60*60*24*365.25);
-    const yrFromLast=m/12;
-    extLabels.push(predLabel);
-    extTotals.push(null); // 実績なし
-    extCompound.push(Math.round(lastTotal*Math.pow(1+yieldRate,yrFromLast)));
-    actualLine.push(Math.round(lastTotal*Math.pow(1+actualCAGR,yrFromLast)));
-  }
-  const cagrLabel=`実績利回り（${(actualCAGR*100)>=0?'+':''}${(actualCAGR*100).toFixed(1)}%/年）`;
-  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels:extLabels,datasets:[
-    {label:'実績',data:[...totals,...Array(predMonths).fill(null)],borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:ctx=>ctx.dataIndex<totals.length?4:0,pointBackgroundColor:'#185FA5',fill:true,tension:0.3,order:1,spanGaps:false},
-    {label:cagrLabel,data:actualLine,borderColor:'#0F6E56',backgroundColor:'transparent',borderWidth:2,borderDash:[4,3],pointRadius:0,fill:false,tension:0.3,order:2},
-    {label:`目標（年率${Math.round((yieldRate*100)*10)/10}%複利）`,data:extCompound,borderColor:'#BA7517',backgroundColor:'transparent',borderWidth:1.5,borderDash:[6,4],pointRadius:0,pointBackgroundColor:'#BA7517',fill:false,tension:0.3,order:3}
-  ]},options:{responsive:true,plugins:{
-    legend:{display:true,position:'bottom',labels:{font:{size:11},padding:12,boxWidth:12,usePointStyle:true}},
-    tooltip:{callbacks:{label:ctx=>{if(ctx.raw===null)return null;return ctx.dataset.label+': '+trFmt(ctx.raw);},afterBody:items=>{const valid=items.filter(i=>i.raw!==null);if(valid.length>=2){const diff=valid[0].raw-valid[valid.length-1].raw;const sign=diff>=0?'＋':'';return['差分: '+sign+Math.round(diff/10000).toLocaleString()+'万円'];}return [];},filter:item=>item.raw!==null}},
-    datalabels:{display:false}
-  },scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  // シミュレーションは別関数で描画
+  trRenderSimChart();
   trDestroyChart('bar');
   // カテゴリ順序と色を資産管理タブと統一
   const TR_BAR_CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
@@ -4354,6 +4359,7 @@ function trRenderCharts(){
     buildDonut('donutIndiaChart','donutIndiaCard','donutIndiaSummary','インドインデックス',tickColor,isDark);
   })();
   trRenderGainLineChart(filtered,labels,tickColor,gridColor);
+  document.getElementById('simCard').style.display='block';
   trRenderWeekly(filtered);
   trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
@@ -4590,6 +4596,109 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
       plugins:[ChartDataLabels]
     });
   }
+}
+
+function trRenderSimChart(){
+  const filtered=getFiltered();if(!filtered||filtered.length<2)return;
+  const labels=filtered.map(s=>s.date);
+  const totals=filtered.map(s=>s.total);
+  const isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
+  const tickColor=isDark?'#636366':'#9b9b97';
+  const yieldRate=(parseFloat(document.getElementById('yieldSlider')?document.getElementById('yieldSlider').value:7)||7)/100;
+  const firstTotal=totals[0], lastTotal=totals[totals.length-1];
+  const firstDate=new Date(labels[0]), lastDate=new Date(labels[labels.length-1]);
+  const totalYears=(lastDate-firstDate)/(1000*60*60*24*365.25);
+  const actualCAGR=totalYears>0?Math.pow(lastTotal/firstTotal,1/totalYears)-1:0;
+  const horizonYears=_simHorizon||1;
+
+  // 予測ラベル生成（月次）
+  const predMonths=Math.round(horizonYears*12);
+  const extLabels=[...labels];
+  const actualLineData=labels.map(label=>{
+    const yr=(new Date(label)-firstDate)/(1000*60*60*24*365.25);
+    return Math.round(firstTotal*Math.pow(1+actualCAGR,yr));
+  });
+  const targetLineData=labels.map(label=>{
+    const yr=(new Date(label)-firstDate)/(1000*60*60*24*365.25);
+    return Math.round(firstTotal*Math.pow(1+yieldRate,yr));
+  });
+  const actualPred=[...actualLineData];
+  const targetPred=[...targetLineData];
+  const realData=[...totals];
+
+  for(let m=1;m<=predMonths;m++){
+    const pd=new Date(lastDate);
+    pd.setMonth(pd.getMonth()+m);
+    extLabels.push(pd.toISOString().slice(0,7)); // 月単位ラベル
+    const yrFromLast=m/12;
+    actualPred.push(Math.round(lastTotal*Math.pow(1+actualCAGR,yrFromLast)));
+    targetPred.push(Math.round(lastTotal*Math.pow(1+yieldRate,yrFromLast)));
+    realData.push(null);
+  }
+
+  // シミュレーション結果カード
+  const simResultEl=document.getElementById('simResult');
+  if(simResultEl){
+    const actualFinal=actualPred[actualPred.length-1];
+    const targetFinal=targetPred[targetPred.length-1];
+    const actualGain=actualFinal-lastTotal;
+    const targetGain=targetFinal-lastTotal;
+    const cagrPct=actualCAGR*100;
+    const cagrCol=cagrPct>=0?'var(--green)':'var(--danger)';
+    const cagrSign=cagrPct>=0?'+':'';
+    const endDate=new Date(lastDate);
+    endDate.setFullYear(endDate.getFullYear()+horizonYears);
+    const endLabel=endDate.toISOString().slice(0,7);
+    simResultEl.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">📊 実績年率（CAGR）</div>
+        <div style="font-size:16px;font-weight:700;color:${cagrCol}">${cagrSign}${cagrPct.toFixed(1)}<span style="font-size:11px">%</span></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${labels[0]}〜現在</div>
+      </div>
+      <div style="background:rgba(15,110,86,0.08);border-radius:8px;padding:10px;border:0.5px solid var(--border)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">📈 実績利回り予測（${horizonYears}年後）</div>
+        <div style="font-size:16px;font-weight:700;color:var(--green)">${Math.round(actualFinal/10000).toLocaleString()}<span style="font-size:11px">万円</span></div>
+        <div style="font-size:10px;color:var(--green);margin-top:2px">${actualGain>=0?'+':''}${Math.round(actualGain/10000).toLocaleString()}万（${endLabel}目途）</div>
+      </div>
+      <div style="background:rgba(186,117,23,0.08);border-radius:8px;padding:10px;border:0.5px solid var(--border)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">🎯 目標利回り予測（${horizonYears}年後）</div>
+        <div style="font-size:16px;font-weight:700;color:var(--amber)">${Math.round(targetFinal/10000).toLocaleString()}<span style="font-size:11px">万円</span></div>
+        <div style="font-size:10px;color:var(--amber);margin-top:2px">${targetGain>=0?'+':''}${Math.round(targetGain/10000).toLocaleString()}万（年率${(yieldRate*100).toFixed(1)}%）</div>
+      </div>
+    </div>`;
+  }
+
+  // グラフ描画
+  trDestroyChart('simLine');
+  const cagrLabel=`実績利回り（${cagrSign}${(actualCAGR*100).toFixed(1)}%/年）`;
+  // 実績期間とX軸ラベルの区切り点
+  const splitIdx=labels.length-1;
+  chartInstances['simLine']=new Chart(document.getElementById('simChart'),{type:'line',data:{labels:extLabels,datasets:[
+    {label:'実績',data:realData,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:ctx=>ctx.dataIndex<=splitIdx?3:0,pointBackgroundColor:'#185FA5',fill:true,tension:0.3,spanGaps:false,order:1},
+    {label:cagrLabel,data:actualPred,borderColor:'#0F6E56',backgroundColor:'rgba(15,110,86,0.06)',borderWidth:2,borderDash:[4,3],pointRadius:0,fill:true,tension:0.25,order:2},
+    {label:`目標（年率${(yieldRate*100).toFixed(1)}%）`,data:targetPred,borderColor:'#BA7517',backgroundColor:'transparent',borderWidth:1.5,borderDash:[8,4],pointRadius:0,fill:false,tension:0.25,order:3}
+  ]},options:{responsive:true,plugins:{
+    legend:{display:true,position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12,usePointStyle:true,color:tickColor}},
+    tooltip:{callbacks:{
+      label:ctx=>{if(ctx.raw===null)return null;return ctx.dataset.label+': '+trFmt(ctx.raw);},
+      filter:item=>item.raw!==null,
+      afterBody:items=>{
+        const valid=items.filter(i=>i.raw!==null);
+        if(valid.length>=2){
+          const diff=valid[1].raw-valid[0].raw;
+          return['実績利回りvs実績差: '+(diff>=0?'+':'')+Math.round(diff/10000).toLocaleString()+'万'];
+        }return[];
+      }
+    }},
+    datalabels:{display:false},
+    // 実績区間と予測区間を視覚的に区別する縦線
+    annotation:void 0
+  },scales:{
+    y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},
+    x:{ticks:{color:tickColor,font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:horizonYears<=2?12:horizonYears<=5?8:6},grid:{display:false}}
+  },layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
 }
 
 function trRenderWeekly(filtered){
