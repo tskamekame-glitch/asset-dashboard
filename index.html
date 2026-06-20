@@ -6169,7 +6169,51 @@ function jpRenderSell() {
     <div class="jp-sum-card c-amber"><div style="font-size:10px;color:var(--text2);margin-bottom:3px">税金合計</div><div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums">${jpFmt(totalTax)}</div></div>
     <div class="jp-sum-card ${totalNet>=0?'c-green':'c-red'}"><div style="font-size:10px;color:var(--text2);margin-bottom:3px">税引後手取り</div><div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums" class="${totalNet>=0?'up':'down'}">${jpFmtSign(totalNet)}</div></div>
   </div>`;
-  listEl.innerHTML = [...sells].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(s => jpSellCardHTML(s)).join('');
+  // ── 月別集計 ──
+  const byMonth={};
+  sells.forEach(s=>{
+    const ym=(s.date||'').slice(0,7); // "2026-06"
+    if(!ym)return;
+    if(!byMonth[ym])byMonth[ym]={sell:0,gain:0,tax:0,count:0};
+    byMonth[ym].sell+=(s.sellTotal||0);
+    byMonth[ym].gain+=(s.gain||0);
+    byMonth[ym].tax+=(s.tax||0);
+    byMonth[ym].count++;
+  });
+  const monthKeys=Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));
+
+  // 月別アコーディオン形式で一覧を表示
+  const sorted=[...sells].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  listEl.innerHTML = monthKeys.map(ym=>{
+    const m=byMonth[ym];
+    const net=m.gain-m.tax;
+    const gCol=m.gain>=0?'var(--green)':'var(--danger)';
+    const nCol=net>=0?'var(--green)':'var(--danger)';
+    const [y,mo]=ym.split('-');
+    const label=`${y}年${parseInt(mo)}月`;
+    const cards=sorted.filter(s=>(s.date||'').startsWith(ym)).map(s=>jpSellCardHTML(s)).join('');
+    return `<details open style="margin-bottom:12px">
+      <summary style="list-style:none;cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border-radius:10px;padding:10px 14px;border:0.5px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:14px;font-weight:700">${label}</span>
+            <span style="font-size:11px;color:var(--text3)">${m.count}件</span>
+          </div>
+          <div style="display:flex;gap:16px;font-size:12px">
+            <div style="text-align:right">
+              <div style="color:var(--text3);font-size:10px">損益</div>
+              <div style="font-weight:700;color:${gCol}">${m.gain>=0?'+':''}${jpFmt(m.gain)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="color:var(--text3);font-size:10px">税引後</div>
+              <div style="font-weight:700;color:${nCol}">${net>=0?'+':''}${jpFmt(net)}</div>
+            </div>
+          </div>
+        </div>
+      </summary>
+      <div style="padding:4px 0 0">${cards}</div>
+    </details>`;
+  }).join('');
 }
 
 function jpSellCardHTML(s) {
