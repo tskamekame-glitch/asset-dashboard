@@ -990,7 +990,6 @@ tr:last-child td{border-bottom:none}
     <div class="page-inner">
       <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
         <button class="btn-accent" style="font-size:12px;padding:6px 14px" onclick="jpOpenDirectSell()">＋ 直接記録（インデックス等）</button>
-        <button id="jp-patch-btn" onclick="jpPatchIndexSells()" style="font-size:11px;padding:5px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;margin-left:6px">🔧 修復</button>
       </div>
       <div id="jp-sell-sum" style="margin-bottom:10px"></div>
       <div id="jp-sell-list"></div>
@@ -6112,41 +6111,6 @@ function jpStockCardHTML(s, compact) {
   </div>`;
 }
 
-// インデックスsellデータの強制修復ダイアログ
-function jpPatchIndexSells(){
-  const data=jpLoad();
-  const idxSells=data.sells.filter(s=>s.type==='index');
-  if(!idxSells.length){alert('インデックスの売却記録がありません');return;}
-  
-  // 各レコードの現状を確認
-  let msg=idxSells.map((s,i)=>`[${i+1}] ${s.name}\n  buyAmount:${s.buyAmount} buyPrice:${s.buyPrice} sellTotal:${s.sellTotal}`).join('\n\n');
-  
-  // 修復が必要なレコードを修正
-  let fixed=0;
-  data.sells.forEach(s=>{
-    if(s.type==='index'){
-      // buyAmountがなくてbuyPriceがある場合、buyAmountとして設定
-      if(!s.buyAmount&&s.buyPrice>0){
-        s.buyAmount=s.buyPrice;
-        fixed++;
-      }
-      // sellTotalが0でも、とりあえず保存
-    }
-  });
-  
-  if(fixed>0){
-    jpSave(data);
-    jpRenderAll();
-    alert(`${fixed}件のbuyAmountを修復しました。\n\n売却金額は「編集」から入力してください。`);
-  }else{
-    const sellTotalZero=idxSells.filter(s=>!s.sellTotal||s.sellTotal===0);
-    if(sellTotalZero.length>0){
-      alert(`売却金額が未入力のレコード: ${sellTotalZero.length}件\n${sellTotalZero.map(s=>s.name).join(', ')}\n\n各レコードの「編集」から売却金額を入力してください。\n\nデータ状態:\n${msg}`);
-    }else{
-      alert('修復不要です。\n\n' + msg);
-    }
-  }
-}
 
 function jpRenderSell() {
   const { sells } = jpLoad();
