@@ -4197,7 +4197,7 @@ function trRenderCharts(){
       +`${yieldDiff>=0?'📈 目標超過':'📉 目標未達'} ${sign}${Math.round(yieldDiff/10000).toLocaleString()}万円</span>`;
   }
   // シミュレーションは別関数で描画
-  trRenderSimChart();
+  try{trRenderSimChart();}catch(e){console.error('trRenderSimChart error:',e);}
   trDestroyChart('bar');
   // カテゴリ順序と色を資産管理タブと統一
   const TR_BAR_CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','年金','その他'];
@@ -4370,12 +4370,13 @@ function trRenderCharts(){
     buildDonut('donutJpChart','donutJpCard','donutJpSummary','日本インデックス',tickColor,isDark);
     buildDonut('donutIndiaChart','donutIndiaCard','donutIndiaSummary','インドインデックス',tickColor,isDark);
   })();
-  trRenderGainLineChart(filtered,labels,tickColor,gridColor);
-  trRenderWeekly(filtered);
-  trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
-  trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);
-  trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);
-  trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);
+  try{trRenderGainLineChart(filtered,labels,tickColor,gridColor);}catch(e){console.error('trRenderGainLineChart error:',e);}
+  try{trRenderWeekly(filtered);}catch(e){console.error('trRenderWeekly error:',e);}
+  try{trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
+  }catch(e){console.error('trRenderGainBarChart error:',e);}
+  try{trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat1 error:',e);}
+  try{trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat2 error:',e);}
+  try{trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat3 error:',e);}
 }
 // ============================================================
 // 投資結果（損益）推移 折れ線グラフ
@@ -4538,18 +4539,13 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
     const oldMsg=canvas.parentElement.querySelector('.line-empty');
     if(oldMsg)oldMsg.remove();
     if(!hasData){
-      canvas.style.display='none';
-      const msg=document.createElement('div');
-      msg.className='line-empty';
-      msg.style.cssText='text-align:center;padding:40px 0;font-size:12px;color:var(--text3)';
-      msg.textContent='データなし（記録がありません）';
-      canvas.parentElement.appendChild(msg);
+      canvas.parentElement.style.visibility='hidden';
+      canvas.parentElement.style.height='60px';
       return;
     }
-    canvas.style.display='';
-    // Chart.jsがサイズを正しく取得できるよう明示的にheightを設定
-    const ph=canvas.parentElement;
-    if(ph&&ph.style.height){canvas.style.height=ph.style.height;}
+    canvas.parentElement.style.visibility='';
+    canvas.parentElement.style.height='';
+
     chartInstances[key]=new Chart(canvas,{
       type:'line',
       data:{labels:gLabels,datasets:[{
@@ -4955,16 +4951,11 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const canvas=document.getElementById(canvasId);
     if(!canvas)return;
     if(!activeItems.length){
-      canvas.style.display='none';
-      canvas.parentElement.style.minHeight='60px';
-      // canvasは削除せずメッセージdivを追加
-      let msg=canvas.parentElement.querySelector('.hbar-empty');
-      if(!msg){msg=document.createElement('div');msg.className='hbar-empty';msg.style.cssText='padding:12px;text-align:center;font-size:12px;color:var(--text3)';msg.textContent='データなし';canvas.parentElement.appendChild(msg);}
+      canvas.parentElement.style.visibility='hidden';
+      canvas.parentElement.style.height='40px';
       return;
     }
-    canvas.style.display='';
-    const oldMsg=canvas.parentElement.querySelector('.hbar-empty');
-    if(oldMsg)oldMsg.remove();
+    canvas.parentElement.style.visibility='';
     const labels=activeItems.map(i=>i.name);
     const data=activeItems.map(i=>i.gain);
     const colors=activeItems.map(i=>i.gain>=0?'#0F6E56cc':'#C0392Bcc');
