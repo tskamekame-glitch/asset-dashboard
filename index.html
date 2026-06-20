@@ -5737,16 +5737,16 @@ function fireAutoLink(){
     document.getElementById('fire-live-cagr').textContent=(cagrPct>=0?'+':'')+cagrPct+'%';
     document.getElementById('fire-live-target').textContent=targetPct+'%';
   }
-  // フォームに自動入力
-  var fields=['s-asset','f-asset'];
-  fields.forEach(function(id){var el=document.getElementById(id);if(el&&el.value==='4400')el.value=asset;});
+  // フォームに自動入力（条件なしで毎回上書き）
+  ['s-asset','f-asset'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value=asset;
+  });
+  var cagrRounded=Math.round(cagrPct*10)/10;
   ['s-rate-actual','f-rate-actual'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el)el.value=Math.round(cagrPct*10)/10;
+    var el=document.getElementById(id);if(el)el.value=cagrRounded;
   });
   ['s-rate-target','f-rate-target'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el&&el.value==='7')el.value=targetPct;
+    var el=document.getElementById(id);if(el)el.value=targetPct;
   });
 }
 
