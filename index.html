@@ -990,6 +990,7 @@ tr:last-child td{border-bottom:none}
     <div class="page-inner">
       <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
         <button class="btn-accent" style="font-size:12px;padding:6px 14px" onclick="jpOpenDirectSell()">＋ 直接記録（インデックス等）</button>
+        <button id="jp-patch-btn" onclick="jpPatchIndexSells()" style="font-size:11px;padding:5px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;margin-left:6px">🔧 修復</button>
       </div>
       <div id="jp-sell-sum" style="margin-bottom:10px"></div>
       <div id="jp-sell-list"></div>
@@ -6111,6 +6112,42 @@ function jpStockCardHTML(s, compact) {
   </div>`;
 }
 
+// インデックスsellデータの強制修復ダイアログ
+function jpPatchIndexSells(){
+  const data=jpLoad();
+  const idxSells=data.sells.filter(s=>s.type==='index');
+  if(!idxSells.length){alert('インデックスの売却記録がありません');return;}
+  
+  // 各レコードの現状を確認
+  let msg=idxSells.map((s,i)=>`[${i+1}] ${s.name}\n  buyAmount:${s.buyAmount} buyPrice:${s.buyPrice} sellTotal:${s.sellTotal}`).join('\n\n');
+  
+  // 修復が必要なレコードを修正
+  let fixed=0;
+  data.sells.forEach(s=>{
+    if(s.type==='index'){
+      // buyAmountがなくてbuyPriceがある場合、buyAmountとして設定
+      if(!s.buyAmount&&s.buyPrice>0){
+        s.buyAmount=s.buyPrice;
+        fixed++;
+      }
+      // sellTotalが0でも、とりあえず保存
+    }
+  });
+  
+  if(fixed>0){
+    jpSave(data);
+    jpRenderAll();
+    alert(`${fixed}件のbuyAmountを修復しました。\n\n売却金額は「編集」から入力してください。`);
+  }else{
+    const sellTotalZero=idxSells.filter(s=>!s.sellTotal||s.sellTotal===0);
+    if(sellTotalZero.length>0){
+      alert(`売却金額が未入力のレコード: ${sellTotalZero.length}件\n${sellTotalZero.map(s=>s.name).join(', ')}\n\n各レコードの「編集」から売却金額を入力してください。\n\nデータ状態:\n${msg}`);
+    }else{
+      alert('修復不要です。\n\n' + msg);
+    }
+  }
+}
+
 function jpRenderSell() {
   const { sells } = jpLoad();
   // ── 欠落・不整合フィールドの補完（移行データ・部分保存データ対策）──
@@ -6653,13 +6690,16 @@ function jpEditSell(id){
   document.getElementById('jp-stock-inputs').style.display=isIdx?'none':'block';
   document.getElementById('jp-index-inputs').style.display=isIdx?'block':'none';
   if(isIdx){
-    // buyAmount優先、なければbuyPrice（旧データ互換）を使用
     jpIdxInputMode='amount';
     jpSetIdxInputMode('amount');
-    const ba=s.buyAmount>0?s.buyAmount:(s.buyPrice>0&&s.buyAmount===undefined?s.buyPrice:'');
-    const sa=s.sellTotal>0?s.sellTotal:'';
-    document.getElementById('jp-s-buy-amount').value=ba;
-    document.getElementById('jp-s-sell-amount').value=sa;
+    const ba=s.buyAmount>0?s.buyAmount:(s.buyPrice>0?s.buyPrice:0);
+    const sa=s.sellTotal>0?s.sellTotal:0;
+    document.getElementById('jp-s-buy-amount').value=ba||'';
+    document.getElementById('jp-s-sell-amount').value=sa||'';
+    // グローバルにも保持（保存時のフォールバック用）
+    _jpCalcResult.costBasis=ba;
+    _jpCalcResult.sellTotal=sa;
+    _jpCalcResult.account=s.account;
   }else{
     document.getElementById('jp-s-shares').value=s.shares;
     document.getElementById('jp-s-hint').textContent='';
@@ -6798,11 +6838,13 @@ function jpRecordSell() {
       // インデックス判定：jpSellMode または既存レコードのtypeで判断
       const saveAsIdx=(jpSellMode==='index')||s.type==='index';
       if(saveAsIdx){
-        // インデックスモード：まず再計算してから値を取得
         if(typeof jpIdxInputMode!=='undefined'&&jpIdxInputMode==='unit') jpCalcIdxUnit();
-        jpCalcSell(); // 最新値で再計算
-        const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||_jpCalcResult.costBasis||0;
-        const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||_jpCalcResult.sellTotal||0;
+        // DOM・グローバル変数・既存データの順で有効な値を取得
+        const domBuy=parseFloat(document.getElementById('jp-s-buy-amount')?.value);
+        const domSell=parseFloat(document.getElementById('jp-s-sell-amount')?.value);
+        const buyAmount=domBuy>0?domBuy:(_jpCalcResult.costBasis>0?_jpCalcResult.costBasis:(s.buyAmount>0?s.buyAmount:(s.buyPrice>0?s.buyPrice:0)));
+        const sellAmount=domSell>0?domSell:(_jpCalcResult.sellTotal>0?_jpCalcResult.sellTotal:(s.sellTotal>0?s.sellTotal:0));
+        console.log('INDEX SAVE: domBuy='+domBuy+' domSell='+domSell+' buyAmount='+buyAmount+' sellAmount='+sellAmount);
         if(!sellAmount){alert('売却金額を入力してください');return;}
         const gain=sellAmount-buyAmount;
         const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
