@@ -6556,6 +6556,7 @@ function jpDeleteStock() {
 // --- SELL MODAL ---
 let jpSellTargetId = null;
 let jpSellEditId=null;// 編集モードのsell ID
+let jpSellMode='stock';// 'stock' or 'index'
 function jpOpenSellModal(id) {
   const { stocks } = jpLoad();
   const s = stocks.find(x => x.id === id);
@@ -6586,7 +6587,6 @@ function jpOpenSellModal(id) {
 }
 
 // 直接記録モーダル（インデックスファンド等 → 金額直接入力モード）
-let jpSellMode = 'stock'; // 'stock' or 'index'
 function jpOpenDirectSell(){
   jpSellTargetId = null;
   jpSellEditId = null;
@@ -6775,20 +6775,21 @@ function jpRecordSell() {
     const idx=data.sells.findIndex(x=>x.id===jpSellEditId);
     if(idx>=0){
       const s=data.sells[idx];
-      if((typeof jpSellMode!=='undefined')&&jpSellMode==='index'){
+      // インデックス判定：jpSellMode または既存レコードのtypeで判断
+      const saveAsIdx=(jpSellMode==='index')||s.type==='index';
+      if(saveAsIdx){
         // インデックスモード：金額直接入力で更新
-        // jpIdxInputModeが'unit'の場合はjpCalcIdxUnitが内部的にbuy-amount/sell-amountに値を書き込む
         if(typeof jpIdxInputMode!=='undefined'&&jpIdxInputMode==='unit') jpCalcIdxUnit();
         const buyAmount=parseFloat(document.getElementById('jp-s-buy-amount')?.value)||0;
         const sellAmount=parseFloat(document.getElementById('jp-s-sell-amount')?.value)||0;
-        if(!buyAmount&&!sellAmount){alert('取得金額と売却金額を入力してください');return;}
+        if(!sellAmount){alert('売却金額を入力してください');return;}
         const gain=sellAmount-buyAmount;
         const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
         data.sells[idx]={...s,type:'index',buyAmount,sellTotal:sellAmount,gain,tax,
           shares:null,sellPrice:null,buyPrice:buyAmount,
           date:sellDate,buyDate,memo,reflection};
       }else{
-        // 株モード（従来通り）
+        // 株モード
         const sellTotal=sellSh*sellPr;
         const gain=sellTotal-sellSh*s.buyPrice;
         const tax=s.account==='NISA'?0:(gain>0?gain*JP_TAX:0);
