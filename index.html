@@ -4107,20 +4107,78 @@ function trRenderCharts(){
   const latestCompound=compoundLine[compoundLine.length-1];
   const yieldDiff=latestTotal-latestCompound;
   const yieldEl=document.getElementById('yieldSummary');
+  // ── 実績CAGR計算 ──
+  const firstTotal=totals[0], lastTotal=totals[totals.length-1];
+  const firstDate=new Date(labels[0]), lastDate=new Date(labels[labels.length-1]);
+  const totalYears=(lastDate-firstDate)/(1000*60*60*24*365.25);
+  // 実績年率（CAGR）
+  const actualCAGR=totalYears>0?Math.pow(lastTotal/firstTotal,1/totalYears)-1:0;
+  // 1年後予測（実績利回りベース）
+  const oneYearLater=Math.round(lastTotal*(1+actualCAGR));
+  // 1年後予測（目標利回りベース）
+  const oneYearTarget=Math.round(lastTotal*(1+yieldRate));
+
   if(yieldEl){
     const sign=yieldDiff>=0?'＋':'';
     const col=yieldDiff>=0?'var(--green)':'var(--danger)';
     const yieldPct=(parseFloat(document.getElementById('yieldSlider').value)||7);
-    yieldEl.innerHTML=`<span style="font-size:11px;color:var(--text2)">基準日：${labels[0]}</span>`
+    const cagrPct=(actualCAGR*100);
+    const cagrCol=cagrPct>=0?'var(--green)':'var(--danger)';
+    const cagrSign=cagrPct>=0?'+':'';
+    // 1年後日付
+    const oneYearDate=new Date(lastDate);oneYearDate.setFullYear(oneYearDate.getFullYear()+1);
+    const oneYearStr=oneYearDate.toISOString().slice(0,7);
+    yieldEl.innerHTML=
+      // 実績利回り
+      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;margin-bottom:6px">`
+      +`<div style="background:rgba(24,95,165,0.08);border-radius:8px;padding:8px 10px">`
+      +`<div style="font-size:10px;color:var(--text3);margin-bottom:2px">📊 実績年率（CAGR）</div>`
+      +`<div style="font-size:16px;font-weight:700;color:${cagrCol}">${cagrSign}${cagrPct.toFixed(1)}<span style="font-size:12px">%</span></div>`
+      +`<div style="font-size:10px;color:var(--text3);margin-top:2px">${labels[0]}〜${labels[labels.length-1]}</div>`
+      +`</div>`
+      // 1年後予測
+      +`<div style="background:rgba(186,117,23,0.08);border-radius:8px;padding:8px 10px">`
+      +`<div style="font-size:10px;color:var(--text3);margin-bottom:2px">🔮 1年後予測（実績利回り）</div>`
+      +`<div style="font-size:16px;font-weight:700;color:var(--amber)">${Math.round(oneYearLater/10000).toLocaleString()}<span style="font-size:12px">万円</span></div>`
+      +`<div style="font-size:10px;color:var(--text3);margin-top:2px">${oneYearStr}目途 / 目標利回りなら${Math.round(oneYearTarget/10000).toLocaleString()}万</div>`
+      +`</div></div>`
+      // 目標vs実績の差分
+      +`<span style="font-size:11px;color:var(--text2)">基準日：${labels[0]}</span>`
       +`<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${yieldDiff>=0?'rgba(15,110,86,0.1)':'rgba(192,57,43,0.1)'};color:${col};font-weight:600">`
       +`${yieldDiff>=0?'📈 目標超過':'📉 目標未達'} ${sign}${Math.round(yieldDiff/10000).toLocaleString()}万円</span>`;
   }
-  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[
-    {label:'実績',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#185FA5',fill:true,tension:0.3,order:1},
-    {label:`目標（年率${Math.round((yieldRate*100)*10)/10}%複利）`,data:compoundLine,borderColor:'#BA7517',backgroundColor:'transparent',borderWidth:2,borderDash:[6,4],pointRadius:3,pointBackgroundColor:'#BA7517',fill:false,tension:0.3,order:2}
+  // 実績CAGRラインを1年後まで延長
+  const extLabels=[...labels];
+  const extTotals=[...totals];
+  const extCompound=[...compoundLine];
+  const extActual=labels.map(()=>null); // 実績と同じ点
+  // 実績期間内のCAGRライン
+  const actualLine=labels.map(label=>{
+    const d=new Date(label);
+    const yr=(d-firstDate)/(1000*60*60*24*365.25);
+    return Math.round(firstTotal*Math.pow(1+actualCAGR,yr));
+  });
+  // 予測部分（最終日〜1年後）を月ごとに追加
+  const predMonths=12;
+  for(let m=1;m<=predMonths;m++){
+    const pd=new Date(lastDate);
+    pd.setMonth(pd.getMonth()+m);
+    const predLabel=pd.toISOString().slice(0,10);
+    const yr=(pd-firstDate)/(1000*60*60*24*365.25);
+    const yrFromLast=m/12;
+    extLabels.push(predLabel);
+    extTotals.push(null); // 実績なし
+    extCompound.push(Math.round(lastTotal*Math.pow(1+yieldRate,yrFromLast)));
+    actualLine.push(Math.round(lastTotal*Math.pow(1+actualCAGR,yrFromLast)));
+  }
+  const cagrLabel=`実績利回り（${(actualCAGR*100)>=0?'+':''}${(actualCAGR*100).toFixed(1)}%/年）`;
+  chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels:extLabels,datasets:[
+    {label:'実績',data:[...totals,...Array(predMonths).fill(null)],borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:ctx=>ctx.dataIndex<totals.length?4:0,pointBackgroundColor:'#185FA5',fill:true,tension:0.3,order:1,spanGaps:false},
+    {label:cagrLabel,data:actualLine,borderColor:'#0F6E56',backgroundColor:'transparent',borderWidth:2,borderDash:[4,3],pointRadius:0,fill:false,tension:0.3,order:2},
+    {label:`目標（年率${Math.round((yieldRate*100)*10)/10}%複利）`,data:extCompound,borderColor:'#BA7517',backgroundColor:'transparent',borderWidth:1.5,borderDash:[6,4],pointRadius:0,pointBackgroundColor:'#BA7517',fill:false,tension:0.3,order:3}
   ]},options:{responsive:true,plugins:{
     legend:{display:true,position:'bottom',labels:{font:{size:11},padding:12,boxWidth:12,usePointStyle:true}},
-    tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),afterBody:items=>{if(items.length===2){const diff=items[0].raw-items[1].raw;const sign=diff>=0?'＋':'';return['差分: '+sign+Math.round(diff/10000).toLocaleString()+'万円'];}return [];}}},
+    tooltip:{callbacks:{label:ctx=>{if(ctx.raw===null)return null;return ctx.dataset.label+': '+trFmt(ctx.raw);},afterBody:items=>{const valid=items.filter(i=>i.raw!==null);if(valid.length>=2){const diff=valid[0].raw-valid[valid.length-1].raw;const sign=diff>=0?'＋':'';return['差分: '+sign+Math.round(diff/10000).toLocaleString()+'万円'];}return [];},filter:item=>item.raw!==null}},
     datalabels:{display:false}
   },scales:{y:{ticks:{callback:v=>'¥'+Math.round(v/10000)+'万',color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
   trDestroyChart('bar');
