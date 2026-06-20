@@ -88,6 +88,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   display:none;
   padding-top:var(--safe-top);
+  background:var(--bg);
 }
 .panel.active{display:block}
 
@@ -425,7 +426,7 @@ tr:last-child td{border-bottom:none}
 .jp-sum-card.c-gray::before{background:var(--text3)}
 
 /* FIRE SIMULATOR */
-#fire-scope .hero { background: linear-gradient(135deg,#0f1117 0%,#1a1040 50%,#0f1117 100%); border-bottom: 0.5px solid var(--border2); padding: 2rem 1.25rem 1.5rem; text-align: center; }
+#fire-scope .hero { background: linear-gradient(135deg,var(--accent) 0%,#1a1040 60%,var(--accent) 100%); border-bottom: 0.5px solid var(--border2); padding: 2rem 1.25rem 1.5rem; text-align: center; }
 #fire-scope .hero h1 { font-size: clamp(20px,5vw,30px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 6px; }
 #fire-scope .hero p { font-size: 13px; color: var(--text2); line-height: 1.6; }
 #fire-scope .tabs { display: flex; margin: 1.25rem 0 1rem; border: 0.5px solid var(--border2); border-radius: 12px; overflow: hidden; }
@@ -435,13 +436,13 @@ tr:last-child td{border-bottom:none}
 #fire-scope .container { max-width: 560px; margin: 0 auto; padding: 0 1rem 4rem; }
 #fire-scope .card { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
 #fire-scope .card-head { padding: 12px 16px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; }
-#fire-scope .card-head h2 { font-size: 12px; font-weight: 500; color: var(--text2); }
+#fire-scope .card-head h2 { font-size: 12px; font-weight: 600; color: var(--text1,#111); }
 #fire-scope .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 #fire-scope .dot.purple { background: var(--purple); }
 #fire-scope .field-list { padding: 6px 0; }
 #fire-scope .field-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; border-bottom: 0.5px solid var(--border); }
 #fire-scope .field-row:last-child { border-bottom: none; }
-#fire-scope .field-label { font-size: 14px; color: var(--text2); flex: 1; line-height: 1.4; }
+#fire-scope .field-label { font-size: 14px; color: var(--text1,#1a1a1a); flex: 1; line-height: 1.4; }
 #fire-scope .field-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
 #fire-scope .field-input-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 #fire-scope .field-unit { font-size: 12px; color: var(--text3); white-space: nowrap; }
@@ -1262,18 +1263,24 @@ tr:last-child td{border-bottom:none}
   <div class="phead">
     <div class="phead-inner"><h1>🔥 FIREシミュレーター</h1></div>
   </div>
-  <div id="fire-scope" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px;background:#0f1117;min-height:100%">
-<div class="hero">
-  <h1>サイドFIRE<br>資産シミュレーター</h1>
-  <p>独身・家族ありを切り替えて比較できます</p>
-</div>
+  <div id="fire-scope" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px;background:var(--bg);min-height:100%;position:relative;z-index:1">
 <div class="container">
+  <!-- ヘッダー：自動連携バナー -->
+  <div id="fire-live-banner" style="background:linear-gradient(135deg,var(--accent),#1a1040);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:none">
+    <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-bottom:6px">📡 資産管理データから自動取得</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div><div style="font-size:10px;color:rgba(255,255,255,0.6)">現在の総資産</div><div id="fire-live-asset" style="font-size:15px;font-weight:700;color:#fff">—</div></div>
+      <div><div style="font-size:10px;color:rgba(255,255,255,0.6)">実績CAGR</div><div id="fire-live-cagr" style="font-size:15px;font-weight:700;color:#34d399">—</div></div>
+      <div><div style="font-size:10px;color:rgba(255,255,255,0.6)">目標利回り</div><div id="fire-live-target" style="font-size:15px;font-weight:700;color:#fbbf24">—</div></div>
+    </div>
+  </div>
+
   <div class="tabs">
     <button class="tab active" onclick="fireSwitchTab('single')">独身</button>
     <button class="tab" onclick="fireSwitchTab('family')">既婚・子1人（0歳）</button>
   </div>
 
-  <!-- 独身タブ -->
+  <!-- ========== 独身タブ ========== -->
   <div class="tab-content active" id="fire-tab-single">
     <div class="card">
       <div class="card-head"><div class="dot"></div><h2>資産・収支</h2></div>
@@ -1286,45 +1293,111 @@ tr:last-child td{border-bottom:none}
     <div class="card">
       <div class="card-head"><div class="dot"></div><h2>運用・年齢・年金</h2></div>
       <div class="field-list">
-        <div class="field-row"><span class="field-label">運用利回り（年）</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-rate" value="3" step="0.1" inputmode="decimal"><span class="field-unit">%</span></div></div>
         <div class="field-row"><span class="field-label">現在の年齢</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-curage" value="45" inputmode="numeric"><span class="field-unit">歳</span></div></div>
         <div class="field-row"><span class="field-label">年金受給開始</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-pension-age" value="65" inputmode="numeric"><span class="field-unit">歳</span></div></div>
         <div class="field-row"><span class="field-label">想定年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-pension-amt" value="14" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
       </div>
     </div>
-    <button class="calc-btn" onclick="calcSingle()">計算する</button>
+    <!-- 3シナリオ利回り設定 -->
+    <div class="card">
+      <div class="card-head"><div class="dot"></div><h2>📊 3シナリオ利回り設定</h2></div>
+      <div class="field-list">
+        <div class="field-row">
+          <span class="field-label" style="color:var(--text3)">😔 悲観シナリオ</span>
+          <div class="field-input-wrap"><input class="field-input" type="number" id="s-rate-bear" value="3" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div>
+        </div>
+        <div class="field-row">
+          <span class="field-label" style="color:var(--green)">📈 実績ベース（CAGR）</span>
+          <div class="field-input-wrap"><input class="field-input" type="number" id="s-rate-actual" value="3" step="0.1" inputmode="decimal" style="border-color:var(--green)"><span class="field-unit">%/年</span></div>
+        </div>
+        <div class="field-row">
+          <span class="field-label" style="color:var(--amber)">🎯 目標利回り</span>
+          <div class="field-input-wrap"><input class="field-input" type="number" id="s-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div>
+        </div>
+      </div>
+    </div>
+    <button class="calc-btn" onclick="calcSingle()">🔮 シミュレーション実行</button>
+
     <div class="results" id="single-results">
+      <!-- FIRE達成判定 -->
       <div class="verdict-card ok" id="s-verdict"><div class="verdict-icon" id="s-vicon"></div><div class="verdict-title" id="s-vtitle"></div><div class="verdict-body" id="s-vbody"></div></div>
+
+      <!-- FIRE達成ライン -->
+      <div id="s-fire-line" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🎯 FIRE達成ライン（年間生活費×25倍）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div><span id="s-fire-current" style="font-size:18px;font-weight:700;color:var(--accent)"></span><span style="font-size:11px;color:var(--text3)"> / <span id="s-fire-target-val"></span></span></div>
+          <div id="s-fire-pct" style="font-size:13px;font-weight:600;color:var(--accent)"></div>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:8px">
+          <div id="s-fire-bar" style="height:100%;border-radius:99px;background:var(--accent);transition:width 0.5s"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+          <div style="text-align:center"><div style="color:var(--text3)">😔 悲観</div><div id="s-fire-yr-bear" style="font-weight:600;color:var(--text2)">—</div></div>
+          <div style="text-align:center"><div style="color:var(--green)">📈 実績</div><div id="s-fire-yr-actual" style="font-weight:600;color:var(--green)">—</div></div>
+          <div style="text-align:center"><div style="color:var(--amber)">🎯 目標</div><div id="s-fire-yr-target" style="font-weight:600;color:var(--amber)">—</div></div>
+        </div>
+      </div>
+
+      <!-- 3シナリオ比較カード -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="s-pct-bear" style="font-weight:600"></span></div>
+          <div id="s-val-bear" style="font-size:16px;font-weight:700;color:var(--text1)">—</div>
+          <div id="s-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+        <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="s-pct-actual" style="font-weight:600"></span></div>
+          <div id="s-val-actual" style="font-size:16px;font-weight:700;color:var(--green)">—</div>
+          <div id="s-sub-actual" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+        <div style="background:rgba(251,191,36,0.08);border:0.5px solid rgba(251,191,36,0.3);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--amber);margin-bottom:4px">🎯 目標<span id="s-pct-target" style="font-weight:600"></span></div>
+          <div id="s-val-target" style="font-size:16px;font-weight:700;color:var(--amber)">—</div>
+          <div id="s-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+      </div>
+
+      <!-- 月次収支サマリー -->
       <div class="metrics-grid">
         <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
         <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">90歳時の残資産</div><div class="mvalue" id="s-m3">—</div><div class="msub" id="s-m3s"></div></div>
         <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
+        <div class="metric-card"><div class="mlabel">実績CAGR予測残高</div><div class="mvalue val-ok" id="s-m3">—</div><div class="msub" id="s-m3s">90歳時点</div></div>
       </div>
+
+      <!-- 資産推移グラフ（3ライン） -->
       <div class="chart-card">
         <div class="chart-head">
           <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
           <div class="chart-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#4f9cf9"></div><span>資産残高</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇ライン</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div><span>悲観</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span>実績</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div><span>目標</span></div>
           </div>
         </div>
-        <canvas id="s-chart" height="200"></canvas>
+        <canvas id="s-chart" height="220"></canvas>
       </div>
+
+      <!-- 資産到達タイムライン -->
+      <div id="s-timeline-card" class="chart-card">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
+        <div id="s-timeline-list"></div>
+      </div>
+
       <p class="note">※税金・医療費・インフレは未考慮。参考試算としてご利用ください。</p>
     </div>
   </div>
 
-  <!-- 家族タブ -->
+  <!-- ========== 家族タブ ========== -->
   <div class="tab-content" id="fire-tab-family">
-    <div class="hint-box"><strong>家族費用の目安（自動加算）</strong><br>配偶者の生活費・教育費・住居費増加分を年齢ごとに自動計算します。各費用は下で調整できます。</div>
+    <div class="hint-box"><strong>家族費用の目安（自動加算）</strong><br>配偶者の生活費・教育費・住居費増加分を年齢ごとに自動計算します。</div>
     <div class="card">
       <div class="card-head"><div class="dot"></div><h2>資産・収支（共通）</h2></div>
       <div class="field-list">
         <div class="field-row"><span class="field-label">現在の資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-asset" value="4400" inputmode="numeric"><span class="field-unit">万円</span></div></div>
         <div class="field-row"><span class="field-label">自分の月収（副業）</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><span class="field-label">配偶者の月収</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-spouse-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><span class="field-label">運用利回り（年）</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate" value="3" step="0.1" inputmode="decimal"><span class="field-unit">%</span></div></div>
         <div class="field-row"><span class="field-label">現在の年齢</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-curage" value="45" inputmode="numeric"><span class="field-unit">歳</span></div></div>
         <div class="field-row"><span class="field-label">年金受給開始</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-pension-age" value="65" inputmode="numeric"><span class="field-unit">歳</span></div></div>
         <div class="field-row"><span class="field-label">自分の年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-pension-amt" value="14" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
@@ -1332,41 +1405,98 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="card">
+      <div class="card-head"><div class="dot purple"></div><h2>3シナリオ利回り設定</h2></div>
+      <div class="field-list">
+        <div class="field-row"><span class="field-label" style="color:var(--text3)">😔 悲観</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-bear" value="3" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
+        <div class="field-row"><span class="field-label" style="color:var(--green)">📈 実績</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-actual" value="3" step="0.1" inputmode="decimal" style="border-color:var(--green)"><span class="field-unit">%/年</span></div></div>
+        <div class="field-row"><span class="field-label" style="color:var(--amber)">🎯 目標</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div></div>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-head"><div class="dot purple"></div><h2>家族の生活費・教育費</h2></div>
       <div class="field-list">
-        <div class="field-row"><div><span class="field-label">家族の基本生活費</span><div class="field-sub">食費・光熱費・日用品など</div></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-living" value="30" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">家族の基本生活費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-living" value="30" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><div><span class="field-label">保育料（0〜5歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-nursery" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><div><span class="field-label">小学校費用（6〜11歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-elem" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><div><span class="field-label">中学校費用（12〜14歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-jhs" value="5" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><div><span class="field-label">高校費用（15〜17歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-hs" value="6" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><div><span class="field-label">大学費用（18〜21歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-univ" value="15" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">住宅費</span><div class="field-sub">賃貸or住宅ローン</div></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">住宅費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
       </div>
     </div>
-    <button class="calc-btn" onclick="calcFamily()">計算する</button>
+    <button class="calc-btn" onclick="calcFamily()" style="background:var(--purple)">🔮 家族シミュレーション実行</button>
+
     <div class="results" id="family-results">
+      <!-- 独身vs家族比較 -->
       <div class="compare-box">
-        <div class="compare-card"><div class="compare-title">独身の場合（90歳残高）</div><div class="compare-val val-ok" id="f-compare-single">—</div></div>
-        <div class="compare-card family"><div class="compare-title family">家族ありの場合（90歳残高）</div><div class="compare-val val-purple" id="f-compare-family">—</div></div>
+        <div class="compare-card"><div class="compare-title">独身（実績利回り・90歳）</div><div class="compare-val val-ok" id="f-compare-single">—</div></div>
+        <div class="compare-card family"><div class="compare-title family">家族あり（実績利回り・90歳）</div><div class="compare-val val-purple" id="f-compare-family">—</div></div>
       </div>
+
       <div class="verdict-card ok" id="f-verdict"><div class="verdict-icon" id="f-vicon"></div><div class="verdict-title" id="f-vtitle"></div><div class="verdict-body" id="f-vbody"></div></div>
+
+      <!-- FIRE達成ライン（家族） -->
+      <div id="f-fire-line" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🎯 FIRE達成ライン（年間生活費×25倍）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div><span id="f-fire-current" style="font-size:18px;font-weight:700;color:var(--purple)"></span><span style="font-size:11px;color:var(--text3)"> / <span id="f-fire-target-val"></span></span></div>
+          <div id="f-fire-pct" style="font-size:13px;font-weight:600;color:var(--purple)"></div>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:8px">
+          <div id="f-fire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+          <div style="text-align:center"><div style="color:var(--text3)">😔 悲観</div><div id="f-fire-yr-bear" style="font-weight:600;color:var(--text2)">—</div></div>
+          <div style="text-align:center"><div style="color:var(--green)">📈 実績</div><div id="f-fire-yr-actual" style="font-weight:600;color:var(--green)">—</div></div>
+          <div style="text-align:center"><div style="color:var(--amber)">🎯 目標</div><div id="f-fire-yr-target" style="font-weight:600;color:var(--amber)">—</div></div>
+        </div>
+      </div>
+
+      <!-- 3シナリオ比較 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="f-pct-bear"></span></div>
+          <div id="f-val-bear" style="font-size:15px;font-weight:700;color:var(--text1)">—</div>
+          <div id="f-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+        <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="f-pct-actual"></span></div>
+          <div id="f-val-actual" style="font-size:15px;font-weight:700;color:var(--green)">—</div>
+          <div id="f-sub-actual" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+        <div style="background:rgba(167,139,250,0.08);border:0.5px solid rgba(167,139,250,0.3);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--purple);margin-bottom:4px">🎯 目標<span id="f-pct-target"></span></div>
+          <div id="f-val-target" style="font-size:15px;font-weight:700;color:var(--purple)">—</div>
+          <div id="f-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+      </div>
+
       <div class="metrics-grid">
         <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
         <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">90歳時の残資産</div><div class="mvalue" id="f-m3">—</div><div class="msub" id="f-m3s"></div></div>
         <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
+        <div class="metric-card"><div class="mlabel">実績ベース90歳残高</div><div class="mvalue val-purple" id="f-m3">—</div><div class="msub" id="f-m3s">家族あり</div></div>
       </div>
+
       <div class="chart-card">
         <div class="chart-head">
           <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
           <div class="chart-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#4f9cf9"></div><span>独身</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span>家族あり</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇ライン</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div><span>悲観</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span>実績</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span>目標</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇線</span></div>
           </div>
         </div>
-        <canvas id="f-chart" height="200"></canvas>
+        <canvas id="f-chart" height="220"></canvas>
       </div>
+
+      <!-- 資産到達タイムライン（家族） -->
+      <div id="f-timeline-card" class="chart-card">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
+        <div id="f-timeline-list"></div>
+      </div>
+
       <div class="timeline">
         <div class="timeline-title">子供の教育費タイムライン</div>
         <div class="tl-row"><div class="tl-age" id="tl-age1"></div><div class="tl-bar"><div class="tl-label">保育園・幼稚園（0〜5歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#34d399"></div></div><div class="tl-cost" id="tl-cost1"></div></div></div>
@@ -1375,13 +1505,119 @@ tr:last-child td{border-bottom:none}
         <div class="tl-row"><div class="tl-age" id="tl-age4"></div><div class="tl-bar"><div class="tl-label">高校（15〜17歳）</div><div class="tl-track"><div class="tl-fill" style="width:45%;background:#f87171"></div></div><div class="tl-cost" id="tl-cost4"></div></div></div>
         <div class="tl-row"><div class="tl-age" id="tl-age5"></div><div class="tl-bar"><div class="tl-label">大学（18〜21歳）</div><div class="tl-track"><div class="tl-fill" style="width:100%;background:#a78bfa"></div></div><div class="tl-cost" id="tl-cost5"></div></div></div>
       </div>
-      <p class="note">※配偶者収入は65歳まで継続と仮定。税金・医療費・インフレは未考慮。<br>※参考試算としてご利用ください。</p>
+      <p class="note">※配偶者収入は65歳まで継続と仮定。税金・医療費・インフレは未考慮。</p>
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+<!-- ========== CASHFLOW TAB-bear" value="3" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
+        <div class="field-row"><span class="field-label" style="color:var(--green)">📈 実績</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-actual" value="3" step="0.1" inputmode="decimal" style="border-color:var(--green)"><span class="field-unit">%/年</span></div></div>
+        <div class="field-row"><span class="field-label" style="color:var(--amber)">🎯 目標</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="dot purple"></div><h2>家族の生活費・教育費</h2></div>
+      <div class="field-list">
+        <div class="field-row"><div><span class="field-label">家族の基本生活費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-living" value="30" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">保育料（0〜5歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-nursery" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">小学校費用（6〜11歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-elem" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">中学校費用（12〜14歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-jhs" value="5" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">高校費用（15〜17歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-hs" value="6" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">大学費用（18〜21歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-univ" value="15" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+        <div class="field-row"><div><span class="field-label">住宅費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+      </div>
+    </div>
+    <button class="calc-btn" onclick="calcFamily()" style="background:var(--purple)">🔮 家族シミュレーション実行</button>
+
+    <div class="results" id="family-results">
+      <!-- 独身vs家族比較 -->
+      <div class="compare-box">
+        <div class="compare-card"><div class="compare-title">独身（実績利回り・90歳）</div><div class="compare-val val-ok" id="f-compare-single">—</div></div>
+        <div class="compare-card family"><div class="compare-title family">家族あり（実績利回り・90歳）</div><div class="compare-val val-purple" id="f-compare-family">—</div></div>
+      </div>
+
+      <div class="verdict-card ok" id="f-verdict"><div class="verdict-icon" id="f-vicon"></div><div class="verdict-title" id="f-vtitle"></div><div class="verdict-body" id="f-vbody"></div></div>
+
+      <!-- FIRE達成ライン（家族） -->
+      <div id="f-fire-line" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🎯 FIRE達成ライン（年間生活費×25倍）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div><span id="f-fire-current" style="font-size:18px;font-weight:700;color:var(--purple)"></span><span style="font-size:11px;color:var(--text3)"> / <span id="f-fire-target-val"></span></span></div>
+          <div id="f-fire-pct" style="font-size:13px;font-weight:600;color:var(--purple)"></div>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:8px">
+          <div id="f-fire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+          <div style="text-align:center"><div style="color:var(--text3)">😔 悲観</div><div id="f-fire-yr-bear" style="font-weight:600;color:var(--text2)">—</div></div>
+          <div style="text-align:center"><div style="color:var(--green)">📈 実績</div><div id="f-fire-yr-actual" style="font-weight:600;color:var(--green)">—</div></div>
+          <div style="text-align:center"><div style="color:var(--amber)">🎯 目標</div><div id="f-fire-yr-target" style="font-weight:600;color:var(--amber)">—</div></div>
+        </div>
+      </div>
+
+      <!-- 3シナリオ比較 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="f-pct-bear"></span></div>
+          <div id="f-val-bear" style="font-size:15px;font-weight:700;color:var(--text1)">—</div>
+          <div id="f-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+        <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="f-pct-actual"></span></div>
+          <div id="f-val-actual" style="font-size:15px;font-weight:700;color:var(--green)">—</div>
+          <div id="f-sub-actual" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+        <div style="background:rgba(167,139,250,0.08);border:0.5px solid rgba(167,139,250,0.3);border-radius:12px;padding:10px">
+          <div style="font-size:10px;color:var(--purple);margin-bottom:4px">🎯 目標<span id="f-pct-target"></span></div>
+          <div id="f-val-target" style="font-size:15px;font-weight:700;color:var(--purple)">—</div>
+          <div id="f-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
+        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
+        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
+        <div class="metric-card"><div class="mlabel">実績ベース90歳残高</div><div class="mvalue val-purple" id="f-m3">—</div><div class="msub" id="f-m3s">家族あり</div></div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-head">
+          <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div><span>悲観</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span>実績</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span>目標</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇線</span></div>
+          </div>
+        </div>
+        <canvas id="f-chart" height="220"></canvas>
+      </div>
+
+      <!-- 資産到達タイムライン（家族） -->
+      <div id="f-timeline-card" class="chart-card">
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
+        <div id="f-timeline-list"></div>
+      </div>
+
+      <div class="timeline">
+        <div class="timeline-title">子供の教育費タイムライン</div>
+        <div class="tl-row"><div class="tl-age" id="tl-age1"></div><div class="tl-bar"><div class="tl-label">保育園・幼稚園（0〜5歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#34d399"></div></div><div class="tl-cost" id="tl-cost1"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age2"></div><div class="tl-bar"><div class="tl-label">小学校（6〜11歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#4f9cf9"></div></div><div class="tl-cost" id="tl-cost2"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age3"></div><div class="tl-bar"><div class="tl-label">中学校（12〜14歳）</div><div class="tl-track"><div class="tl-fill" style="width:35%;background:#fbbf24"></div></div><div class="tl-cost" id="tl-cost3"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age4"></div><div class="tl-bar"><div class="tl-label">高校（15〜17歳）</div><div class="tl-track"><div class="tl-fill" style="width:45%;background:#f87171"></div></div><div class="tl-cost" id="tl-cost4"></div></div></div>
+        <div class="tl-row"><div class="tl-age" id="tl-age5"></div><div class="tl-bar"><div class="tl-label">大学（18〜21歳）</div><div class="tl-track"><div class="tl-fill" style="width:100%;background:#a78bfa"></div></div><div class="tl-cost" id="tl-cost5"></div></div></div>
+      </div>
+      <p class="note">※配偶者収入は65歳まで継続と仮定。税金・医療費・インフレは未考慮。</p>
     </div>
   </div>
 </div>
   </div>
 </div>
 </div><!-- /panels -->
+
+<!-- ========== CASHFLOW TABpanels -->
 
 <!-- ========== CASHFLOW TAB ========== -->
 <div class="panel" id="tab-cashflow">
@@ -1690,6 +1926,7 @@ function switchTab(tab){
   currentTab=tab;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  if(tab==='fire'&&typeof fireAutoLink==='function')setTimeout(fireAutoLink,100);
   const fab=document.getElementById('fab');
   fab.classList.toggle('hidden',tab!=='manager');
   if(tab==='home')refreshHome();
@@ -5363,6 +5600,51 @@ function simRun(asset,rate,curAge,netFn){
   return{zero:zero,final:bals[bals.length-1],ages:ages,bals:bals};
 }
 
+function drawChart3(canvasId,ages,series,zeroAge){
+  var canvas=document.getElementById(canvasId);if(!canvas)return;
+  var ctx=canvas.getContext('2d');
+  var W=canvas.offsetWidth||300,H=parseInt(canvas.getAttribute('height'))||220;
+  canvas.width=W*window.devicePixelRatio||W;
+  canvas.height=H*window.devicePixelRatio||H;
+  ctx.scale(window.devicePixelRatio||1,window.devicePixelRatio||1);
+  var allVals=series.flatMap(function(s){return s.data;});
+  var mx=Math.max.apply(null,allVals)*1.05,mn=0;
+  var pad={t:16,r:12,b:36,l:62};
+  var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  function px(i){return pad.l+i/( ages.length-1)*cw;}
+  function py(v){return pad.t+ch-(v-mn)/(mx-mn)*ch;}
+  var isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+  var textCol=isDark?'#888':'#666';
+  ctx.clearRect(0,0,W,H);
+  // グリッド
+  for(var g=0;g<=4;g++){
+    var gv2=mn+(mx-mn)*g/4,gy=py(gv2);
+    ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+cw,gy);
+    ctx.strokeStyle=gridCol;ctx.lineWidth=0.5;ctx.stroke();
+    ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='right';
+    var label=gv2>=1e8?(Math.round(gv2/1e8*10)/10)+'億':(Math.round(gv2/1e4))+'万';
+    ctx.fillText(label,pad.l-4,gy+4);
+  }
+  // 枯渇ライン
+  if(zeroAge){
+    var zi=ages.indexOf(zeroAge);
+    if(zi>0){ctx.beginPath();ctx.moveTo(px(zi),pad.t);ctx.lineTo(px(zi),pad.t+ch);
+      ctx.strokeStyle='rgba(248,113,113,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);}
+  }
+  // 各シリーズ描画
+  series.forEach(function(s){
+    ctx.beginPath();
+    s.data.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
+    ctx.strokeStyle=s.color;ctx.lineWidth=s.dash?1.5:2.5;
+    if(s.dash)ctx.setLineDash([6,4]); else ctx.setLineDash([]);
+    ctx.stroke();ctx.setLineDash([]);
+  });
+  // X軸ラベル
+  var step=Math.ceil(ages.length/6);
+  ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='center';
+  ages.forEach(function(a,i){if(i%step===0){ctx.fillText(a+'歳',px(i),H-pad.b+14);}});
+}
 function drawChart(canvasId,ages,datasets,zeroAge){
   var canvas=el(canvasId);
   var ctx=canvas.getContext('2d');
@@ -5430,25 +5712,149 @@ function setVerdict(prefix,survives,sr,zero,pt,label){
   else{vc.className='verdict-card ng';vi.textContent='❌';vt.textContent='要見直し — '+zero+'歳で枯渇';vb.textContent=zero+'歳で資産がゼロになります。収入を増やす・支出を下げる・利回りを上げる調整が必要です。'}
 }
 
+function fwOku(n){
+  if(n==null||isNaN(n))return'—';
+  var v=Math.round(n),a=Math.abs(v),s=v<0?'-':'';
+  if(a>=1e8){var ok=Math.floor(a/1e8),m=Math.round((a-ok*1e8)/1e4);return s+(m===0?ok+'億円':ok+'億'+m+'万円');}
+  return s+Math.round(a/10000).toLocaleString()+'万円';
+}
+function fireAutoLink(){
+  // 推移タブの実績CAGRと総資産・目標利回りを自動連携
+  var snapshots=JSON.parse(localStorage.getItem('assetSnapshots_v2')||'[]');
+  var banner=document.getElementById('fire-live-banner');
+  if(!snapshots.length){if(banner)banner.style.display='none';return;}
+  var sorted=snapshots.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+  var first=sorted[0],last=sorted[sorted.length-1];
+  var totalYears=(new Date(last.date)-new Date(first.date))/(1000*60*60*24*365.25);
+  var cagr=totalYears>0?Math.pow(last.total/first.total,1/totalYears)-1:0;
+  var cagrPct=Math.round(cagr*1000)/10;
+  var asset=Math.round(last.total/10000);
+  var targetPct=parseFloat(document.getElementById('yieldSlider')?document.getElementById('yieldSlider').value:7)||7;
+  // バナー更新
+  if(banner){
+    banner.style.display='block';
+    document.getElementById('fire-live-asset').textContent=asset.toLocaleString()+'万円';
+    document.getElementById('fire-live-cagr').textContent=(cagrPct>=0?'+':'')+cagrPct+'%';
+    document.getElementById('fire-live-target').textContent=targetPct+'%';
+  }
+  // フォームに自動入力
+  var fields=['s-asset','f-asset'];
+  fields.forEach(function(id){var el=document.getElementById(id);if(el&&el.value==='4400')el.value=asset;});
+  ['s-rate-actual','f-rate-actual'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el)el.value=Math.round(cagrPct*10)/10;
+  });
+  ['s-rate-target','f-rate-target'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el&&el.value==='7')el.value=targetPct;
+  });
+}
+
+function fireCalcFIREYear(asset,rate,curAge,netFn,fireTarget){
+  // FIRE達成年を計算
+  var bal=asset,ar=rate/100;
+  for(var age=curAge;age<=90;age++){
+    if(bal>=fireTarget)return age;
+    bal=bal*(1+ar)+netFn(age)*12;
+  }
+  return null;
+}
+
+function fireRenderTimeline(containerId,ages,bals,curAge,curYear){
+  var el=document.getElementById(containerId);if(!el)return;
+  var milestones=[5000,6000,8000,10000,15000,20000,30000,50000];
+  var items=[];
+  milestones.forEach(function(m){
+    var idx=bals.findIndex(function(b){return b>=m*10000;});
+    if(idx>=0){
+      var age=ages[idx];
+      var yr=curYear+(age-curAge);
+      items.push({label:fwOku(m*10000),age:age,year:yr});
+    }
+  });
+  // 年金開始・90歳も追加
+  var milestoneAges=[65,70,75,80,90];
+  milestoneAges.forEach(function(a){
+    var idx=ages.indexOf(a);
+    if(idx>=0){
+      var yr=curYear+(a-curAge);
+      items.push({label:a+'歳（'+yr+'年）',age:a,year:yr,val:bals[idx],isAge:true});
+    }
+  });
+  items.sort(function(a,b){return a.age-b.age;});
+  
+  el.innerHTML=items.map(function(item){
+    var col=item.isAge?'var(--text3)':'var(--accent)';
+    var icon=item.isAge?'📅':'💰';
+    var desc=item.isAge?(item.val>=0?fwOku(item.val):'枯渇'):item.age+'歳（'+(curYear+(item.age-curAge))+'年）に到達';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'
+      +'<div style="font-size:16px">'+icon+'</div>'
+      +'<div style="flex:1"><div style="font-size:12px;font-weight:600;color:'+col+'">'+item.label+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+desc+'</div></div>'
+      +'</div>';
+  }).join('');
+}
+
 function calcSingle(){
-  var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income'),rate=gv('s-rate');
+  var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income');
   var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
-  if(!A||!E){alert('資産と生活費を入力してください');return}
-  var res=simRun(A,rate,CA,function(age){return(age>=PA?I+PM:I)-E});
-  var surv=!res.zero,sr=A>0?Math.max(0,E-I)*12/A*100:0,ms=I-E,pt=I+PM;
+  var rBear=gv('s-rate-bear')||3,rActual=gv('s-rate-actual')||3,rTarget=gv('s-rate-target')||7;
+  if(!A||!E){alert('資産と生活費を入力してください');return;}
+  var netFn=function(age){return(age>=PA?I+PM:I)-E;};
+  var resBear=simRun(A,rBear,CA,netFn);
+  var resActual=simRun(A,rActual,CA,netFn);
+  var resTarget=simRun(A,rTarget,CA,netFn);
+  var surv=!resActual.zero;
+  var sr=A>0?Math.max(0,E-I)*12/A*100:0,ms=I-E,pt=I+PM;
+  // 月収支・取り崩し率
   var m1=el('s-m1');m1.textContent=(ms>=0?'+':'')+ms+'万円';m1.className='mvalue '+(ms>=0?'val-ok':ms>=-5?'val-warn':'val-ng');
   var m2=el('s-m2');m2.textContent=fp(sr);m2.className='mvalue '+(sr<=3?'val-ok':sr<=4?'val-warn':'val-ng');
-  var m3=el('s-m3'),m3s=el('s-m3s');
-  if(surv){m3.textContent=fw(res.final);m3.className='mvalue val-ok';m3s.textContent='90歳時点の残高'}
-  else{m3.textContent=res.zero+'歳で枯渇';m3.className='mvalue val-ng';m3s.textContent='見直しが必要'}
+  var m3=el('s-m3');
+  m3.textContent=fwOku(resActual.final*10000);m3.className='mvalue val-ok';
+  el('s-m3s').textContent=surv?'90歳時点の残高':resActual.zero+'歳で枯渇';
   el('s-m4').textContent=pt+'万円/月';el('s-m4s').textContent=PA+'歳〜（副収入＋年金）';
-  setVerdict('s-',surv,sr,res.zero,pt,'独身');
+  // 3シナリオ表示
+  function scenarioVal(res,id,subId,zero_col){
+    var balMan=Math.round(res.final);
+    document.getElementById(id).textContent=fwOku(balMan*10000);
+    document.getElementById(subId).textContent=res.zero?res.zero+'歳で枯渇':'90歳時 '+fwOku(balMan*10000);
+  }
+  scenarioVal(resBear,'s-val-bear','s-sub-bear');
+  document.getElementById('s-pct-bear').textContent=' '+rBear+'%';
+  scenarioVal(resActual,'s-val-actual','s-sub-actual');
+  document.getElementById('s-pct-actual').textContent=' '+rActual+'%';
+  scenarioVal(resTarget,'s-val-target','s-sub-target');
+  document.getElementById('s-pct-target').textContent=' '+rTarget+'%';
+  // FIRE達成ライン
+  var fireTarget=E*12*25;
+  var fireEl=document.getElementById('s-fire-line');
+  fireEl.style.display='block';
+  document.getElementById('s-fire-current').textContent=fwOku(A*10000);
+  document.getElementById('s-fire-target-val').textContent=fwOku(fireTarget*10000);
+  var pct=Math.min(100,Math.round(A/fireTarget*100));
+  document.getElementById('s-fire-pct').textContent=pct+'%';
+  document.getElementById('s-fire-bar').style.width=pct+'%';
+  var curYear=new Date().getFullYear();
+  function fireYrStr(r){
+    var yr=fireCalcFIREYear(A,r,CA,netFn,fireTarget);
+    return yr?yr+'歳（'+(curYear+(yr-CA))+'年）':'達成困難';
+  }
+  document.getElementById('s-fire-yr-bear').textContent=fireYrStr(rBear);
+  document.getElementById('s-fire-yr-actual').textContent=fireYrStr(rActual);
+  document.getElementById('s-fire-yr-target').textContent=fireYrStr(rTarget);
+  setVerdict('s-',surv,sr,resActual.zero,pt,'独身');
   el('single-results').className='results visible';
   setTimeout(function(){
-    drawChart('s-chart',res.ages,[{data:res.bals,color:'#4f9cf9',fillTop:'rgba(79,156,249,0.18)',fillBot:'rgba(79,156,249,0.01)'}],res.zero);
+    drawChart3('s-chart',resActual.ages,[
+      {data:resBear.bals,color:'#94a3b8',label:'悲観',dash:true},
+      {data:resActual.bals,color:'#34d399',label:'実績'},
+      {data:resTarget.bals,color:'#fbbf24',label:'目標',dash:true}
+    ],resBear.zero||resActual.zero||resTarget.zero);
+    fireRenderTimeline('s-timeline-list',resActual.ages,resActual.bals,CA,curYear);
     el('single-results').scrollIntoView({behavior:'smooth',block:'start'});
   },50);
 }
+
 
 function calcFamily(){
   var A=gv('f-asset'),I=gv('f-income'),SI=gv('f-spouse-income'),rate=gv('f-rate');
