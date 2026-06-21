@@ -5510,7 +5510,7 @@ function simRun(asset,rate,curAge,netFn,inflation){
   return{zero:zero,final:bals[bals.length-1],ages:ages,bals:bals};
 }
 
-function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
+function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor,maxValOverride){
   var canvas=el(canvasId);
   if(!canvas)return;
   if(chartInstances[canvasId]){chartInstances[canvasId].destroy();chartInstances[canvasId]=null;}
@@ -5532,7 +5532,7 @@ function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
   var pad={top:14,right:10,bottom:28,left:50};
   var cw=w-pad.left-pad.right;
   var ch=h-pad.top-pad.bottom;
-  var maxBal=Math.max.apply(null,bals.filter(function(v){return v>0;}))||1;
+  var maxBal=maxValOverride||Math.max.apply(null,bals.filter(function(v){return v>0;}))||1;
   var isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
   var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
   var textCol=isDark?'#888':'#666';
@@ -5847,9 +5847,11 @@ function calcSingle(){try{
   fireRenderTimeline('s-timeline-list',resActual.ages,resActual.bals,CA,curYear);
   // グラフはスクロール完了後に描画
   setTimeout(function(){
-    drawChart1('s-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)');
-    drawChart1('s-chart-actual',resActual.ages,resActual.bals,'#34d399',resActual.zero,'rgba(52,211,153,0.12)');
-    drawChart1('s-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)');
+    // Y軸を目標利回りの最大値に合わせて統一（実績CAGRが異常値でもスケール崩れない）
+    var maxV=Math.max.apply(null,resTarget.bals.concat(resBear.bals));
+    drawChart1('s-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)',maxV);
+    drawChart1('s-chart-actual',resActual.ages,resActual.bals,'#34d399',resActual.zero,'rgba(52,211,153,0.12)',maxV);
+    drawChart1('s-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)',maxV);
   },300);
 }catch(e){console.error('calcSingle ERROR:',e,e.stack);alert('エラー: '+e.message);}
 }
@@ -5938,9 +5940,10 @@ function calcFamily(){
       requestAnimationFrame(function(){drawFamilyCharts(retry-1);});
       return;
     }
-    drawChart1('f-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)');
-    drawChart1('f-chart-actual',resActual.ages,resActual.bals,'#a78bfa',resActual.zero,'rgba(167,139,250,0.12)');
-    drawChart1('f-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)');
+    var maxVf=Math.max.apply(null,resTarget.bals.concat(resBear.bals));
+    drawChart1('f-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)',maxVf);
+    drawChart1('f-chart-actual',resActual.ages,resActual.bals,'#a78bfa',resActual.zero,'rgba(167,139,250,0.12)',maxVf);
+    drawChart1('f-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)',maxVf);
   }
   setTimeout(function(){drawFamilyCharts(20);},100);
 }
