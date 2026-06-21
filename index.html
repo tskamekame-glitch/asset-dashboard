@@ -1362,6 +1362,10 @@ tr:last-child td{border-bottom:none}
       <!-- 月次収支サマリー -->
       <div class="chart-card">
         <div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">
+          <button onclick="setFireChartAge('s','y1')" id="s-age-btn-y1" class="filter-btn" style="font-size:11px;padding:4px 8px">1年</button>
+          <button onclick="setFireChartAge('s','y2')" id="s-age-btn-y2" class="filter-btn" style="font-size:11px;padding:4px 8px">2年</button>
+          <button onclick="setFireChartAge('s','y3')" id="s-age-btn-y3" class="filter-btn" style="font-size:11px;padding:4px 8px">3年</button>
+          <button onclick="setFireChartAge('s','y4')" id="s-age-btn-y4" class="filter-btn" style="font-size:11px;padding:4px 8px">4年</button>
           <button onclick="setFireChartAge('s',0)" id="s-age-btn-0" class="filter-btn active" style="font-size:11px;padding:4px 8px">全期間</button>
           <button onclick="setFireChartAge('s',50)" id="s-age-btn-50" class="filter-btn" style="font-size:11px;padding:4px 8px">〜50歳</button>
           <button onclick="setFireChartAge('s',60)" id="s-age-btn-60" class="filter-btn" style="font-size:11px;padding:4px 8px">〜60歳</button>
@@ -1488,6 +1492,10 @@ tr:last-child td{border-bottom:none}
 
       <div class="chart-card">
         <div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">
+          <button onclick="setFireChartAge('f','y1')" id="f-age-btn-y1" class="filter-btn" style="font-size:11px;padding:4px 8px">1年</button>
+          <button onclick="setFireChartAge('f','y2')" id="f-age-btn-y2" class="filter-btn" style="font-size:11px;padding:4px 8px">2年</button>
+          <button onclick="setFireChartAge('f','y3')" id="f-age-btn-y3" class="filter-btn" style="font-size:11px;padding:4px 8px">3年</button>
+          <button onclick="setFireChartAge('f','y4')" id="f-age-btn-y4" class="filter-btn" style="font-size:11px;padding:4px 8px">4年</button>
           <button onclick="setFireChartAge('f',0)" id="f-age-btn-0" class="filter-btn active" style="font-size:11px;padding:4px 8px">全期間</button>
           <button onclick="setFireChartAge('f',50)" id="f-age-btn-50" class="filter-btn" style="font-size:11px;padding:4px 8px">〜50歳</button>
           <button onclick="setFireChartAge('f',60)" id="f-age-btn-60" class="filter-btn" style="font-size:11px;padding:4px 8px">〜60歳</button>
@@ -5529,17 +5537,25 @@ var _fireCurAge={s:45,f:45};
 
 function setFireChartAge(prefix,maxAge){
   // ボタンのactive切り替え
-  [0,50,60,70,80,90].forEach(function(a){
+  ['y1','y2','y3','y4',0,50,60,70,80,90].forEach(function(a){
     var btn=document.getElementById(prefix+'-age-btn-'+a);
     if(btn)btn.classList.toggle('active',a===maxAge);
   });
   var d=_fireChartData[prefix];
   if(!d||!d.bear)return;
   var curAge=_fireCurAge[prefix];
-  var limitAge=maxAge||90;
-  // データをmaxAgeまで絞り込む
+  // 年数モード（y1〜y4）の場合は現在年齢+N年後まで表示
+  var limitAge;
+  if(typeof maxAge==='string'&&maxAge[0]==='y'){
+    var yrs=parseInt(maxAge[1]);
+    limitAge=curAge+yrs;
+  }else{
+    limitAge=maxAge||90;
+  }
+  // データをlimitAgeまで絞り込む
   function slice(res){
     var idx=res.ages.indexOf(limitAge);
+    if(idx<0&&typeof maxAge==='string')idx=res.ages.length-1; // 近い年齢で代替
     if(idx<0||maxAge===0)return res;
     return{ages:res.ages.slice(0,idx+1),bals:res.bals.slice(0,idx+1),zero:res.zero&&res.zero<=limitAge?res.zero:null};
   }
