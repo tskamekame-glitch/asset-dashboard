@@ -5702,10 +5702,10 @@ function fwOku(n){
   return s+Math.round(a/10000).toLocaleString()+'万円';
 }
 function fireAutoLink(){
-  // 推移タブの実績CAGRと総資産・目標利回りを自動連携
   var snapshots=JSON.parse(localStorage.getItem('assetSnapshots_v2')||'[]');
+  console.log('[fireAutoLink] snapshots:', snapshots.length, 'items');
   var banner=document.getElementById('fire-live-banner');
-  if(!snapshots.length){if(banner)banner.style.display='none';return;}
+  if(!snapshots.length){if(banner)banner.style.display='none';console.log('[fireAutoLink] no snapshots, return');return;}
   var sorted=snapshots.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
   var first=sorted[0],last=sorted[sorted.length-1];
   var totalYears=(new Date(last.date)-new Date(first.date))/(1000*60*60*24*365.25);
@@ -5725,8 +5725,11 @@ function fireAutoLink(){
     var el=document.getElementById(id);if(el)el.value=asset;
   });
   var cagrRounded=Math.round(cagrPct*10)/10;
+  console.log('[fireAutoLink] cagrPct='+cagrPct+' cagrRounded='+cagrRounded+' asset='+asset);
   ['s-rate-actual','f-rate-actual'].forEach(function(id){
-    var el=document.getElementById(id);if(el)el.value=cagrRounded;
+    var el2=document.getElementById(id);
+    console.log('[fireAutoLink] setting '+id+' el='+!!el2+' value='+cagrRounded);
+    if(el2)el2.value=cagrRounded;
   });
   ['s-rate-target','f-rate-target'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value=targetPct;
