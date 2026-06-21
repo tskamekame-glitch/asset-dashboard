@@ -1361,7 +1361,14 @@ tr:last-child td{border-bottom:none}
 
       <!-- 月次収支サマリー -->
       <div class="chart-card">
-        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">資産推移グラフ（現在〜90歳）</div>
+        <div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">
+          <button onclick="setFireChartAge('s',0)" id="s-age-btn-0" class="filter-btn active" style="font-size:11px;padding:4px 8px">全期間</button>
+          <button onclick="setFireChartAge('s',50)" id="s-age-btn-50" class="filter-btn" style="font-size:11px;padding:4px 8px">〜50歳</button>
+          <button onclick="setFireChartAge('s',60)" id="s-age-btn-60" class="filter-btn" style="font-size:11px;padding:4px 8px">〜60歳</button>
+          <button onclick="setFireChartAge('s',70)" id="s-age-btn-70" class="filter-btn" style="font-size:11px;padding:4px 8px">〜70歳</button>
+          <button onclick="setFireChartAge('s',80)" id="s-age-btn-80" class="filter-btn" style="font-size:11px;padding:4px 8px">〜80歳</button>
+          <button onclick="setFireChartAge('s',90)" id="s-age-btn-90" class="filter-btn" style="font-size:11px;padding:4px 8px">〜90歳</button>
+        </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="s-chart-pct-bear"></span></span>
@@ -1377,20 +1384,7 @@ tr:last-child td{border-bottom:none}
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="s-chart-pct-target"></span></span>
         </div>
         <canvas id="s-chart-target"></canvas>
-      </div>
-
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
-        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
-        <div class="metric-card"><div class="mlabel">実績CAGR予測残高</div><div class="mvalue val-ok" id="s-m3">—</div><div class="msub" id="s-m3s">90歳時点</div></div>
-      </div>
-
-      <!-- 資産推移グラフ（3ライン） -->
-      
-
-      <!-- 資産到達タイムライン -->
-      <div id="s-timeline-card" class="chart-card">
+      </div><div id="s-timeline-card" class="chart-card">
         <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
         <div id="s-timeline-list"></div>
       </div>
@@ -1483,6 +1477,14 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <div class="chart-card">
+        <div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">
+          <button onclick="setFireChartAge('f',0)" id="f-age-btn-0" class="filter-btn active" style="font-size:11px;padding:4px 8px">全期間</button>
+          <button onclick="setFireChartAge('f',50)" id="f-age-btn-50" class="filter-btn" style="font-size:11px;padding:4px 8px">〜50歳</button>
+          <button onclick="setFireChartAge('f',60)" id="f-age-btn-60" class="filter-btn" style="font-size:11px;padding:4px 8px">〜60歳</button>
+          <button onclick="setFireChartAge('f',70)" id="f-age-btn-70" class="filter-btn" style="font-size:11px;padding:4px 8px">〜70歳</button>
+          <button onclick="setFireChartAge('f',80)" id="f-age-btn-80" class="filter-btn" style="font-size:11px;padding:4px 8px">〜80歳</button>
+          <button onclick="setFireChartAge('f',90)" id="f-age-btn-90" class="filter-btn" style="font-size:11px;padding:4px 8px">〜90歳</button>
+        </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <div style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="f-chart-pct-bear"></span></span>
@@ -5510,6 +5512,37 @@ function simRun(asset,rate,curAge,netFn,inflation){
   return{zero:zero,final:bals[bals.length-1],ages:ages,bals:bals};
 }
 
+// FIREグラフの年齢フィルター
+var _fireChartData={s:{bear:null,actual:null,target:null},f:{bear:null,actual:null,target:null}};
+var _fireChartMaxV={s:0,f:0};
+var _fireCurAge={s:45,f:45};
+
+function setFireChartAge(prefix,maxAge){
+  // ボタンのactive切り替え
+  [0,50,60,70,80,90].forEach(function(a){
+    var btn=document.getElementById(prefix+'-age-btn-'+a);
+    if(btn)btn.classList.toggle('active',a===maxAge);
+  });
+  var d=_fireChartData[prefix];
+  if(!d||!d.bear)return;
+  var curAge=_fireCurAge[prefix];
+  var limitAge=maxAge||90;
+  // データをmaxAgeまで絞り込む
+  function slice(res){
+    var idx=res.ages.indexOf(limitAge);
+    if(idx<0||maxAge===0)return res;
+    return{ages:res.ages.slice(0,idx+1),bals:res.bals.slice(0,idx+1),zero:res.zero&&res.zero<=limitAge?res.zero:null};
+  }
+  var bear=slice(d.bear),actual=slice(d.actual),target=slice(d.target);
+  var maxV=Math.max.apply(null,target.bals.concat(bear.bals));
+  var colors=prefix==='s'?
+    {bear:'#94a3b8',actual:'#34d399',target:'#fbbf24',bf:'rgba(148,163,184,0.1)',af:'rgba(52,211,153,0.12)',tf:'rgba(251,191,36,0.12)'}:
+    {bear:'#94a3b8',actual:'#a78bfa',target:'#fbbf24',bf:'rgba(148,163,184,0.1)',af:'rgba(167,139,250,0.12)',tf:'rgba(251,191,36,0.12)'};
+  drawChart1(prefix+'-chart-bear',bear.ages,bear.bals,colors.bear,bear.zero,colors.bf,maxV);
+  drawChart1(prefix+'-chart-actual',actual.ages,actual.bals,colors.actual,actual.zero,colors.af,maxV);
+  drawChart1(prefix+'-chart-target',target.ages,target.bals,colors.target,target.zero,colors.tf,maxV);
+}
+
 function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor,maxValOverride){
   var canvas=el(canvasId);
   if(!canvas)return;
@@ -5848,10 +5881,9 @@ function calcSingle(){try{
   // グラフはスクロール完了後に描画
   setTimeout(function(){
     // Y軸を目標利回りの最大値に合わせて統一（実績CAGRが異常値でもスケール崩れない）
-    var maxV=Math.max.apply(null,resTarget.bals.concat(resBear.bals));
-    drawChart1('s-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)',maxV);
-    drawChart1('s-chart-actual',resActual.ages,resActual.bals,'#34d399',resActual.zero,'rgba(52,211,153,0.12)',maxV);
-    drawChart1('s-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)',maxV);
+    _fireChartData.s={bear:resBear,actual:resActual,target:resTarget};
+    _fireCurAge.s=CA;
+    setFireChartAge('s',0);
   },300);
 }catch(e){console.error('calcSingle ERROR:',e,e.stack);alert('エラー: '+e.message);}
 }
@@ -5940,10 +5972,9 @@ function calcFamily(){
       requestAnimationFrame(function(){drawFamilyCharts(retry-1);});
       return;
     }
-    var maxVf=Math.max.apply(null,resTarget.bals.concat(resBear.bals));
-    drawChart1('f-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)',maxVf);
-    drawChart1('f-chart-actual',resActual.ages,resActual.bals,'#a78bfa',resActual.zero,'rgba(167,139,250,0.12)',maxVf);
-    drawChart1('f-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)',maxVf);
+    _fireChartData.f={bear:resBear,actual:resActual,target:resTarget};
+    _fireCurAge.f=CA;
+    setFireChartAge('f',0);
   }
   setTimeout(function(){drawFamilyCharts(20);},100);
 }
