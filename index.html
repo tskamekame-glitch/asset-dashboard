@@ -487,7 +487,7 @@ tr:last-child td{border-bottom:none}
 #fire-scope .chart-legend { display: flex; gap: 10px; flex-wrap: wrap; }
 #fire-scope .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text3); }
 #fire-scope .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-#fire-scope canvas { display: block; width: 100% !important; }
+#fire-scope canvas { display: block; }
 #fire-scope .timeline { background: var(--surface); border: 0.5px solid var(--border2); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
 #fire-scope .timeline-title { font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 12px; }
 #fire-scope .tl-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
@@ -1374,17 +1374,17 @@ tr:last-child td{border-bottom:none}
           <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="s-chart-pct-bear"></span></span>
         </div>
-        <canvas id="s-chart-bear" height="130"></canvas>
+        <canvas id="s-chart-bear" height="130" style="height:130px;width:100%"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#34d399;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--green);flex:1">📈 実績 <span id="s-chart-pct-actual"></span></span>
         </div>
-        <canvas id="s-chart-actual" height="130"></canvas>
+        <canvas id="s-chart-actual" height="130" style="height:130px;width:100%"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="s-chart-pct-target"></span></span>
         </div>
-        <canvas id="s-chart-target" height="130"></canvas>
+        <canvas id="s-chart-target" height="130" style="height:130px;width:100%"></canvas>
       </div>
 
       <!-- 資産到達タイムライン -->
@@ -1493,17 +1493,17 @@ tr:last-child td{border-bottom:none}
           <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="f-chart-pct-bear"></span></span>
         </div>
-        <canvas id="f-chart-bear" height="130"></canvas>
+        <canvas id="f-chart-bear" height="130" style="height:130px;width:100%"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#a78bfa;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--purple);flex:1">📈 実績 <span id="f-chart-pct-actual"></span></span>
         </div>
-        <canvas id="f-chart-actual" height="130"></canvas>
+        <canvas id="f-chart-actual" height="130" style="height:130px;width:100%"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="f-chart-pct-target"></span></span>
         </div>
-        <canvas id="f-chart-target" height="130"></canvas>
+        <canvas id="f-chart-target" height="130" style="height:130px;width:100%"></canvas>
       </div>
 
       <!-- 資産到達タイムライン（家族） -->
@@ -5622,71 +5622,97 @@ function simRun(asset,rate,curAge,netFn,inflation){
 function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
   var canvas=document.getElementById(canvasId);
   if(!canvas)return;
-  // CSSで幅を強制設定してからBCRで取得
-  canvas.style.display='block';
-  canvas.style.width='100%';
-  var H=parseInt(canvas.getAttribute('height'))||130;
-  canvas.style.height=H+'px';
-  var bcr=canvas.getBoundingClientRect();
-  var W=Math.round(bcr.width)||canvas.parentElement.getBoundingClientRect().width||300;
-  if(W<10){setTimeout(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);},100);return;}
-  var dpr=window.devicePixelRatio||1;
-  canvas.width=Math.round(W*dpr);
-  canvas.height=Math.round(H*dpr);
-  var ctx=canvas.getContext('2d');
-  ctx.scale(dpr,dpr);
-  var mn=0,mx=Math.max.apply(null,bals.filter(function(v){return v>0;}))||1;
-  mx=mx*1.08;
-  var pad={t:10,r:10,b:28,l:54};
-  var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
-  if(cw<=0||ch<=0)return;
-  function px(i){return pad.l+i/(ages.length-1||1)*cw;}
-  function py(v){return pad.t+ch*(1-(v-mn)/(mx-mn));}
+  // 既存チャートを破棄
+  if(chartInstances[canvasId]){chartInstances[canvasId].destroy();chartInstances[canvasId]=null;}
   var isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
-  var gridCol=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)';
-  var textCol=isDark?'#999':'#777';
-  ctx.clearRect(0,0,W,H);
-  // グリッド・Y軸ラベル
-  for(var g=0;g<=2;g++){
-    var gv=mx*g/2,gy=py(gv);
-    ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(W-pad.r,gy);
-    ctx.strokeStyle=gridCol;ctx.lineWidth=0.5;ctx.stroke();
-    var lbl=gv>=1e8?(Math.floor(gv/1e8)+'億'):(Math.round(gv/1e4)+'万');
-    ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='right';
-    ctx.fillText(lbl,pad.l-3,gy+4);
-  }
+  var gridCol=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
+  var tickCol=isDark?'#636366':'#9b9b97';
+  // 65歳縦線プラグイン
+  var line65Plugin={
+    id:'line65',
+    afterDraw:function(chart){
+      var idx65=ages.indexOf(65);
+      if(idx65<0)return;
+      var x=chart.scales.x.getPixelForValue(idx65);
+      var ctx2=chart.ctx,top=chart.chartArea.top,bot=chart.chartArea.bottom;
+      ctx2.save();
+      ctx2.beginPath();ctx2.moveTo(x,top);ctx2.lineTo(x,bot);
+      ctx2.strokeStyle='rgba(99,102,241,0.5)';ctx2.lineWidth=1;ctx2.setLineDash([3,3]);ctx2.stroke();
+      ctx2.setLineDash([]);
+      ctx2.fillStyle='rgba(99,102,241,0.8)';ctx2.font='9px system-ui';ctx2.textAlign='center';
+      ctx2.fillText('65歳',x,top+10);
+      ctx2.restore();
+    }
+  };
   // 枯渇ライン
-  if(zeroAge&&ages.indexOf(zeroAge)>=0){
-    var zi=ages.indexOf(zeroAge);
-    ctx.beginPath();ctx.moveTo(px(zi),pad.t);ctx.lineTo(px(zi),pad.t+ch);
-    ctx.strokeStyle='rgba(248,113,113,0.8)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle='rgba(248,113,113,0.9)';ctx.font='9px system-ui';ctx.textAlign='center';
-    ctx.fillText(zeroAge+'歳枯渇',px(zi),pad.t+9);
-  }
-  // 65歳縦線
-  var idx65=ages.indexOf(65);
-  if(idx65>=0){
-    ctx.beginPath();ctx.moveTo(px(idx65),pad.t);ctx.lineTo(px(idx65),pad.t+ch);
-    ctx.strokeStyle='rgba(99,102,241,0.5)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle='rgba(99,102,241,0.8)';ctx.font='9px system-ui';ctx.textAlign='center';
-    ctx.fillText('65歳',px(idx65),pad.t+9);
-  }
-  // 塗りつぶし
-  if(fillColor&&bals.some(function(v){return v>0;})){
-    ctx.beginPath();
-    bals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
-    ctx.lineTo(px(bals.length-1),py(0));ctx.lineTo(px(0),py(0));ctx.closePath();
-    ctx.fillStyle=fillColor;ctx.fill();
-  }
-  // ライン
-  ctx.beginPath();
-  bals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
-  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke();
-  // X軸ラベル
-  var step=Math.ceil(ages.length/5);
-  ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='center';
-  ages.forEach(function(a,i){
-    if(i===0||i===ages.length-1||i%step===0)ctx.fillText(a+'歳',px(i),H-6);
+  var zeroPlugin={
+    id:'zeroline',
+    afterDraw:function(chart){
+      if(!zeroAge)return;
+      var zi=ages.indexOf(zeroAge);if(zi<0)return;
+      var x=chart.scales.x.getPixelForValue(zi);
+      var ctx2=chart.ctx,top=chart.chartArea.top,bot=chart.chartArea.bottom;
+      ctx2.save();
+      ctx2.beginPath();ctx2.moveTo(x,top);ctx2.lineTo(x,bot);
+      ctx2.strokeStyle='rgba(248,113,113,0.8)';ctx2.lineWidth=1.5;ctx2.setLineDash([4,3]);ctx2.stroke();
+      ctx2.setLineDash([]);
+      ctx2.fillStyle='rgba(248,113,113,0.9)';ctx2.font='9px system-ui';ctx2.textAlign='center';
+      ctx2.fillText(zeroAge+'歳枯渇',x,top+10);
+      ctx2.restore();
+    }
+  };
+  var yMax=Math.max.apply(null,bals.filter(function(v){return v>0;}))||1;
+  chartInstances[canvasId]=new Chart(canvas,{
+    type:'line',
+    data:{
+      labels:ages,
+      datasets:[{
+        data:bals,
+        borderColor:color,
+        backgroundColor:fillColor||'transparent',
+        borderWidth:2.5,
+        fill:!!fillColor,
+        pointRadius:0,
+        tension:0.3
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      animation:{duration:400},
+      plugins:{
+        legend:{display:false},
+        datalabels:{display:false},
+        tooltip:{callbacks:{
+          title:function(items){return items[0].label+'歳';},
+          label:function(ctx){
+            var v=ctx.raw*10000;
+            if(v>=1e8){var ok=Math.floor(v/1e8),m=Math.round((v-ok*1e8)/1e4);return m?ok+'億'+m+'万円':ok+'億円';}
+            return Math.round(v/1e4).toLocaleString()+'万円';
+          }
+        }}
+      },
+      scales:{
+        x:{
+          ticks:{color:tickCol,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:6,
+            callback:function(val){return this.getLabelForValue(val)+'歳';}},
+          grid:{display:false}
+        },
+        y:{
+          min:0,
+          ticks:{color:tickCol,font:{size:10},
+            callback:function(v){
+              var a=Math.abs(v*10000);
+              if(a>=1e8){var ok=Math.floor(a/1e8);return ok+'億';}
+              return Math.round(a/1e4)+'万';
+            }
+          },
+          grid:{color:gridCol}
+        }
+      },
+      layout:{padding:{top:14,right:8}}
+    },
+    plugins:[ChartDataLabels,line65Plugin,zeroPlugin]
   });
 }
 
