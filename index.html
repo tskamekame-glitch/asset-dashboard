@@ -1374,17 +1374,17 @@ tr:last-child td{border-bottom:none}
           <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="s-chart-pct-bear"></span></span>
         </div>
-        <canvas id="s-chart-bear" height="130" style="height:130px;width:100%"></canvas>
+        <canvas id="s-chart-bear"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#34d399;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--green);flex:1">📈 実績 <span id="s-chart-pct-actual"></span></span>
         </div>
-        <canvas id="s-chart-actual" height="130" style="height:130px;width:100%"></canvas>
+        <canvas id="s-chart-actual"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="s-chart-pct-target"></span></span>
         </div>
-        <canvas id="s-chart-target" height="130" style="height:130px;width:100%"></canvas>
+        <canvas id="s-chart-target"></canvas>
       </div>
 
       <!-- 資産到達タイムライン -->
@@ -1493,17 +1493,17 @@ tr:last-child td{border-bottom:none}
           <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="f-chart-pct-bear"></span></span>
         </div>
-        <canvas id="f-chart-bear" height="130" style="height:130px;width:100%"></canvas>
+        <canvas id="f-chart-bear"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#a78bfa;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--purple);flex:1">📈 実績 <span id="f-chart-pct-actual"></span></span>
         </div>
-        <canvas id="f-chart-actual" height="130" style="height:130px;width:100%"></canvas>
+        <canvas id="f-chart-actual"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
           <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="f-chart-pct-target"></span></span>
         </div>
-        <canvas id="f-chart-target" height="130" style="height:130px;width:100%"></canvas>
+        <canvas id="f-chart-target"></canvas>
       </div>
 
       <!-- 資産到達タイムライン（家族） -->
@@ -5625,8 +5625,12 @@ function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
   if(chartInstances[canvasId]){chartInstances[canvasId].destroy();chartInstances[canvasId]=null;}
   var ctx=canvas.getContext('2d');
   var dpr=window.devicePixelRatio||1;
-  var w=canvas.parentElement.clientWidth-2;
-  if(w<10){setTimeout(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);},200);return;}
+  // parentを遡ってclientWidthを取得
+  var par=canvas.parentElement;
+  var w=0;
+  while(par&&w<10){w=par.clientWidth-32;par=par.parentElement;}
+  console.log('drawChart1',canvasId,'w='+w);
+  if(w<10){setTimeout(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);},300);return;}
   var h=150;
   canvas.width=Math.round(w*dpr);
   canvas.height=Math.round(h*dpr);
