@@ -1373,6 +1373,21 @@ tr:last-child td{border-bottom:none}
           <button onclick="setFireChartAge('s',80)" id="s-age-btn-80" class="filter-btn" style="font-size:11px;padding:4px 8px">〜80歳</button>
           <button onclick="setFireChartAge('s',90)" id="s-age-btn-90" class="filter-btn" style="font-size:11px;padding:4px 8px">〜90歳</button>
         </div>
+        <!-- 選択期間の残高サマリー -->
+        <div id="s-chart-summary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;display:none">
+          <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">😔 悲観</div>
+            <div id="s-cs-bear" style="font-size:13px;font-weight:700;color:var(--text1)">—</div>
+          </div>
+          <div style="background:rgba(52,211,153,0.08);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--green);margin-bottom:2px">📈 実績</div>
+            <div id="s-cs-actual" style="font-size:13px;font-weight:700;color:var(--green)">—</div>
+          </div>
+          <div style="background:rgba(251,191,36,0.08);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--amber);margin-bottom:2px">🎯 目標</div>
+            <div id="s-cs-target" style="font-size:13px;font-weight:700;color:var(--amber)">—</div>
+          </div>
+        </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="s-chart-pct-bear"></span></span>
@@ -1502,6 +1517,20 @@ tr:last-child td{border-bottom:none}
           <button onclick="setFireChartAge('f',70)" id="f-age-btn-70" class="filter-btn" style="font-size:11px;padding:4px 8px">〜70歳</button>
           <button onclick="setFireChartAge('f',80)" id="f-age-btn-80" class="filter-btn" style="font-size:11px;padding:4px 8px">〜80歳</button>
           <button onclick="setFireChartAge('f',90)" id="f-age-btn-90" class="filter-btn" style="font-size:11px;padding:4px 8px">〜90歳</button>
+        </div>
+        <div id="f-chart-summary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;display:none">
+          <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">😔 悲観</div>
+            <div id="f-cs-bear" style="font-size:13px;font-weight:700;color:var(--text1)">—</div>
+          </div>
+          <div style="background:rgba(167,139,250,0.08);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--purple);margin-bottom:2px">📈 実績</div>
+            <div id="f-cs-actual" style="font-size:13px;font-weight:700;color:var(--purple)">—</div>
+          </div>
+          <div style="background:rgba(251,191,36,0.08);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--amber);margin-bottom:2px">🎯 目標</div>
+            <div id="f-cs-target" style="font-size:13px;font-weight:700;color:var(--amber)">—</div>
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <div style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
@@ -5567,6 +5596,29 @@ function setFireChartAge(prefix,maxAge){
   drawChart1(prefix+'-chart-bear',bear.ages,bear.bals,colors.bear,bear.zero,colors.bf,maxV);
   drawChart1(prefix+'-chart-actual',actual.ages,actual.bals,colors.actual,actual.zero,colors.af,maxV);
   drawChart1(prefix+'-chart-target',target.ages,target.bals,colors.target,target.zero,colors.tf,maxV);
+  // 期間末の残高サマリーを表示
+  var sumEl=document.getElementById(prefix+'-chart-summary');
+  if(sumEl){
+    sumEl.style.display='grid';
+    var endAge=bear.ages[bear.ages.length-1];
+    var label=maxAge===0?'90歳時点':(typeof maxAge==='string'?curAge+parseInt(maxAge[1])+'歳時点':maxAge+'歳時点');
+    function setSum(id,balsArr,zero){
+      var el2=document.getElementById(id);
+      if(!el2)return;
+      var lastBal=balsArr[balsArr.length-1];
+      el2.textContent=zero&&zero<=endAge?zero+'歳で枯渇':fwOku(lastBal*10000);
+    }
+    setSum(prefix+'-cs-bear',bear.bals,bear.zero);
+    setSum(prefix+'-cs-actual',actual.bals,actual.zero);
+    setSum(prefix+'-cs-target',target.bals,target.zero);
+    // ラベルをボタン行の上に表示
+    var firstBtn=document.getElementById(prefix+'-age-btn-y1');
+    if(firstBtn&&firstBtn.parentElement){
+      var lbl=firstBtn.parentElement.querySelector('.chart-period-label');
+      if(!lbl){lbl=document.createElement('div');lbl.className='chart-period-label';lbl.style.cssText='font-size:11px;color:var(--text3);margin-bottom:4px';firstBtn.parentElement.insertBefore(lbl,firstBtn);}
+      lbl.textContent='📊 '+label+'の予測残高';
+    }
+  }
 }
 
 function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor,maxValOverride){
