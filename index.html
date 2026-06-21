@@ -5702,7 +5702,7 @@ function fwOku(n){
   return s+Math.round(a/10000).toLocaleString()+'万円';
 }
 function fireAutoLink(){
-  var snapshots=JSON.parse(localStorage.getItem('assetSnapshots_v2')||'[]');
+  var snapshots=JSON.parse(localStorage.getItem('assetSnapshots')||localStorage.getItem('assetSnapshots_v2')||'[]');
   console.log('[fireAutoLink] snapshots:', snapshots.length, 'items');
   var banner=document.getElementById('fire-live-banner');
   if(!snapshots.length){if(banner)banner.style.display='none';console.log('[fireAutoLink] no snapshots, return');return;}
