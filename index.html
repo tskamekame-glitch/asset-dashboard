@@ -1369,15 +1369,22 @@ tr:last-child td{border-bottom:none}
 
       <!-- 資産推移グラフ（3ライン） -->
       <div class="chart-card">
-        <div class="chart-head">
-          <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
-          <div class="chart-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div><span>悲観</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span>実績</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div><span>目標</span></div>
-          </div>
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">資産推移グラフ（現在〜90歳）</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="s-chart-pct-bear"></span></span>
         </div>
-        <canvas id="s-chart" height="220"></canvas>
+        <canvas id="s-chart-bear" height="130"></canvas>
+        <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
+          <div class="legend-dot" style="background:#34d399;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <span style="font-size:11px;color:var(--green);flex:1">📈 実績 <span id="s-chart-pct-actual"></span></span>
+        </div>
+        <canvas id="s-chart-actual" height="130"></canvas>
+        <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
+          <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="s-chart-pct-target"></span></span>
+        </div>
+        <canvas id="s-chart-target" height="130"></canvas>
       </div>
 
       <!-- 資産到達タイムライン -->
@@ -1481,16 +1488,22 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <div class="chart-card">
-        <div class="chart-head">
-          <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
-          <div class="chart-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div><span>悲観</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span>実績</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span>目標</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇線</span></div>
-          </div>
+        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">資産推移グラフ（現在〜90歳）</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="f-chart-pct-bear"></span></span>
         </div>
-        <canvas id="f-chart" height="220"></canvas>
+        <canvas id="f-chart-bear" height="130"></canvas>
+        <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
+          <div class="legend-dot" style="background:#a78bfa;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <span style="font-size:11px;color:var(--purple);flex:1">📈 実績 <span id="f-chart-pct-actual"></span></span>
+        </div>
+        <canvas id="f-chart-actual" height="130"></canvas>
+        <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
+          <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="f-chart-pct-target"></span></span>
+        </div>
+        <canvas id="f-chart-target" height="130"></canvas>
       </div>
 
       <!-- 資産到達タイムライン（家族） -->
@@ -5606,6 +5619,74 @@ function simRun(asset,rate,curAge,netFn,inflation){
   return{zero:zero,final:bals[bals.length-1],ages:ages,bals:bals};
 }
 
+function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
+  var canvas=document.getElementById(canvasId);if(!canvas)return;
+  // offsetWidthが0の場合は親要素から取得
+  var W=canvas.offsetWidth||canvas.parentElement&&canvas.parentElement.offsetWidth||320;
+  if(W<10){
+    // まだレイアウトされていない場合はrAFで再試行
+    requestAnimationFrame(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);});
+    return;
+  }
+  var ctx=canvas.getContext('2d');
+  var H=parseInt(canvas.getAttribute('height'))||130;
+  canvas.width=W*(window.devicePixelRatio||1);
+  canvas.height=H*(window.devicePixelRatio||1);
+  ctx.scale(window.devicePixelRatio||1,window.devicePixelRatio||1);
+  var mn=0,mx=Math.max.apply(null,bals)*1.08;
+  if(mx===0)mx=1;
+  var pad={t:8,r:8,b:28,l:52};
+  var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  function px(i){return pad.l+i/(ages.length-1||1)*cw;}
+  function py(v){return pad.t+ch-(v-mn)/(mx-mn)*ch;}
+  var isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+  var textCol=isDark?'#888':'#666';
+  ctx.clearRect(0,0,W,H);
+  // グリッド3本
+  for(var g=0;g<=2;g++){
+    var gv=mn+(mx-mn)*g/2,gy=py(gv);
+    ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+cw,gy);
+    ctx.strokeStyle=gridCol;ctx.lineWidth=0.5;ctx.stroke();
+    ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='right';
+    var lbl=gv>=1e8?(Math.floor(gv/1e8)+'億'+(Math.round((gv%1e8)/1e4)>0?Math.round((gv%1e8)/1e4)+'万':'')):Math.round(gv/1e4)+'万';
+    ctx.fillText(lbl,pad.l-3,gy+3);
+  }
+  // 枯渇ライン
+  if(zeroAge){
+    var zi=ages.indexOf(zeroAge);
+    if(zi>0){
+      ctx.beginPath();ctx.moveTo(px(zi),pad.t);ctx.lineTo(px(zi),pad.t+ch);
+      ctx.strokeStyle='rgba(248,113,113,0.7)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='rgba(248,113,113,0.8)';ctx.font='9px system-ui';ctx.textAlign='center';
+      ctx.fillText(zeroAge+'歳枯渇',px(zi),pad.t+10);
+    }
+  }
+  // 塗りつぶし
+  if(fillColor){
+    ctx.beginPath();
+    bals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
+    ctx.lineTo(px(bals.length-1),py(0));ctx.lineTo(px(0),py(0));ctx.closePath();
+    ctx.fillStyle=fillColor;ctx.fill();
+  }
+  // ライン
+  ctx.beginPath();
+  bals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+  // X軸ラベル
+  var step=Math.ceil(ages.length/5);
+  ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='center';
+  ages.forEach(function(a,i){if(i%step===0||a===90){ctx.fillText(a+'歳',px(i),H-pad.b+14);}});
+  // 65歳マーカー
+  var idx65=ages.indexOf(65);
+  if(idx65>=0){
+    ctx.beginPath();ctx.moveTo(px(idx65),pad.t);ctx.lineTo(px(idx65),pad.t+ch);
+    ctx.strokeStyle='rgba(99,102,241,0.4)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(99,102,241,0.7)';ctx.font='9px system-ui';ctx.textAlign='center';
+    ctx.fillText('65歳',px(idx65),pad.t+9);
+  }
+}
+
 function drawChart3(canvasId,ages,series,zeroAge){
   var canvas=document.getElementById(canvasId);if(!canvas)return;
   var ctx=canvas.getContext('2d');
@@ -5858,15 +5939,17 @@ function calcSingle(){
   document.getElementById('s-fire-yr-target').textContent=fireYrStr(rTarget);
   setVerdict('s-',surv,sr,resActual.zero,pt,'独身');
   el('single-results').className='results visible';
+  el('single-results').scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('s-chart-pct-bear').textContent=rBear+'%';
+  document.getElementById('s-chart-pct-actual').textContent=rActual+'%';
+  document.getElementById('s-chart-pct-target').textContent=rTarget+'%';
+  fireRenderTimeline('s-timeline-list',resActual.ages,resActual.bals,CA,curYear);
+  // グラフはスクロール完了後に描画
   setTimeout(function(){
-    drawChart3('s-chart',resActual.ages,[
-      {data:resBear.bals,color:'#94a3b8',label:'悲観',dash:true},
-      {data:resActual.bals,color:'#34d399',label:'実績'},
-      {data:resTarget.bals,color:'#fbbf24',label:'目標',dash:true}
-    ],resBear.zero||resActual.zero||resTarget.zero);
-    fireRenderTimeline('s-timeline-list',resActual.ages,resActual.bals,CA,curYear);
-    el('single-results').scrollIntoView({behavior:'smooth',block:'start'});
-  },50);
+    drawChart1('s-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)');
+    drawChart1('s-chart-actual',resActual.ages,resActual.bals,'#34d399',resActual.zero,'rgba(52,211,153,0.12)');
+    drawChart1('s-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)');
+  },300);
 }
 
 
@@ -5939,15 +6022,16 @@ function calcFamily(){
   el('tl-age5').textContent=(CA+18)+'〜'+(CA+21)+'歳';el('tl-cost5').textContent='月'+univ2+'万円 × 4年 ＝ 計'+Math.round(univ2*12*4)+'万円';
   setVerdict('f-',surv,sr,resActual.zero,pt,'家族あり');
   el('family-results').className='results visible';
+  el('family-results').scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('f-chart-pct-bear').textContent=rBear+'%';
+  document.getElementById('f-chart-pct-actual').textContent=rActual+'%';
+  document.getElementById('f-chart-pct-target').textContent=rTarget+'%';
+  fireRenderTimeline('f-timeline-list',resActual.ages,resActual.bals,CA,curYear);
   setTimeout(function(){
-    drawChart3('f-chart',resActual.ages,[
-      {data:resBear.bals,color:'#94a3b8',label:'悲観',dash:true},
-      {data:resActual.bals,color:'#a78bfa',label:'実績'},
-      {data:resTarget.bals,color:'#fbbf24',label:'目標',dash:true}
-    ],resBear.zero||resActual.zero||resTarget.zero);
-    fireRenderTimeline('f-timeline-list',resActual.ages,resActual.bals,CA,curYear);
-    el('family-results').scrollIntoView({behavior:'smooth',block:'start'});
-  },50);
+    drawChart1('f-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)');
+    drawChart1('f-chart-actual',resActual.ages,resActual.bals,'#a78bfa',resActual.zero,'rgba(167,139,250,0.12)');
+    drawChart1('f-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)');
+  },300);
 }
 
 
