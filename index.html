@@ -5889,7 +5889,7 @@ function fireRenderTimeline(containerId,ages,bals,curAge,curYear){
   }).join('');
 }
 
-function calcSingle(){
+function calcSingle(){try{
   var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income');
   var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
   var rBear=gv('s-rate-bear')||3,rActual=gv('s-rate-actual')||3,rTarget=gv('s-rate-target')||7;
@@ -5957,8 +5957,8 @@ function calcSingle(){
     drawChart1('s-chart-actual',resActual.ages,resActual.bals,'#34d399',resActual.zero,'rgba(52,211,153,0.12)');
     drawChart1('s-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)');
   },300);
+}catch(e){console.error('calcSingle ERROR:',e,e.stack);alert('エラー: '+e.message);}
 }
-
 
 function calcFamily(){
   var A=gv('f-asset'),I=gv('f-income'),SI=gv('f-spouse-income');
