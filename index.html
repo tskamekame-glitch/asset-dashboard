@@ -5928,11 +5928,21 @@ function calcFamily(){
   document.getElementById('f-chart-pct-actual').textContent=rActual+'%';
   document.getElementById('f-chart-pct-target').textContent=rTarget+'%';
   fireRenderTimeline('f-timeline-list',resActual.ages,resActual.bals,CA,curYear);
-  setTimeout(function(){
+  // w=0対策：requestAnimationFrameで描画タイミングを確実にする
+  function drawFamilyCharts(retry){
+    var canvas=el('f-chart-bear');
+    var par=canvas&&canvas.parentElement;
+    var w=0;
+    while(par&&w<10){w=par.clientWidth-32;par=par.parentElement;}
+    if(w<10&&retry>0){
+      requestAnimationFrame(function(){drawFamilyCharts(retry-1);});
+      return;
+    }
     drawChart1('f-chart-bear',resBear.ages,resBear.bals,'#94a3b8',resBear.zero,'rgba(148,163,184,0.1)');
     drawChart1('f-chart-actual',resActual.ages,resActual.bals,'#a78bfa',resActual.zero,'rgba(167,139,250,0.12)');
     drawChart1('f-chart-target',resTarget.ages,resTarget.bals,'#fbbf24',resTarget.zero,'rgba(251,191,36,0.12)');
-  },300);
+  }
+  setTimeout(function(){drawFamilyCharts(20);},100);
 }
 
 
