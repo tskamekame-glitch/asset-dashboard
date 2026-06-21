@@ -1384,7 +1384,17 @@ tr:last-child td{border-bottom:none}
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="s-chart-pct-target"></span></span>
         </div>
         <canvas id="s-chart-target"></canvas>
-      </div><div id="s-timeline-card" class="chart-card">
+      </div>
+
+      <!-- 月次収支サマリー -->
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
+        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
+        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
+        <div class="metric-card"><div class="mlabel">実績CAGR予測残高</div><div class="mvalue val-ok" id="s-m3">—</div><div class="msub" id="s-m3s">90歳時点</div></div>
+      </div>
+
+      <div id="s-timeline-card" class="chart-card">
         <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
         <div id="s-timeline-list"></div>
       </div>
