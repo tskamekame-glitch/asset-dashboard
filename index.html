@@ -5620,50 +5620,59 @@ function simRun(asset,rate,curAge,netFn,inflation){
 }
 
 function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
-  var canvas=document.getElementById(canvasId);if(!canvas)return;
-  // offsetWidthが0の場合は親要素から取得
-  var W=canvas.offsetWidth||canvas.parentElement&&canvas.parentElement.offsetWidth||320;
-  if(W<10){
-    // まだレイアウトされていない場合はrAFで再試行
-    requestAnimationFrame(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);});
-    return;
-  }
-  var ctx=canvas.getContext('2d');
+  var canvas=document.getElementById(canvasId);
+  if(!canvas)return;
+  // CSSで幅を強制設定してからBCRで取得
+  canvas.style.display='block';
+  canvas.style.width='100%';
   var H=parseInt(canvas.getAttribute('height'))||130;
-  canvas.width=W*(window.devicePixelRatio||1);
-  canvas.height=H*(window.devicePixelRatio||1);
-  ctx.scale(window.devicePixelRatio||1,window.devicePixelRatio||1);
-  var mn=0,mx=Math.max.apply(null,bals)*1.08;
-  if(mx===0)mx=1;
-  var pad={t:8,r:8,b:28,l:52};
+  canvas.style.height=H+'px';
+  var bcr=canvas.getBoundingClientRect();
+  var W=Math.round(bcr.width)||canvas.parentElement.getBoundingClientRect().width||300;
+  if(W<10){setTimeout(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);},100);return;}
+  var dpr=window.devicePixelRatio||1;
+  canvas.width=Math.round(W*dpr);
+  canvas.height=Math.round(H*dpr);
+  var ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  var mn=0,mx=Math.max.apply(null,bals.filter(function(v){return v>0;}))||1;
+  mx=mx*1.08;
+  var pad={t:10,r:10,b:28,l:54};
   var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  if(cw<=0||ch<=0)return;
   function px(i){return pad.l+i/(ages.length-1||1)*cw;}
-  function py(v){return pad.t+ch-(v-mn)/(mx-mn)*ch;}
+  function py(v){return pad.t+ch*(1-(v-mn)/(mx-mn));}
   var isDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
-  var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
-  var textCol=isDark?'#888':'#666';
+  var gridCol=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)';
+  var textCol=isDark?'#999':'#777';
   ctx.clearRect(0,0,W,H);
-  // グリッド3本
+  // グリッド・Y軸ラベル
   for(var g=0;g<=2;g++){
-    var gv=mn+(mx-mn)*g/2,gy=py(gv);
-    ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+cw,gy);
+    var gv=mx*g/2,gy=py(gv);
+    ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(W-pad.r,gy);
     ctx.strokeStyle=gridCol;ctx.lineWidth=0.5;ctx.stroke();
+    var lbl=gv>=1e8?(Math.floor(gv/1e8)+'億'):(Math.round(gv/1e4)+'万');
     ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='right';
-    var lbl=gv>=1e8?(Math.floor(gv/1e8)+'億'+(Math.round((gv%1e8)/1e4)>0?Math.round((gv%1e8)/1e4)+'万':'')):Math.round(gv/1e4)+'万';
-    ctx.fillText(lbl,pad.l-3,gy+3);
+    ctx.fillText(lbl,pad.l-3,gy+4);
   }
   // 枯渇ライン
-  if(zeroAge){
+  if(zeroAge&&ages.indexOf(zeroAge)>=0){
     var zi=ages.indexOf(zeroAge);
-    if(zi>0){
-      ctx.beginPath();ctx.moveTo(px(zi),pad.t);ctx.lineTo(px(zi),pad.t+ch);
-      ctx.strokeStyle='rgba(248,113,113,0.7)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
-      ctx.fillStyle='rgba(248,113,113,0.8)';ctx.font='9px system-ui';ctx.textAlign='center';
-      ctx.fillText(zeroAge+'歳枯渇',px(zi),pad.t+10);
-    }
+    ctx.beginPath();ctx.moveTo(px(zi),pad.t);ctx.lineTo(px(zi),pad.t+ch);
+    ctx.strokeStyle='rgba(248,113,113,0.8)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(248,113,113,0.9)';ctx.font='9px system-ui';ctx.textAlign='center';
+    ctx.fillText(zeroAge+'歳枯渇',px(zi),pad.t+9);
+  }
+  // 65歳縦線
+  var idx65=ages.indexOf(65);
+  if(idx65>=0){
+    ctx.beginPath();ctx.moveTo(px(idx65),pad.t);ctx.lineTo(px(idx65),pad.t+ch);
+    ctx.strokeStyle='rgba(99,102,241,0.5)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(99,102,241,0.8)';ctx.font='9px system-ui';ctx.textAlign='center';
+    ctx.fillText('65歳',px(idx65),pad.t+9);
   }
   // 塗りつぶし
-  if(fillColor){
+  if(fillColor&&bals.some(function(v){return v>0;})){
     ctx.beginPath();
     bals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
     ctx.lineTo(px(bals.length-1),py(0));ctx.lineTo(px(0),py(0));ctx.closePath();
@@ -5672,20 +5681,15 @@ function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
   // ライン
   ctx.beginPath();
   bals.forEach(function(v,i){i===0?ctx.moveTo(px(i),py(v)):ctx.lineTo(px(i),py(v));});
-  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke();
   // X軸ラベル
   var step=Math.ceil(ages.length/5);
   ctx.fillStyle=textCol;ctx.font='10px system-ui';ctx.textAlign='center';
-  ages.forEach(function(a,i){if(i%step===0||a===90){ctx.fillText(a+'歳',px(i),H-pad.b+14);}});
-  // 65歳マーカー
-  var idx65=ages.indexOf(65);
-  if(idx65>=0){
-    ctx.beginPath();ctx.moveTo(px(idx65),pad.t);ctx.lineTo(px(idx65),pad.t+ch);
-    ctx.strokeStyle='rgba(99,102,241,0.4)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle='rgba(99,102,241,0.7)';ctx.font='9px system-ui';ctx.textAlign='center';
-    ctx.fillText('65歳',px(idx65),pad.t+9);
-  }
+  ages.forEach(function(a,i){
+    if(i===0||i===ages.length-1||i%step===0)ctx.fillText(a+'歳',px(i),H-6);
+  });
 }
+
 
 function drawChart3(canvasId,ages,series,zeroAge){
   var canvas=document.getElementById(canvasId);if(!canvas)return;
