@@ -5523,7 +5523,7 @@ function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor){
   var par=canvas.parentElement;
   var w=0;
   while(par&&w<10){w=par.clientWidth-32;par=par.parentElement;}
-  console.log('drawChart1',canvasId,'w='+w);
+  console.log('drawChart1',canvasId,'w='+w,'parentClientWidth='+canvas.parentElement.clientWidth,'parentDisplay='+getComputedStyle(canvas.parentElement).display,'resultsDisplay='+getComputedStyle(document.getElementById('family-results')||document.body).display);
   if(w<10){setTimeout(function(){drawChart1(canvasId,ages,bals,color,zeroAge,fillColor);},300);return;}
   var h=150;
   canvas.width=Math.round(w*dpr);
