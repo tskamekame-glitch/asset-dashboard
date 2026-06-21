@@ -1488,128 +1488,22 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <div class="chart-card">
-        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">資産推移グラフ（現在〜90歳）</div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <div style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="f-chart-pct-bear"></span></span>
         </div>
         <canvas id="f-chart-bear"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
-          <div class="legend-dot" style="background:#a78bfa;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <div style="background:#a78bfa;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--purple);flex:1">📈 実績 <span id="f-chart-pct-actual"></span></span>
         </div>
         <canvas id="f-chart-actual"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
-          <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <div style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="f-chart-pct-target"></span></span>
         </div>
         <canvas id="f-chart-target"></canvas>
       </div>
-
-      <!-- 資産到達タイムライン（家族） -->
-      <div id="f-timeline-card" class="chart-card">
-        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
-        <div id="f-timeline-list"></div>
-      </div>
-
-      <div class="timeline">
-        <div class="timeline-title">子供の教育費タイムライン</div>
-        <div class="tl-row"><div class="tl-age" id="tl-age1"></div><div class="tl-bar"><div class="tl-label">保育園・幼稚園（0〜5歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#34d399"></div></div><div class="tl-cost" id="tl-cost1"></div></div></div>
-        <div class="tl-row"><div class="tl-age" id="tl-age2"></div><div class="tl-bar"><div class="tl-label">小学校（6〜11歳）</div><div class="tl-track"><div class="tl-fill" style="width:20%;background:#4f9cf9"></div></div><div class="tl-cost" id="tl-cost2"></div></div></div>
-        <div class="tl-row"><div class="tl-age" id="tl-age3"></div><div class="tl-bar"><div class="tl-label">中学校（12〜14歳）</div><div class="tl-track"><div class="tl-fill" style="width:35%;background:#fbbf24"></div></div><div class="tl-cost" id="tl-cost3"></div></div></div>
-        <div class="tl-row"><div class="tl-age" id="tl-age4"></div><div class="tl-bar"><div class="tl-label">高校（15〜17歳）</div><div class="tl-track"><div class="tl-fill" style="width:45%;background:#f87171"></div></div><div class="tl-cost" id="tl-cost4"></div></div></div>
-        <div class="tl-row"><div class="tl-age" id="tl-age5"></div><div class="tl-bar"><div class="tl-label">大学（18〜21歳）</div><div class="tl-track"><div class="tl-fill" style="width:100%;background:#a78bfa"></div></div><div class="tl-cost" id="tl-cost5"></div></div></div>
-      </div>
-      <p class="note">※配偶者収入は65歳まで継続と仮定。税金・医療費・インフレは未考慮。</p>
-    </div>
-  </div>
-</div>
-  </div>
-</div>
-<!-- ========== CASHFLOW TAB-bear" value="3" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
-        <div class="field-row"><span class="field-label" style="color:var(--green)">📈 実績</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-actual" value="3" step="0.1" inputmode="decimal" style="border-color:var(--green)"><span class="field-unit">%/年</span></div></div>
-        <div class="field-row"><span class="field-label" style="color:var(--amber)">🎯 目標</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><div class="dot purple"></div><h2>家族の生活費・教育費</h2></div>
-      <div class="field-list">
-        <div class="field-row"><div><span class="field-label">家族の基本生活費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-living" value="30" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">保育料（0〜5歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-nursery" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">小学校費用（6〜11歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-elem" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">中学校費用（12〜14歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-jhs" value="5" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">高校費用（15〜17歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-hs" value="6" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">大学費用（18〜21歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-univ" value="15" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">住宅費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-      </div>
-    </div>
-    <button class="calc-btn" onclick="calcFamily()" style="background:var(--purple)">🔮 家族シミュレーション実行</button>
-
-    <div class="results" id="family-results">
-      <!-- 独身vs家族比較 -->
-      <div class="compare-box">
-        <div class="compare-card"><div class="compare-title">独身（実績利回り・90歳）</div><div class="compare-val val-ok" id="f-compare-single">—</div></div>
-        <div class="compare-card family"><div class="compare-title family">家族あり（実績利回り・90歳）</div><div class="compare-val val-purple" id="f-compare-family">—</div></div>
-      </div>
-
-      <div class="verdict-card ok" id="f-verdict"><div class="verdict-icon" id="f-vicon"></div><div class="verdict-title" id="f-vtitle"></div><div class="verdict-body" id="f-vbody"></div></div>
-
-      <!-- FIRE達成ライン（家族） -->
-      <div id="f-fire-line" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🎯 FIRE達成ライン（年間生活費×25倍）</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div><span id="f-fire-current" style="font-size:18px;font-weight:700;color:var(--purple)"></span><span style="font-size:11px;color:var(--text3)"> / <span id="f-fire-target-val"></span></span></div>
-          <div id="f-fire-pct" style="font-size:13px;font-weight:600;color:var(--purple)"></div>
-        </div>
-        <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:8px">
-          <div id="f-fire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
-          <div style="text-align:center"><div style="color:var(--text3)">😔 悲観</div><div id="f-fire-yr-bear" style="font-weight:600;color:var(--text2)">—</div></div>
-          <div style="text-align:center"><div style="color:var(--green)">📈 実績</div><div id="f-fire-yr-actual" style="font-weight:600;color:var(--green)">—</div></div>
-          <div style="text-align:center"><div style="color:var(--amber)">🎯 目標</div><div id="f-fire-yr-target" style="font-weight:600;color:var(--amber)">—</div></div>
-        </div>
-      </div>
-
-      <!-- 3シナリオ比較 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-        <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="f-pct-bear"></span></div>
-          <div id="f-val-bear" style="font-size:15px;font-weight:700;color:var(--text1)">—</div>
-          <div id="f-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
-        </div>
-        <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="f-pct-actual"></span></div>
-          <div id="f-val-actual" style="font-size:15px;font-weight:700;color:var(--green)">—</div>
-          <div id="f-sub-actual" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
-        </div>
-        <div style="background:rgba(167,139,250,0.08);border:0.5px solid rgba(167,139,250,0.3);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--purple);margin-bottom:4px">🎯 目標<span id="f-pct-target"></span></div>
-          <div id="f-val-target" style="font-size:15px;font-weight:700;color:var(--purple)">—</div>
-          <div id="f-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
-        </div>
-      </div>
-
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
-        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
-        <div class="metric-card"><div class="mlabel">実績ベース90歳残高</div><div class="mvalue val-purple" id="f-m3">—</div><div class="msub" id="f-m3s">家族あり</div></div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-head">
-          <span class="chart-title">資産推移グラフ（現在〜90歳）</span>
-          <div class="chart-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div><span>悲観</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div><span>実績</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div><span>目標</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div><span>枯渇線</span></div>
-          </div>
-        </div>
-        <canvas id="f-chart" height="220"></canvas>
-      </div>
-
       <!-- 資産到達タイムライン（家族） -->
       <div id="f-timeline-card" class="chart-card">
         <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
