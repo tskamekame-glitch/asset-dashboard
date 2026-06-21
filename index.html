@@ -4242,6 +4242,8 @@ function trRenderAll(){
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
   if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  // FIREタブのCAGR自動反映
+  if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,200);
 }
 function trRenderFileList(){
   document.getElementById('fileList').innerHTML=snapshots.map(s=>`<div class="file-item"><div><div class="fname">📄 ${s.filename}</div><div class="fmeta">${s.date} ・ ${trFmt(s.total)}</div></div><button class="file-del" onclick="removeSnapshot('${s.date}')">✕</button></div>`).join('');
