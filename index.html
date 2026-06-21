@@ -1360,14 +1360,6 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <!-- 月次収支サマリー -->
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
-        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
-        <div class="metric-card"><div class="mlabel">実績CAGR予測残高</div><div class="mvalue val-ok" id="s-m3">—</div><div class="msub" id="s-m3s">90歳時点</div></div>
-      </div>
-
-      <!-- 資産推移グラフ（3ライン） -->
       <div class="chart-card">
         <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">資産推移グラフ（現在〜90歳）</div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
@@ -1386,6 +1378,16 @@ tr:last-child td{border-bottom:none}
         </div>
         <canvas id="s-chart-target"></canvas>
       </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
+        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
+        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
+        <div class="metric-card"><div class="mlabel">実績CAGR予測残高</div><div class="mvalue val-ok" id="s-m3">—</div><div class="msub" id="s-m3s">90歳時点</div></div>
+      </div>
+
+      <!-- 資産推移グラフ（3ライン） -->
+      
 
       <!-- 資産到達タイムライン -->
       <div id="s-timeline-card" class="chart-card">
@@ -1433,7 +1435,7 @@ tr:last-child td{border-bottom:none}
         <div class="field-row"><div><span class="field-label">住宅費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
       </div>
     </div>
-    <button class="calc-btn" onclick="calcFamily()" style="background:var(--purple)">🔮 家族シミュレーション実行</button>
+    <button class="calc-btn" onclick="calcFamily()" style="background:#7c3aed">🔮 家族シミュレーション実行</button>
 
     <div class="results" id="family-results">
       <!-- 独身vs家族比較 -->
@@ -1478,13 +1480,6 @@ tr:last-child td{border-bottom:none}
           <div id="f-val-target" style="font-size:15px;font-weight:700;color:var(--purple)">—</div>
           <div id="f-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
         </div>
-      </div>
-
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
-        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
-        <div class="metric-card"><div class="mlabel">実績ベース90歳残高</div><div class="mvalue val-purple" id="f-m3">—</div><div class="msub" id="f-m3s">家族あり</div></div>
       </div>
 
       <div class="chart-card">
@@ -9663,5 +9658,39 @@ function retRender(){
   }
 }
 </script>
+<script>
+// FIREタブの自動連携：ページロード後とGoogleSheets同期後に実行
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    if(typeof fireAutoLink==='function') fireAutoLink();
+  }, 500);
+});
+// jpLoadFromSheet完了後にも呼ぶ（Sheetsデータ読み込み後）
+var _origJpLoad = null;
+(function(){
+  var _timer = setInterval(function(){
+    if(typeof jpLoadFromSheet === 'function'){
+      clearInterval(_timer);
+      var _orig = jpLoadFromSheet;
+      jpLoadFromSheet = function(){
+        var result = _orig.apply(this, arguments);
+        setTimeout(function(){
+          if(typeof fireAutoLink==='function') fireAutoLink();
+        }, 1000);
+        return result;
+      };
+    }
+  }, 200);
+})();
+</script>
 </body>
-</html>
+</html
+
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
+        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
+        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
+        <div class="metric-card"><div class="mlabel">実績ベース90歳残高</div><div class="mvalue val-purple" id="f-m3">—</div><div class="msub" id="f-m3s">家族あり</div></div>
+      </div>
+
+      >
