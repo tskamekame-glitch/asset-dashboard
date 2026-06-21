@@ -1314,6 +1314,7 @@ tr:last-child td{border-bottom:none}
           <span class="field-label" style="color:var(--amber)">🎯 目標利回り</span>
           <div class="field-input-wrap"><input class="field-input" type="number" id="s-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div>
         </div>
+        <div class="field-row"><span class="field-label" style="color:var(--danger,#ef4444)">📈 インフレ率</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-inflation" value="1" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
       </div>
     </div>
     <button class="calc-btn" onclick="calcSingle()">🔮 シミュレーション実行</button>
@@ -1344,7 +1345,7 @@ tr:last-child td{border-bottom:none}
         <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="s-pct-bear" style="font-weight:600"></span></div>
           <div id="s-val-bear" style="font-size:16px;font-weight:700;color:var(--text1)">—</div>
-          <div id="s-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+          <div id="s-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">65歳時点</div>
         </div>
         <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
           <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="s-pct-actual" style="font-weight:600"></span></div>
@@ -1410,6 +1411,7 @@ tr:last-child td{border-bottom:none}
         <div class="field-row"><span class="field-label" style="color:var(--text3)">😔 悲観</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-bear" value="3" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
         <div class="field-row"><span class="field-label" style="color:var(--green)">📈 実績</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-actual" value="3" step="0.1" inputmode="decimal" style="border-color:var(--green)"><span class="field-unit">%/年</span></div></div>
         <div class="field-row"><span class="field-label" style="color:var(--amber)">🎯 目標</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div></div>
+        <div class="field-row"><span class="field-label" style="color:var(--red,#ef4444)">📈 インフレ率</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-inflation" value="1" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
       </div>
     </div>
     <div class="card">
@@ -1457,7 +1459,7 @@ tr:last-child td{border-bottom:none}
         <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="f-pct-bear"></span></div>
           <div id="f-val-bear" style="font-size:15px;font-weight:700;color:var(--text1)">—</div>
-          <div id="f-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
+          <div id="f-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">65歳時点</div>
         </div>
         <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
           <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="f-pct-actual"></span></div>
@@ -5589,13 +5591,17 @@ function fireSwitchTab(tab){
   document.getElementById('fire-tab-family').classList.toggle('active',tab==='family');
 }
 
-function simRun(asset,rate,curAge,netFn){
-  var bal=asset,zero=null,ar=rate/100,bals=[],ages=[];
+function simRun(asset,rate,curAge,netFn,inflation){
+  var bal=asset,zero=null,ar=rate/100,ir=(inflation||0)/100,bals=[],ages=[];
+  var inflFactor=1; // 累積インフレ倍率
   for(var age=curAge;age<=90;age++){
     ages.push(age);
-    bal=bal*(1+ar)+netFn(age)*12;
+    // インフレ分だけ生活費等が増加（netFnの支出側に反映）
+    var net=netFn(age,inflFactor);
+    bal=bal*(1+ar)+net*12;
     if(bal<0&&!zero)zero=age;
     bals.push(Math.round(Math.max(0,bal)));
+    inflFactor*=(1+ir);
   }
   return{zero:zero,final:bals[bals.length-1],ages:ages,bals:bals};
 }
@@ -5799,31 +5805,234 @@ function calcSingle(){
   var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income');
   var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
   var rBear=gv('s-rate-bear')||3,rActual=gv('s-rate-actual')||3,rTarget=gv('s-rate-target')||7;
+  var inflation=gv('s-inflation')||0;
   if(!A||!E){alert('資産と生活費を入力してください');return;}
-  var netFn=function(age){return(age>=PA?I+PM:I)-E;};
-  var resBear=simRun(A,rBear,CA,netFn);
-  var resActual=simRun(A,rActual,CA,netFn);
-  var resTarget=simRun(A,rTarget,CA,netFn);
+  // インフレ考慮のnetFn（支出のみインフレ増加、収入は固定）
+  var netFn=function(age,infl){
+    var expense=E*(infl||1);
+    return(age>=PA?I+PM:I)-expense;
+  };
+  var resBear=simRun(A,rBear,CA,netFn,inflation);
+  var resActual=simRun(A,rActual,CA,netFn,inflation);
+  var resTarget=simRun(A,rTarget,CA,netFn,inflation);
   var surv=!resActual.zero;
-  var sr=A>0?Math.max(0,E-I)*12/A*100:0,ms=I-E,pt=I+PM;
-  // 月収支・取り崩し率
+  // 65歳時点の残高を取得
+  var idx65=resActual.ages.indexOf(65);
+  var bal65Actual=idx65>=0?resActual.bals[idx65]:resActual.bals[resActual.bals.length-1];
+  var bal65Bear=idx65>=0?resBear.bals[idx65]:resBear.bals[resBear.bals.length-1];
+  var bal65Target=idx65>=0?resTarget.bals[idx65]:resTarget.bals[resTarget.bals.length-1];
+  // 月収支・取り崩し率（現時点）
+  var ms=I-E, sr=A>0?Math.max(0,E-I)*12/A*100:0, pt=I+PM;
   var m1=el('s-m1');m1.textContent=(ms>=0?'+':'')+ms+'万円';m1.className='mvalue '+(ms>=0?'val-ok':ms>=-5?'val-warn':'val-ng');
   var m2=el('s-m2');m2.textContent=fp(sr);m2.className='mvalue '+(sr<=3?'val-ok':sr<=4?'val-warn':'val-ng');
   var m3=el('s-m3');
   m3.textContent=fwOku(resActual.final*10000);m3.className='mvalue val-ok';
   el('s-m3s').textContent=surv?'90歳時点の残高':resActual.zero+'歳で枯渇';
   el('s-m4').textContent=pt+'万円/月';el('s-m4s').textContent=PA+'歳〜（副収入＋年金）';
-  // 3シナリオ表示
-  function scenarioVal(res,id,subId,zero_col){
-    var balMan=Math.round(res.final);
-    document.getElementById(id).textContent=fwOku(balMan*10000);
-    document.getElementById(subId).textContent=res.zero?res.zero+'歳で枯渇':'90歳時 '+fwOku(balMan*10000);
-  }
-  scenarioVal(resBear,'s-val-bear','s-sub-bear');
+  // 3シナリオ：65歳時点の残高を表示
+  document.getElementById('s-val-bear').textContent=fwOku(bal65Bear*10000);
+  document.getElementById('s-sub-bear').textContent=resBear.zero&&resBear.zero<=65?resBear.zero+'歳で枯渇':'65歳時点';
   document.getElementById('s-pct-bear').textContent=' '+rBear+'%';
-  scenarioVal(resActual,'s-val-actual','s-sub-actual');
+  document.getElementById('s-val-actual').textContent=fwOku(bal65Actual*10000);
+  document.getElementById('s-sub-actual').textContent=resActual.zero&&resActual.zero<=65?resActual.zero+'歳で枯渇':'65歳時点';
   document.getElementById('s-pct-actual').textContent=' '+rActual+'%';
-  scenarioVal(resTarget,'s-val-target','s-sub-target');
+  document.getElementById('s-val-target').textContent=fwOku(bal65Target*10000);
+  document.getElementById('s-sub-target').textContent=resTarget.zero&&resTarget.zero<=65?resTarget.zero+'歳で枯渇':'65歳時点';
+  document.getElementById('s-pct-target').textContent=' '+rTarget+'%';
+  // FIRE達成ライン
+  var fireTarget=E*12*25;
+  var fireEl=document.getElementById('s-fire-line');
+  fireEl.style.display='block';
+  document.getElementById('s-fire-current').textContent=fwOku(A*10000);
+  document.getElementById('s-fire-target-val').textContent=fwOku(fireTarget*10000);
+  var pct=Math.min(100,Math.round(A/fireTarget*100));
+  document.getElementById('s-fire-pct').textContent=pct+'%';
+  document.getElementById('s-fire-bar').style.width=pct+'%';
+  var curYear=new Date().getFullYear();
+  function fireYrStr(r){
+    var yr=fireCalcFIREYear(A,r,CA,netFn,fireTarget);
+    return yr?yr+'歳（'+(curYear+(yr-CA))+'年）':'達成困難';
+  }
+  document.getElementById('s-fire-yr-bear').textContent=fireYrStr(rBear);
+  document.getElementById('s-fire-yr-actual').textContent=fireYrStr(rActual);
+  document.getElementById('s-fire-yr-target').textContent=fireYrStr(rTarget);
+  setVerdict('s-',surv,sr,resActual.zero,pt,'独身');
+  el('single-results').className='results visible';
+  setTimeout(function(){
+    drawChart3('s-chart',resActual.ages,[
+      {data:resBear.bals,color:'#94a3b8',label:'悲観',dash:true},
+      {data:resActual.bals,color:'#34d399',label:'実績'},
+      {data:resTarget.bals,color:'#fbbf24',label:'目標',dash:true}
+    ],resBear.zero||resActual.zero||resTarget.zero);
+    fireRenderTimeline('s-timeline-list',resActual.ages,resActual.bals,CA,curYear);
+    el('single-results').scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+
+function calcFamily(){
+  var A=gv('f-asset'),I=gv('f-income'),SI=gv('f-spouse-income');
+  var CA=Math.round(gv('f-curage')),PA=Math.round(gv('f-pension-age')),PM=gv('f-pension-amt'),SP=gv('f-spouse-pension');
+  var living=gv('f-living'),nursery=gv('f-nursery'),elem=gv('f-elem'),jhs=gv('f-jhs'),hs=gv('f-hs'),univ=gv('f-univ'),housing=gv('f-housing');
+  var rBear=gv('f-rate-bear')||3,rActual=gv('f-rate-actual')||3,rTarget=gv('f-rate-target')||7;
+  var inflation=gv('f-inflation')||0;
+  if(!A||!living){alert('資産と生活費を入力してください');return;}
+  function childAge(myAge){return myAge-CA;}
+  var familyNetFn=function(age,infl){
+    var f=infl||1;
+    var totalIn=I+(age<65?SI:0)+(age>=PA?PM:0)+(age>=PA?SP:0);
+    var ca2=childAge(age);
+    var edu=0;
+    if(ca2>=0&&ca2<=5)edu=nursery*f;
+    else if(ca2>=6&&ca2<=11)edu=elem*f;
+    else if(ca2>=12&&ca2<=14)edu=jhs*f;
+    else if(ca2>=15&&ca2<=17)edu=hs*f;
+    else if(ca2>=18&&ca2<=21)edu=univ*f;
+    return totalIn-(living*f+housing*f+edu);
+  };
+  var singleNetFn=function(age,infl){return I-(living/2)*(infl||1);};
+  var resBear=simRun(A,rBear,CA,familyNetFn,inflation);
+  var resActual=simRun(A,rActual,CA,familyNetFn,inflation);
+  var resTarget=simRun(A,rTarget,CA,familyNetFn,inflation);
+  var resSingle=simRun(A,rActual,CA,singleNetFn,inflation);
+  var surv=!resActual.zero;
+  var idx65=resActual.ages.indexOf(65);
+  var bal65Actual=idx65>=0?resActual.bals[idx65]:resActual.bals[resActual.bals.length-1];
+  var bal65Bear=idx65>=0?resBear.bals[idx65]:resBear.bals[resBear.bals.length-1];
+  var bal65Target=idx65>=0?resTarget.bals[idx65]:resTarget.bals[resTarget.bals.length-1];
+  var curNet=I+SI-living-housing;
+  var sr=A>0?Math.max(0,living+housing-I-SI)*12/A*100:0;
+  var pt=I+PM+SP;
+  el('f-compare-single').textContent=fwOku(resSingle.final*10000);
+  el('f-compare-family').textContent=fwOku(resActual.final*10000);
+  var m1=el('f-m1');m1.textContent=(curNet>=0?'+':'')+Math.round(curNet)+'万円';m1.className='mvalue '+(curNet>=0?'val-ok':curNet>=-5?'val-warn':'val-ng');
+  var m2=el('f-m2');m2.textContent=fp(sr);m2.className='mvalue '+(sr<=3?'val-ok':sr<=4?'val-warn':'val-ng');
+  el('f-m3').textContent=fwOku(resActual.final*10000);el('f-m3s').textContent=surv?'家族あり90歳残高':resActual.zero+'歳で枯渇';
+  el('f-m4').textContent=pt+'万円/月';el('f-m4s').textContent=PA+'歳〜（年金合算）';
+  document.getElementById('f-val-bear').textContent=fwOku(bal65Bear*10000);
+  document.getElementById('f-sub-bear').textContent=resBear.zero&&resBear.zero<=65?resBear.zero+'歳で枯渇':'65歳時点';
+  document.getElementById('f-pct-bear').textContent=' '+rBear+'%';
+  document.getElementById('f-val-actual').textContent=fwOku(bal65Actual*10000);
+  document.getElementById('f-sub-actual').textContent=resActual.zero&&resActual.zero<=65?resActual.zero+'歳で枯渇':'65歳時点';
+  document.getElementById('f-pct-actual').textContent=' '+rActual+'%';
+  document.getElementById('f-val-target').textContent=fwOku(bal65Target*10000);
+  document.getElementById('f-sub-target').textContent=resTarget.zero&&resTarget.zero<=65?resTarget.zero+'歳で枯渇':'65歳時点';
+  document.getElementById('f-pct-target').textContent=' '+rTarget+'%';
+  var fireTarget=(living+housing)*12*25;
+  var fireEl=document.getElementById('f-fire-line');
+  fireEl.style.display='block';
+  document.getElementById('f-fire-current').textContent=fwOku(A*10000);
+  document.getElementById('f-fire-target-val').textContent=fwOku(fireTarget*10000);
+  var pct=Math.min(100,Math.round(A/fireTarget*100));
+  document.getElementById('f-fire-pct').textContent=pct+'%';
+  document.getElementById('f-fire-bar').style.width=pct+'%';
+  var curYear=new Date().getFullYear();
+  function fireYrStr(r){var yr=fireCalcFIREYear(A,r,CA,familyNetFn,fireTarget);return yr?yr+'歳（'+(curYear+(yr-CA))+'年）':'達成困難';}
+  document.getElementById('f-fire-yr-bear').textContent=fireYrStr(rBear);
+  document.getElementById('f-fire-yr-actual').textContent=fireYrStr(rActual);
+  document.getElementById('f-fire-yr-target').textContent=fireYrStr(rTarget);
+  var nursery2=nursery,elem2=elem,jhs2=jhs,hs2=hs,univ2=univ;
+  el('tl-age1').textContent=CA+'〜'+(CA+5)+'歳';el('tl-cost1').textContent='月'+nursery2+'万円 × 6年 ＝ 計'+Math.round(nursery2*12*6)+'万円';
+  el('tl-age2').textContent=(CA+6)+'〜'+(CA+11)+'歳';el('tl-cost2').textContent='月'+elem2+'万円 × 6年 ＝ 計'+Math.round(elem2*12*6)+'万円';
+  el('tl-age3').textContent=(CA+12)+'〜'+(CA+14)+'歳';el('tl-cost3').textContent='月'+jhs2+'万円 × 3年 ＝ 計'+Math.round(jhs2*12*3)+'万円';
+  el('tl-age4').textContent=(CA+15)+'〜'+(CA+17)+'歳';el('tl-cost4').textContent='月'+hs2+'万円 × 3年 ＝ 計'+Math.round(hs2*12*3)+'万円';
+  el('tl-age5').textContent=(CA+18)+'〜'+(CA+21)+'歳';el('tl-cost5').textContent='月'+univ2+'万円 × 4年 ＝ 計'+Math.round(univ2*12*4)+'万円';
+  setVerdict('f-',surv,sr,resActual.zero,pt,'家族あり');
+  el('family-results').className='results visible';
+  setTimeout(function(){
+    drawChart3('f-chart',resActual.ages,[
+      {data:resBear.bals,color:'#94a3b8',label:'悲観',dash:true},
+      {data:resActual.bals,color:'#a78bfa',label:'実績'},
+      {data:resTarget.bals,color:'#fbbf24',label:'目標',dash:true}
+    ],resBear.zero||resActual.zero||resTarget.zero);
+    fireRenderTimeline('f-timeline-list',resActual.ages,resActual.bals,CA,curYear);
+    el('family-results').scrollIntoView({behavior:'smooth',block:'start'});
+  },50);
+}
+
+
+function fireCalcFIREYear(asset,rate,curAge,netFn,fireTarget){
+  // FIRE達成年を計算
+  var bal=asset,ar=rate/100;
+  for(var age=curAge;age<=90;age++){
+    if(bal>=fireTarget)return age;
+    bal=bal*(1+ar)+netFn(age)*12;
+  }
+  return null;
+}
+
+function fireRenderTimeline(containerId,ages,bals,curAge,curYear){
+  var el=document.getElementById(containerId);if(!el)return;
+  var milestones=[5000,6000,8000,10000,15000,20000,30000,50000];
+  var items=[];
+  milestones.forEach(function(m){
+    var idx=bals.findIndex(function(b){return b>=m*10000;});
+    if(idx>=0){
+      var age=ages[idx];
+      var yr=curYear+(age-curAge);
+      items.push({label:fwOku(m*10000),age:age,year:yr});
+    }
+  });
+  // 年金開始・90歳も追加
+  var milestoneAges=[65,70,75,80,90];
+  milestoneAges.forEach(function(a){
+    var idx=ages.indexOf(a);
+    if(idx>=0){
+      var yr=curYear+(a-curAge);
+      items.push({label:a+'歳（'+yr+'年）',age:a,year:yr,val:bals[idx],isAge:true});
+    }
+  });
+  items.sort(function(a,b){return a.age-b.age;});
+  
+  el.innerHTML=items.map(function(item){
+    var col=item.isAge?'var(--text3)':'var(--accent)';
+    var icon=item.isAge?'📅':'💰';
+    var desc=item.isAge?(item.val>=0?fwOku(item.val):'枯渇'):item.age+'歳（'+(curYear+(item.age-curAge))+'年）に到達';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'
+      +'<div style="font-size:16px">'+icon+'</div>'
+      +'<div style="flex:1"><div style="font-size:12px;font-weight:600;color:'+col+'">'+item.label+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+desc+'</div></div>'
+      +'</div>';
+  }).join('');
+}
+
+function calcSingle(){
+  var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income');
+  var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
+  var rBear=gv('s-rate-bear')||3,rActual=gv('s-rate-actual')||3,rTarget=gv('s-rate-target')||7;
+  var inflation=gv('s-inflation')||0;
+  if(!A||!E){alert('資産と生活費を入力してください');return;}
+  // インフレ考慮のnetFn（支出のみインフレ増加、収入は固定）
+  var netFn=function(age,infl){
+    var expense=E*(infl||1);
+    return(age>=PA?I+PM:I)-expense;
+  };
+  var resBear=simRun(A,rBear,CA,netFn,inflation);
+  var resActual=simRun(A,rActual,CA,netFn,inflation);
+  var resTarget=simRun(A,rTarget,CA,netFn,inflation);
+  var surv=!resActual.zero;
+  // 65歳時点の残高を取得
+  var idx65=resActual.ages.indexOf(65);
+  var bal65Actual=idx65>=0?resActual.bals[idx65]:resActual.bals[resActual.bals.length-1];
+  var bal65Bear=idx65>=0?resBear.bals[idx65]:resBear.bals[resBear.bals.length-1];
+  var bal65Target=idx65>=0?resTarget.bals[idx65]:resTarget.bals[resTarget.bals.length-1];
+  // 月収支・取り崩し率（現時点）
+  var ms=I-E, sr=A>0?Math.max(0,E-I)*12/A*100:0, pt=I+PM;
+  var m1=el('s-m1');m1.textContent=(ms>=0?'+':'')+ms+'万円';m1.className='mvalue '+(ms>=0?'val-ok':ms>=-5?'val-warn':'val-ng');
+  var m2=el('s-m2');m2.textContent=fp(sr);m2.className='mvalue '+(sr<=3?'val-ok':sr<=4?'val-warn':'val-ng');
+  var m3=el('s-m3');
+  m3.textContent=fwOku(resActual.final*10000);m3.className='mvalue val-ok';
+  el('s-m3s').textContent=surv?'90歳時点の残高':resActual.zero+'歳で枯渇';
+  el('s-m4').textContent=pt+'万円/月';el('s-m4s').textContent=PA+'歳〜（副収入＋年金）';
+  // 3シナリオ：65歳時点の残高を表示
+  document.getElementById('s-val-bear').textContent=fwOku(bal65Bear*10000);
+  document.getElementById('s-sub-bear').textContent=resBear.zero&&resBear.zero<=65?resBear.zero+'歳で枯渇':'65歳時点';
+  document.getElementById('s-pct-bear').textContent=' '+rBear+'%';
+  document.getElementById('s-val-actual').textContent=fwOku(bal65Actual*10000);
+  document.getElementById('s-sub-actual').textContent=resActual.zero&&resActual.zero<=65?resActual.zero+'歳で枯渇':'65歳時点';
+  document.getElementById('s-pct-actual').textContent=' '+rActual+'%';
+  document.getElementById('s-val-target').textContent=fwOku(bal65Target*10000);
+  document.getElementById('s-sub-target').textContent=resTarget.zero&&resTarget.zero<=65?resTarget.zero+'歳で枯渇':'65歳時点';
   document.getElementById('s-pct-target').textContent=' '+rTarget+'%';
   // FIRE達成ライン
   var fireTarget=E*12*25;
