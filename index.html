@@ -452,6 +452,10 @@ tr:last-child td{border-bottom:none}
 #fire-scope .field-input:focus { border-color: var(--accent); }
 #fire-scope .field-input::-webkit-inner-spin-button, #fire-scope .field-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #fire-scope .field-input[type=number] { -moz-appearance: textfield; }
+/* スピナー非表示（全体）*/
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
 #fire-scope .hint-box { background: rgba(167,139,250,0.08); border: 0.5px solid rgba(167,139,250,0.25); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-size: 12px; color: #c4b5fd; line-height: 1.7; }
 #fire-scope .hint-box strong { color: var(--purple); }
 #fire-scope .calc-btn { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 14px; font-family: inherit; -webkit-tap-highlight-color: transparent; }
@@ -698,13 +702,13 @@ tr:last-child td{border-bottom:none}
       <div id="amSoldModeIndex" style="display:none;flex-direction:column;gap:12px">
         <div>
           <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">取得総額（円）<span style="font-size:11px;font-weight:400;margin-left:4px">自動入力・修正可</span></label>
-          <input id="amSoldCostTotal" type="number" inputmode="numeric" placeholder="例: 1000000"
+          <input id="amSoldCostTotal" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="例: 1000000"
             style="width:100%;padding:12px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
             oninput="amCalcSoldGain()">
         </div>
         <div>
           <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却総額（円）</label>
-          <input id="amSoldAmountTotal" type="number" inputmode="numeric" placeholder="例: 1360831"
+          <input id="amSoldAmountTotal" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="例: 1360831"
             style="width:100%;padding:12px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
             oninput="amCalcSoldGain()">
           <div id="amSoldAmountHint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
@@ -2383,7 +2387,7 @@ function amOpenSoldModal(id){
     const costTotal=a.costPrice>0?a.costPrice:0;
     const el=document.getElementById('amSoldCostTotal');
     const hintEl=document.getElementById('amSoldAmountHint');
-    el.value=costTotal>0?costTotal:'';
+    el.value=costTotal>0?String(costTotal):'';
     el.placeholder='例: 1000000';
     document.getElementById('amSoldAmountTotal').value='';
     document.getElementById('amSoldAmountTotal').placeholder='例: 1360831';
@@ -2413,8 +2417,9 @@ function amCalcSoldGain(){
   let soldTotal=0,costTotal=0;
 
   if(isIndex){
-    costTotal=parseFloat(document.getElementById('amSoldCostTotal').value)||0;
-    soldTotal=parseFloat(document.getElementById('amSoldAmountTotal').value)||0;
+    const parseAmt=s=>parseFloat((s||'').replace(/[,，\s￥¥円]/g,''))||0;
+    costTotal=parseAmt(document.getElementById('amSoldCostTotal').value);
+    soldTotal=parseAmt(document.getElementById('amSoldAmountTotal').value);
     if(!soldTotal){previewEl.innerHTML='';return;}
     if(!costTotal&&a.costPrice>0)costTotal=a.costPrice;
   }else{
@@ -2457,8 +2462,9 @@ async function amConfirmSold(){
   let soldAmount=0,soldPrice=0,costOverride=0;
 
   if(isIndex){
-    soldAmount=parseFloat(document.getElementById('amSoldAmountTotal').value)||0;
-    costOverride=parseFloat(document.getElementById('amSoldCostTotal').value)||0;
+    const parseAmt=s=>parseFloat((s||'').replace(/[,，\s￥¥円]/g,''))||0;
+    soldAmount=parseAmt(document.getElementById('amSoldAmountTotal').value);
+    costOverride=parseAmt(document.getElementById('amSoldCostTotal').value);
     if(!soldAmount){showToast('⚠ 売却総額を入力してください');return;}
     soldPrice=0;// インデックスは単価不要
     // 取得総額を修正した場合はcostPriceも更新
