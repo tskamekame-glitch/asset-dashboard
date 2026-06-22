@@ -885,7 +885,7 @@ tr:last-child td{border-bottom:none}
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
-    <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div></div>
+    <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div><div id="donutLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
     <!-- 銘柄別保有円グラフ（4種） -->
     <div class="card" id="donutStockCard" style="display:none">
       <div class="card-head"><h2>📈 個別株 銘柄別保有</h2></div>
@@ -4825,7 +4825,21 @@ function trRenderCharts(){
   }};
   const donutTotal=catEntries.reduce((s,[,v])=>s+v,0);
   const donutTextColor=isDark?'#e5e5ea':'#1c1c1e';
-  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{donutCenter:{total:donutTotal,color:donutTextColor},legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);return parseFloat(p)<8?'':p+'%';}}},cutout:'60%'},plugins:[ChartDataLabels,donutCenterPlugin]});
+  chartInstances['donut']=new Chart(document.getElementById('donutChart'),{type:'doughnut',data:{labels:catEntries.map(([c])=>c),datasets:[{data:catEntries.map(([,v])=>v),backgroundColor:catEntries.map(([c])=>TR_DONUT_CAT_COLORS[c]||'#888780'),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{donutCenter:{total:donutTotal,color:donutTextColor},legend:{display:false},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:10,weight:'600'},textShadowBlur:3,textShadowColor:'rgba(0,0,0,0.5)',formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);if(parseFloat(p)<5)return'';const label=ctx.chart.data.labels[ctx.dataIndex];const shortLabel=label.length>6?label.slice(0,5)+'…':label;return[shortLabel,p+'%'];},align:'center',anchor:'center'}},cutout:'60%'},plugins:[ChartDataLabels,donutCenterPlugin]});
+  // ── カテゴリ凡例（カスタム）──
+  const donutLegendEl=document.getElementById('donutLegend');
+  if(donutLegendEl){
+    donutLegendEl.innerHTML=catEntries.map(([cat,val])=>{
+      const total=catEntries.reduce((s,[,v])=>s+v,0);
+      const pct=total>0?(val/total*100).toFixed(1):'0.0';
+      const col=TR_DONUT_CAT_COLORS[cat]||'#888';
+      return`<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);">`
+        +`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span>`
+        +`<span style="font-weight:600">${cat}</span>`
+        +`<span style="color:var(--text3)">${pct}%</span>`
+        +`</div>`;
+    }).join('');
+  }
   // ── 銘柄別保有円グラフ（5種）──
   (function renderBrandDonuts(){
     const PALETTE=[
