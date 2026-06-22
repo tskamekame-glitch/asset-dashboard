@@ -2309,9 +2309,10 @@ function amRenderCard(a){
           +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
           +(a.prevSBIAmount>0&&a.amount>0?(()=>{
             const d=a.amount-a.prevSBIAmount;
+            const pct=d/a.prevSBIAmount*100;
             const s=d>=0?'+':'';
             const c=d>=0?'var(--green)':'var(--danger)';
-            return`<span style="font-size:11px;font-weight:600;color:${c}">前回比 ${s}${fmt(Math.round(d))}</span>`;
+            return`<span style="font-size:11px;font-weight:600;color:${c}">前回比 ${s}${fmt(Math.round(d))} (${s}${pct.toFixed(1)}%)</span>`;
           })():'')
           +staleHtml
           +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
