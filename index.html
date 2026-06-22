@@ -864,6 +864,7 @@ tr:last-child td{border-bottom:none}
       <!-- 合算グラフ -->
       <div style="padding:4px 16px 2px">
         <div style="font-size:12px;font-weight:700;color:var(--text2)">💰 合算（株＋インデックス）</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px" id="gainLineCombinedSummary"></div>
       </div>
       <div style="position:relative;height:200px;padding:0 8px 8px"><canvas id="gainLineChart"></canvas></div>
     </div>
@@ -3732,9 +3733,9 @@ function sendToTrend(){
     if((a.cat==='証券'||a.cat==='個別株'||a.cat==='高配当'||a.cat==='その他')&&TOUSHI_NAMES2.some(n=>a.name.includes(n)))return'投信';
     return TO_GRAPH_CAT2[a.cat]||a.cat;
   };
-  const cats={};amAccounts.forEach(a=>{const c=normCat2(a);cats[c]=(cats[c]||0)+a.amount;});
-  const total=amAccounts.reduce((s,a)=>s+a.amount,0);
-  const accounts=amAccounts.map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated,costPrice:a.costPrice||0,shares:a.shares||0,price:a.price||0,code:a.code||''}));
+  const cats={};amAccounts.filter(a=>!a.sold).forEach(a=>{const c=normCat2(a);cats[c]=(cats[c]||0)+a.amount;});
+  const total=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+a.amount,0);
+  const accounts=amAccounts.filter(a=>!a.sold).map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated,costPrice:a.costPrice||0,shares:a.shares||0,price:a.price||0,code:a.code||''}));
   snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
@@ -4630,6 +4631,7 @@ function trNormalizeSnapshots(snaps){
     'インドインデックス':'インドインデックス',
     '高配当':'高配当',
     '個別株':'個別株',
+    '外国株式':'外国株式',
     '銀行':'銀行','預り金':'銀行',
     '年金':'年金',
     'その他':'銀行',
@@ -5132,33 +5134,33 @@ function trRenderCharts(){
 // useCurrentAccounts=true の場合、スナップショットの口座構成ではなく
 // 現在のamAccounts全体をそのまま使って計算する（「最新の銘柄別損益」と完全に一致させるため）
 function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
-  // catFilter: 'stock'=個別株・高配当のみ, 'index'=インデックスのみ, undefined=全体
+  // catFilter: 'stock'=個別株・高配当・外国株式のみ, 'index'=インデックスのみ, undefined=全体
   const sourceAccounts=useCurrentAccounts?(amAccounts||[]):(s.accounts||[]);
   if(!sourceAccounts.length)return null;
   // 現在の資産管理データから名前→{costPrice,shares,price,cat}の参照マップを作成（フォールバック用）
   const amInfoMap={};
   try{
-    (amAccounts||[]).forEach(a=>{if(a.costPrice>0)amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};});
+    (amAccounts||[]).forEach(a=>{if(a.costPrice>0&&!a.sold)amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};});
   }catch(e){}
-  const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
-  // PayPay系（ポイント運用等）・確定拠出年金（iDeCo/企業DC）は残高入力方式（数量×単価では扱わない）
+  const UNIT_BASED_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
   const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   let evalSum=0,costSum=0,hasAny=false;
-  const STOCK_CATS_F=['個別株','高配当'];
+  const STOCK_CATS_F=['個別株','高配当','外国株式'];
   const INDEX_CATS_F=['全世界インデックス','日本インデックス','インドインデックス'];
   sourceAccounts.forEach(a=>{
-    if(trGainExcludeNames.includes(a.name))return;// 除外指定された銘柄はスキップ
+    // 売却済みは損益推移グラフから除外（評価額0で誤計算になるため）
+    if(a.sold)return;
+    if(trGainExcludeNames.some(ex=>a.name===ex||a.name.startsWith(ex+'（')||a.name.startsWith(ex+' ')))return;
     // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
     const fallback=amInfoMap[a.name];
     const cp=(a.costPrice>0)?a.costPrice:(fallback?fallback.costPrice:0);
-    if(!cp||cp<=0)return;// 取得価格が一切わからない口座は除外
+    if(!cp||cp<=0)return;
 
     const shares=(a.shares>0)?a.shares:(fallback?fallback.shares:0);
     const price=(a.price>0)?a.price:(fallback?fallback.price:0);
     const cat=a.cat||(fallback?fallback.cat:'');
     const evalTotal=a.amount||0;
 
-    // 数量×単価方式の対象カテゴリかどうかで計算方法を決める（PayPay系・確定拠出年金は除く）
     const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
     const isUnitBased=UNIT_BASED_CATS.includes(cat)&&!isBalanceBased;
 
@@ -5168,18 +5170,13 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
 
     let costTotal;
     if(isUnitBased){
-      // 数量・単価が欠落している場合は計算不能として除外（誤った巨額損益を防ぐ）
       if(!(shares>0))return;
       costTotal=shares*cp;
     }else{
-      // 銀行・預り金等以外の「残高入力方式」カテゴリ: costPriceは総額
       costTotal=cp;
     }
 
-    // ── 異常値ガード ──
-    // 評価額と取得額の比率が極端（100倍以上 or 1/100以下）な場合のみ、
-    // 単価と総額の単位が混在している等の入力ミスとみなし、この口座を損益計算から除外する。
-    // 持株会等で取得単価が著しく低いケース（数十倍の利益）は正当なデータなので除外しない。
+    // 異常値ガード（評価額と取得額の比率が100倍超 or 1/100未満）
     if(evalTotal>0&&costTotal>0){
       const ratio=evalTotal/costTotal;
       if(ratio>100||ratio<0.01)return;
@@ -5205,16 +5202,17 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   const gainDataStock=filtered.map(s=>trCalcSnapshotGain(s,false,'stock'));
   const gainDataIndex=filtered.map(s=>trCalcSnapshotGain(s,false,'index'));
 
-  // スナップショットにaccountsがない場合、現在のamAccountsで最新点を補完
-  const lastIdx=filtered.length-1;
-  if(!gainData[lastIdx]){
-    const cur=trCalcSnapshotGain(filtered[lastIdx],true,null);
-    const curS=trCalcSnapshotGain(filtered[lastIdx],true,'stock');
-    const curI=trCalcSnapshotGain(filtered[lastIdx],true,'index');
-    if(cur) gainData[lastIdx]=cur;
-    if(curS)gainDataStock[lastIdx]=curS;
-    if(curI)gainDataIndex[lastIdx]=curI;
-  }
+  // 全スナップショットについて、costPrice未保存（旧データ）はamAccountsのフォールバックで補完
+  filtered.forEach((s,i)=>{
+    if(!gainData[i]){
+      const cur=trCalcSnapshotGain(s,true,null);
+      const curS=trCalcSnapshotGain(s,true,'stock');
+      const curI=trCalcSnapshotGain(s,true,'index');
+      if(cur) gainData[i]=cur;
+      if(curS)gainDataStock[i]=curS;
+      if(curI)gainDataIndex[i]=curI;
+    }
+  });
 
   const validIdx=gainData.map((g,i)=>g?i:null).filter(i=>i!==null);
 
@@ -5337,6 +5335,25 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
     '#2980b9','rgba(41,128,185,0.12)');
 
   // ── 合算グラフ（株・インデックス・合算の3ライン） ──
+  const latestG=gainData[lastValidIdx];
+  // 合算サマリー表示（インデックス・株と同じ形式）
+  const combinedSumEl=document.getElementById('gainLineCombinedSummary');
+  if(combinedSumEl){
+    if(latestG){
+      const s=latestG.gain>=0?'+':'';
+      const c=latestG.gain>=0?'var(--green)':'var(--danger)';
+      const sS=latestS&&latestS.gain>=0?'+':'';
+      const sI=latestI&&latestI.gain>=0?'+':'';
+      const cS=latestS?(latestS.gain>=0?'var(--green)':'var(--danger)'):'var(--text3)';
+      const cI=latestI?(latestI.gain>=0?'var(--green)':'var(--danger)'):'var(--text3)';
+      let html=`最新: <b style="color:${c}">${s}${trFmt(latestG.gain)}（${s}${latestG.pct.toFixed(1)}%）</b>`;
+      if(latestS&&latestI){
+        html+=`&nbsp;&nbsp;<span style="font-size:10px;color:var(--text3)">株 <b style="color:${cS}">${sS}${trFmt(latestS.gain)}</b> ／ 指数 <b style="color:${cI}">${sI}${trFmt(latestI.gain)}</b></span>`;
+      }
+      combinedSumEl.innerHTML=html;
+    }else{combinedSumEl.innerHTML='';}
+  }
+
   const hasStock=stockLine.some(v=>v!==null);
   const hasIndex=indexLine.some(v=>v!==null);
   const datasets=[];
