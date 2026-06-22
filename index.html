@@ -3762,11 +3762,15 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const values=[['id','name','cat','amount','note','shares','price','updated','code','costPrice'],...amAccounts.map(a=>[a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:J${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:J1000`});
-    // 推移グラフの損益計算から除外する銘柄リストをL1セルに保存（端末間で共有するため）
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!L1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice'];
+    const values=[hdr,...amAccounts.map(a=>[
+      a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||''
+    ])];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:O${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:O1000`});
+    // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
   }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
@@ -3854,16 +3858,41 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:J1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:O1000'});
     const rows=res.result.values||[];
-    amAccounts=rows.filter(r=>r[0]).map(r=>({id:parseInt(r[0])||Date.now(),name:r[1]||'',cat:r[2]||'その他',amount:parseFloat(r[3])||0,note:r[4]||'',shares:parseFloat(r[5])||0,price:parseFloat(r[6])||0,updated:r[7]||todayStr(),code:r[8]||'',costPrice:parseFloat(r[9])||0}));
+    amAccounts=rows.filter(r=>r[0]).map(r=>({
+      id:parseInt(r[0])||Date.now(),
+      name:r[1]||'',
+      cat:r[2]||'その他',
+      amount:parseFloat(r[3])||0,
+      note:r[4]||'',
+      shares:parseFloat(r[5])||0,
+      price:parseFloat(r[6])||0,
+      updated:r[7]||todayStr(),
+      code:r[8]||'',
+      costPrice:parseFloat(r[9])||0,
+      fxRate:r[10]?parseFloat(r[10])||0:undefined,
+      sold:r[11]==='1'||r[11]===true,
+      soldDate:r[12]||'',
+      soldAmount:r[13]?parseFloat(r[13])||0:0,
+      soldPrice:r[14]?parseFloat(r[14])||0:0,
+    }));
+    // sold=falseのものはundefinedにクリーン（旧データ互換）
+    amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
     amSaveToLocal();amRender();
-    // 推移グラフの損益除外リストをL1セルから読み込む（端末間で共有）
+    // 推移グラフの損益除外リストをQ1セルから読み込む（端末間で共有）
     try{
-      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!L1'});
+      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Q1'});
       const raw=exRes.result.values?.[0]?.[0];
       if(raw){trGainExcludeNames=JSON.parse(raw);trSaveGainExclude();}
-    }catch(e){}
+    }catch(e){
+      // 旧形式（L1セル）のフォールバック
+      try{
+        const exRes2=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!L1'});
+        const raw2=exRes2.result.values?.[0]?.[0];
+        if(raw2){trGainExcludeNames=JSON.parse(raw2);trSaveGainExclude();}
+      }catch(e2){}
+    }
   }catch(e){amLoadFromLocal();amRender();}
 }
 async function onSignedIn(){
@@ -4511,7 +4540,7 @@ function trSaveGainExclude(){
   // Googleログイン中はaccountsシートのL1セルにも保存し、他端末と共有する
   if(amIsOnline&&amSpreadsheetId){
     try{
-      gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!L1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
+      gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     }catch(e){console.warn('trSaveGainExclude sheet sync error',e);}
   }
 }
