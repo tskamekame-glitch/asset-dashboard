@@ -682,15 +682,37 @@ tr:last-child td{border-bottom:none}
     </div>
     <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
       <div id="amSoldModalName" style="font-size:14px;font-weight:600;color:var(--text);background:var(--bg2);padding:10px 12px;border-radius:8px"></div>
-      <div>
-        <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却単価（円）</label>
-        <input id="amSoldPrice" type="number" inputmode="decimal" placeholder="例: 2500" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box" oninput="amCalcSoldGain()">
+
+      <!-- 株モード（個別株・高配当・外国株） -->
+      <div id="amSoldModeStock">
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却単価（円/株）</label>
+          <input id="amSoldPrice" type="number" inputmode="decimal" placeholder="例: 2500" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box" oninput="amCalcSoldGain()">
+        </div>
       </div>
+
+      <!-- インデックスモード（総額入力） -->
+      <div id="amSoldModeIndex" style="display:none;flex-direction:column;gap:10px">
+        <div style="background:rgba(41,128,185,0.08);border:1px solid rgba(41,128,185,0.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2)">
+          🌍 インデックスファンドは<b>取得総額・売却総額</b>をそのまま入力してください
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">取得総額（円）<span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:4px">※ 自動入力済み・修正可</span></label>
+          <input id="amSoldCostTotal" type="number" inputmode="numeric" placeholder="例: 1000000" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box" oninput="amCalcSoldGain()">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却総額（円）</label>
+          <input id="amSoldAmountTotal" type="number" inputmode="numeric" placeholder="例: 1200000" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box" oninput="amCalcSoldGain()">
+        </div>
+      </div>
+
       <div>
         <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却日</label>
         <input id="amSoldDate" type="date" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
       </div>
+
       <div id="amSoldGainPreview" style="min-height:40px"></div>
+
       <div style="background:var(--bg2);border-radius:8px;padding:10px 12px;border:1px solid var(--border2);font-size:12px;color:var(--text3)">
         💡 売却済みにすると評価額の合計から除外されますが、<strong style="color:var(--text2)">確定損益として記録が残ります</strong>。後から「保有中」に戻すこともできます。
       </div>
@@ -2305,25 +2327,37 @@ function amRenderSoldSection(soldAccounts){
 }
 
 // ── 売却済みモーダル ──
+const INDEX_CATS_SOLD=['全世界インデックス','日本インデックス','インドインデックス'];
 let amSoldTargetId=null;
 function amOpenSoldModal(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
   amSoldTargetId=id;
   document.getElementById('amSoldModalName').textContent=a.name;
-  // 取得単価から売却金額の初期値を設定
-  const isUnitBased=a.shares>0&&a.costPrice>0;
-  const priceEl=document.getElementById('amSoldPrice');
-  if(isUnitBased){
-    // デフォルトは空（ユーザーが入力）
-    priceEl.placeholder=`例: ${Math.round((a.price||a.costPrice||0)*1.1)}（現在の株価ベース）`;
+  const isIndex=INDEX_CATS_SOLD.includes(a.cat);
+
+  // モード切替
+  document.getElementById('amSoldModeStock').style.display=isIndex?'none':'block';
+  document.getElementById('amSoldModeIndex').style.display=isIndex?'flex':'none';
+
+  if(isIndex){
+    // インデックスモード：取得総額を自動入力
+    const costTotal=a.costPrice>0?a.costPrice:0;// インデックスのcostPriceは総額
+    document.getElementById('amSoldCostTotal').value=costTotal||'';
+    document.getElementById('amSoldAmountTotal').value='';
+    document.getElementById('amSoldCostTotal').placeholder=costTotal>0?fmt(costTotal):'例: 1000000';
+    document.getElementById('amSoldAmountTotal').placeholder=a.amount>0?`現在評価額: ${fmt(a.amount)}`:'例: 1200000';
   }else{
-    priceEl.placeholder='例: '+(a.amount||0);
+    const priceEl=document.getElementById('amSoldPrice');
+    priceEl.placeholder=a.price>0?`現在の株価: ${a.price.toLocaleString()}円`:'例: 2500';
+    priceEl.value='';
   }
-  priceEl.value='';
   document.getElementById('amSoldDate').value=todayStr();
   document.getElementById('amSoldGainPreview').innerHTML='';
   document.getElementById('amSoldModalBg').classList.add('open');
-  setTimeout(()=>priceEl.focus(),300);
+  setTimeout(()=>{
+    const focusEl=isIndex?document.getElementById('amSoldAmountTotal'):document.getElementById('amSoldPrice');
+    focusEl.focus();
+  },300);
 }
 function amCloseSoldModal(){
   document.getElementById('amSoldModalBg').classList.remove('open');
@@ -2331,44 +2365,75 @@ function amCloseSoldModal(){
 }
 function amCalcSoldGain(){
   const a=amAccounts.find(x=>x.id===amSoldTargetId);if(!a)return;
-  const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
-  if(!priceVal){document.getElementById('amSoldGainPreview').innerHTML='';return;}
-  const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
-  const isUnitBased=a.shares>0&&(isStock||['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat));
-  let soldTotal,costTotal,gain,pct;
-  if(isUnitBased){
-    soldTotal=Math.round(a.shares*priceVal);
-    costTotal=a.shares>0&&a.costPrice>0?Math.round(a.shares*a.costPrice):(a.costPrice||0);
+  const isIndex=INDEX_CATS_SOLD.includes(a.cat);
+  const previewEl=document.getElementById('amSoldGainPreview');
+  let soldTotal=0,costTotal=0;
+
+  if(isIndex){
+    costTotal=parseFloat(document.getElementById('amSoldCostTotal').value)||0;
+    soldTotal=parseFloat(document.getElementById('amSoldAmountTotal').value)||0;
+    if(!soldTotal){previewEl.innerHTML='';return;}
+    if(!costTotal&&a.costPrice>0)costTotal=a.costPrice;
   }else{
-    soldTotal=Math.round(priceVal);
-    costTotal=a.costPrice||0;
+    const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
+    const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+    if(!priceVal){previewEl.innerHTML='';return;}
+    const isUnitBased=a.shares>0&&(isStock||INDEX_CATS_SOLD.includes(a.cat));
+    soldTotal=isUnitBased?Math.round(a.shares*priceVal):Math.round(priceVal);
+    costTotal=isUnitBased&&a.shares>0&&a.costPrice>0?Math.round(a.shares*a.costPrice):(a.costPrice||0);
   }
-  gain=soldTotal-costTotal;
-  pct=costTotal>0?gain/costTotal*100:0;
+
+  const gain=soldTotal-costTotal;
+  const pct=costTotal>0?gain/costTotal*100:0;
   const gSign=gain>=0?'+':'';
   const gCol=gain>=0?'var(--green)':'var(--danger)';
-  const label=isUnitBased?`${a.shares}株 × ${priceVal}円 = `:'売却金額: ';
-  document.getElementById('amSoldGainPreview').innerHTML=
-    `<div style="background:var(--bg2);border-radius:8px;padding:10px 12px;border:1px solid var(--border2)">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${label}${fmt(soldTotal)}</div>
-      <div style="font-size:14px;font-weight:700;color:${gCol}">確定損益 ${gSign}${fmt(gain)} <span style="font-size:12px">(${gSign}${pct.toFixed(1)}%)</span></div>
+
+  previewEl.innerHTML=`
+    <div style="background:var(--bg2);border-radius:8px;padding:12px;border:1px solid var(--border2)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">取得総額</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${costTotal>0?fmt(Math.round(costTotal)):'—'}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">売却総額</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${fmt(Math.round(soldTotal))}</div>
+        </div>
+      </div>
+      <div style="text-align:center;padding-top:8px;border-top:1px solid var(--border2)">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">確定損益</div>
+        <div style="font-size:20px;font-weight:800;color:${gCol}">${gSign}${fmt(Math.round(gain))}</div>
+        <div style="font-size:13px;font-weight:600;color:${gCol};margin-top:2px">${gSign}${pct.toFixed(2)}%</div>
+      </div>
     </div>`;
 }
 async function amConfirmSold(){
   const a=amAccounts.find(x=>x.id===amSoldTargetId);if(!a)return;
-  const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+  const isIndex=INDEX_CATS_SOLD.includes(a.cat);
   const dateVal=document.getElementById('amSoldDate').value||todayStr();
-  const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
-  const isUnitBased=a.shares>0&&(isStock||['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat));
-  let soldAmount=0;
-  if(priceVal>0){
+  let soldAmount=0,soldPrice=0,costOverride=0;
+
+  if(isIndex){
+    soldAmount=parseFloat(document.getElementById('amSoldAmountTotal').value)||0;
+    costOverride=parseFloat(document.getElementById('amSoldCostTotal').value)||0;
+    if(!soldAmount){showToast('⚠ 売却総額を入力してください');return;}
+    soldPrice=0;// インデックスは単価不要
+    // 取得総額を修正した場合はcostPriceも更新
+    if(costOverride>0&&costOverride!==a.costPrice)a.costPrice=costOverride;
+  }else{
+    const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+    if(!priceVal){showToast('⚠ 売却単価を入力してください');return;}
+    const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
+    const isUnitBased=a.shares>0&&(isStock||INDEX_CATS_SOLD.includes(a.cat));
     soldAmount=isUnitBased?Math.round(a.shares*priceVal):Math.round(priceVal);
+    soldPrice=priceVal;
   }
+
   a.sold=true;
   a.soldDate=dateVal;
   a.soldAmount=soldAmount||a.amount||0;
-  a.soldPrice=priceVal||0;
-  a.amount=0;// 総資産から除外
+  a.soldPrice=soldPrice;
+  a.amount=0;
   a.updated=todayStr();
   amCloseSoldModal();
   amSaveToLocal();
@@ -2376,7 +2441,6 @@ async function amConfirmSold(){
   await amSaveToSheet();
   refreshHome();
   showToast('✅ 売却済みとして記録しました');
-  // 売却済みセクションが非表示なら自動で開く
   if(!amShowSold)amToggleSoldView();
 }
 async function amReviveSold(id){
