@@ -2500,10 +2500,72 @@ async function amConfirmSold(){
   amCloseSoldModal();
   amSaveToLocal();
   amRender();
+  // 売却タブにも自動追加
+  amSyncSoldToSlData(a,soldAmount,soldPrice,dateVal,isIndex);
   await amSaveToSheet();
   refreshHome();
-  showToast('✅ 売却済みとして記録しました');
+  showToast('✅ 売却済みとして記録しました（売却タブにも追加）');
   if(!amShowSold)amToggleSoldView();
+}
+// 資産管理の売却 → 売却タブ（slData）へ自動同期
+function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
+  try{
+    if(typeof slData==='undefined'||typeof slUID==='undefined')return;
+    // 既に同じ銘柄・同じ日付で登録されていたら重複追加しない
+    const isDup=slData.some(d=>d.name===a.name&&d.date===soldDate&&d.amSynced);
+    if(isDup)return;
+
+    const NISA_PAT=/NISA|ニーサ/i;
+    const account=NISA_PAT.test(a.note||'')?'NISA':'特定口座';
+    const isNISA=account==='NISA';
+
+    // カテゴリ変換
+    const catMap={'個別株':'個別株','高配当':'高配当','外国株式':'個別株',
+      '全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス',
+      'インドインデックス':'インドインデックス'};
+    const cat=catMap[a.cat]||'その他';
+
+    let shares=0,sellPrice=0,buyPrice=0,sellTotal=0,cost=null,gain=null;
+
+    if(isIndex){
+      // インデックス：金額記録モード（shares=0, prices=0, totals直接）
+      sellTotal=soldAmount||0;
+      cost=a.costPrice>0?a.costPrice:null;
+      gain=cost!==null?sellTotal-cost:null;
+    }else{
+      // 株：単価×株数モード
+      shares=a.shares||0;
+      sellPrice=soldPrice||0;
+      buyPrice=a.costPrice||0;
+      sellTotal=soldAmount||0;
+      cost=shares>0&&buyPrice>0?shares*buyPrice:null;
+      gain=cost!==null?sellTotal-cost:null;
+    }
+
+    const tax=isNISA?0:(gain!==null&&gain>0?Math.round(gain*0.20315):0);
+    const net=sellTotal-tax;
+
+    const entry={
+      id:slUID(),
+      name:a.name,
+      cat,
+      shares,
+      sellPrice,
+      buyPrice,
+      date:soldDate,
+      account,
+      memo:a.note||'',
+      sellTotal,
+      cost,
+      gain,
+      tax,
+      net,
+      amSynced:true,// 資産管理からの同期フラグ
+    };
+    slData.push(entry);
+    if(typeof slSaveData==='function')slSaveData();
+    if(typeof slRender==='function')slRender();
+  }catch(e){console.warn('amSyncSoldToSlData error',e);}
 }
 async function amReviveSold(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
@@ -3707,6 +3769,11 @@ async function amApplySBIRows(rows){
   const noMatch=[];
   const usedAccIdx=new Set();
 
+  // ── 取り込み前の合計・各口座金額をスナップ ──
+  const totalBefore=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+(a.amount||0),0);
+  const amountBefore={};
+  amAccounts.forEach(a=>{amountBefore[a.id]=a.amount||0;});
+
   // コードごとにグループ化し、既存の同コード口座リストに順番に割り当てる
   const codeGroups=new Map();
   stockRows.forEach(row=>{
@@ -3752,7 +3819,7 @@ async function amApplySBIRows(rows){
       acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
 
       updated++;
-      log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:100,acctSuffix:row.acctSuffix});
+      log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:row.acctSuffix});
     });
   });
 
@@ -3786,7 +3853,7 @@ async function amApplySBIRows(rows){
     acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
 
     updated++;
-    log.push({sbi:row.nameRaw,am:acc.name,val:newVal,score:bestScore,acctSuffix:row.acctSuffix});
+    log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:bestScore,acctSuffix:row.acctSuffix});
   });
 
   // ── 未マッチ銘柄を資産管理に自動追加 ──
@@ -3851,8 +3918,6 @@ async function amApplySBIRows(rows){
     console.log('[amSBI] rows:',rows);
     return;
   }
-
-  amSaveToLocal();
   amRender();
   refreshHome();
   pfSyncFromAM();
@@ -3905,10 +3970,70 @@ async function amApplySBIRows(rows){
     }).join('・');
     msg+=` ⚠️未マッチ${noMatch.length}件: ${names}`;
   }
-  showToast(msg,6000);
+  showToast(msg,5000);
+
+  // ── 差分バナーを表示 ──
+  const totalAfter=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+(a.amount||0),0);
+  amShowSBIDiffBanner(totalBefore,totalAfter,log,added);
+
   console.log('[amSBI] updated:',log,'noMatch:',noMatch);
 }
 
+// ── SBI取り込み後 差分バナー ──
+function amShowSBIDiffBanner(totalBefore,totalAfter,log,added){
+  const diff=totalAfter-totalBefore;
+  const sign=diff>=0?'+':'';
+  const col=diff>=0?'var(--green)':'var(--danger)';
+  const icon=diff>=0?'📈':'📉';
+
+  // 銘柄別差分（上位5件）
+  const itemDiffs=log
+    .filter(l=>l.oldVal>0&&l.val>0&&l.val!==l.oldVal)
+    .map(l=>({name:l.am,diff:l.val-l.oldVal,pct:(l.val-l.oldVal)/l.oldVal*100}))
+    .sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff))
+    .slice(0,6);
+
+  const itemHtml=itemDiffs.map(d=>{
+    const s=d.diff>=0?'+':'';
+    const c=d.diff>=0?'var(--green)':'var(--danger)';
+    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
+      <span style="font-size:13px;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</span>
+      <span style="font-size:13px;font-weight:700;color:${c};flex-shrink:0;margin-left:8px">${s}${fmt(Math.round(d.diff))}</span>
+      <span style="font-size:11px;color:${c};flex-shrink:0;margin-left:6px;min-width:48px;text-align:right">(${s}${d.pct.toFixed(1)}%)</span>
+    </div>`;
+  }).join('');
+
+  const addedHtml=added>0?`<div style="font-size:12px;color:var(--accent);margin-top:6px">＋ 新規追加 ${added}件</div>`:'';
+
+  const html=`
+    <div id="sbiDiffBanner" style="margin:8px 0 4px;background:var(--bg2);border:1px solid ${diff>=0?'rgba(15,110,86,0.3)':'rgba(192,57,43,0.3)'};border-radius:12px;overflow:hidden">
+      <!-- ヘッダー -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px 10px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="document.getElementById('sbiDiffDetail').style.display=document.getElementById('sbiDiffDetail').style.display==='none'?'block':'none'">
+        <div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:2px">${icon} SBI CSV取り込み完了</div>
+          <div style="font-size:18px;font-weight:800;color:${col}">${sign}${fmt(Math.round(diff))}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px">総資産 ${fmt(Math.round(totalBefore))} → ${fmt(Math.round(totalAfter))}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">▼ 詳細</div>
+      </div>
+      <!-- 詳細（開閉） -->
+      <div id="sbiDiffDetail" style="display:none;padding:4px 14px 10px">
+        ${itemHtml||'<div style="font-size:12px;color:var(--text3);padding:8px 0">変動なし</div>'}
+        ${addedHtml}
+      </div>
+    </div>`;
+
+  // reminderBannerの下に挿入
+  const banner=document.getElementById('soldSummaryBanner');
+  if(banner){
+    // 既存の差分バナーを削除
+    const old=document.getElementById('sbiDiffBanner');
+    if(old)old.remove();
+    banner.insertAdjacentHTML('afterend',html);
+    // 3秒後に自動で詳細を開く
+    setTimeout(()=>{const d=document.getElementById('sbiDiffDetail');if(d)d.style.display='block';},300);
+  }
+}
 function amExportCSV(){
   const rows=[['id','口座名','カテゴリ','残高','メモ','更新日']];
   amAccounts.forEach(a=>rows.push([a.id,a.name,a.cat,a.amount,a.note||'',a.updated]));
