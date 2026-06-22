@@ -678,54 +678,57 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
 
 <!-- 売却済みマークモーダル -->
-<div id="amSoldModalBg" class="sheet-bg" onclick="if(event.target===this)amCloseSoldModal()">
-  <div style="position:fixed;bottom:0;left:0;right:0;max-height:88vh;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.18);overflow:hidden">
-    <!-- ヘッダー固定 -->
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <h2 style="font-size:16px;font-weight:700;margin:0">売却済みにする</h2>
-      <button onclick="amCloseSoldModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0;line-height:1">✕</button>
+<div id="amSoldModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:flex-end;justify-content:center" onclick="if(event.target===this)amCloseSoldModal()">
+  <div style="width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.2)">
+
+    <!-- ヘッダー -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <h2 style="font-size:17px;font-weight:700;margin:0">💴 売却済みにする</h2>
+      <button onclick="amCloseSoldModal()" style="background:var(--bg2);border:none;width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center">✕</button>
     </div>
 
-    <!-- スクロール部分 -->
-    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+    <!-- スクロールエリア -->
+    <div style="flex:1;overflow-y:scroll;padding:16px 20px 8px;display:flex;flex-direction:column;gap:14px;min-height:0">
+
       <div id="amSoldModalName" style="font-size:14px;font-weight:600;color:var(--text);background:var(--bg2);padding:10px 14px;border-radius:10px;word-break:break-all"></div>
 
       <!-- 株モード -->
       <div id="amSoldModeStock">
         <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却単価（円/株）</label>
-        <input id="amSoldPrice" type="number" inputmode="decimal" placeholder="例: 2500"
-          style="width:100%;padding:12px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
+        <input id="amSoldPrice" type="text" inputmode="decimal" placeholder="例: 7500"
+          style="width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
           oninput="amCalcSoldGain()">
+        <div id="amSoldStockHint" style="font-size:11px;color:var(--text3);margin-top:5px"></div>
       </div>
 
       <!-- インデックスモード -->
       <div id="amSoldModeIndex" style="display:none;flex-direction:column;gap:12px">
         <div>
           <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">取得総額（円）<span style="font-size:11px;font-weight:400;margin-left:4px">自動入力・修正可</span></label>
-          <input id="amSoldCostTotal" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="例: 1000000"
-            style="width:100%;padding:12px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
+          <input id="amSoldCostTotal" type="text" inputmode="numeric" placeholder="例: 1000000"
+            style="width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
             oninput="amCalcSoldGain()">
         </div>
         <div>
           <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却総額（円）</label>
-          <input id="amSoldAmountTotal" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="例: 1360831"
-            style="width:100%;padding:12px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
+          <input id="amSoldAmountTotal" type="text" inputmode="numeric" placeholder="例: 1360831"
+            style="width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
             oninput="amCalcSoldGain()">
-          <div id="amSoldAmountHint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+          <div id="amSoldAmountHint" style="font-size:11px;color:var(--text3);margin-top:5px"></div>
         </div>
       </div>
 
       <div>
         <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却日</label>
         <input id="amSoldDate" type="date"
-          style="width:100%;padding:12px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          style="width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
       </div>
 
-      <div id="amSoldGainPreview"></div>
+      <div id="amSoldGainPreview" style="padding-bottom:4px"></div>
     </div>
 
-    <!-- ボタン（常に下部固定） -->
-    <div style="flex-shrink:0;padding:12px 20px 24px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px">
+    <!-- ボタン（固定） -->
+    <div style="flex-shrink:0;padding:12px 20px 28px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px">
       <button onclick="amCloseSoldModal()"
         style="flex:1;padding:14px;border:1.5px solid var(--border2);border-radius:12px;background:var(--bg2);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">
         キャンセル
@@ -735,6 +738,7 @@ input[type=number] { -moz-appearance: textfield; }
         ✅ 売却済みにする
       </button>
     </div>
+
   </div>
 </div>
 </div>
@@ -2395,19 +2399,22 @@ function amOpenSoldModal(id){
     if(hintEl)hintEl.textContent=a.amount>0?`現在の評価額: ${fmt(a.amount)}（参考）`:'';
   }else{
     const priceEl=document.getElementById('amSoldPrice');
-    priceEl.placeholder=a.price>0?`現在の株価: ${a.price.toLocaleString()}円`:'例: 2500';
     priceEl.value='';
+    priceEl.placeholder=a.price>0?String(a.price):'例: 2500';
+    const hintEl=document.getElementById('amSoldStockHint');
+    if(hintEl)hintEl.textContent=a.price>0&&a.shares>0?`現在株価: ${a.price.toLocaleString()}円（${a.shares}株）`:'';
   }
   document.getElementById('amSoldDate').value=todayStr();
   document.getElementById('amSoldGainPreview').innerHTML='';
-  document.getElementById('amSoldModalBg').classList.add('open');
+  document.getElementById('amSoldModalBg').style.display='flex';
   setTimeout(()=>{
     const focusEl=isIndex?document.getElementById('amSoldAmountTotal'):document.getElementById('amSoldPrice');
     focusEl.focus();
   },300);
 }
 function amCloseSoldModal(){
-  document.getElementById('amSoldModalBg').classList.remove('open');
+  const bg=document.getElementById('amSoldModalBg');
+  if(bg)bg.style.display='none';
   amSoldTargetId=null;
 }
 function amCalcSoldGain(){
@@ -2424,11 +2431,16 @@ function amCalcSoldGain(){
     if(!costTotal&&a.costPrice>0)costTotal=a.costPrice;
   }else{
     const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
-    const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+    const parseNum=s=>parseFloat((s||'').replace(/[,，\s￥¥円]/g,''))||0;
+    const priceVal=parseNum(document.getElementById('amSoldPrice').value);
     if(!priceVal){previewEl.innerHTML='';return;}
     const isUnitBased=a.shares>0&&(isStock||INDEX_CATS_SOLD.includes(a.cat));
     soldTotal=isUnitBased?Math.round(a.shares*priceVal):Math.round(priceVal);
     costTotal=isUnitBased&&a.shares>0&&a.costPrice>0?Math.round(a.shares*a.costPrice):(a.costPrice||0);
+    // 株数×単価のヒント
+    const hintEl=document.getElementById('amSoldStockHint');
+    if(hintEl&&isUnitBased&&a.shares>0)hintEl.textContent=`${a.shares}株 × ${priceVal.toLocaleString()}円 = ${fmt(soldTotal)}`;
+    else if(hintEl)hintEl.textContent='';
   }
 
   const gain=soldTotal-costTotal;
@@ -2470,7 +2482,8 @@ async function amConfirmSold(){
     // 取得総額を修正した場合はcostPriceも更新
     if(costOverride>0&&costOverride!==a.costPrice)a.costPrice=costOverride;
   }else{
-    const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+    const parseNum=s=>parseFloat((s||'').replace(/[,，\s￥¥円]/g,''))||0;
+    const priceVal=parseNum(document.getElementById('amSoldPrice').value);
     if(!priceVal){showToast('⚠ 売却単価を入力してください');return;}
     const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
     const isUnitBased=a.shares>0&&(isStock||INDEX_CATS_SOLD.includes(a.cat));
