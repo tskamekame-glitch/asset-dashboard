@@ -4750,7 +4750,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard'].forEach(id=>document.getElementById(id).style.display=hasData?'block':'none');
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -5622,121 +5622,100 @@ function trRenderWeekly(filtered){
   el.innerHTML=html;
 }
 
-// ── 銘柄変動アラート（前回スナップショット比） ──
+// ── 銘柄変動アラート ──
+// 判定①: 現在株価 vs 取得単価（含み益率）で+10%以上/-5%以下
+// 判定②: 前回スナップショット評価額からの変動（記録がある場合）
 function trRenderPriceAlert(filtered){
   const card=document.getElementById('priceAlertCard');
   const listEl=document.getElementById('priceAlertList');
   const badgeEl=document.getElementById('priceAlertBadge');
   if(!card||!listEl)return;
 
-  // 前回・最新スナップショットを取得
-  if(!filtered||filtered.length<2){card.style.display='none';return;}
-
-  // アカウントデータを持つスナップショットを新しい順に探す
-  const withAccounts=filtered.filter(s=>s.accounts&&s.accounts.length>0);
-  if(withAccounts.length<1){card.style.display='none';return;}
-
-  const latestSnap=withAccounts[withAccounts.length-1];
-  const prevSnap=withAccounts.length>=2?withAccounts[withAccounts.length-2]:null;
-
-  // 現在のamAccountsも含めてマップ化（最優先）
-  const currentMap={};
-  (amAccounts||[]).filter(a=>!a.sold).forEach(a=>{
-    if(a.amount>0)currentMap[a.name]={amount:a.amount,shares:a.shares||0,price:a.price||0,cat:a.cat};
-  });
-
-  // 最新スナップショットのアカウント評価額マップ
-  const latestMap={};
-  latestSnap.accounts.forEach(a=>{
-    const cur=currentMap[a.name];
-    latestMap[a.name]={amount:cur?cur.amount:a.amount,shares:a.shares||0,price:cur?cur.price:a.price||0,cat:a.cat};
-  });
-  // currentMapにあってlatestMapにない銘柄も追加（新規追加分）
-  Object.entries(currentMap).forEach(([name,v])=>{if(!latestMap[name])latestMap[name]=v;});
-
-  // 前回スナップショットのアカウント評価額マップ
-  const prevMap={};
-  if(prevSnap){
-    prevSnap.accounts.forEach(a=>{prevMap[a.name]={amount:a.amount,shares:a.shares||0,price:a.price||0};});
-  }
-
-  const RISE_THRESH=10;   // +10%以上で目標候補アラート
-  const DROP_THRESH=-5;   // -5%以下で下落アラート
   const STOCK_CATS=['個別株','高配当','外国株式'];
+  const RISE_THRESH=10;  // +10%以上
+  const DROP_THRESH=-5;  // -5%以下
 
   const alerts=[];
 
-  Object.entries(latestMap).forEach(([name,cur])=>{
-    if(!STOCK_CATS.includes(cur.cat))return;// 株系のみ対象
-    const prev=prevMap[name];
-    if(!prev||prev.amount<=0||cur.amount<=0)return;
-
-    const chgAmt=cur.amount-prev.amount;
-    const chgPct=prev.amount>0?chgAmt/prev.amount*100:0;
-
-    // 単価ベースの変化（shares共通なら単価比較がより正確）
-    const prevPrice=prev.price||0;
-    const curPrice=cur.price||0;
-    const pricePct=(prevPrice>0&&curPrice>0)?(curPrice-prevPrice)/prevPrice*100:chgPct;
-
-    if(pricePct>=RISE_THRESH){
-      alerts.push({name,type:'rise',chgPct:pricePct,chgAmt,curAmount:cur.amount,prevAmount:prev.amount,cat:cur.cat});
-    }else if(pricePct<=DROP_THRESH){
-      alerts.push({name,type:'drop',chgPct:pricePct,chgAmt,curAmount:cur.amount,prevAmount:prev.amount,cat:cur.cat});
+  // ── 判定①: amAccounts の現在株価 vs 取得単価 ──
+  (amAccounts||[]).filter(a=>!a.sold&&STOCK_CATS.includes(a.cat)&&a.costPrice>0).forEach(a=>{
+    const price=a.price||0;
+    const cost=a.costPrice||0;
+    if(price<=0||cost<=0)return;
+    const pct=(price-cost)/cost*100;
+    if(pct>=RISE_THRESH||pct<=DROP_THRESH){
+      const gain=(price-cost)*(a.shares||1);
+      // 前回スナップショットとの差分も計算
+      let snapChgPct=null,snapChgAmt=null,prevDate=null;
+      if(filtered&&filtered.length>=2){
+        const withAcc=filtered.filter(s=>s.accounts&&s.accounts.length>0);
+        if(withAcc.length>=2){
+          const prev=withAcc[withAcc.length-2];
+          const prevAcc=prev.accounts.find(ac=>ac.name===a.name);
+          if(prevAcc&&prevAcc.amount>0&&a.amount>0){
+            snapChgAmt=a.amount-prevAcc.amount;
+            snapChgPct=snapChgAmt/prevAcc.amount*100;
+            prevDate=prev.date;
+          }
+        }
+      }
+      alerts.push({
+        name:a.name,cat:a.cat,
+        type:pct>=RISE_THRESH?'rise':'drop',
+        pct,                          // 取得単価比
+        gain,                         // 含み益
+        curPrice:price,prevPrice:cost,
+        snapChgPct,snapChgAmt,prevDate,// スナップショット比（nullの場合は非表示）
+        amount:a.amount,shares:a.shares||0
+      });
     }
   });
 
   if(!alerts.length){
     card.style.display='none';
+    if(badgeEl)badgeEl.textContent='';
     return;
   }
 
-  // 変動率順にソート（大きい順）
-  alerts.sort((a,b)=>Math.abs(b.chgPct)-Math.abs(a.chgPct));
-
+  alerts.sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct));
   const rises=alerts.filter(a=>a.type==='rise');
   const drops=alerts.filter(a=>a.type==='drop');
 
   if(badgeEl)badgeEl.textContent=alerts.length+'件';
+  card.style.display='block';
 
-  const prevDateStr=prevSnap?prevSnap.date:'前回';
-  const latestDateStr=latestSnap.date;
+  const renderItem=(a,isRise)=>{
+    const col=isRise?'var(--green)':'var(--danger)';
+    const bg=isRise?'rgba(15,110,86,0.07)':'rgba(192,57,43,0.07)';
+    const border=isRise?'rgba(15,110,86,0.25)':'rgba(192,57,43,0.25)';
+    const icon=isRise?'🎯':'⚠️';
+    const s=a.pct>=0?'+':'';
+    const gainS=a.gain>=0?'+':'';
+    // スナップショット比（前回CSV記録からの変動）
+    const snapRow=a.snapChgPct!==null
+      ?`<span style="font-size:10px;color:var(--text3)">前回記録(${a.prevDate})比: <b style="color:${Math.abs(a.snapChgPct)>=5?(a.snapChgPct>=0?'var(--green)':'var(--danger)'):'var(--text2)'}">${a.snapChgPct>=0?'+':''}${a.snapChgPct.toFixed(1)}%（${a.snapChgAmt>=0?'+':''}${Math.round(a.snapChgAmt).toLocaleString()}円）</b></span>`
+      :'';
+    return`<div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+      <div style="font-size:22px;flex-shrink:0">${icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(a.name)} <span style="font-size:10px;font-weight:500;color:var(--text3)">${esc(a.cat)}</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          取得単価 ${a.prevPrice.toLocaleString()}円 → 現在 ${a.curPrice.toLocaleString()}円
+        </div>
+        ${snapRow?'<div style="margin-top:3px">'+snapRow+'</div>':''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:18px;font-weight:800;color:${col}">${s}${a.pct.toFixed(1)}%</div>
+        <div style="font-size:11px;color:${col};margin-top:1px">${gainS}${Math.round(a.gain).toLocaleString()}円</div>
+      </div>
+    </div>`;
+  };
 
   listEl.innerHTML=
-    // 上昇アラート
-    (rises.length?`<div style="font-size:11px;font-weight:700;color:var(--green);padding:4px 4px 2px;letter-spacing:0.05em">🎯 目標到達候補（+${RISE_THRESH}%以上上昇）</div>`:'')
-    +rises.map(a=>{
-      const s=a.chgPct>=0?'+':'';
-      return`<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(15,110,86,0.07);border:1px solid rgba(15,110,86,0.2);border-radius:10px;padding:10px 14px;gap:8px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(a.name)}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(a.cat)} ／ ${prevDateStr} → ${latestDateStr}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:16px;font-weight:800;color:var(--green)">${s}${a.chgPct.toFixed(1)}%</div>
-          <div style="font-size:11px;color:var(--green)">${s}${Math.round(a.chgAmt).toLocaleString()}円</div>
-        </div>
-        <div style="font-size:20px">🎯</div>
-      </div>`;
-    }).join('')
-    // 下落アラート
-    +(drops.length?`<div style="font-size:11px;font-weight:700;color:var(--danger);padding:8px 4px 2px;letter-spacing:0.05em">⚠️ 下落アラート（${DROP_THRESH}%以下下落）</div>`:'')
-    +drops.map(a=>{
-      const s=a.chgPct>=0?'+':'';
-      return`<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:10px;padding:10px 14px;gap:8px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(a.name)}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(a.cat)} ／ ${prevDateStr} → ${latestDateStr}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:16px;font-weight:800;color:var(--danger)">${s}${a.chgPct.toFixed(1)}%</div>
-          <div style="font-size:11px;color:var(--danger)">${s}${Math.round(a.chgAmt).toLocaleString()}円</div>
-        </div>
-        <div style="font-size:20px">⚠️</div>
-      </div>`;
-    }).join('');
-
-  card.style.display='block';
+    (rises.length?`<div style="font-size:11px;font-weight:700;color:var(--green);padding:4px 2px 4px;letter-spacing:0.05em">🎯 目標到達候補 取得単価比 +${RISE_THRESH}%以上</div>`:'')
+    +rises.map(a=>renderItem(a,true)).join('')
+    +(drops.length?`<div style="font-size:11px;font-weight:700;color:var(--danger);padding:10px 2px 4px;letter-spacing:0.05em">⚠️ 下落アラート 取得単価比 ${DROP_THRESH}%以下</div>`:'')
+    +drops.map(a=>renderItem(a,false)).join('');
 }
 
 function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
