@@ -223,7 +223,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .file-item .fname{font-weight:500}
 .file-item .fmeta{font-size:11px;color:var(--text3);margin-top:2px}
 .file-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px 8px;line-height:1}
-.tr-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.tr-summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:680px){.tr-summary-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:420px){.tr-summary-grid{grid-template-columns:repeat(2,1fr)}}
 .filter-bar{display:flex;gap:6px;margin-bottom:10px}
 .filter-btn{background:var(--bg);border:0.5px solid var(--border2);border-radius:16px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text2);font-family:inherit}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -799,7 +801,16 @@ tr:last-child td{border-bottom:none}
     </div>
     <!-- 総資産推移グラフ（短期確認用） -->
     <div class="card" id="lineCard" style="display:none">
-      <div class="card-head"><h2>📈 総資産推移</h2></div>
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h2>📈 総資産推移</h2>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
+          <span style="color:var(--text3)">🎯 目標</span>
+          <input type="range" id="lineYieldSlider" min="1" max="15" value="7" step="0.5"
+            style="width:70px;accent-color:#EF9F27"
+            oninput="const v=this.value;document.getElementById('lineYieldVal').textContent=v+'%';document.getElementById('yieldSlider').value=v;document.getElementById('yieldVal').textContent=v+'%';trRenderCharts()">
+          <span id="lineYieldVal" style="min-width:28px;font-weight:700;color:#EF9F27">7%</span>
+        </div>
+      </div>
       <div class="chart-container"><canvas id="lineChart"></canvas></div>
     </div>
     <!-- 総資産シミュレーション -->
@@ -810,7 +821,7 @@ tr:last-child td{border-bottom:none}
           <span>目標利回り</span>
           <input type="range" id="yieldSlider" min="1" max="15" value="7" step="0.5"
             style="width:80px;accent-color:var(--amber)"
-            oninput="document.getElementById('yieldVal').textContent=this.value+'%';trRenderCharts()">
+            oninput="document.getElementById('yieldVal').textContent=this.value+'%';const ls=document.getElementById('lineYieldSlider');const lv=document.getElementById('lineYieldVal');if(ls){ls.value=this.value;}if(lv){lv.textContent=this.value+'%';}trRenderCharts()">
           <span id="yieldVal" style="min-width:32px;font-weight:600;color:var(--amber)">7%</span>
         </div>
       </div>
@@ -4704,7 +4715,58 @@ function trRenderSummary(){
   const diff=latest.total-first.total,diffPct=first.total>0?diff/first.total*100:0;
   const prev=filtered.length>=2?filtered[filtered.length-2]:null;
   const monthDiff=prev?latest.total-prev.total:null;
-  document.getElementById('trSummaryGrid').innerHTML=`<div class="metric"><div class="label">現在の総資産</div><div class="value">${trFmt(latest.total)}</div><div class="sub">${latest.date}</div></div><div class="metric"><div class="label">期間増減</div><div class="value ${diff>=0?'up':'down'}">${trFmtDiff(diff)}</div><div class="sub ${diff>=0?'up':'down'}">${diff>=0?'＋':''}${diffPct.toFixed(1)}%</div></div><div class="metric"><div class="label">前回比</div><div class="value ${monthDiff===null?'':monthDiff>=0?'up':'down'}">${monthDiff===null?'—':trFmtDiff(monthDiff)}</div><div class="sub">${prev?prev.date:'—'}</div></div>`;
+
+  // ── 含み益・確定損益を amAccounts から計算 ──
+  const UNIT_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
+  const BALANCE_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
+  let unrealizedGain=0,unrealizedCost=0;
+  let confirmedGain=0,confirmedCost=0;
+  if(typeof amAccounts!=='undefined'&&amAccounts.length){
+    amAccounts.forEach(a=>{
+      const isUnitBased=UNIT_CATS.includes(a.cat)&&!BALANCE_PAT.test(a.name||'');
+      if(a.sold){
+        // 確定損益
+        const cTotal=a.shares>0&&a.costPrice>0?a.shares*a.costPrice:(a.costPrice||0);
+        const sTotal=a.soldAmount||0;
+        if(cTotal>0&&sTotal>0){confirmedGain+=sTotal-cTotal;confirmedCost+=cTotal;}
+      }else if(a.costPrice>0){
+        // 含み損益
+        const cTotal=isUnitBased&&a.shares>0?a.shares*a.costPrice:a.costPrice;
+        const eTotal=a.amount||0;
+        if(eTotal>0&&cTotal>0){
+          // 異常値除外（取得コストの100倍超 or 1%未満）
+          const ratio=eTotal/cTotal;
+          if(ratio>=0.01&&ratio<=100){unrealizedGain+=eTotal-cTotal;unrealizedCost+=cTotal;}
+        }
+      }
+    });
+  }
+  const unrealizedPct=unrealizedCost>0?unrealizedGain/unrealizedCost*100:null;
+  const confirmedPct=confirmedCost>0?confirmedGain/confirmedCost*100:null;
+  const fmtGain=(gain,pct,noData)=>{
+    if(noData)return{val:'—',sub:'取得価格を入力',col:'var(--text3)',sign:''};
+    const sign=gain>=0?'+':'';
+    const col=gain>=0?'var(--green)':'var(--danger)';
+    const pctTxt=pct!==null?`${sign}${pct.toFixed(1)}%`:'';
+    return{val:sign+trFmt(Math.round(gain)),sub:pctTxt,col,sign};
+  };
+  const ug=fmtGain(unrealizedGain,unrealizedPct,unrealizedCost===0);
+  const cg=fmtGain(confirmedGain,confirmedPct,confirmedCost===0&&confirmedGain===0);
+  const totalGain=unrealizedGain+confirmedGain;
+  const totalCost=unrealizedCost+confirmedCost;
+  const tg=fmtGain(totalGain,totalCost>0?totalGain/totalCost*100:null,unrealizedCost===0&&confirmedCost===0);
+
+  document.getElementById('trSummaryGrid').innerHTML=
+    // 1: 総資産
+    `<div class="metric"><div class="label">現在の総資産</div><div class="value">${trFmt(latest.total)}</div><div class="sub">${latest.date}</div></div>`
+    // 2: 含み益
+    +`<div class="metric"><div class="label">現在の含み益</div><div class="value" style="color:${ug.col};font-size:15px">${ug.val}</div><div class="sub" style="color:${ug.col}">${ug.sub}</div></div>`
+    // 3: 確定損益（売却済み）
+    +`<div class="metric"><div class="label">確定損益</div><div class="value" style="color:${cg.col};font-size:15px">${cg.val}</div><div class="sub" style="color:${cg.col}">${cg.sub||'売却済みなし'}</div></div>`
+    // 4: 期間増減
+    +`<div class="metric"><div class="label">期間増減</div><div class="value ${diff>=0?'up':'down'}">${trFmtDiff(diff)}</div><div class="sub ${diff>=0?'up':'down'}">${diff>=0?'＋':''}${diffPct.toFixed(1)}%</div></div>`
+    // 5: 前回比
+    +`<div class="metric"><div class="label">前回比</div><div class="value ${monthDiff===null?'':monthDiff>=0?'up':'down'}">${monthDiff===null?'—':trFmtDiff(monthDiff)}</div><div class="sub">${prev?prev.date:'—'}</div></div>`;
 }
 function trDestroyChart(key){if(chartInstances[key]){chartInstances[key].destroy();chartInstances[key]=null;}}
 let _simHorizon=1;
@@ -4725,15 +4787,62 @@ function trRenderCharts(){
   const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
   const tickColor=isDark?'#636366':'#9b9b97';
 
-  // ── 総資産推移グラフ（短期確認用・シンプル） ──
+  // ── 総資産推移グラフ（短期確認用・目標利回りライン追加） ──
   trDestroyChart('line');
+  // 目標利回りライン（シミュレーションと同じ計算）
+  const yieldRateForLine=(parseFloat(document.getElementById('yieldSlider')?.value)||7)/100;
+  const baseForLine=totals[0];
+  const baseDateForLine=new Date(labels[0]);
+  const targetLine=labels.map(label=>{
+    const d=new Date(label);
+    const years=(d-baseDateForLine)/(1000*60*60*24*365.25);
+    return Math.round(baseForLine*Math.pow(1+yieldRateForLine,years));
+  });
+  const yieldPctLabel=(parseFloat(document.getElementById('yieldSlider')?.value)||7)+'%';
   chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[
-    {label:'実績',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#185FA5',fill:true,tension:0.3}
+    {label:'実績',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#185FA5',fill:true,tension:0.3,order:1},
+    {label:'目標利回り '+yieldPctLabel,data:targetLine,borderColor:'#EF9F27',backgroundColor:'transparent',borderWidth:1.8,borderDash:[5,4],pointRadius:0,fill:false,tension:0.3,order:2}
   ]},options:{responsive:true,plugins:{
-    legend:{display:false},
-    tooltip:{callbacks:{label:ctx=>trFmt(ctx.raw)}},
+    legend:{display:true,position:'top',align:'end',labels:{font:{size:11},padding:12,boxWidth:20,usePointStyle:true,pointStyle:'line'}},
+    tooltip:{callbacks:{
+      label:ctx=>{
+        const prefix=ctx.datasetIndex===1?'🎯 ':'📊 ';
+        return prefix+ctx.dataset.label+': '+trFmt(ctx.raw);
+      },
+      afterBody:items=>{
+        if(items.length<2)return[];
+        const actual=items.find(i=>i.datasetIndex===0);
+        const target=items.find(i=>i.datasetIndex===1);
+        if(!actual||!target)return[];
+        const diff=actual.raw-target.raw;
+        const sign=diff>=0?'+':'';
+        return[`差分: ${sign}${Math.round(diff/10000).toLocaleString()}万円 ${diff>=0?'↑目標超過':'↓目標未達'}`];
+      }
+    },backgroundColor:'rgba(0,0,0,0.8)',padding:10,cornerRadius:8},
     datalabels:{display:false}
-  },scales:{y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  },scales:{
+    y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
+    x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}
+  },layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
+  // グラフ直下に差分サマリーを表示
+  const lineLatest=totals[totals.length-1];
+  const lineTarget=targetLine[targetLine.length-1];
+  const lineDiff=lineLatest-lineTarget;
+  const lineCard=document.getElementById('lineCard');
+  let lineSummaryEl=document.getElementById('lineSummary');
+  if(!lineSummaryEl){
+    lineSummaryEl=document.createElement('div');
+    lineSummaryEl.id='lineSummary';
+    lineSummaryEl.style.cssText='padding:4px 16px 10px;font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+    lineCard.querySelector('.chart-container').after(lineSummaryEl);
+  }
+  const ldSign=lineDiff>=0?'+':'';
+  const ldCol=lineDiff>=0?'var(--green)':'var(--danger)';
+  lineSummaryEl.innerHTML=
+    `<span style="color:var(--text3)">基準日 ${labels[0]} 〜 ${labels[labels.length-1]}</span>`
+    +`<span style="padding:2px 8px;border-radius:10px;background:${lineDiff>=0?'rgba(15,110,86,0.1)':'rgba(192,57,43,0.1)'};color:${ldCol};font-weight:600">`
+    +`${lineDiff>=0?'📈 目標超過':'📉 目標未達'} ${ldSign}${Math.round(lineDiff/10000).toLocaleString()}万円</span>`;
+
 
   // ── シミュレーション用のCAGR計算 ──
   const yieldRate=(parseFloat(document.getElementById('yieldSlider')?document.getElementById('yieldSlider').value:7)||7)/100;
