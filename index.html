@@ -644,6 +644,7 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="page-inner" id="managerMain" style="display:none">
     <div id="reminderBanner"></div>
+    <div id="soldSummaryBanner"></div>
     <div id="totalCard"></div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div class="export-bar">
@@ -654,7 +655,7 @@ tr:last-child td{border-bottom:none}
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
       <button class="btn-sm" onclick="amFixFundUnits()" style="color:#e24b4a;border-color:#e24b4a" title="投資信託の数量(口数)を万口単位に補正">🔧 投信数量修正</button>
-      <button class="btn-sm" onclick="amCheckAnomalies()" style="color:#854F0B;border-color:#854F0B" title="評価額と取得単価のバランスがおかしい口座を検出">⚠️ 異常値チェック</button>
+      <button class="btn-sm" onclick="amToggleSoldView()" id="btnSoldToggle" style="color:var(--text3);border-color:var(--text3)">🏷 売却済を表示</button>
       <button class="btn-sm" onclick="amMigrateConfirmedContribution()" style="color:#0F6E56;border-color:#0F6E56" title="確定拠出年金口座を残高入力方式に変換">🔄 DC年金データ移行</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
@@ -667,7 +668,37 @@ tr:last-child td{border-bottom:none}
       <div class="account-list"><div class="chart-wrap"><div class="bar-chart" id="amBarChart"></div></div></div>
     </div>
     <div id="accountSections"></div>
+    <div id="soldAccountSections" style="display:none"></div>
   </div>
+
+<!-- 売却済みマークモーダル -->
+<div id="amSoldModalBg" class="sheet-bg" onclick="if(event.target===this)amCloseSoldModal()">
+  <div class="sheet-panel" style="max-height:90vh;overflow-y:auto">
+    <div class="sheet-header">
+      <h2 id="amSoldModalTitle" style="font-size:16px;font-weight:700">売却済みにする</h2>
+      <button class="sheet-close" onclick="amCloseSoldModal()">✕</button>
+    </div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div id="amSoldModalName" style="font-size:14px;font-weight:600;color:var(--text);background:var(--bg2);padding:10px 12px;border-radius:8px"></div>
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却単価（円）</label>
+        <input id="amSoldPrice" type="number" inputmode="decimal" placeholder="例: 2500" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box" oninput="amCalcSoldGain()">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却日</label>
+        <input id="amSoldDate" type="date" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+      </div>
+      <div id="amSoldGainPreview" style="min-height:40px"></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px;border:1px solid var(--border2);font-size:12px;color:var(--text3)">
+        💡 売却済みにすると評価額の合計から除外されますが、<strong style="color:var(--text2)">確定損益として記録が残ります</strong>。後から「保有中」に戻すこともできます。
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="amCloseSoldModal()" style="flex:1;padding:12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">キャンセル</button>
+        <button onclick="amConfirmSold()" style="flex:2;padding:12px;border:none;border-radius:var(--radius);background:#C0392B;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">✅ 売却済みにする</button>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- ========== PORTFOLIO ========== -->
@@ -2013,124 +2044,319 @@ function amRenderReminder(){
   el.innerHTML=stale.length?`<div class="reminder-banner"><span class="reminder-icon">🔔</span><div><div class="reminder-title">残高の更新をお忘れなく！</div><div class="reminder-text">${stale.map(a=>a.name+'（'+daysSince(a.updated)+'日未更新）').join('<br>')}</div></div></div>`:'';
 }
 function amRender(){
-  const total=amAccounts.reduce((s,a)=>s+a.amount,0);
-  const cats={};amAccounts.forEach(a=>{cats[a.cat]=(cats[a.cat]||0)+a.amount;});
+  // 売却済みと保有中を分離
+  const activeAccounts=amAccounts.filter(a=>!a.sold);
+  const soldAccounts=amAccounts.filter(a=>a.sold);
+
+  const total=activeAccounts.reduce((s,a)=>s+a.amount,0);
+  const cats={};activeAccounts.forEach(a=>{cats[a.cat]=(cats[a.cat]||0)+a.amount;});
   amRenderReminder();
-  document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産</div><div class="value">${fmt(total)}</div><div class="sub">${amAccounts.length}口座</div></div>`;
+
+  // 確定損益バナー
+  amRenderSoldBanner(soldAccounts);
+
+  document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}口座${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
   const maxAmt=Math.max(...Object.values(cats),1);
   document.getElementById('amBarChart').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`<div class="bar-row"><span class="bar-label">${cat}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(amt/maxAmt*100)}%;background:${AM_CAT_COLORS[cat]||'#888'}"></div></div><span class="bar-val">${fmt(amt)}</span></div>`).join('')||'<p style="text-align:center;color:var(--text3);font-size:13px">口座を追加してください</p>';
-  const catGroups={};amAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
+  const catGroups={};activeAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
   const CAT_ORDER=['銀行','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','外国株式','年金','その他'];
   const sortedCatEntries=[...CAT_ORDER.filter(c=>catGroups[c]),...Object.keys(catGroups).filter(c=>!CAT_ORDER.includes(c))].map(c=>[c,catGroups[c]]);
   document.getElementById('accountSections').innerHTML=sortedCatEntries.map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
-    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>{
-      const stale=daysSince(a.updated)>=30;
-      const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
-      const isStock=a.cat==='個別株'||a.cat==='高配当';
-      const isForeignStock=a.cat==='外国株式';
-      const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
-      const hasSBICode=(isStock||isForeignStock)&&!!(a.code&&a.code.length>0);
-      const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
-      const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
-      // 数量×単価＝評価額 表示の対象: 個別株・高配当・外国株式・インデックス投信（PayPay系・確定拠出年金除く）
-      const isUnitBased=isStock||isForeignStock||(isIndexFund&&!isPayPay);
-      // SBI以外の証券会社・サービス保有は手動扱い
-      const NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
-      const isNonSBI=NON_SBI_PAT.test(a.name)||NON_SBI_PAT.test(a.note||'');
-      // SBI自動更新対象: SBI保有のインデックス投信 or SBI保有のコード設定済み株式（外国株含む）
-      const isSBIAuto=(isIndexFund||hasSBICode)&&!isNonSBI;
-      const needsManual=!isSBIAuto;
-      const sharesVal=a.shares||'';
-      const priceVal=a.price||'';
-      const amountVal=a.amount||'';
-      const fxRateVal=a.fxRate||amGetFxRate()||145;
-      const calcVal=isForeignStock&&a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price*fxRateVal)):(!isForeignStock&&a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price)):'');
-      const noteHtml=a.note?'<div class="acct-note">'+esc(a.note)+'</div>':'';
-      const codeInput=(isStock||isForeignStock)
-        ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'
-         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isForeignStock?'ティッカー':'銘柄コード')+'</span>'
-         +'<input id="il-code-'+a.id+'" type="text" inputmode="'+(isForeignStock?'text':'numeric')+'" value="'+esc(a.code||'')+'" placeholder="'+(isForeignStock?'例:AAPL':'例:4063')+'" maxlength="10"'
-         +' style="width:'+(isForeignStock?'80px':'70px')+';padding:4px 8px;font-size:13px;border:1px solid var(--accent);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;letter-spacing:0.05em"'
-         +' title="SBI CSV照合用コード">'
-         +(hasSBICode?'':'<span style="font-size:10px;color:var(--accent);font-weight:600;margin-left:4px">← 入力でSBI自動更新</span>')
-         +'</div>'
-        :'';
-      // 手動更新が必要な口座は評価額テキストを落とす（ボタンは常に青）
-      const amountColor='var(--text)';
-      const updateBtnStyle='padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap';
-      const updateBtnLabel=needsManual?'✏️ 手動更新':'更新';
-      const unitLabel=isStock||isForeignStock?'株数':'数量';
-      const priceLabel=isForeignStock?'株価(USD)':isStock?'株価':'単価';
-      const onInput=isForeignStock?'amInlineCalcFx('+a.id+')':'amInlineCalc('+a.id+')';
-      const onSave=isForeignStock?'amInlineSaveFx('+a.id+')':'amInlineSave('+a.id+')';
-      const fxInput=isForeignStock
-        ?'<div style="display:flex;align-items:center;gap:4px;margin-top:6px;flex-wrap:wrap">'
-         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">為替</span>'
-         +'<input id="il-fx-'+a.id+'" type="number" inputmode="decimal" step="0.1" value="'+fxRateVal+'" placeholder="例:150" oninput="'+onInput+'" style="width:72px;padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
-         +'<span style="font-size:11px;color:var(--text3)">円/USD</span>'
-         +'</div>'
-        :'';
-      const stockInputs=isUnitBased
-        ?'<input id="il-shares-'+a.id+'" type="number" inputmode="numeric" value="'+sharesVal+'" placeholder="'+unitLabel+'" oninput="'+onInput+'" style="width:80px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
-         +'<span style="color:var(--text3);font-size:13px">×</span>'
-         +'<input id="il-price-'+a.id+'" type="number" inputmode="numeric" value="'+priceVal+'" placeholder="'+priceLabel+'" oninput="'+onInput+'" style="width:95px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
-         +(isForeignStock?'<span style="color:var(--text3);font-size:11px">USD</span>':'')
-         +'<span style="color:var(--text3);font-size:13px">=</span>'
-         +'<span id="il-calc-'+a.id+'" style="font-size:13px;font-weight:600;color:var(--green)">'+calcVal+'</span>'
-        :'<input id="il-amount-'+a.id+'" type="number" inputmode="numeric" value="'+amountVal+'" placeholder="残高（円）" oninput="'+onInput+'" style="width:140px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">';
-      // 取得価格・取得株価 入力欄＋損益表示（個別株/高配当/外国株式/インデックスのみ）
-      const costVal=a.costPrice||'';
-      const initGainHtml=(()=>{
-        if(isForeignStock&&a.shares>0&&a.price>0&&a.costPrice>0){
-          return amGainHtml((a.price-a.costPrice)*a.shares*fxRateVal,(a.price-a.costPrice)/a.costPrice*100);
-        }
-        if(isUnitBased&&a.shares>0&&a.price>0&&a.costPrice>0){
-          return amGainHtml((a.price-a.costPrice)*a.shares,(a.price-a.costPrice)/a.costPrice*100);
-        }
-        if(!isUnitBased&&isIndexFund&&a.amount>0&&a.costPrice>0){
-          return amGainHtml(a.amount-a.costPrice,(a.amount-a.costPrice)/a.costPrice*100);
-        }
-        return'';
-      })();
-      const costInput=(isStock||isForeignStock||isIndexFund)
-        ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'
-         +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isForeignStock?'取得株価(USD)':(isUnitBased?'取得単価':'取得価格'))+'</span>'
-         +'<input id="il-cost-'+a.id+'" type="number" inputmode="numeric" value="'+costVal+'" placeholder="'+(isForeignStock?'例:180.5':(isUnitBased?(isStock?'例:1500':'例:18000'):'例:1000000'))+'" oninput="'+onInput+'" style="width:'+(isUnitBased?'90px':'120px')+';padding:5px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
-         +'<span style="font-size:11px;color:var(--text3)">'+(isForeignStock?'USD/株':(isUnitBased?'円/'+(isStock?'株':'単位'):'円'))+'</span>'
-         +'<span id="il-gain-'+a.id+'">'+initGainHtml+'</span>'
-         +'</div>'
-        :'';
-      const html=''
-        +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
-          +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
-            +'<div style="flex:1;min-width:0">'
-              +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+'</div>'
-              +noteHtml
-              +codeInput
-              +fxInput
-              +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
-                +stockInputs
-                +'<button onclick="'+onSave+'" style="'+updateBtnStyle+'">'+updateBtnLabel+'</button>'
-              +'</div>'
-              +costInput
-            +'</div>'
-            +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
-              +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
-              +staleHtml
-              +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
-              +'<div style="display:flex;gap:3px;margin-bottom:2px">'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',-1)" title="上に移動" style="padding:4px 7px;font-size:12px">▲</button>'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',1)" title="下に移動" style="padding:4px 7px;font-size:12px">▼</button>'+'</div>'+'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
-            +'</div>'
-          +'</div>'
-        +'</div>';
-      return html;
-    }).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
+    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>amRenderCard(a)).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
   }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
+
+  // 売却済みセクション
+  amRenderSoldSection(soldAccounts);
+
   // PFパネルが表示中なら現状配分グラフも自動更新
   if(currentTab==='portfolio'&&typeof pfRenderDonutCharts==='function'){
     try{pfRenderDonutCharts();}catch(e){}
   }
+}
+// ── 口座カード1件レンダリング（保有中・売却済み共通） ──
+function amRenderCard(a){
+  const stale=!a.sold&&daysSince(a.updated)>=30;
+  const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
+  const isStock=a.cat==='個別株'||a.cat==='高配当';
+  const isForeignStock=a.cat==='外国株式';
+  const isIndexFund=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+  const hasSBICode=(isStock||isForeignStock)&&!!(a.code&&a.code.length>0);
+  const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
+  const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
+  const isUnitBased=isStock||isForeignStock||(isIndexFund&&!isPayPay);
+  const NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
+  const isNonSBI=NON_SBI_PAT.test(a.name)||NON_SBI_PAT.test(a.note||'');
+  const isSBIAuto=(isIndexFund||hasSBICode)&&!isNonSBI;
+  const needsManual=!isSBIAuto;
+  const sharesVal=a.shares||'';
+  const priceVal=a.sold?'':a.price||'';
+  const amountVal=a.amount||'';
+  const fxRateVal=a.fxRate||amGetFxRate()||145;
+  const calcVal=isForeignStock&&a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price*fxRateVal)):(!isForeignStock&&a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price)):'');
+  const noteHtml=a.note?'<div class="acct-note">'+esc(a.note)+'</div>':'';
+
+  // 売却済みカードは簡略表示
+  if(a.sold){
+    const costTotal=a.shares>0&&a.costPrice>0?a.shares*a.costPrice:(a.costPrice||0);
+    const soldTotal=a.soldAmount||0;
+    const confirmedGain=soldTotal-costTotal;
+    const confirmedPct=costTotal>0?confirmedGain/costTotal*100:0;
+    const gSign=confirmedGain>=0?'+':'';
+    const gCol=confirmedGain>=0?'var(--green)':'var(--danger)';
+    const soldDateStr=a.soldDate||'';
+    return'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border);opacity:0.75">'
+      +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+            +'<span class="acct-name" style="color:var(--text2)">'+esc(a.name)+'</span>'
+            +'<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:#C0392B20;color:#C0392B;border:1px solid #C0392B40">売却済</span>'
+          +'</div>'
+          +(soldDateStr?'<div style="font-size:11px;color:var(--text3);margin-top:3px">売却日: '+esc(soldDateStr)+'</div>':'')
+          +(a.note?'<div class="acct-note">'+esc(a.note)+'</div>':'')
+          +'<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--text3)">'
+            +(costTotal>0?'<span>取得額 '+fmt(Math.round(costTotal))+'</span>':'')
+            +(soldTotal>0?'<span>売却額 '+fmt(soldTotal)+'</span>':'')
+          +'</div>'
+          +(costTotal>0&&soldTotal>0?'<div style="margin-top:4px"><span style="font-size:13px;font-weight:700;color:'+gCol+'">確定損益 '+gSign+fmt(Math.round(confirmedGain))
+            +'<span style="font-size:11px;margin-left:4px">('+gSign+confirmedPct.toFixed(1)+'%)</span></span></div>':'')
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+          +'<button class="icon-btn" onclick="amReviveSold('+a.id+')" style="font-size:11px;padding:4px 8px;color:var(--accent);border-color:var(--accent)">↩ 保有中に戻す</button>'
+          +'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')" style="font-size:11px;padding:4px 8px">削除</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }
+
+  const codeInput=(isStock||isForeignStock)
+    ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'
+     +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isForeignStock?'ティッカー':'銘柄コード')+'</span>'
+     +'<input id="il-code-'+a.id+'" type="text" inputmode="'+(isForeignStock?'text':'numeric')+'" value="'+esc(a.code||'')+'" placeholder="'+(isForeignStock?'例:AAPL':'例:4063')+'" maxlength="10"'
+     +' style="width:'+(isForeignStock?'80px':'70px')+';padding:4px 8px;font-size:13px;border:1px solid var(--accent);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;letter-spacing:0.05em"'
+     +' title="SBI CSV照合用コード">'
+     +(hasSBICode?'':'<span style="font-size:10px;color:var(--accent);font-weight:600;margin-left:4px">← 入力でSBI自動更新</span>')
+     +'</div>'
+    :'';
+  const amountColor='var(--text)';
+  const updateBtnStyle='padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap';
+  const updateBtnLabel=needsManual?'✏️ 手動更新':'更新';
+  const unitLabel=isStock||isForeignStock?'株数':'数量';
+  const priceLabel=isForeignStock?'株価(USD)':isStock?'株価':'単価';
+  const onInput=isForeignStock?'amInlineCalcFx('+a.id+')':'amInlineCalc('+a.id+')';
+  const onSave=isForeignStock?'amInlineSaveFx('+a.id+')':'amInlineSave('+a.id+')';
+  const fxInput=isForeignStock
+    ?'<div style="display:flex;align-items:center;gap:4px;margin-top:6px;flex-wrap:wrap">'
+     +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">為替</span>'
+     +'<input id="il-fx-'+a.id+'" type="number" inputmode="decimal" step="0.1" value="'+fxRateVal+'" placeholder="例:150" oninput="'+onInput+'" style="width:72px;padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+     +'<span style="font-size:11px;color:var(--text3)">円/USD</span>'
+     +'</div>'
+    :'';
+  const stockInputs=isUnitBased
+    ?'<input id="il-shares-'+a.id+'" type="number" inputmode="numeric" value="'+sharesVal+'" placeholder="'+unitLabel+'" oninput="'+onInput+'" style="width:80px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+     +'<span style="color:var(--text3);font-size:13px">×</span>'
+     +'<input id="il-price-'+a.id+'" type="number" inputmode="numeric" value="'+priceVal+'" placeholder="'+priceLabel+'" oninput="'+onInput+'" style="width:95px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+     +(isForeignStock?'<span style="color:var(--text3);font-size:11px">USD</span>':'')
+     +'<span style="color:var(--text3);font-size:13px">=</span>'
+     +'<span id="il-calc-'+a.id+'" style="font-size:13px;font-weight:600;color:var(--green)">'+calcVal+'</span>'
+    :'<input id="il-amount-'+a.id+'" type="number" inputmode="numeric" value="'+amountVal+'" placeholder="残高（円）" oninput="'+onInput+'" style="width:140px;padding:6px 8px;font-size:14px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">';
+  const costVal=a.costPrice||'';
+  const initGainHtml=(()=>{
+    if(isForeignStock&&a.shares>0&&a.price>0&&a.costPrice>0){
+      return amGainHtml((a.price-a.costPrice)*a.shares*fxRateVal,(a.price-a.costPrice)/a.costPrice*100);
+    }
+    if(isUnitBased&&a.shares>0&&a.price>0&&a.costPrice>0){
+      return amGainHtml((a.price-a.costPrice)*a.shares,(a.price-a.costPrice)/a.costPrice*100);
+    }
+    if(!isUnitBased&&isIndexFund&&a.amount>0&&a.costPrice>0){
+      return amGainHtml(a.amount-a.costPrice,(a.amount-a.costPrice)/a.costPrice*100);
+    }
+    return'';
+  })();
+  const costInput=(isStock||isForeignStock||isIndexFund)
+    ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'
+     +'<span style="font-size:11px;color:var(--text3);white-space:nowrap">'+(isForeignStock?'取得株価(USD)':(isUnitBased?'取得単価':'取得価格'))+'</span>'
+     +'<input id="il-cost-'+a.id+'" type="number" inputmode="numeric" value="'+costVal+'" placeholder="'+(isForeignStock?'例:180.5':(isUnitBased?(isStock?'例:1500':'例:18000'):'例:1000000'))+'" oninput="'+onInput+'" style="width:'+(isUnitBased?'90px':'120px')+';padding:5px 8px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none">'
+     +'<span style="font-size:11px;color:var(--text3)">'+(isForeignStock?'USD/株':(isUnitBased?'円/'+(isStock?'株':'単位'):'円'))+'</span>'
+     +'<span id="il-gain-'+a.id+'">'+initGainHtml+'</span>'
+     +'</div>'
+    :'';
+  // 売却ボタン（個別株・高配当・外国株式・インデックス）
+  const canSell=isStock||isForeignStock||isIndexFund;
+  const sellBtn=canSell
+    ?'<button class="icon-btn" onclick="amOpenSoldModal('+a.id+')" style="font-size:11px;padding:4px 8px;color:#C0392B;border-color:#C0392B;white-space:nowrap">💴 売却済み</button>'
+    :'';
+  return''
+    +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
+      +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
+        +'<div style="flex:1;min-width:0">'
+          +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+'</div>'
+          +noteHtml
+          +codeInput
+          +fxInput
+          +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
+            +stockInputs
+            +'<button onclick="'+onSave+'" style="'+updateBtnStyle+'">'+updateBtnLabel+'</button>'
+          +'</div>'
+          +costInput
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+          +'<span class="acct-amount" style="color:'+amountColor+'">'+fmt(a.amount)+'</span>'
+          +staleHtml
+          +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
+          +sellBtn
+          +'<div style="display:flex;gap:3px;margin-bottom:2px">'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',-1)" title="上に移動" style="padding:4px 7px;font-size:12px">▲</button>'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',1)" title="下に移動" style="padding:4px 7px;font-size:12px">▼</button>'+'</div>'+'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+}
+
+// ── 確定損益バナー ──
+function amRenderSoldBanner(soldAccounts){
+  const el=document.getElementById('soldSummaryBanner');
+  if(!el)return;
+  if(!soldAccounts||!soldAccounts.length){el.innerHTML='';return;}
+  let totalConfirmedGain=0,totalCost=0,totalSold=0;
+  soldAccounts.forEach(a=>{
+    const costTotal=a.shares>0&&a.costPrice>0?a.shares*a.costPrice:(a.costPrice||0);
+    const soldTotal=a.soldAmount||0;
+    if(costTotal>0&&soldTotal>0){
+      totalConfirmedGain+=soldTotal-costTotal;
+      totalCost+=costTotal;
+      totalSold+=soldTotal;
+    }
+  });
+  const gSign=totalConfirmedGain>=0?'+':'';
+  const gCol=totalConfirmedGain>=0?'var(--green)':'var(--danger)';
+  const gPct=totalCost>0?totalConfirmedGain/totalCost*100:0;
+  el.innerHTML=`<div style="margin:8px 0;padding:12px 16px;background:${totalConfirmedGain>=0?'#0F6E5610':'#C0392B10'};border:1px solid ${totalConfirmedGain>=0?'#0F6E5630':'#C0392B30'};border-radius:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">🏷 確定損益（売却済み ${soldAccounts.length}件）</div>
+        <div style="font-size:18px;font-weight:700;color:${gCol}">${gSign}${fmt(Math.round(totalConfirmedGain))} <span style="font-size:13px">(${gSign}${gPct.toFixed(1)}%)</span></div>
+      </div>
+      <div style="text-align:right;font-size:12px;color:var(--text3)">
+        <div>取得総額 ${fmt(Math.round(totalCost))}</div>
+        <div>売却総額 ${fmt(Math.round(totalSold))}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 売却済みセクション ──
+let amShowSold=false;
+function amToggleSoldView(){
+  amShowSold=!amShowSold;
+  const btn=document.getElementById('btnSoldToggle');
+  if(btn){
+    btn.textContent=amShowSold?'🏷 売却済みを非表示':'🏷 売却済みを表示';
+    btn.style.color=amShowSold?'#C0392B':'var(--text3)';
+    btn.style.borderColor=amShowSold?'#C0392B':'var(--text3)';
+  }
+  const el=document.getElementById('soldAccountSections');
+  if(el)el.style.display=amShowSold?'block':'none';
+}
+function amRenderSoldSection(soldAccounts){
+  const el=document.getElementById('soldAccountSections');
+  if(!el)return;
+  if(!soldAccounts||!soldAccounts.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="section" id="sec-sold">
+    <div class="section-head" onclick="toggleSection('sec-sold')">
+      <div class="section-head-left"><span style="font-size:16px">🏷</span><h2>売却済み（${soldAccounts.length}件）</h2></div>
+      <span><span class="chevron">▼</span></span>
+    </div>
+    <div class="account-list">${soldAccounts.map(a=>amRenderCard(a)).join('')}</div>
+  </div>`;
+}
+
+// ── 売却済みモーダル ──
+let amSoldTargetId=null;
+function amOpenSoldModal(id){
+  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  amSoldTargetId=id;
+  document.getElementById('amSoldModalName').textContent=a.name;
+  // 取得単価から売却金額の初期値を設定
+  const isUnitBased=a.shares>0&&a.costPrice>0;
+  const priceEl=document.getElementById('amSoldPrice');
+  if(isUnitBased){
+    // デフォルトは空（ユーザーが入力）
+    priceEl.placeholder=`例: ${Math.round((a.price||a.costPrice||0)*1.1)}（現在の株価ベース）`;
+  }else{
+    priceEl.placeholder='例: '+(a.amount||0);
+  }
+  priceEl.value='';
+  document.getElementById('amSoldDate').value=todayStr();
+  document.getElementById('amSoldGainPreview').innerHTML='';
+  document.getElementById('amSoldModalBg').classList.add('open');
+  setTimeout(()=>priceEl.focus(),300);
+}
+function amCloseSoldModal(){
+  document.getElementById('amSoldModalBg').classList.remove('open');
+  amSoldTargetId=null;
+}
+function amCalcSoldGain(){
+  const a=amAccounts.find(x=>x.id===amSoldTargetId);if(!a)return;
+  const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+  if(!priceVal){document.getElementById('amSoldGainPreview').innerHTML='';return;}
+  const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
+  const isUnitBased=a.shares>0&&(isStock||['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat));
+  let soldTotal,costTotal,gain,pct;
+  if(isUnitBased){
+    soldTotal=Math.round(a.shares*priceVal);
+    costTotal=a.shares>0&&a.costPrice>0?Math.round(a.shares*a.costPrice):(a.costPrice||0);
+  }else{
+    soldTotal=Math.round(priceVal);
+    costTotal=a.costPrice||0;
+  }
+  gain=soldTotal-costTotal;
+  pct=costTotal>0?gain/costTotal*100:0;
+  const gSign=gain>=0?'+':'';
+  const gCol=gain>=0?'var(--green)':'var(--danger)';
+  const label=isUnitBased?`${a.shares}株 × ${priceVal}円 = `:'売却金額: ';
+  document.getElementById('amSoldGainPreview').innerHTML=
+    `<div style="background:var(--bg2);border-radius:8px;padding:10px 12px;border:1px solid var(--border2)">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${label}${fmt(soldTotal)}</div>
+      <div style="font-size:14px;font-weight:700;color:${gCol}">確定損益 ${gSign}${fmt(gain)} <span style="font-size:12px">(${gSign}${pct.toFixed(1)}%)</span></div>
+    </div>`;
+}
+async function amConfirmSold(){
+  const a=amAccounts.find(x=>x.id===amSoldTargetId);if(!a)return;
+  const priceVal=parseFloat(document.getElementById('amSoldPrice').value)||0;
+  const dateVal=document.getElementById('amSoldDate').value||todayStr();
+  const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式';
+  const isUnitBased=a.shares>0&&(isStock||['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat));
+  let soldAmount=0;
+  if(priceVal>0){
+    soldAmount=isUnitBased?Math.round(a.shares*priceVal):Math.round(priceVal);
+  }
+  a.sold=true;
+  a.soldDate=dateVal;
+  a.soldAmount=soldAmount||a.amount||0;
+  a.soldPrice=priceVal||0;
+  a.amount=0;// 総資産から除外
+  a.updated=todayStr();
+  amCloseSoldModal();
+  amSaveToLocal();
+  amRender();
+  await amSaveToSheet();
+  refreshHome();
+  showToast('✅ 売却済みとして記録しました');
+  // 売却済みセクションが非表示なら自動で開く
+  if(!amShowSold)amToggleSoldView();
+}
+async function amReviveSold(id){
+  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  if(!confirm(`「${a.name}」を保有中に戻しますか？\n売却情報は消去されます。`))return;
+  a.sold=false;
+  delete a.soldDate;delete a.soldAmount;delete a.soldPrice;
+  a.amount=0;// 手動で評価額を再入力してもらう
+  a.updated=todayStr();
+  amSaveToLocal();
+  amRender();
+  await amSaveToSheet();
+  refreshHome();
+  showToast('↩ 保有中に戻しました（評価額を再入力してください）');
 }
 function toggleSection(id){document.getElementById(id).classList.toggle('collapsed')}
 function amToggleInline(id){
@@ -5224,13 +5450,14 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   }
   card.style.display='block';
 
-  const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス'];
+  const UNIT_BASED_CATS=['個別株','高配当','全世界インデックス','日本インデックス','インドインデックス','外国株式'];
   const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
-  const STOCK_CATS=['個別株','高配当'];
+  const STOCK_CATS=['個別株','高配当','外国株式'];
   const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
 
-  // 各銘柄の損益を計算
+  // 各銘柄の損益を計算（保有中）
   const allItems=sourceAccounts.filter(a=>{
+    if(a.sold)return false;// 売却済みは別途処理
     if(!(a.costPrice>0))return false;
     const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
     const isUnitBased=UNIT_BASED_CATS.includes(a.cat)&&!isBalanceBased;
@@ -5249,25 +5476,55 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const excluded=trGainExcludeNames.some(ex=>a.name===ex||a.name.startsWith(ex+'（')||a.name.startsWith(ex+' ')||a.name.startsWith(ex+'　'));
     const isStock=STOCK_CATS.includes(a.cat);
     const isIndex=INDEX_CATS.includes(a.cat);
-    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded,isStock,isIndex};
+    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded,isStock,isIndex,isSold:false};
+  }).sort((a,b)=>b.gain-a.gain);
+
+  // 売却済み銘柄（確定損益）
+  const soldItems=sourceAccounts.filter(a=>a.sold&&a.costPrice>0).map(a=>{
+    const costTotal=a.shares>0&&a.costPrice>0?a.shares*a.costPrice:(a.costPrice||0);
+    const soldTotal=a.soldAmount||0;
+    const gain=soldTotal-costTotal;
+    const pct=costTotal>0?gain/costTotal*100:0;
+    const excluded=trGainExcludeNames.some(ex=>a.name===ex||a.name.startsWith(ex+'（')||a.name.startsWith(ex+' ')||a.name.startsWith(ex+'　'));
+    const isStock=STOCK_CATS.includes(a.cat);
+    const isIndex=INDEX_CATS.includes(a.cat);
+    return{name:a.name+(a.soldDate?` (${a.soldDate}売)` :''),origName:a.name,cat:a.cat,gain,pct,evalTotal:soldTotal,costTotal,excluded,isStock,isIndex,isSold:true,soldDate:a.soldDate||''};
   }).sort((a,b)=>b.gain-a.gain);
 
   const stockItems=allItems.filter(i=>i.isStock);
   const indexItems=allItems.filter(i=>i.isIndex);
   const otherItems=allItems.filter(i=>!i.isStock&&!i.isIndex);
 
-  // ── トップサマリー（株 vs インデックス 比較） ──
+  // 売却済みをカテゴリ別に分類
+  const soldStockItems=soldItems.filter(i=>i.isStock);
+  const soldIndexItems=soldItems.filter(i=>i.isIndex);
+
+  // ── トップサマリー（含み損益 + 確定損益） ──
   const activeAll=allItems.filter(i=>!i.excluded);
   const activeStock=stockItems.filter(i=>!i.excluded);
   const activeIndex=indexItems.filter(i=>!i.excluded);
-  const totalGain=activeAll.reduce((s,i)=>s+i.gain,0);
+  const activeSold=soldItems.filter(i=>!i.excluded);
+
+  // 含み損益
+  const unrealizedGain=activeAll.reduce((s,i)=>s+i.gain,0);
   const stockGain=activeStock.reduce((s,i)=>s+i.gain,0);
   const indexGain=activeIndex.reduce((s,i)=>s+i.gain,0);
   const stockCost=activeStock.reduce((s,i)=>s+i.costTotal,0);
   const indexCost=activeIndex.reduce((s,i)=>s+i.costTotal,0);
   const stockPct=stockCost>0?stockGain/stockCost*100:0;
   const indexPct=indexCost>0?indexGain/indexCost*100:0;
-  const totalExcluded=allItems.length-activeAll.length;
+
+  // 確定損益（売却済み）
+  const confirmedGain=activeSold.reduce((s,i)=>s+i.gain,0);
+  const confirmedCost=activeSold.reduce((s,i)=>s+i.costTotal,0);
+  const confirmedPct=confirmedCost>0?confirmedGain/confirmedCost*100:0;
+
+  // 累計（含み＋確定）
+  const totalGain=unrealizedGain+confirmedGain;
+  const totalCost=activeAll.reduce((s,i)=>s+i.costTotal,0)+confirmedCost;
+  const totalPct=totalCost>0?totalGain/totalCost*100:0;
+
+  const totalExcluded=(allItems.length+soldItems.length)-(activeAll.length+activeSold.length);
 
   const fmtGain=(g,p)=>{
     const s=g>=0?'+':'';
@@ -5276,22 +5533,33 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   };
 
   if(summaryEl){
+    const hasSold=soldItems.length>0;
     summaryEl.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
       <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">📈 株合計</div>
-        <div style="font-size:14px">${fmtGain(stockGain,stockPct)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">📈 含み損益（保有中）</div>
+        <div style="font-size:13px">${fmtGain(unrealizedGain,totalCost-confirmedCost>0?unrealizedGain/(totalCost-confirmedCost)*100:0)}</div>
       </div>
-      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🌍 指数合計</div>
-        <div style="font-size:14px">${fmtGain(indexGain,indexPct)}</div>
-      </div>
-      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">💰 総合計</div>
-        <div style="font-size:14px">${fmtGain(totalGain,totalGain/(stockCost+indexCost||1)*100)}</div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid ${hasSold?'#C0392B30':'var(--border2)'};text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🏷 確定損益（売却済）</div>
+        <div style="font-size:13px">${hasSold?fmtGain(confirmedGain,confirmedPct):'<span style="color:var(--text3);font-size:12px">なし</span>'}</div>
       </div>
     </div>
-    <div style="font-size:11px;color:var(--text3)">💡 下の一覧の銘柄名タップで除外/復帰${totalExcluded>0?` ／ 除外中${totalExcluded}件（SBG・SBKKはデフォルト除外）`:' ／ SBG・SBKKはデフォルト除外'}</div>`;
+    <div style="background:var(--bg2);border-radius:8px;padding:10px;border:1px solid var(--border2);text-align:center;margin-bottom:6px">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">💰 累計損益（含み＋確定）</div>
+      <div style="font-size:16px;font-weight:700">${fmtGain(totalGain,totalPct)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;border:1px solid var(--border2);text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">📈 株（含み）</div>
+        <div style="font-size:12px">${fmtGain(stockGain,stockPct)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;border:1px solid var(--border2);text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">🌍 指数（含み）</div>
+        <div style="font-size:12px">${fmtGain(indexGain,indexPct)}</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3)">💡 下の一覧の銘柄名タップで除外/復帰${totalExcluded>0?` ／ 除外中${totalExcluded}件`:''} ／ SBG・SBKKはデフォルト除外</div>`;
   }
 
   // ── サブ関数: 横棒グラフ描画 ──
@@ -5402,8 +5670,8 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     });
   }
 
-  renderHBar('gainBarChart','gainBar',stockItems,stockSummaryEl);
-  renderHBar('gainBarIndexChart','gainBarIndex',indexItems,indexSummaryEl);
+  renderHBar('gainBarChart','gainBar',[...stockItems,...soldStockItems],stockSummaryEl);
+  renderHBar('gainBarIndexChart','gainBarIndex',[...indexItems,...soldIndexItems],indexSummaryEl);
 
   // ── 詳細一覧（株→インデックス→その他 の順） ──
   const renderDetail=(items,label)=>{
@@ -5414,10 +5682,13 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
         const col=i.excluded?'var(--text3)':(i.gain>=0?'var(--green)':'var(--danger)');
         const nameStyle=i.excluded?'text-decoration:line-through;color:var(--text3)':'';
         const catBadge=`<span style="font-size:10px;color:var(--text3);margin-left:6px">${i.cat}</span>`;
-        return`<div onclick="trToggleGainExclude('${i.name.replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer;${i.excluded?'opacity:0.55':''}">
+        const soldBadge=i.isSold?`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#C0392B20;color:#C0392B;border:1px solid #C0392B40;margin-left:4px">確定</span>`:'';
+        const evalLabel=i.isSold?'売却額':'評価額';
+        const toggleName=i.isSold?(i.origName||i.name):i.name;
+        return`<div onclick="trToggleGainExclude('${toggleName.replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer;${i.excluded?'opacity:0.55':''}${i.isSold?';background:var(--bg2);padding:8px 10px;border-radius:6px;margin-bottom:2px':''};border-left:${i.isSold?'3px solid #C0392B40':'none'};padding-left:${i.isSold?'10px':'0'}">
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${catBadge}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
-            <div style="font-size:11px;color:var(--text3)">評価額 ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
+            <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${catBadge}${soldBadge}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
+            <div style="font-size:11px;color:var(--text3)">${evalLabel} ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-size:14px;font-weight:700;color:${col}">${sign}${trFmt(i.gain)}</div>
@@ -5430,8 +5701,8 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
   const detailEl=document.getElementById('gainBarDetail');
   if(detailEl){
     detailEl.innerHTML=
-      renderDetail(stockItems,'📈 個別株・高配当')
-      +renderDetail(indexItems,'🌍 インデックス・投信')
+      renderDetail([...stockItems,...soldStockItems],'📈 個別株・高配当（含み＋確定）')
+      +renderDetail([...indexItems,...soldIndexItems],'🌍 インデックス・投信（含み＋確定）')
       +renderDetail(otherItems,'その他');
   }
 }
