@@ -1827,9 +1827,39 @@ tr:last-child td{border-bottom:none}
         </div>
         <div id="fFxNote" style="font-size:11px;color:var(--text3);margin-top:4px">SBI CSV読込時は評価額（円）が直接設定されます</div>
       </div>
+
+      <!-- インデックス専用：取得総額・売却総額入力（損益自動計算） -->
+      <div class="field" id="fIndexFields" style="display:none">
+        <label id="fIndexFieldsLabel">📊 インデックス 損益計算</label>
+        <div style="background:rgba(41,128,185,0.07);border:1px solid rgba(41,128,185,0.2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text2)">
+          取得総額・売却総額を入力すると損益を自動計算します
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text3);white-space:nowrap;width:64px">取得総額</span>
+            <input type="number" id="fIndexCost" placeholder="例: 1000000" inputmode="numeric"
+              style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"
+              oninput="amCalcIndexGain()">
+            <span style="font-size:12px;color:var(--text3)">円</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text3);white-space:nowrap;width:64px">売却総額</span>
+            <input type="number" id="fIndexSell" placeholder="例: 1200000（未売却なら空欄）" inputmode="numeric"
+              style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"
+              oninput="amCalcIndexGain()">
+            <span style="font-size:12px;color:var(--text3)">円</span>
+          </div>
+          <div id="fIndexGainResult" style="min-height:36px"></div>
+        </div>
+      </div>
+
+      <!-- 株・その他：取得単価 -->
+      <div class="field" id="fCostField" style="display:none">
+        <label id="fCostLabel">取得価格（円・総額）</label>
         <input type="number" id="fCost" placeholder="例: 1000000" inputmode="numeric" oninput="amCalcAmount()">
         <div id="fGainResult" style="font-size:12px;font-weight:600;margin-top:4px"></div>
       </div>
+
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
     </div>
     <div class="sheet-btns">
@@ -2469,6 +2499,49 @@ function amToggleInline(id){
   }
 }
 // 損益表示HTML生成（gain:差額, pct:変化率）
+// インデックス専用：取得総額・売却総額から損益計算
+function amCalcIndexGain(){
+  const costVal=parseFloat(document.getElementById('fIndexCost')?.value)||0;
+  const sellVal=parseFloat(document.getElementById('fIndexSell')?.value)||0;
+  const resultEl=document.getElementById('fIndexGainResult');
+  if(!resultEl)return;
+  // 売却総額が入力されたら損益計算＆残高欄に反映
+  if(sellVal>0){
+    document.getElementById('fAmount').value=sellVal;
+    if(costVal>0){
+      const gain=sellVal-costVal;
+      const pct=gain/costVal*100;
+      const s=gain>=0?'+':'';
+      const col=gain>=0?'var(--green)':'var(--danger)';
+      resultEl.innerHTML=`
+        <div style="background:var(--bg2);border-radius:8px;padding:10px 12px;border:1px solid var(--border2)">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px">
+            <span>取得総額 ${fmt(Math.round(costVal))}</span>
+            <span>売却総額 ${fmt(Math.round(sellVal))}</span>
+          </div>
+          <div style="text-align:center;font-size:16px;font-weight:700;color:${col}">
+            確定損益 ${s}${fmt(Math.round(gain))} <span style="font-size:12px">(${s}${pct.toFixed(2)}%)</span>
+          </div>
+        </div>`;
+    }else{
+      resultEl.innerHTML=`<div style="font-size:12px;color:var(--text3)">売却総額: ${fmt(Math.round(sellVal))}（取得総額を入力すると損益計算）</div>`;
+    }
+  }else if(costVal>0){
+    // 売却総額未入力：現在の評価額があれば含み益を表示
+    const curAmount=parseFloat(document.getElementById('fAmount').value)||0;
+    if(curAmount>0){
+      const gain=curAmount-costVal;
+      const pct=gain/costVal*100;
+      const s=gain>=0?'+':'';
+      const col=gain>=0?'var(--green)':'var(--danger)';
+      resultEl.innerHTML=`<div style="font-size:12px;color:${col};font-weight:600">含み損益 ${s}${fmt(Math.round(gain))} (${s}${pct.toFixed(2)}%)</div>`;
+    }else{
+      resultEl.innerHTML='';
+    }
+  }else{
+    resultEl.innerHTML='';
+  }
+}
 function amGainHtml(gain,pct){
   if(gain==null||!isFinite(gain))return'';
   const color=gain>=0?'var(--green)':'var(--danger)';
@@ -2536,9 +2609,12 @@ function openAddModal(defaultCat){
   document.getElementById('fCode').value='';
   document.getElementById('fShares').value='';
   document.getElementById('fPrice').value='';
-  document.getElementById('fCost').value='';
+  if(document.getElementById('fCost'))document.getElementById('fCost').value='';
+  if(document.getElementById('fIndexCost'))document.getElementById('fIndexCost').value='';
+  if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value='';
+  if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   document.getElementById('fCalcResult').textContent='';
-  document.getElementById('fGainResult').innerHTML='';
+  if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
   if(fxEl)fxEl.value=amGetFxRate()>0?amGetFxRate():'';
   amToggleStockFields();
@@ -2561,9 +2637,12 @@ function openEditModal(id){
   document.getElementById('fCode').value=a.code||'';
   document.getElementById('fShares').value=a.shares||'';
   document.getElementById('fPrice').value=a.price||'';
-  document.getElementById('fCost').value=a.costPrice||'';
+  if(document.getElementById('fCost'))document.getElementById('fCost').value=a.costPrice||'';
+  if(document.getElementById('fIndexCost'))document.getElementById('fIndexCost').value=a.costPrice||'';
+  if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value=a.soldAmount&&a.sold?a.soldAmount:'';
+  if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   document.getElementById('fCalcResult').textContent='';
-  document.getElementById('fGainResult').innerHTML='';
+  if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
   if(fxEl)fxEl.value=a.fxRate||amGetFxRate()||145;
   amToggleStockFields();
@@ -2586,12 +2665,23 @@ async function saveAccount(){
   const amount=parseFloat(document.getElementById('fAmount').value)||0;
   const note=document.getElementById('fNote').value.trim();
   if(!name){document.getElementById('fName').focus();return;}
+  const isIndexFundSave=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
   const code=(document.getElementById('fCode').value||'').trim().replace(/[^0-9A-Za-z.]/g,'');
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
-  const costPrice=parseFloat(document.getElementById('fCost').value)||0;
   const fxRate=(cat==='外国株式')?(parseFloat(document.getElementById('fFxRate')?.value)||amGetFxRate()):0;
   if(cat==='外国株式'&&fxRate>0)amSetFxRate(fxRate);
+
+  // インデックスの場合：取得総額・売却総額フィールドから保存
+  let costPrice=0;
+  if(isIndexFundSave){
+    costPrice=parseFloat(document.getElementById('fIndexCost')?.value)||0;
+    const sellTotal=parseFloat(document.getElementById('fIndexSell')?.value)||0;
+    // 売却総額が入力されている場合は残高に反映
+    if(sellTotal>0&&!amount){amount=sellTotal;}
+  }else{
+    costPrice=parseFloat(document.getElementById('fCost')?.value)||0;
+  }
   if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,updated:todayStr()};}
   else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();
@@ -2632,6 +2722,7 @@ function amToggleStockFields(){
   const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const isPayPay=PAYPAY_PAT.test(name)||PAYPAY_PAT.test(note);
   const isUnitBased=isStock||isForeignStock||(isIndexFund&&!isPayPay);
+
   const sf=document.getElementById('fStockFields');
   const cf=document.getElementById('fCodeField');
   const costF=document.getElementById('fCostField');
@@ -2639,18 +2730,31 @@ function amToggleStockFields(){
   const sfLabel=document.getElementById('fStockFieldsLabel');
   const sharesEl=document.getElementById('fShares');
   const priceEl=document.getElementById('fPrice');
-  // 外国株式：為替レート入力欄の表示切替
   const fxRow=document.getElementById('fFxRow');
+  const idxF=document.getElementById('fIndexFields');// インデックス専用フィールド
+
+  // インデックスの場合は専用フィールドを表示（数量×単価欄は非表示）
+  const showIndexFields=isIndexFund&&!isPayPay;
+
   if(fxRow)fxRow.style.display=isForeignStock?'block':'none';
-  if(sf)sf.style.display=isUnitBased?'block':'none';
+  if(sf)sf.style.display=(isUnitBased&&!showIndexFields)?'block':'none';
   if(cf)cf.style.display=(isStock||isForeignStock)?'block':'none';
-  if(costF)costF.style.display=(isStock||isForeignStock||isIndexFund)?'block':'none';
-  if(costLabel)costLabel.textContent=isUnitBased?(isStock?'取得株価（円/株）':isForeignStock?'取得株価（USD/株）':'取得単価（円/単位）'):'取得価格（円・総額）';
+  if(costF)costF.style.display=(isStock||isForeignStock)?'block':'none';// 株のみ取得単価欄
+  if(idxF)idxF.style.display=showIndexFields?'block':'none';// インデックス専用
+  if(costLabel)costLabel.textContent=isStock?'取得株価（円/株）':isForeignStock?'取得株価（USD/株）':'取得価格（円・総額）';
   if(sfLabel)sfLabel.textContent=isStock?'株式自動計算':isForeignStock?'外国株 自動計算（USD×為替→円）':'投資信託 自動計算';
   if(sharesEl)sharesEl.placeholder=isStock||isForeignStock?'株数':'数量';
   if(priceEl)priceEl.placeholder=isForeignStock?'株価（USD）':isStock?'株価（円）':'単価（円）';
-  if(!isUnitBased){document.getElementById('fShares').value='';document.getElementById('fPrice').value='';document.getElementById('fCalcResult').textContent='';}
-  if(!isStock&&!isForeignStock&&!isIndexFund){document.getElementById('fCost').value='';document.getElementById('fGainResult').innerHTML='';}
+
+  if(!isUnitBased&&!showIndexFields){
+    document.getElementById('fShares').value='';
+    document.getElementById('fPrice').value='';
+    document.getElementById('fCalcResult').textContent='';
+  }
+  if(!isStock&&!isForeignStock){
+    if(document.getElementById('fCost'))document.getElementById('fCost').value='';
+    if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
+  }
   amCalcAmount();
 }
 function amCalcAmount(){
