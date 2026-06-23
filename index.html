@@ -8419,10 +8419,14 @@ function wlUpdateSellPrice(id,val){
 }
 
 function wlOpenAdd(){
-  wlEditId=null;
-  const setVal=(id,v='')=>{const el=document.getElementById(id);if(el)el.value=v;};
-  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  const setDisp=(id,v)=>{const el=document.getElementById(id);if(el)el.style.display=v;};
+  // ── 診断ログ ──
+  console.log('[wl] wlOpenAdd called');
+  const modal=document.getElementById('wl-modal');
+  console.log('[wl] wl-modal element:', modal);
+  if(!modal){console.error('[wl] ERROR: wl-modal not found in DOM');alert('エラー: モーダル要素が見つかりません(wl-modal)');return;}
+  const setVal=(id,v='')=>{const el=document.getElementById(id);if(!el){console.warn('[wl] missing element:',id);}else{el.value=v;}};
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(!el){console.warn('[wl] missing element:',id);}else{el.textContent=v;}};
+  const setDisp=(id,v)=>{const el=document.getElementById(id);if(!el){console.warn('[wl] missing element:',id);}else{el.style.display=v;}};
   setTxt('wl-modal-title','銘柄を追加');
   setDisp('wl-del-btn','none');
   ['wf-code','wf-name','wf-sector','wf-memo','wf-earningsDate',
@@ -8437,8 +8441,11 @@ function wlOpenAdd(){
   setVal('wf-account','特定');
   setVal('wf-status','購入検討');
   setVal('wf-priority','3');
-  const modal=document.getElementById('wl-modal');
-  if(modal)modal.classList.add('open');
+  console.log('[wl] opening modal, classList before:', modal.className);
+  modal.classList.add('open');
+  console.log('[wl] classList after:', modal.className);
+  console.log('[wl] computed display:', window.getComputedStyle(modal).display);
+  wlEditId=null;
 }
 
 function wlOpenEdit(id){
@@ -8559,11 +8566,13 @@ function wlCalcAuto(){
 
 
 function wlSave(){
+  console.log('[wl] wlSave called');
   const g=(id)=>document.getElementById(id);
-  const gv=(id)=>{const el=g(id);return el?el.value:'';}
+  const gv=(id)=>{const el=g(id);if(!el){console.warn('[wl] wlSave missing:',id);return '';}return el.value;}
   const gf=(id)=>parseFloat(gv(id))||null;
   const name=gv('wf-name').trim();
   const shares=parseFloat(gv('wf-shares'))||0;
+  console.log('[wl] name:', name, 'shares:', shares);
   if(!name){alert('銘柄名は必須です');return;}
   const d=wlLoad();
   const item={
@@ -8592,7 +8601,11 @@ function wlSave(){
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
-  wlSaveData(d);wlCloseModal();wlRender();
+  console.log('[wl] saving item:', item.name, 'total items:', d.length);
+  try{wlSaveData(d);}catch(e){console.error('[wl] wlSaveData error:',e);alert('保存エラー: '+e.message);return;}
+  try{wlCloseModal();}catch(e){console.error('[wl] wlCloseModal error:',e);}
+  try{wlRender();}catch(e){console.error('[wl] wlRender error:',e);}
+  console.log('[wl] wlSave complete');
 }
 
 function wlDelete(){
