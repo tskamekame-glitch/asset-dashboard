@@ -9463,45 +9463,7 @@ window.pfRender=function(){
 };
 </script>
 
-<!-- ============================================================ -->
-<!-- 年間収益レポートタブ -->
-<!-- ============================================================ -->
-<div class="panel" id="tab-returns">
-  <div class="phead"><div class="phead-inner">
-    <h1>📅 年間収益レポート</h1>
-    <div style="display:flex;gap:6px;align-items:center">
-      <select id="ret-year-sel" onchange="retRender()" style="padding:6px 10px;font-size:13px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);outline:none"></select>
-      <button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="retRender()">🔄 更新</button>
-    </div>
-  </div></div>
 
-  <!-- サマリーカード -->
-  <div id="ret-summary" style="padding:14px 16px 0"></div>
-
-  <!-- 年別バーチャート -->
-  <div style="padding:0 16px 14px">
-    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">年別収益推移</div>
-    <canvas id="ret-bar-chart" style="width:100%;max-height:200px"></canvas>
-  </div>
-
-  <!-- 内訳テーブル -->
-  <div style="padding:0 16px 20px">
-    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">収益内訳</div>
-    <div id="ret-breakdown" style="overflow-x:auto"></div>
-  </div>
-
-  <!-- 口座別内訳 -->
-  <div style="padding:0 16px 20px">
-    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">口座別損益</div>
-    <div id="ret-by-account"></div>
-  </div>
-
-  <!-- 銘柄別売却履歴 -->
-  <div style="padding:0 16px 40px">
-    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:0.05em">銘柄別売却履歴（選択年）</div>
-    <div id="ret-sell-list"></div>
-  </div>
-</div>
 
 <script>
 // ============================================================
@@ -9757,14 +9719,32 @@ function retRender(){
     </div>`;
   }
 }
+</script>
+
+<script>
+// FIREタブの自動連携：ページロード後とGoogleSheets同期後に実行
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    if(typeof fireAutoLink==='function') fireAutoLink();
+  }, 500);
+});
+// jpLoadFromSheet完了後にも呼ぶ（Sheetsデータ読み込み後）
+var _origJpLoad = null;
+(function(){
+  var _timer = setInterval(function(){
+    if(typeof jpLoadFromSheet === 'function'){
+      clearInterval(_timer);
+      var _orig = jpLoadFromSheet;
+      jpLoadFromSheet = function(){
+        var result = _orig.apply(this, arguments);
+        setTimeout(function(){
+          if(typeof fireAutoLink==='function') fireAutoLink();
+        }, 1000);
+        return result;
+      };
+    }
+  }, 200);
+})();
+</script>
 </body>
-</html
-
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="mlabel">現在の月収支</div><div class="mvalue" id="f-m1">—</div><div class="msub">総収入－総支出</div></div>
-        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="f-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-purple" id="f-m4">—</div><div class="msub" id="f-m4s"></div></div>
-        <div class="metric-card"><div class="mlabel">実績ベース90歳残高</div><div class="mvalue val-purple" id="f-m3">—</div><div class="msub" id="f-m3s">家族あり</div></div>
-      </div>
-
-      >
+</html>
