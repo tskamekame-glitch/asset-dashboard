@@ -9463,13 +9463,6 @@ window.refreshHome=function(){
   _origRefreshHome&&_origRefreshHome();
   try{cfLoad();cfRefreshHomeIncome();}catch(e){}
 };
-
-// pfRender にリバランスを追加
-const _origPfRender=pfRender;
-window.pfRender=function(){
-  _origPfRender&&_origPfRender();
-  try{pfRenderRebalance();}catch(e){}
-};
 </script>
 
 
