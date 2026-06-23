@@ -8057,13 +8057,16 @@ function wlLoad(){
   }catch{return WL_DEFAULT;}
 }
 function wlSaveData(d){
-  try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}
+  try{
+    localStorage.setItem(WL_KEY,JSON.stringify(d));
+    console.log('[wl] localStorage saved:', d.length, 'items');
+  }catch(e){console.error('[wl] localStorage error:',e);}
   // Google Sheets に自動同期（ログイン済み かつ 読み込み中でない場合のみ）
   if(wlHasToken()&&!wlSaveData._loading){
     clearTimeout(wlSaveData._timer);
     wlSaveData._timer=setTimeout(()=>{
-      wlSyncToSheet().catch(()=>{});
-    },800);
+      wlSyncToSheet().catch(e=>console.warn('[wl] auto-sync failed:',e));
+    },1500);// 1.5秒待ってまとめて送信
   }
 }
 wlSaveData._loading=false;
@@ -8664,6 +8667,12 @@ async function wlSyncToSheet(manual=false){
 }
 async function wlSyncFromSheet(){
   if(!wlHasToken()){showToast('⚠ 資産管理タブでGoogleサインインしてください');return;}
+  // 未送信の自動同期タイマーがある場合は先に送信してから読み込む
+  if(wlSaveData._timer){
+    clearTimeout(wlSaveData._timer);
+    wlSaveData._timer=null;
+    try{await wlSyncToSheet();}catch(e){}
+  }
   showToast('↓ 読み込み中...');
   try{
     const sid=await wlGetSheetId();
@@ -8683,7 +8692,7 @@ async function wlSyncFromSheet(){
 const _origSwitch=window.switchTab;
 window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
-  if(t==='watchlist'){wlRender();if(wlHasToken())wlSyncFromSheet();}
+  if(t==='watchlist'){wlRender();/* 自動読込はしない（手動↓読込ボタンで同期）*/}
   if(t==='cashflow'){cfRender();}
 };
 wlRender();
