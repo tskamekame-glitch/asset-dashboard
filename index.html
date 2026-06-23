@@ -7879,7 +7879,8 @@ var _origJpLoad = null;
     <span class="wl-title">👀 購入検討リスト</span>
     <div style="display:flex;gap:6px">
       <button class="wl-add-btn" onclick="wlSyncFromSheet()" style="font-size:12px;padding:5px 10px">↓ 読込</button>
-      <button class="wl-add-btn" onclick="wlSyncToSheet()" style="font-size:12px;padding:5px 10px">↑ 保存</button>
+      <button class="wl-add-btn" onclick="wlSyncToSheet(true)" style="font-size:12px;padding:5px 10px">↑ 保存</button>
+      <span id="wl-sync-status" style="font-size:11px;color:var(--text3);min-width:16px"></span>
       <button class="wl-add-btn" onclick="wlDownloadCSV()" style="font-size:12px;padding:5px 10px">↓ CSV</button>
       <button class="wl-add-btn" onclick="wlExportToAnalysisSheet()" style="font-size:12px;padding:5px 10px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer">📊 分析SSへ書込</button>
       <button class="wl-add-btn" onclick="wlOpenAdd()">＋ 追加</button>
@@ -7916,8 +7917,8 @@ var _origJpLoad = null;
     </div>
     <div class="wl-frow"><label>銘柄名</label><input id="wf-name" placeholder="例: エムスリー"></div>
     <div class="wl-fg2">
-      <div class="wl-frow"><label>株数</label><input id="wf-shares" type="number" placeholder="500" min="1" inputmode="numeric"></div>
-      <div class="wl-frow"><label>指値（円）</label><input id="wf-limit" type="number" placeholder="1550" inputmode="numeric"></div>
+      <div class="wl-frow"><label>株数</label><input id="wf-shares" type="text" inputmode="numeric" placeholder="500"></div>
+      <div class="wl-frow"><label>指値（円）</label><input id="wf-limit" type="text" inputmode="numeric" placeholder="1550"></div>
     </div>
     <div class="wl-fg2">
       <div class="wl-frow"><label>現在値（円）</label><input id="wf-current" type="number" placeholder="1590" inputmode="numeric" oninput="wlCalcAuto()"></div>
@@ -8055,7 +8056,17 @@ function wlLoad(){
     });
   }catch{return WL_DEFAULT;}
 }
-function wlSaveData(d){try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}}
+function wlSaveData(d){
+  try{localStorage.setItem(WL_KEY,JSON.stringify(d));}catch{}
+  // Google Sheets に自動同期（ログイン済み かつ 読み込み中でない場合のみ）
+  if(wlHasToken()&&!wlSaveData._loading){
+    clearTimeout(wlSaveData._timer);
+    wlSaveData._timer=setTimeout(()=>{
+      wlSyncToSheet().catch(()=>{});
+    },800);
+  }
+}
+wlSaveData._loading=false;
 
 // ============================================================
 // 購入検討リスト → CSV ダウンロード
@@ -8409,21 +8420,25 @@ function wlUpdateSellPrice(id,val){
 
 function wlOpenAdd(){
   wlEditId=null;
-  document.getElementById('wl-modal-title').textContent='銘柄を追加';
-  document.getElementById('wl-del-btn').style.display='none';
+  const setVal=(id,v='')=>{const el=document.getElementById(id);if(el)el.value=v;};
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const setDisp=(id,v)=>{const el=document.getElementById(id);if(el)el.style.display=v;};
+  setTxt('wl-modal-title','銘柄を追加');
+  setDisp('wl-del-btn','none');
   ['wf-code','wf-name','wf-sector','wf-memo','wf-earningsDate',
-   'wf-shikiho1','wf-shikiho2','wf-roe'].forEach(i=>document.getElementById(i).value='');
-  ['wf-shares','wf-limit','wf-current','wf-target',
+   'wf-shikiho1','wf-shikiho2','wf-roe',
+   'wf-shares','wf-limit','wf-current','wf-target',
    'wf-sell1','wf-sell2','wf-sell3','wf-per','wf-pbr',
    'wf-eps1','wf-eps2','wf-op0','wf-op1','wf-op2',
    'wf-sales0','wf-sales1','wf-sales2',
-   'wf-actper','wf-targetper','wf-mktcap','wf-float'].forEach(i=>document.getElementById(i).value='');
-  ['wf-opGrowth','wf-salesGrowth','wf-opMargin','wf-rule40',
-   'wf-target1auto','wf-target2auto','wf-psr'].forEach(i=>{if(document.getElementById(i))document.getElementById(i).value='';});
-  document.getElementById('wf-account').value='特定';
-  document.getElementById('wf-status').value='購入検討';
-  document.getElementById('wf-priority').value='3';
-  document.getElementById('wl-modal').classList.add('open');
+   'wf-actper','wf-targetper','wf-mktcap','wf-float',
+   'wf-opGrowth','wf-salesGrowth','wf-opMargin','wf-rule40',
+   'wf-target1auto','wf-target2auto','wf-psr'].forEach(i=>setVal(i,''));
+  setVal('wf-account','特定');
+  setVal('wf-status','購入検討');
+  setVal('wf-priority','3');
+  const modal=document.getElementById('wl-modal');
+  if(modal)modal.classList.add('open');
 }
 
 function wlOpenEdit(id){
@@ -8544,44 +8559,36 @@ function wlCalcAuto(){
 
 
 function wlSave(){
-  const name=document.getElementById('wf-name').value.trim();
-  const shares=parseFloat(document.getElementById('wf-shares').value);
-  if(!name||!shares){alert('銘柄名と株数は必須です');return;}
+  const g=(id)=>document.getElementById(id);
+  const gv=(id)=>{const el=g(id);return el?el.value:'';}
+  const gf=(id)=>parseFloat(gv(id))||null;
+  const name=gv('wf-name').trim();
+  const shares=parseFloat(gv('wf-shares'))||0;
+  if(!name){alert('銘柄名は必須です');return;}
   const d=wlLoad();
   const item={
     id:wlEditId||wlUID(),
-    code:document.getElementById('wf-code').value.trim(),
-    sector:document.getElementById('wf-sector').value.trim(),
+    code:gv('wf-code').trim(),
+    sector:gv('wf-sector').trim(),
     name,shares,
-    limit:parseFloat(document.getElementById('wf-limit').value)||null,
-    current:parseFloat(document.getElementById('wf-current').value)||null,
-    target:parseFloat(document.getElementById('wf-target').value)||null,
-    account:document.getElementById('wf-account').value,
-    status:document.getElementById('wf-status').value,
-    priority:parseInt(document.getElementById('wf-priority').value)||3,
-    memo:document.getElementById('wf-memo').value.trim(),
-    sell1:parseFloat(document.getElementById('wf-sell1').value)||null,
-    sell2:parseFloat(document.getElementById('wf-sell2').value)||null,
-    sell3:parseFloat(document.getElementById('wf-sell3').value)||null,
-    per:parseFloat(document.getElementById('wf-per').value)||null,
-    pbr:parseFloat(document.getElementById('wf-pbr').value)||null,
-    earningsDate:document.getElementById('wf-earningsDate').value||'',
-    // 新規項目
-    eps1:parseFloat(document.getElementById('wf-eps1').value)||null,
-    eps2:parseFloat(document.getElementById('wf-eps2').value)||null,
-    op0:parseFloat(document.getElementById('wf-op0').value)||null,
-    op1:parseFloat(document.getElementById('wf-op1').value)||null,
-    op2:parseFloat(document.getElementById('wf-op2').value)||null,
-    sales0:parseFloat(document.getElementById('wf-sales0').value)||null,
-    sales1:parseFloat(document.getElementById('wf-sales1').value)||null,
-    sales2:parseFloat(document.getElementById('wf-sales2').value)||null,
-    actper:parseFloat(document.getElementById('wf-actper').value)||null,
-    targetper:parseFloat(document.getElementById('wf-targetper').value)||null,
-    mktcap:parseFloat(document.getElementById('wf-mktcap').value)||null,
-    shikiho1:document.getElementById('wf-shikiho1').value.trim(),
-    shikiho2:document.getElementById('wf-shikiho2').value.trim(),
-    floatRatio:parseFloat(document.getElementById('wf-float').value)||null,
-    roe:document.getElementById('wf-roe').value.trim(),
+    limit:gf('wf-limit'),
+    current:gf('wf-current'),
+    target:gf('wf-target'),
+    account:gv('wf-account'),
+    status:gv('wf-status'),
+    priority:parseInt(gv('wf-priority'))||3,
+    memo:gv('wf-memo').trim(),
+    sell1:gf('wf-sell1'),sell2:gf('wf-sell2'),sell3:gf('wf-sell3'),
+    per:gf('wf-per'),pbr:gf('wf-pbr'),
+    earningsDate:gv('wf-earningsDate'),
+    eps1:gf('wf-eps1'),eps2:gf('wf-eps2'),
+    op0:gf('wf-op0'),op1:gf('wf-op1'),op2:gf('wf-op2'),
+    sales0:gf('wf-sales0'),sales1:gf('wf-sales1'),sales2:gf('wf-sales2'),
+    actper:gf('wf-actper'),targetper:gf('wf-targetper'),
+    mktcap:gf('wf-mktcap'),
+    shikiho1:gv('wf-shikiho1').trim(),shikiho2:gv('wf-shikiho2').trim(),
+    floatRatio:gf('wf-float'),
+    roe:gv('wf-roe').trim(),
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
@@ -8616,9 +8623,14 @@ async function wlEnsureWatchlistTab(sid){
     if(!has)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:sid,resource:{requests:[{addSheet:{properties:{title:'watchlist'}}}]}});
   }catch(e){console.warn('wl tab ensure err',e);}
 }
-async function wlSyncToSheet(){
-  if(!wlHasToken()){showToast('⚠ 資産管理タブでGoogleサインインしてください');return;}
-  showToast('↑ 保存中...');
+async function wlSyncToSheet(manual=false){
+  if(!wlHasToken()){
+    if(manual)showToast('⚠ 資産管理タブでGoogleサインインしてください');
+    return;
+  }
+  // 同期中インジケーター
+  const syncEl=document.getElementById('wl-sync-status');
+  if(syncEl)syncEl.textContent='⏳';
   try{
     const sid=await wlGetSheetId();
     if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
@@ -8629,8 +8641,13 @@ async function wlSyncToSheet(){
     const vals=[...hdr,...rows];
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:Q${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
     if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:Q1000`});
-    showToast('✅ 保存しました');
-  }catch(e){console.warn('wl sync err',e);showToast('⚠ 保存失敗');}
+    if(syncEl)syncEl.textContent='✓';
+    if(manual)showToast('✅ 保存しました');
+  }catch(e){
+    console.warn('wl sync err',e);
+    if(syncEl)syncEl.textContent='⚠';
+    if(manual)showToast('⚠ 保存失敗');
+  }
 }
 async function wlSyncFromSheet(){
   if(!wlHasToken()){showToast('⚠ 資産管理タブでGoogleサインインしてください');return;}
@@ -8643,7 +8660,10 @@ async function wlSyncFromSheet(){
     const rows=res.result.values||[];
     if(!rows.length){showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');return;}
     const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||'',earningsDate:r[16]||''})).filter(x=>x.name);
-    wlSaveData(data);wlRender();showToast(`✅ ${data.length}件を読み込みました`);
+    wlSaveData._loading=true;
+    wlSaveData(data);
+    wlSaveData._loading=false;
+    wlRender();showToast(`✅ ${data.length}件を読み込みました`);
   }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
 }
 
