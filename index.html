@@ -85,9 +85,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 }
 .panel{
   position:absolute;inset:0;
-  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
   display:none;
   padding-top:var(--safe-top);
+  padding-bottom:calc(var(--safe-bot) + 60px);/* ナビバー分の余白 */
   background:var(--bg);
 }
 .panel.active{display:block}
@@ -8059,17 +8062,27 @@ function wlLoad(){
 function wlSaveData(d){
   try{
     localStorage.setItem(WL_KEY,JSON.stringify(d));
-    console.log('[wl] localStorage saved:', d.length, 'items');
   }catch(e){console.error('[wl] localStorage error:',e);}
-  // Google Sheets に自動同期（ログイン済み かつ 読み込み中でない場合のみ）
   if(wlHasToken()&&!wlSaveData._loading){
     clearTimeout(wlSaveData._timer);
-    wlSaveData._timer=setTimeout(()=>{
-      wlSyncToSheet().catch(e=>console.warn('[wl] auto-sync failed:',e));
-    },1500);// 1.5秒待ってまとめて送信
+    wlSaveData._timer=setTimeout(async()=>{
+      wlSaveData._timer=null;
+      const syncEl=document.getElementById('wl-sync-status');
+      if(syncEl)syncEl.textContent='⏳';
+      try{
+        await wlSyncToSheet();
+        if(syncEl)syncEl.textContent='✓';
+        setTimeout(()=>{if(syncEl&&syncEl.textContent==='✓')syncEl.textContent='';},3000);
+      }catch(e){
+        console.warn('[wl] auto-sync failed:',e);
+        if(syncEl)syncEl.textContent='⚠';
+        showToast('⚠ 購入検討の同期に失敗しました',3000);
+      }
+    },1000);
   }
 }
 wlSaveData._loading=false;
+wlSaveData._timer=null;
 
 // ============================================================
 // 購入検討リスト → CSV ダウンロード
@@ -8621,6 +8634,8 @@ document.getElementById('wl-modal').addEventListener('click',e=>{if(e.target===e
 
 // ===== Google Sheets 同期 =====
 function wlHasToken(){
+  // amIsOnlineを優先（資産管理タブのGoogleログイン状態と統一）
+  if(typeof amIsOnline!=='undefined'&&amIsOnline&&amSpreadsheetId)return true;
   try{const t=gapi&&gapi.client&&gapi.client.getToken();return !!(t&&t.access_token);}
   catch(e){return false;}
 }
