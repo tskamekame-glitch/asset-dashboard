@@ -3442,8 +3442,17 @@ async function amApplySBIRows(rows){
   }
   amRender();
   refreshHome();
-  pfSyncFromAM();
   await amSaveToSheet();
+
+  // ── 同期結果を確認表示 ──
+  const syncOk=amIsOnline&&amSpreadsheetId;
+  const activeCount=amAccounts.filter(a=>!a.sold).length;
+  const soldCount=amAccounts.filter(a=>a.sold).length;
+  const totalAll=amAccounts.reduce((s,a)=>s+(a.amount||0),0);
+  console.log(`[SBI] 取込完了: 保有${activeCount}件 売却済${soldCount}件 合計¥${totalAll.toLocaleString()} Sheets同期=${syncOk?'✓':'×(未ログイン)'}`);
+  if(!syncOk){
+    showToast(`⚠ Google未ログインのためローカルのみ保存。iPhoneと差異が出ます。`,5000);
+  }
 
   // ── 日本株タブ（jpstock_v1）の currentPrice も更新 ──
   // CSVの株式行・投信行の現在値を銘柄コード/名称で照合して上書きする
