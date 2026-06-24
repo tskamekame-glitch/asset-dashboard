@@ -2732,7 +2732,7 @@ async function saveAccount(){
   }
   if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,updated:todayStr()};}
   else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,updated:todayStr()});}
-  closeSheet();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();
+  closeSheet();amRender();await amSaveToSheet();refreshHome();
 }
 function amMoveAccount(id,dir){
   const idx=amAccounts.findIndex(a=>a.id===id);
@@ -2757,7 +2757,7 @@ function amConfirmDelete(id){
 }
 function confirmDelete(id,name){amDeleteId=id;document.getElementById('confirmName').textContent=name;document.getElementById('confirmBg').classList.add('open')}
 function closeConfirm(){document.getElementById('confirmBg').classList.remove('open')}
-document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();pfSyncFromAM();};
+document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();};
 document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===document.getElementById('sheetBg'))closeSheet()});
 document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
 function amToggleStockFields(){
@@ -3444,16 +3444,6 @@ async function amApplySBIRows(rows){
   refreshHome();
   await amSaveToSheet();
 
-  // ── 同期結果を確認表示 ──
-  const syncOk=amIsOnline&&amSpreadsheetId;
-  const activeCount=amAccounts.filter(a=>!a.sold).length;
-  const soldCount=amAccounts.filter(a=>a.sold).length;
-  const totalAll=amAccounts.reduce((s,a)=>s+(a.amount||0),0);
-  console.log(`[SBI] 取込完了: 保有${activeCount}件 売却済${soldCount}件 合計¥${totalAll.toLocaleString()} Sheets同期=${syncOk?'✓':'×(未ログイン)'}`);
-  if(!syncOk){
-    showToast(`⚠ Google未ログインのためローカルのみ保存。iPhoneと差異が出ます。`,5000);
-  }
-
   // ── 日本株タブ（jpstock_v1）の currentPrice も更新 ──
   // CSVの株式行・投信行の現在値を銘柄コード/名称で照合して上書きする
   let jpUpdated=0;
@@ -3590,7 +3580,7 @@ function importCSV(e){
         if(ex){ex.amount=imp.amount;ex.cat=imp.cat;if(imp.note)ex.note=imp.note;ex.updated=imp.updated||todayStr();updated++;}
         else{const maxId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id)):0;amAccounts.push({id:maxId+added+1,...imp});added++;}
       });
-      amRender();await amSaveToSheet();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();pfSyncFromAM();
+      amRender();await amSaveToSheet();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();
     }else{showToast('有効なデータがありませんでした');}
     e.target.value='';
   };reader.readAsText(file,'UTF-8');
@@ -8110,7 +8100,7 @@ async function jpSyncToAssetManager(stock){
     amSaveToLocal();
     amRender();
     refreshHome();
-    pfSyncFromAM();
+    
     await amSaveToSheet();
   }catch(e){console.warn('jpSyncToAssetManager error',e);}
 }
