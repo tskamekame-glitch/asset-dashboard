@@ -9161,7 +9161,7 @@ function wlRender(){
         <button class="wl-move-btn" onclick="wlMoveDown('${s.id}')" ${isLast?'disabled':''} title="下へ">▼</button>
       </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
-      <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2)">${s.memo}</div>`:''}</td>
+      <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
       <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
       <td style="font-size:11px">${(s.shares||0).toLocaleString()}株</td>
       <td style="font-weight:500;color:#3B6D11">${wlFmt(s.limit)}</td>
