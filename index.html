@@ -5064,6 +5064,8 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
   sourceAccounts.forEach(a=>{
     if(a.sold)return;
     if(isExcluded(a.name))return;
+    // 評価額が0の口座は損益計算から除外（売却済み・解約済み）
+    if(!a.amount||a.amount<=0)return;
     // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
     const fallback=amInfoMap[a.name];
     const cp=(a.costPrice>0)?a.costPrice:(fallback?fallback.costPrice:0);
