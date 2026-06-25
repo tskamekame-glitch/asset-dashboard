@@ -4414,6 +4414,13 @@ function trToggleGainExclude(name){
   trSaveGainExclude();
   trRenderAll();
 }
+function trIsExcluded(name){
+  return trGainExcludeNames.some(ex=>{
+    if(!ex)return false;
+    if(name===ex)return true;
+    return name.startsWith(ex+'（')||name.startsWith(ex+' ')||name.startsWith(ex+'　');
+  });
+}
 trLoadGainExclude();
 function trFmt(n){
   if(n==null||isNaN(n))return'—';
@@ -5001,11 +5008,7 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
   let evalSum=0,costSum=0,hasAny=false;
   const STOCK_CATS_F=['個別株','高配当','外国株式'];
   const INDEX_CATS_F=['全世界インデックス','日本インデックス','インドインデックス'];
-  const isExcluded=name=>trGainExcludeNames.some(ex=>{
-    if(!ex)return false;
-    if(name===ex)return true;
-    return name.startsWith(ex+'（')||name.startsWith(ex+' ')||name.startsWith(ex+'　');
-  });
+  const isExcluded=name=>trIsExcluded(name);
   sourceAccounts.forEach(a=>{
     if(a.sold)return;
     if(isExcluded(a.name))return;
@@ -5028,8 +5031,17 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
 
     let costTotal;
     if(isUnitBased){
-      if(!(shares>0))return;
-      costTotal=shares*cp;
+      if(!(shares>0)){
+        // shares未入力の場合：costPriceを取得総額として扱う（インデックス専用入力欄）
+        if(cp>0)costTotal=cp;
+        else return;
+      }else{
+        costTotal=shares*cp;
+        // 異常値チェック：costTotalが評価額の100倍超ならcostPriceを取得総額として扱う
+        if(evalTotal>0&&costTotal>evalTotal*100){
+          costTotal=cp;// 単価ではなく総額として解釈
+        }
+      }
     }else{
       costTotal=cp;
     }
@@ -5049,7 +5061,6 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
 }
 
 function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
-  console.log('[gainLine] excludeNames:', JSON.stringify(trGainExcludeNames));
   trDestroyChart('gainLine');
   trDestroyChart('gainLineStock');
   trDestroyChart('gainLineIndex');
@@ -5610,7 +5621,7 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const evalTotal=a.amount||0;
     const gain=evalTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
-    const excluded=trGainExcludeNames.some(ex=>a.name===ex||a.name.startsWith(ex+'（')||a.name.startsWith(ex+' ')||a.name.startsWith(ex+'　'));
+    const excluded=trIsExcluded(a.name);
     const isStock=STOCK_CATS.includes(a.cat);
     const isIndex=INDEX_CATS.includes(a.cat);
     return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded,isStock,isIndex,isSold:false};
@@ -5622,7 +5633,7 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const soldTotal=a.soldAmount||0;
     const gain=soldTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
-    const excluded=trGainExcludeNames.some(ex=>a.name===ex||a.name.startsWith(ex+'（')||a.name.startsWith(ex+' ')||a.name.startsWith(ex+'　'));
+    const excluded=trIsExcluded(a.name);
     const isStock=STOCK_CATS.includes(a.cat);
     const isIndex=INDEX_CATS.includes(a.cat);
     return{name:a.name+(a.soldDate?` (${a.soldDate}売)` :''),origName:a.name,cat:a.cat,gain,pct,evalTotal:soldTotal,costTotal,excluded,isStock,isIndex,isSold:true,soldDate:a.soldDate||''};
