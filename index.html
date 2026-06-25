@@ -908,6 +908,7 @@ input[type=number] { -moz-appearance: textfield; }
     </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
+    <div class="card" id="indexCard" style="display:none"><div class="card-head"><h2>🌍 インデックス 推移</h2></div><div class="chart-container"><canvas id="indexChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
     <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div><div id="donutLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
     <!-- 銘柄別保有円グラフ（4種） -->
@@ -4640,7 +4641,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -5036,6 +5037,7 @@ function trRenderCharts(){
   try{trRenderPriceAlert(filtered);}catch(e){console.error('trRenderPriceAlert error:',e);}
   try{trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat1 error:',e);}
   try{trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat2 error:',e);}
+  try{trRenderCategoryChartIndex('indexChart','indexCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat_index error:',e);}
   try{trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat3 error:',e);}
 }
 // ============================================================
@@ -5962,6 +5964,70 @@ function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor
   // 口座別ラインは最初は非表示（凡例クリックで表示）
   const datasets=accountNames.map((name,i)=>({label:name,data:filtered.map(s=>{if(!s.accounts)return 0;const acct=s.accounts.find(a=>a.name===name&&a.cat===catName);return acct?acct.amount:0;}),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'18',borderWidth:1.5,pointRadius:2,pointBackgroundColor:colors[i%colors.length],fill:false,tension:0.3,hidden:true}));
   datasets.unshift({label:catName+'合計',data:filtered.map(s=>{if(!s.accounts)return s.cats[catName]||0;return s.accounts.filter(a=>a.cat===catName).reduce((sum,a)=>sum+a.amount,0);}),borderColor:isDark?'#fff':'#333',backgroundColor:'transparent',borderWidth:2.5,borderDash:[5,3],pointRadius:4,pointBackgroundColor:isDark?'#fff':'#333',fill:false,tension:0.3,hidden:false});
+  trDestroyChart(canvasId);
+  const canvas=document.getElementById(canvasId);
+  canvas.style.width='100%';canvas.style.minWidth='';
+  const legendRows=Math.ceil(datasets.length/2);
+  canvas.style.height=(220+legendRows*28)+'px';
+  chartInstances[canvasId]=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true},
+        onClick:(e,li,legend)=>{const ci=legend.chart;ci.getDatasetMeta(li.datasetIndex).hidden=!ci.getDatasetMeta(li.datasetIndex).hidden;ci.update();}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},
+      datalabels:{display:false}
+    },
+    scales:{
+      y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
+      x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
+    },
+    layout:{padding:{top:8,right:8}}
+  },plugins:[ChartDataLabels]});
+}
+function trRenderCategoryChartIndex(canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
+  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
+  const EXCL=/PayPay|ペイペイ|確定拠出|DC年金|iDeCo|イデコ|TOPIX100/;
+  const card=document.getElementById(cardId);
+  const hasCatData=filtered.some(s=>s.cats&&INDEX_CATS.some(c=>s.cats[c]>0));
+  if(!hasCatData){card.style.display='none';return;}
+  card.style.display='block';
+
+  // 銘柄別ライン（全インデックスカテゴリから除外対象を除く）
+  const accountNames=[...new Set(snapshots.flatMap(s=>s.accounts
+    ?s.accounts.filter(a=>INDEX_CATS.includes(a.cat)&&!EXCL.test(a.name)).map(a=>a.name)
+    :[]))];
+
+  const colors=['#0F6E56','#2980b9','#EF9F27','#8B5CF6','#E24B4A','#185FA5','#888780'];
+  const datasets=accountNames.map((name,i)=>({
+    label:name,
+    data:filtered.map(s=>{
+      if(!s.accounts)return 0;
+      const acct=s.accounts.find(a=>a.name===name);
+      return acct?acct.amount:0;
+    }),
+    borderColor:colors[i%colors.length],
+    backgroundColor:colors[i%colors.length]+'18',
+    borderWidth:1.5,pointRadius:2,
+    pointBackgroundColor:colors[i%colors.length],
+    fill:false,tension:0.3,hidden:true
+  }));
+
+  // 合計ライン
+  datasets.unshift({
+    label:'インデックス合計',
+    data:filtered.map(s=>{
+      if(s.accounts){
+        return s.accounts.filter(a=>INDEX_CATS.includes(a.cat)&&!EXCL.test(a.name)).reduce((sum,a)=>sum+a.amount,0);
+      }
+      return INDEX_CATS.reduce((sum,c)=>sum+(s.cats[c]||0),0);
+    }),
+    borderColor:isDark?'#fff':'#333',
+    backgroundColor:'transparent',
+    borderWidth:2.5,borderDash:[5,3],
+    pointRadius:4,pointBackgroundColor:isDark?'#fff':'#333',
+    fill:false,tension:0.3,hidden:false
+  });
+
   trDestroyChart(canvasId);
   const canvas=document.getElementById(canvasId);
   canvas.style.width='100%';canvas.style.minWidth='';
