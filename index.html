@@ -5128,13 +5128,13 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
 
   // 全スナップショットについて、costPrice未保存（旧データ）はamAccountsのフォールバックで補完
   filtered.forEach((s,i)=>{
-    if(!gainData[i]){
-      const cur=trCalcSnapshotGain(s,true,null);
-      const curS=trCalcSnapshotGain(s,true,'stock');
-      const curI=trCalcSnapshotGain(s,true,'index');
-      if(cur) gainData[i]=cur;
-      if(curS)gainDataStock[i]=curS;
-      if(curI)gainDataIndex[i]=curI;
+    const needAll=!gainData[i];
+    const needStock=!gainDataStock[i];
+    const needIndex=!gainDataIndex[i];
+    if(needAll||needStock||needIndex){
+      if(needAll){const cur=trCalcSnapshotGain(s,true,null);if(cur)gainData[i]=cur;}
+      if(needStock){const curS=trCalcSnapshotGain(s,true,'stock');if(curS)gainDataStock[i]=curS;}
+      if(needIndex){const curI=trCalcSnapshotGain(s,true,'index');if(curI)gainDataIndex[i]=curI;}
     }
   });
 
