@@ -5053,7 +5053,10 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
   // 現在の資産管理データから名前→{costPrice,shares,price,cat}の参照マップを作成（フォールバック用）
   const amInfoMap={};
   try{
-    (amAccounts||[]).forEach(a=>{if(a.costPrice>0&&!a.sold)amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};});
+    (amAccounts||[]).forEach(a=>{
+      if(a.costPrice>0&&!a.sold&&(a.amount||0)>0)// 評価額0は除外
+        amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};
+    });
   }catch(e){}
   const UNIT_BASED_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
   const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
