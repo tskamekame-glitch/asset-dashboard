@@ -1053,11 +1053,12 @@ input[type=number] { -moz-appearance: textfield; }
   <!-- 保有株サブパネル -->
   <div class="jp-sub" id="jpsub-hold">
     <div class="page-inner">
-      <div class="filter-bar" style="padding-bottom:4px">
+      <div class="filter-bar" style="padding-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <button class="filter-btn active" onclick="jpSetFilter('all',this)">すべて</button>
         <button class="filter-btn" onclick="jpSetFilter('特定口座',this)">特定</button>
         <button class="filter-btn" onclick="jpSetFilter('NISA',this)">NISA</button>
         <button class="filter-btn" onclick="jpSetFilter('一般口座',this)">一般</button>
+        <button onclick="jpDownloadHoldCSV()" style="margin-left:auto;padding:5px 12px;font-size:12px;border:1px solid var(--accent);border-radius:8px;background:var(--bg2);color:var(--accent);cursor:pointer;font-family:inherit;white-space:nowrap">⬇ CSV</button>
       </div>
       <div id="jp-hold-list"></div>
       <div class="empty" id="jp-hold-empty" style="display:none">保有株がありません<br><small>右上「＋追加」から登録</small></div>
@@ -7123,6 +7124,27 @@ function slRender(){
 // ============================================================
 const JP_KEY = 'jpstock_v1';
 
+function jpDownloadHoldCSV(){
+  const data=jpLoad();
+  const stocks=data.stocks||[];
+  if(!stocks.length){showToast('保有株がありません',2000);return;}
+  const headers=['銘柄名','コード','セクター','口座','株数','取得単価','取得日','現在値','評価額','損益','損益率(%)','売値①','売値②本命','売値③','メモ'];
+  const rows=stocks.map(s=>{
+    const cur=s.currentPrice||s.buyPrice||0;
+    const evalAmt=s.shares*cur;
+    const cost=s.shares*(s.buyPrice||0);
+    const gain=evalAmt-cost;
+    const gainPct=cost>0?(gain/cost*100).toFixed(2):'';
+    return[s.name||'',s.code||'',s.sector||'',s.account||'',s.shares||0,s.buyPrice||0,s.buyDate||'',cur||'',Math.round(evalAmt),Math.round(gain),gainPct,s.sell1||'',s.sell2||'',s.sell3||'',s.memo||''];
+  });
+  const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`保有株_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+  URL.revokeObjectURL(url);
+  showToast(`⬇ ${stocks.length}件をCSVダウンロードしました`,2500);
+}
 function jpLoad() {
   try { return JSON.parse(localStorage.getItem(JP_KEY)) || { stocks: [], sells: [] }; }
   catch(e) { return { stocks: [], sells: [] }; }
