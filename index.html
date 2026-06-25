@@ -5052,10 +5052,23 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
   if(!sourceAccounts.length)return null;
   // 現在の資産管理データから名前→{costPrice,shares,price,cat}の参照マップを作成（フォールバック用）
   const amInfoMap={};
+  const amCatCostMap={};// カテゴリ別の取得総額集計（名前マッチしない場合のフォールバック）
   try{
     (amAccounts||[]).forEach(a=>{
-      if(a.costPrice>0&&!a.sold&&(a.amount||0)>0)// 評価額0は除外
+      if(a.costPrice>0&&!a.sold&&(a.amount||0)>0){
         amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};
+        // カテゴリ別集計
+        const cat=a.cat;
+        if(!amCatCostMap[cat])amCatCostMap[cat]={evalSum:0,costSum:0};
+        const sh=a.shares||0;
+        const cp=a.costPrice||0;
+        const costTotal=sh>0?sh*cp:cp;
+        const evalTotal=a.amount||0;
+        if(evalTotal>0&&costTotal>0&&evalTotal/costTotal<100&&evalTotal/costTotal>0.01){
+          amCatCostMap[cat].evalSum+=evalTotal;
+          amCatCostMap[cat].costSum+=costTotal;
+        }
+      }
     });
   }catch(e){}
   const UNIT_BASED_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
@@ -5113,6 +5126,27 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
     evalSum+=evalTotal;
     costSum+=costTotal;
   });
+  if(!hasAny&&!useCurrentAccounts&&catFilter){
+    // 名前マッチも個別計算も失敗した場合、amCatCostMapのカテゴリ集計で代替
+    const cats=catFilter==='stock'?STOCK_CATS_F:catFilter==='index'?INDEX_CATS_F:null;
+    if(cats){
+      // スナップショットのカテゴリ別評価額合計を計算
+      let snapEvalSum=0;
+      (s.accounts||[]).forEach(a=>{
+        if(!cats.includes(a.cat))return;
+        if(isExcluded(a.name))return;
+        if(BALANCE_BASED_PAT.test(a.name||''))return;
+        if((a.amount||0)<=0)return;
+        snapEvalSum+=a.amount;
+      });
+      // 現在のamAccountsのカテゴリ別取得総額を取得
+      let catCostSum=0;
+      cats.forEach(cat=>{if(amCatCostMap[cat])catCostSum+=amCatCostMap[cat].costSum;});
+      if(snapEvalSum>0&&catCostSum>0){
+        return{evalSum:snapEvalSum,costSum:catCostSum,gain:snapEvalSum-catCostSum,pct:catCostSum>0?(snapEvalSum-catCostSum)/catCostSum*100:0};
+      }
+    }
+  }
   if(!hasAny)return null;
   return {evalSum,costSum,gain:evalSum-costSum,pct:costSum>0?(evalSum-costSum)/costSum*100:0};
 }
