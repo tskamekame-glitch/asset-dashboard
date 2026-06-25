@@ -5001,10 +5001,14 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
   let evalSum=0,costSum=0,hasAny=false;
   const STOCK_CATS_F=['個別株','高配当','外国株式'];
   const INDEX_CATS_F=['全世界インデックス','日本インデックス','インドインデックス'];
+  const isExcluded=name=>trGainExcludeNames.some(ex=>{
+    if(!ex)return false;
+    if(name===ex)return true;
+    return name.startsWith(ex+'（')||name.startsWith(ex+' ')||name.startsWith(ex+'　');
+  });
   sourceAccounts.forEach(a=>{
-    // 売却済みは損益推移グラフから除外（評価額0で誤計算になるため）
     if(a.sold)return;
-    if(trGainExcludeNames.some(ex=>a.name===ex||a.name.startsWith(ex+'（')||a.name.startsWith(ex+' ')))return;
+    if(isExcluded(a.name))return;
     // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
     const fallback=amInfoMap[a.name];
     const cp=(a.costPrice>0)?a.costPrice:(fallback?fallback.costPrice:0);
@@ -5045,6 +5049,7 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
 }
 
 function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
+  console.log('[gainLine] excludeNames:', JSON.stringify(trGainExcludeNames));
   trDestroyChart('gainLine');
   trDestroyChart('gainLineStock');
   trDestroyChart('gainLineIndex');
@@ -5189,20 +5194,33 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
     '#2980b9','rgba(41,128,185,0.12)');
 
   // ── 合算グラフ（株・インデックス・合算の3ライン） ──
+  // 合算 = 株ライン + インデックスラインの合計（catFilter=nullの全体計算ではなく）
+  const combinedLine=validIdx.map((_,vi)=>{
+    const s=stockLine[vi];
+    const idx2=indexLine[vi];
+    if(s===null&&idx2===null)return null;
+    return (s||0)+(idx2||0);
+  });
   const latestG=gainData[lastValidIdx];
+  const latestCombined=combinedLine[combinedLine.length-1];
   // 合算サマリー表示（インデックス・株と同じ形式）
   const combinedSumEl=document.getElementById('gainLineCombinedSummary');
   if(combinedSumEl){
-    if(latestG){
-      const s=latestG.gain>=0?'+':'';
-      const c=latestG.gain>=0?'var(--green)':'var(--danger)';
-      const sS=latestS&&latestS.gain>=0?'+':'';
-      const sI=latestI&&latestI.gain>=0?'+':'';
-      const cS=latestS?(latestS.gain>=0?'var(--green)':'var(--danger)'):'var(--text3)';
-      const cI=latestI?(latestI.gain>=0?'var(--green)':'var(--danger)'):'var(--text3)';
-      let html=`最新: <b style="color:${c}">${s}${trFmt(latestG.gain)}（${s}${latestG.pct.toFixed(1)}%）</b>`;
-      if(latestS&&latestI){
-        html+=`&nbsp;&nbsp;<span style="font-size:10px;color:var(--text3)">株 <b style="color:${cS}">${sS}${trFmt(latestS.gain)}</b> ／ 指数 <b style="color:${cI}">${sI}${trFmt(latestI.gain)}</b></span>`;
+    const latestCombinedVal=latestCombined;
+    const latestSVal=latestS?latestS.gain:null;
+    const latestIVal=latestI?latestI.gain:null;
+    if(latestCombinedVal!==null){
+      const s=latestCombinedVal>=0?'+':'';
+      const c=latestCombinedVal>=0?'var(--green)':'var(--danger)';
+      const totalCost=(latestS?latestS.costSum:0)+(latestI?latestI.costSum:0);
+      const pct=totalCost>0?latestCombinedVal/totalCost*100:0;
+      const sS=latestSVal!==null&&latestSVal>=0?'+':'';
+      const sI=latestIVal!==null&&latestIVal>=0?'+':'';
+      const cS=latestSVal!==null?(latestSVal>=0?'var(--green)':'var(--danger)'):'var(--text3)';
+      const cI=latestIVal!==null?(latestIVal>=0?'var(--green)':'var(--danger)'):'var(--text3)';
+      let html=`最新: <b style="color:${c}">${s}${trFmt(latestCombinedVal)}（${s}${pct.toFixed(1)}%）</b>`;
+      if(latestSVal!==null&&latestIVal!==null){
+        html+=`&nbsp;&nbsp;<span style="font-size:10px;color:var(--text3)">株 <b style="color:${cS}">${sS}${trFmt(latestSVal)}</b> ／ 指数 <b style="color:${cI}">${sI}${trFmt(latestIVal)}</b></span>`;
       }
       combinedSumEl.innerHTML=html;
     }else{combinedSumEl.innerHTML='';}
@@ -5214,10 +5232,10 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   if(hasStock) datasets.push({label:'株',data:stockLine,borderColor:'#E24B4A',backgroundColor:'transparent',borderWidth:2,pointRadius:2,fill:false,tension:0.25,spanGaps:false});
   if(hasIndex) datasets.push({label:'インデックス',data:indexLine,borderColor:'#2980b9',backgroundColor:'transparent',borderWidth:2,pointRadius:2,fill:false,tension:0.25,spanGaps:false});
   datasets.push({
-    label:'合算',data:gainLine,
+    label:'合算',data:combinedLine,
     borderColor:'#0F6E56',backgroundColor:'rgba(15,110,86,0.08)',
     borderWidth:2.5,pointRadius:3,
-    pointBackgroundColor:gainLine.map(v=>v===null?'transparent':v>=0?'#0F6E56':'#C0392B'),
+    pointBackgroundColor:combinedLine.map(v=>v===null?'transparent':v>=0?'#0F6E56':'#C0392B'),
     fill:true,tension:0.25,spanGaps:false,
     segment:{borderColor:ctx=>(ctx.p0.parsed.y<0||ctx.p1.parsed.y<0)?'#C0392B':'#0F6E56'}
   });
