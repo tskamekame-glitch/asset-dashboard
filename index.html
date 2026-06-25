@@ -3604,7 +3604,25 @@ function sendToTrend(){
   };
   const cats={};amAccounts.filter(a=>!a.sold).forEach(a=>{const c=normCat2(a);cats[c]=(cats[c]||0)+a.amount;});
   const total=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+a.amount,0);
-  const accounts=amAccounts.filter(a=>!a.sold).map(a=>({name:a.name,cat:normCat2(a),amount:a.amount,updated:a.updated,costPrice:a.costPrice||0,shares:a.shares||0,price:a.price||0,code:a.code||''}));
+  const INDEX_CATS_SNAP=['全世界インデックス','日本インデックス','インドインデックス'];
+  const accounts=amAccounts.filter(a=>!a.sold).map(a=>{
+    let costPrice=a.costPrice||0;
+    // インデックスで口数(shares)がない場合、costPriceは取得総額として保存
+    // スナップショット計算時に正しく解釈できるようフラグを付与
+    const isIndex=INDEX_CATS_SNAP.includes(a.cat);
+    const hasShares=(a.shares||0)>0;
+    return {
+      name:a.name,
+      cat:normCat2(a),
+      amount:a.amount,
+      updated:a.updated,
+      costPrice:costPrice,
+      shares:a.shares||0,
+      price:a.price||0,
+      code:a.code||'',
+      costIsTotal:isIndex&&!hasShares&&costPrice>0,// 取得総額フラグ
+    };
+  });
   snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
@@ -4414,6 +4432,26 @@ function trToggleGainExclude(name){
   trSaveGainExclude();
   trRenderAll();
 }
+// スナップショット診断関数（コンソールから呼び出し可能）
+window.diagSnapshots=function(){
+  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
+  const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|DC年金|iDeCo|イデコ|TOPIX100/;
+  snapshots.forEach(s=>{
+    if(!s.accounts)return;
+    const indexAccs=s.accounts.filter(a=>INDEX_CATS.includes(a.cat)&&!PAYPAY_PAT.test(a.name));
+    if(!indexAccs.length)return;
+    console.group(`📅 ${s.date}`);
+    indexAccs.forEach(a=>{
+      const evalTotal=a.amount||0;
+      const cp=a.costPrice||0;
+      const sh=a.shares||0;
+      const costTotal=sh>0?sh*cp:cp;
+      const gain=evalTotal-costTotal;
+      console.log(`${a.name.slice(0,20)}: 評価¥${evalTotal.toLocaleString()} 取得単価${cp} 口数${sh} → 取得総額¥${Math.round(costTotal).toLocaleString()} 損益¥${Math.round(gain).toLocaleString()}`);
+    });
+    console.groupEnd();
+  });
+};
 function trIsExcluded(name){
   return trGainExcludeNames.some(ex=>{
     if(!ex)return false;
@@ -4502,6 +4540,9 @@ function trNormalizeSnapshots(snaps){
   };
   const PENSION_PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
 
+  const INDEX_CATS_N=['全世界インデックス','日本インデックス','インドインデックス'];
+  const PAYPAY_N=/PayPay|ペイペイ|確定拠出|DC年金|iDeCo|イデコ|TOPIX100/;
+
   snaps.forEach(s=>{
     if(!s.accounts||!s.accounts.length)return;
 
@@ -4511,6 +4552,17 @@ function trNormalizeSnapshots(snaps){
       if(PENSION_PATS.some(p=>p.test(a.name))){a.cat='年金';return;}
       // カテゴリマップ変換
       if(TO_GRAPH_CAT[a.cat])a.cat=TO_GRAPH_CAT[a.cat];
+      // インデックスで口数なし → costPriceは取得総額
+      if(INDEX_CATS_N.includes(a.cat)&&!(a.shares>0)&&(a.costPrice>0)){
+        a.costIsTotal=true;
+      }
+      // 異常値チェック：costPrice×sharesが評価額の100倍超 → 総額として扱う
+      if(INDEX_CATS_N.includes(a.cat)&&(a.shares>0)&&(a.costPrice>0)&&(a.amount>0)){
+        const costCalc=a.shares*a.costPrice;
+        if(costCalc>a.amount*100){
+          a.costIsTotal=true;// 取得総額フラグに切り替え
+        }
+      }
     });
 
     // Step2: accountsからcatsを完全再計算（不整合を排除）
@@ -5031,15 +5083,15 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
 
     let costTotal;
     if(isUnitBased){
-      if(!(shares>0)){
-        // shares未入力の場合：costPriceを取得総額として扱う（インデックス専用入力欄）
-        if(cp>0)costTotal=cp;
-        else return;
+      // costIsTotalフラグがある（取得総額として保存）または shares=0 の場合
+      if(a.costIsTotal||!(shares>0)){
+        costTotal=cp>0?cp:0;
+        if(!costTotal)return;
       }else{
         costTotal=shares*cp;
         // 異常値チェック：costTotalが評価額の100倍超ならcostPriceを取得総額として扱う
-        if(evalTotal>0&&costTotal>evalTotal*100){
-          costTotal=cp;// 単価ではなく総額として解釈
+        if(evalTotal>0&&costTotal>0&&costTotal>evalTotal*100){
+          costTotal=cp;
         }
       }
     }else{
