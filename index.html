@@ -9159,6 +9159,7 @@ function wlRender(){
       <td style="white-space:nowrap">
         <button class="wl-move-btn" onclick="wlMoveUp('${s.id}')" ${isFirst?'disabled':''} title="上へ">▲</button>
         <button class="wl-move-btn" onclick="wlMoveDown('${s.id}')" ${isLast?'disabled':''} title="下へ">▼</button>
+        <button class="wl-move-btn" onclick="if(confirm('「${s.name}」を削除しますか？')){var d=wlLoad();wlSaveData(d.filter(function(x){return x.id!=='${s.id}';}));wlRender();}" style="color:#C0392B;border-color:#C0392B;margin-top:3px" title="削除">✕</button>
       </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
