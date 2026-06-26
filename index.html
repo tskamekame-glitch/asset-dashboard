@@ -1828,6 +1828,7 @@ input[type=number] { -moz-appearance: textfield; }
       </div>
 
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
+      <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
     </div>
     <div class="sheet-btns">
       <button class="btn-cancel" onclick="closeSheet()">キャンセル</button>
@@ -2246,6 +2247,7 @@ function amRenderCard(a){
         +'<div style="flex:1;min-width:0">'
           +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+'</div>'
           +noteHtml
+          +(a.earningsDate?'<div style="font-size:11px;color:var(--accent);margin-top:2px">📅 決算: '+esc(a.earningsDate)+'</div>':'')
           +codeInput
           +fxInput
           +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
@@ -2663,6 +2665,7 @@ function openAddModal(defaultCat){
   if(document.getElementById('fIndexCost'))document.getElementById('fIndexCost').value='';
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value='';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
+  if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value='';
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
@@ -2691,6 +2694,7 @@ function openEditModal(id){
   if(document.getElementById('fIndexCost'))document.getElementById('fIndexCost').value=a.costPrice||'';
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value=a.soldAmount&&a.sold?a.soldAmount:'';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
+  if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value=a.earningsDate||'';
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
@@ -2732,8 +2736,9 @@ async function saveAccount(){
   }else{
     costPrice=parseFloat(document.getElementById('fCost')?.value)||0;
   }
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,updated:todayStr()});}
+  const earningsDate=(document.getElementById('fEarningsDate')?.value||'').trim();
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
 }
 function amMoveAccount(id,dir){
@@ -3635,13 +3640,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:P${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:P1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:Q${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:Q1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -3731,7 +3736,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:P1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:Q1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -3750,6 +3755,7 @@ async function amLoadFromSheet(){
       soldAmount:r[13]?parseFloat(r[13])||0:0,
       soldPrice:r[14]?parseFloat(r[14])||0:0,
       prevSBIAmount:r[15]?parseFloat(r[15])||0:0,
+      earningsDate:r[16]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
