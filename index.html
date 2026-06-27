@@ -9206,57 +9206,82 @@ function tradeImportSBI(event){
     try{
       const text=e.target.result;
       const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-      const toH=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
+      const toH=s=>(s||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
       const toNum=s=>parseFloat((s||'').replace(/[,，\+\s円]/g,''))||0;
+      const parseCSVLine=l=>{const r=[];let cur='',inQ=false;for(const c of l){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){r.push(cur.trim());cur='';}else cur+=c;}r.push(cur.trim());return r;};
 
-      let added=0,skipped=0;
+      // フォーマット判定
+      const isYakujo=lines.some(l=>l.includes('約定履歴'));
+      const isYozoku=lines.some(l=>l.includes('特定口座損益明細')||l.includes('銘柄コード,銘柄,譲渡益取消'));
+
       tradeLoad();
       const existing=new Set(tradeData.map(d=>`${d.name}_${d.date}_${d.type}_${d.amount}`));
+      let added=0,skipped=0;
 
-      for(let i=0;i<lines.length;i++){
-        const cols=lines[i].split(',').map(c=>c.replace(/^"|"$/g,'').trim());
-        if(cols.length<8)continue;
-        // 売買行の判定：銘柄コード or 銘柄名がある行
-        const code=toH(cols[0]);
-        const name=toH(cols[1]);
-        const type=toH(cols[5]);// 現物売、現物買、国内投信解約 等
-        const dateStr=cols[3]?.replace(/\//g,'-');
-        const sellAmt=toNum(cols[7]);
-        const buyAmt=toNum(cols[10]);
-        const gainAmt=toNum(cols[11]);
-        const sharesStr=toH(cols[4]||'');
-        const shares=parseFloat(sharesStr)||0;
+      if(isYakujo){
+        // 約定履歴フォーマット
+        // 列: 約定日,銘柄,銘柄コード,市場,取引,期限,預り,課税,約定数量,約定単価,手数料,税額,受渡日,受渡金額
+        let inData=false;
+        for(const line of lines){
+          const cols=parseCSVLine(line);
+          if(cols[0]==='約定日'){inData=true;continue;}
+          if(!inData||!cols[0])continue;
+          const dateStr=cols[0].replace(/\//g,'-');
+          if(!dateStr.match(/^\d{4}-\d{2}-\d{2}$/))continue;
+          const name=toH(cols[1]);
+          const code=toH(cols[2])||'';
+          const tradeType_raw=toH(cols[4]);
+          const shares=toNum(cols[8]);
+          const price=toNum(cols[9]);
+          const amount=toNum(cols[13]);
+          const account=toH(cols[6]);
+          if(!name||!amount)continue;
 
-        if(!name||!dateStr||!type)continue;
-        if(type.includes('譲渡益'))continue;// 税行はスキップ
-        if(!dateStr.match(/^\d{4}-\d{2}-\d{2}$/))continue;
+          let tradeType;
+          if(tradeType_raw.includes('買'))tradeType='buy';
+          else if(tradeType_raw.includes('売')||tradeType_raw.includes('解約'))tradeType='sell';
+          else continue;
 
-        let tradeType,amount,price=0;
-        if(type.includes('売')||type.includes('解約')){
-          tradeType='sell';amount=sellAmt;
-          price=shares>0?Math.round(sellAmt/shares):0;
-        }else if(type.includes('買')){
-          tradeType='buy';amount=buyAmt;
-          price=shares>0?Math.round(buyAmt/shares):0;
-        }else continue;
+          const key=`${name}_${dateStr}_${tradeType}_${amount}`;
+          if(existing.has(key)){skipped++;continue;}
+          tradeData.push({id:tradeUID(),type:tradeType,date:dateStr,name,code,shares,price,amount,memo:account.includes('NISA')?'NISA':'',gain:0});
+          existing.add(key);added++;
+        }
+      }else if(isYozoku){
+        // 譲渡益税明細フォーマット
+        // 列: 銘柄コード,銘柄,取消区分,約定日,数量,取引,受渡日,売却金額,費用,取得年月日,取得金額,損益
+        let inData=false;
+        for(const line of lines){
+          const cols=parseCSVLine(line);
+          if(cols[0]==='銘柄コード'){inData=true;continue;}
+          if(!inData)continue;
+          const dateStr=(cols[3]||'').replace(/\//g,'-');
+          if(!dateStr.match(/^\d{4}-\d{2}-\d{2}$/))continue;
+          const name=toH(cols[1]);
+          const code=toH(cols[0])||'';
+          const tradeType_raw=toH(cols[5]);
+          const sharesStr=toH(cols[4]);
+          const shares=parseFloat(sharesStr)||0;
+          const sellAmt=toNum(cols[7]);
+          const gain=toNum(cols[11]);
+          if(!name||!sellAmt)continue;
+          if(tradeType_raw.includes('譲渡益'))continue;
 
-        if(!amount)continue;
-        const key=`${name}_${dateStr}_${tradeType}_${amount}`;
-        if(existing.has(key)){skipped++;continue;}
+          let tradeType;
+          if(tradeType_raw.includes('売')||tradeType_raw.includes('解約'))tradeType='sell';
+          else if(tradeType_raw.includes('買'))tradeType='buy';
+          else continue;
 
-        tradeData.push({
-          id:tradeUID(),
-          type:tradeType,
-          date:dateStr,
-          name,
-          code:code.trim()||'',
-          shares,price,amount,
-          gain:gainAmt||0,
-          memo:''
-        });
-        existing.add(key);
-        added++;
+          const price=shares>0?Math.round(sellAmt/shares):0;
+          const key=`${name}_${dateStr}_${tradeType}_${sellAmt}`;
+          if(existing.has(key)){skipped++;continue;}
+          tradeData.push({id:tradeUID(),type:tradeType,date:dateStr,name,code:code.trim(),shares,price,amount:sellAmt,gain,memo:''});
+          existing.add(key);added++;
+        }
+      }else{
+        showToast('⚠ 対応していないCSV形式です');return;
       }
+
       tradeSaveData();tradeRender();
       showToast(`✅ ${added}件インポート${skipped?` / ${skipped}件重複スキップ`:''}`,4000);
     }catch(err){console.error(err);showToast('⚠ 読み込みエラー: '+err.message);}
