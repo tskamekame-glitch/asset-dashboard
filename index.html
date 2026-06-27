@@ -568,8 +568,6 @@ input[type=number] { -moz-appearance: textfield; }
   <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
   <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
-  <button class="nav-btn" data-tab="dividend" onclick="switchTab('dividend')"><span class="ni">💰</span>配当</button>
-  <button class="nav-btn" data-tab="trades" onclick="switchTab('trades')"><span class="ni">📋</span>取引履歴</button>
   <button class="nav-btn" data-tab="jpstock" onclick="switchTab('jpstock')"><span class="ni">📈</span>日本株</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
@@ -664,17 +662,11 @@ input[type=number] { -moz-appearance: textfield; }
         <div class="hc-meta">収入・支出・副業<br>キャッシュフロー管理</div>
         <div class="hc-badge" id="hbadge-cashflow">タップして入力</div>
       </div>
-      <div class="home-card" onclick="switchTab('dividend')">
-        <div class="hc-icon">💰</div>
         <div class="hc-title">配当金管理</div>
         <div class="hc-meta">受取配当金の記録<br>月別・年別グラフ</div>
-        <div class="hc-badge" id="hbadge-dividend">—</div>
       </div>
-      <div class="home-card" onclick="switchTab('trades')">
-        <div class="hc-icon">📋</div>
         <div class="hc-title">取引履歴</div>
         <div class="hc-meta">買い・売り・配当を記録<br>累計IN/OUT推移</div>
-        <div class="hc-badge" id="hbadge-trades">—</div>
       </div>
     </div>
     <div class="hint"><strong>ヒント：</strong>「資産管理」でCSV書き出し→「推移グラフ」に読み込むと月次推移を記録できます。</div>
@@ -726,6 +718,12 @@ input[type=number] { -moz-appearance: textfield; }
         <span><span class="chevron">▼</span></span>
       </div>
       <div class="account-list"><div class="chart-wrap"><div class="bar-chart" id="amBarChart"></div></div></div>
+      <!-- ヒートマップ -->
+      <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:600;color:var(--text2)">🟥 保有銘柄ヒートマップ</div>
+        <div style="font-size:11px;color:var(--text3)">面積=評価額 / 色=損益率</div>
+      </div>
+      <div id="amHeatmap" style="padding:0 16px 12px"></div>
     </div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
@@ -1627,121 +1625,6 @@ input[type=number] { -moz-appearance: textfield; }
 <!-- ========== CASHFLOW TABpanels -->
 
 <!-- ========== CASHFLOW TAB ========== -->
-<!-- ============================================================ -->
-<!-- 配当金管理タブ -->
-<!-- ============================================================ -->
-<div class="panel" id="tab-dividend">
-  <div style="padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <h1 style="font-size:18px;font-weight:700;margin:0">💰 配当金管理</h1>
-    <button onclick="dvOpenAdd()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">＋ 追加</button>
-  </div>
-  <!-- サマリー -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px" id="dvSummaryGrid"></div>
-  <!-- 月別グラフ -->
-  <div class="card" id="dvMonthCard" style="margin:0 12px 12px">
-    <div class="card-head"><h2>📊 月別配当金</h2>
-      <select id="dvYearSelect" onchange="dvRender()" style="font-size:13px;padding:4px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit"></select>
-    </div>
-    <div class="chart-container"><canvas id="dvMonthChart"></canvas></div>
-  </div>
-  <!-- 一覧 -->
-  <div style="padding:0 12px 80px" id="dvList"></div>
-</div>
-
-<!-- 配当追加モーダル -->
-<div id="dvModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:flex-end;justify-content:center" onclick="if(event.target===this)dvCloseModal()">
-  <div style="width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.2)">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <h2 id="dvModalTitle" style="font-size:16px;font-weight:700;margin:0">配当金を追加</h2>
-      <button onclick="dvCloseModal()" style="background:var(--bg2);border:none;width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--text2)">✕</button>
-    </div>
-    <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-      <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">銘柄名</label>
-        <input id="dv-name" type="text" placeholder="例: 信越化学工業" list="dvNameList" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
-        <datalist id="dvNameList"></datalist>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">受取日</label>
-          <input id="dv-date" type="date" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">口座</label>
-          <select id="dv-account" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
-            <option>特定口座</option><option>NISA</option><option>一般口座</option></select></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">税引前（円）</label>
-          <input id="dv-gross" type="text" inputmode="numeric" placeholder="例: 10000" oninput="dvCalcNet()" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">税引後（円）</label>
-          <input id="dv-net" type="text" inputmode="numeric" placeholder="自動計算" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-      </div>
-      <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">メモ</label>
-        <input id="dv-memo" type="text" placeholder="例: 中間配当" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-    </div>
-    <div style="flex-shrink:0;padding:12px 20px 28px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px">
-      <button onclick="dvCloseModal()" style="flex:1;padding:14px;border:1.5px solid var(--border2);border-radius:12px;background:var(--bg2);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">キャンセル</button>
-      <button onclick="dvSave()" style="flex:2;padding:14px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit">✅ 保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============================================================ -->
-<!-- 取引履歴タブ -->
-<!-- ============================================================ -->
-<div class="panel" id="tab-trades">
-  <div style="padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <h1 style="font-size:18px;font-weight:700;margin:0">📋 取引履歴</h1>
-    <div style="display:flex;gap:8px">
-      <button onclick="document.getElementById('tradeCSVInput').click()" style="padding:8px 12px;background:#e6931a;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">📥 SBI読込</button>
-      <input type="file" id="tradeCSVInput" accept=".csv" style="display:none" onchange="tradeImportSBI(event)">
-      <button onclick="tradeOpenAdd()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">＋ 追加</button>
-    </div>
-  </div>
-  <!-- サマリー -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px" id="tradeSummaryGrid"></div>
-  <!-- IN/OUTグラフ -->
-  <div class="card" style="margin:0 12px 12px">
-    <div class="card-head"><h2>📈 累計IN/OUT</h2></div>
-    <div class="chart-container"><canvas id="tradeLineChart"></canvas></div>
-  </div>
-  <!-- 一覧 -->
-  <div style="padding:0 12px 80px" id="tradeList"></div>
-</div>
-
-<!-- 取引追加モーダル -->
-<div id="tradeModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:flex-end;justify-content:center" onclick="if(event.target===this)tradeCloseModal()">
-  <div style="width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.2)">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <h2 id="tradeModalTitle" style="font-size:16px;font-weight:700;margin:0">取引を追加</h2>
-      <button onclick="tradeCloseModal()" style="background:var(--bg2);border:none;width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--text2)">✕</button>
-    </div>
-    <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">種別</label>
-          <select id="trade-type" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
-            <option value="buy">🟢 買い</option><option value="sell">🔴 売り</option><option value="dividend">💰 配当</option></select></div>
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">日付</label>
-          <input id="trade-date" type="date" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-      </div>
-      <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">銘柄名</label>
-        <input id="trade-name" type="text" placeholder="例: 信越化学工業" list="tradeNameList" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
-        <datalist id="tradeNameList"></datalist></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">株数</label>
-          <input id="trade-shares" type="text" inputmode="numeric" placeholder="例: 100" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-        <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">単価（円）</label>
-          <input id="trade-price" type="text" inputmode="numeric" placeholder="例: 6700" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-      </div>
-      <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">合計金額（円）</label>
-        <input id="trade-amount" type="text" inputmode="numeric" placeholder="例: 670000（自動計算可）" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-      <div><label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">メモ</label>
-        <input id="trade-memo" type="text" placeholder="例: ナンピン買い" style="width:100%;padding:12px;font-size:15px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"></div>
-    </div>
-    <div style="flex-shrink:0;padding:12px 20px 28px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px">
-      <button onclick="tradeCloseModal()" style="flex:1;padding:14px;border:1.5px solid var(--border2);border-radius:12px;background:var(--bg2);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">キャンセル</button>
-      <button onclick="tradeSave()" style="flex:2;padding:14px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit">✅ 保存</button>
-    </div>
-  </div>
-</div>
-
 <div class="panel" id="tab-cashflow">
   <div class="phead">
     <div class="phead-inner">
@@ -2194,18 +2077,7 @@ function refreshHome(){
       }
     }
   }catch(e){}
-  // 配当・取引履歴バッジ
   try{
-    dvLoad();
-    const thisYear=new Date().getFullYear()+'';
-    const yearNet=dvData.filter(d=>d.date.startsWith(thisYear)).reduce((s,d)=>s+d.net,0);
-    const dvBadge=document.getElementById('hbadge-dividend');
-    if(dvBadge)dvBadge.textContent=dvData.length?`${thisYear}年 +${fmt(Math.round(yearNet))}円`:'—';
-  }catch(e){}
-  try{
-    tradeLoad();
-    const tradeBadge=document.getElementById('hbadge-trades');
-    if(tradeBadge)tradeBadge.textContent=tradeData.length?`${tradeData.length}件記録済み`:'—';
   }catch(e){}
 }
 
@@ -2265,11 +2137,84 @@ function amRender(){
 
   // 売却済みセクション
   amRenderSoldSection(soldAccounts);
+  // ヒートマップ
+  amRenderHeatmap(activeAccounts,total);
 
   // PFパネルが表示中なら現状配分グラフも自動更新
   if(currentTab==='portfolio'&&typeof pfRenderDonutCharts==='function'){
     try{pfRenderDonutCharts();}catch(e){}
   }
+}
+// ── 保有銘柄ヒートマップ ──
+function amRenderHeatmap(accounts,total){
+  const el=document.getElementById('amHeatmap');
+  if(!el)return;
+
+  // 損益計算できる銘柄のみ（銀行・年金・その他除く）
+  const EXCL_CATS=['銀行','年金','その他','預り金'];
+  const items=accounts
+    .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.costPrice>0)
+    .map(a=>{
+      const shares=a.shares||0;
+      const cp=a.costPrice||0;
+      const cost=shares>0?shares*cp:cp;
+      const gain=a.amount-cost;
+      const pct=cost>0?gain/cost*100:0;
+      return{name:a.name,amount:a.amount,gain,pct,cat:a.cat,code:a.code||''};
+    })
+    .sort((a,b)=>b.amount-a.amount);
+
+  if(!items.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得単価が入力された銘柄が表示されます</p>';return;}
+
+  const maxAmt=items[0].amount;
+  const totalAmt=items.reduce((s,i)=>s+i.amount,0);
+
+  // 色関数（損益率に応じてグラデーション）
+  const pctToColor=pct=>{
+    if(pct>=20)return'#0a5e3f';
+    if(pct>=10)return'#0f8a5a';
+    if(pct>=5)return'#17b27a';
+    if(pct>=2)return'#2ecc8f';
+    if(pct>=0)return'#52d9a8';
+    if(pct>=-2)return'#e8847a';
+    if(pct>=-5)return'#e05a50';
+    if(pct>=-10)return'#c0392b';
+    return'#922b21';
+  };
+
+  // ツリーマップ風レイアウト（横幅に比例してタイル配置）
+  const html=items.map(item=>{
+    const widthPct=Math.max(item.amount/totalAmt*100,3);
+    const color=pctToColor(item.pct);
+    const textColor='#fff';
+    const sign=item.pct>=0?'+':'';
+    const shortName=item.name.length>6?item.name.slice(0,6)+'…':item.name;
+    return`<div onclick="openEditModal(${accounts.find(a=>a.name===item.name)?.id})" style="
+      display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+      width:calc(${widthPct.toFixed(1)}% - 4px);
+      min-width:52px;
+      height:${Math.max(widthPct*0.9,44).toFixed(0)}px;
+      background:${color};border-radius:8px;margin:2px;
+      cursor:pointer;vertical-align:top;overflow:hidden;
+      box-shadow:0 1px 3px rgba(0,0,0,0.15);
+      transition:transform 0.15s;
+      " onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
+      <div style="font-size:${widthPct>8?11:9}px;font-weight:700;color:${textColor};text-align:center;padding:0 4px;word-break:break-all;line-height:1.2">${esc(shortName)}</div>
+      <div style="font-size:${widthPct>8?10:8}px;color:${textColor};opacity:0.9;margin-top:2px">${sign}${item.pct.toFixed(1)}%</div>
+      ${widthPct>10?`<div style="font-size:8px;color:${textColor};opacity:0.75">${fmt(item.amount)}</div>`:''}
+    </div>`;
+  }).join('');
+
+  // 凡例
+  const legend=`<div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
+    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#0a5e3f"></div>+20%以上</div>
+    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#17b27a"></div>+5〜20%</div>
+    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#52d9a8"></div>0〜5%</div>
+    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#e8847a"></div>-5〜0%</div>
+    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#922b21"></div>-10%以下</div>
+  </div>`;
+
+  el.innerHTML=`<div style="line-height:0;display:flex;flex-wrap:wrap;align-items:flex-start">${html}</div>${legend}`;
 }
 // ── 口座カード1件レンダリング（保有中・売却済み共通） ──
 function amRenderCard(a){
@@ -9067,335 +9012,6 @@ wlSaveData._loading=false;
 wlSaveData._timer=null;
 
 // ============================================================
-// 配当金管理
-// ============================================================
-const DV_KEY='dividends_v1';
-let dvData=[];
-let dvEditId=null;
-function dvUID(){return 'd'+Date.now()+Math.random().toString(36).slice(2,5);}
-function dvLoad(){try{dvData=JSON.parse(localStorage.getItem(DV_KEY)||'[]');}catch(e){dvData=[];}}
-function dvSaveData(){try{localStorage.setItem(DV_KEY,JSON.stringify(dvData));}catch(e){}}
-
-function dvOpenAdd(){
-  dvEditId=null;
-  document.getElementById('dvModalTitle').textContent='配当金を追加';
-  document.getElementById('dv-name').value='';
-  document.getElementById('dv-date').value=todayStr();
-  document.getElementById('dv-account').value='特定口座';
-  document.getElementById('dv-gross').value='';
-  document.getElementById('dv-net').value='';
-  document.getElementById('dv-memo').value='';
-  // 銘柄名候補
-  const dl=document.getElementById('dvNameList');
-  const names=[...new Set((amAccounts||[]).filter(a=>!a.sold&&(a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式')).map(a=>a.name))];
-  dl.innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
-  document.getElementById('dvModalBg').style.display='flex';
-  setTimeout(()=>document.getElementById('dv-name').focus(),300);
-}
-function dvCloseModal(){document.getElementById('dvModalBg').style.display='none';dvEditId=null;}
-
-function dvCalcNet(){
-  const g=parseFloat(document.getElementById('dv-gross').value)||0;
-  const acc=document.getElementById('dv-account').value;
-  if(g>0&&!document.getElementById('dv-net').value){
-    const net=acc==='NISA'?g:Math.floor(g*(1-0.20315));
-    document.getElementById('dv-net').value=net;
-  }
-}
-
-function dvSave(){
-  const name=document.getElementById('dv-name').value.trim();
-  const date=document.getElementById('dv-date').value;
-  const gross=parseFloat(document.getElementById('dv-gross').value)||0;
-  const net=parseFloat(document.getElementById('dv-net').value)||0;
-  if(!name||!date||!gross){showToast('⚠ 銘柄名・日付・税引前金額は必須です');return;}
-  const entry={
-    id:dvEditId||dvUID(),
-    name,date,
-    account:document.getElementById('dv-account').value,
-    gross,net:net||Math.floor(gross*(1-0.20315)),
-    memo:document.getElementById('dv-memo').value.trim()
-  };
-  if(dvEditId){const i=dvData.findIndex(x=>x.id===dvEditId);if(i>=0)dvData[i]=entry;}
-  else dvData.push(entry);
-  dvSaveData();dvCloseModal();dvRender();
-  showToast('✅ 配当金を記録しました');
-}
-
-function dvDelete(id){
-  if(!confirm('削除しますか？'))return;
-  dvData=dvData.filter(x=>x.id!==id);
-  dvSaveData();dvRender();
-}
-
-function dvRender(){
-  dvLoad();
-  if(!dvData.length){
-    document.getElementById('dvSummaryGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text3);padding:20px;font-size:13px">まだ配当金の記録がありません。＋追加から記録してください。</div>';
-    document.getElementById('dvList').innerHTML='';
-    return;
-  }
-
-  // 年選択
-  const years=[...new Set(dvData.map(d=>d.date.slice(0,4)))].sort((a,b)=>b-a);
-  const sel=document.getElementById('dvYearSelect');
-  const curYear=sel.value||years[0];
-  sel.innerHTML=years.map(y=>`<option value="${y}" ${y===curYear?'selected':''}>${y}年</option>`).join('');
-
-  // サマリー
-  const totalGross=dvData.reduce((s,d)=>s+d.gross,0);
-  const totalNet=dvData.reduce((s,d)=>s+d.net,0);
-  const thisYear=new Date().getFullYear()+'';
-  const yearNet=dvData.filter(d=>d.date.startsWith(thisYear)).reduce((s,d)=>s+d.net,0);
-  document.getElementById('dvSummaryGrid').innerHTML=`
-    <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">累計税引後</div>
-      <div style="font-size:16px;font-weight:700;color:var(--green)">${fmt(Math.round(totalNet))}</div>
-    </div>
-    <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${thisYear}年税引後</div>
-      <div style="font-size:16px;font-weight:700;color:var(--green)">${fmt(Math.round(yearNet))}</div>
-    </div>
-    <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">件数</div>
-      <div style="font-size:16px;font-weight:700;color:var(--text)">${dvData.length}件</div>
-    </div>`;
-
-  // 月別グラフ
-  const yearData=dvData.filter(d=>d.date.startsWith(curYear));
-  const monthNet=Array(12).fill(0);
-  yearData.forEach(d=>{const m=parseInt(d.date.slice(5,7))-1;monthNet[m]+=d.net;});
-  trDestroyChart('dvMonthChart');
-  const canvas=document.getElementById('dvMonthChart');
-  const isDark=document.body.classList.contains('dark');
-  const tickColor=isDark?'#aaa':'#666';
-  chartInstances['dvMonthChart']=new Chart(canvas,{type:'bar',data:{
-    labels:['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
-    datasets:[{label:'税引後配当',data:monthNet,backgroundColor:'rgba(15,110,86,0.7)',borderRadius:6}]
-  },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)+'円'}}},scales:{y:{ticks:{callback:v=>fmt(v)+'円',color:tickColor,font:{size:10}},grid:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}},x:{ticks:{color:tickColor,font:{size:10}},grid:{display:false}}}},plugins:[ChartDataLabels]});
-
-  // 一覧（新しい順）
-  const sorted=[...dvData].sort((a,b)=>b.date.localeCompare(a.date));
-  document.getElementById('dvList').innerHTML=sorted.map(d=>`
-    <div style="background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(d.name)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${d.date} ／ ${d.account}${d.memo?' ／ '+esc(d.memo):''}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:3px">税引前 ${fmt(d.gross)}円 → 税引後 <b style="color:var(--green)">${fmt(d.net)}円</b></div>
-      </div>
-      <button onclick="dvDelete('${d.id}')" style="background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer;flex-shrink:0">✕</button>
-    </div>`).join('');
-}
-
-// ============================================================
-// 取引履歴
-// ============================================================
-const TRADE_KEY='trades_v1';
-let tradeData=[];
-let tradeEditId=null;
-function tradeUID(){return 't'+Date.now()+Math.random().toString(36).slice(2,5);}
-function tradeLoad(){try{tradeData=JSON.parse(localStorage.getItem(TRADE_KEY)||'[]');}catch(e){tradeData=[];}}
-function tradeSaveData(){try{localStorage.setItem(TRADE_KEY,JSON.stringify(tradeData));}catch(e){}}
-
-function tradeImportSBI(event){
-  const file=event.target.files[0];
-  if(!file)return;
-  event.target.value='';
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const text=e.target.result;
-      const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-      const toH=s=>(s||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
-      const toNum=s=>parseFloat((s||'').replace(/[,，\+\s円]/g,''))||0;
-      const parseCSVLine=l=>{const r=[];let cur='',inQ=false;for(const c of l){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){r.push(cur.trim());cur='';}else cur+=c;}r.push(cur.trim());return r;};
-
-      // フォーマット判定
-      const isYakujo=lines.some(l=>l.includes('約定履歴'));
-      const isYozoku=lines.some(l=>l.includes('特定口座損益明細')||l.includes('銘柄コード,銘柄,譲渡益取消'));
-
-      tradeLoad();
-      const existing=new Set(tradeData.map(d=>`${d.name}_${d.date}_${d.type}_${d.amount}`));
-      let added=0,skipped=0;
-
-      if(isYakujo){
-        // 約定履歴フォーマット
-        // 列: 約定日,銘柄,銘柄コード,市場,取引,期限,預り,課税,約定数量,約定単価,手数料,税額,受渡日,受渡金額
-        let inData=false;
-        for(const line of lines){
-          const cols=parseCSVLine(line);
-          if(cols[0]==='約定日'){inData=true;continue;}
-          if(!inData||!cols[0])continue;
-          const dateStr=cols[0].replace(/\//g,'-');
-          if(!dateStr.match(/^\d{4}-\d{2}-\d{2}$/))continue;
-          const name=toH(cols[1]);
-          const code=toH(cols[2])||'';
-          const tradeType_raw=toH(cols[4]);
-          const shares=toNum(cols[8]);
-          const price=toNum(cols[9]);
-          const amount=toNum(cols[13]);
-          const account=toH(cols[6]);
-          if(!name||!amount)continue;
-
-          let tradeType;
-          if(tradeType_raw.includes('買'))tradeType='buy';
-          else if(tradeType_raw.includes('売')||tradeType_raw.includes('解約'))tradeType='sell';
-          else continue;
-
-          const key=`${name}_${dateStr}_${tradeType}_${amount}`;
-          if(existing.has(key)){skipped++;continue;}
-          tradeData.push({id:tradeUID(),type:tradeType,date:dateStr,name,code,shares,price,amount,memo:account.includes('NISA')?'NISA':'',gain:0});
-          existing.add(key);added++;
-        }
-      }else if(isYozoku){
-        // 譲渡益税明細フォーマット
-        // 列: 銘柄コード,銘柄,取消区分,約定日,数量,取引,受渡日,売却金額,費用,取得年月日,取得金額,損益
-        let inData=false;
-        for(const line of lines){
-          const cols=parseCSVLine(line);
-          if(cols[0]==='銘柄コード'){inData=true;continue;}
-          if(!inData)continue;
-          const dateStr=(cols[3]||'').replace(/\//g,'-');
-          if(!dateStr.match(/^\d{4}-\d{2}-\d{2}$/))continue;
-          const name=toH(cols[1]);
-          const code=toH(cols[0])||'';
-          const tradeType_raw=toH(cols[5]);
-          const sharesStr=toH(cols[4]);
-          const shares=parseFloat(sharesStr)||0;
-          const sellAmt=toNum(cols[7]);
-          const gain=toNum(cols[11]);
-          if(!name||!sellAmt)continue;
-          if(tradeType_raw.includes('譲渡益'))continue;
-
-          let tradeType;
-          if(tradeType_raw.includes('売')||tradeType_raw.includes('解約'))tradeType='sell';
-          else if(tradeType_raw.includes('買'))tradeType='buy';
-          else continue;
-
-          const price=shares>0?Math.round(sellAmt/shares):0;
-          const key=`${name}_${dateStr}_${tradeType}_${sellAmt}`;
-          if(existing.has(key)){skipped++;continue;}
-          tradeData.push({id:tradeUID(),type:tradeType,date:dateStr,name,code:code.trim(),shares,price,amount:sellAmt,gain,memo:''});
-          existing.add(key);added++;
-        }
-      }else{
-        showToast('⚠ 対応していないCSV形式です');return;
-      }
-
-      tradeSaveData();tradeRender();
-      showToast(`✅ ${added}件インポート${skipped?` / ${skipped}件重複スキップ`:''}`,4000);
-    }catch(err){console.error(err);showToast('⚠ 読み込みエラー: '+err.message);}
-  };
-  reader.readAsText(file,'Shift-JIS');
-}
-function tradeOpenAdd(){
-  tradeEditId=null;
-  document.getElementById('tradeModalTitle').textContent='取引を追加';
-  document.getElementById('trade-type').value='buy';
-  document.getElementById('trade-date').value=todayStr();
-  document.getElementById('trade-name').value='';
-  document.getElementById('trade-shares').value='';
-  document.getElementById('trade-price').value='';
-  document.getElementById('trade-amount').value='';
-  document.getElementById('trade-memo').value='';
-  const dl=document.getElementById('tradeNameList');
-  const names=[...new Set((amAccounts||[]).map(a=>a.name))];
-  dl.innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
-  document.getElementById('tradeModalBg').style.display='flex';
-  setTimeout(()=>document.getElementById('trade-name').focus(),300);
-}
-function tradeCloseModal(){document.getElementById('tradeModalBg').style.display='none';tradeEditId=null;}
-
-function tradeSave(){
-  const type=document.getElementById('trade-type').value;
-  const date=document.getElementById('trade-date').value;
-  const name=document.getElementById('trade-name').value.trim();
-  const shares=parseFloat(document.getElementById('trade-shares').value)||0;
-  const price=parseFloat(document.getElementById('trade-price').value)||0;
-  let amount=parseFloat(document.getElementById('trade-amount').value)||0;
-  if(!name||!date){showToast('⚠ 銘柄名と日付は必須です');return;}
-  if(!amount&&shares&&price)amount=Math.round(shares*price);
-  if(!amount){showToast('⚠ 金額を入力してください');return;}
-  const entry={id:tradeEditId||tradeUID(),type,date,name,shares,price,amount,memo:document.getElementById('trade-memo').value.trim()};
-  if(tradeEditId){const i=tradeData.findIndex(x=>x.id===tradeEditId);if(i>=0)tradeData[i]=entry;}
-  else tradeData.push(entry);
-  tradeSaveData();tradeCloseModal();tradeRender();
-  showToast('✅ 取引を記録しました');
-}
-
-function tradeDelete(id){
-  if(!confirm('削除しますか？'))return;
-  tradeData=tradeData.filter(x=>x.id!==id);
-  tradeSaveData();tradeRender();
-}
-
-function tradeRender(){
-  tradeLoad();
-  const soldNamesForSummary=new Set(tradeData.filter(d=>d.type==='sell').map(d=>d.name));
-  const totalBuy=tradeData.filter(d=>d.type==='buy'&&soldNamesForSummary.has(d.name)).reduce((s,d)=>s+d.amount,0);
-  const totalSell=tradeData.filter(d=>d.type==='sell').reduce((s,d)=>s+d.amount,0);
-  const totalDiv=tradeData.filter(d=>d.type==='dividend').reduce((s,d)=>s+d.amount,0);
-  document.getElementById('tradeSummaryGrid').innerHTML=`
-    <div style="background:rgba(15,110,86,0.08);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">売却銘柄の取得コスト</div>
-      <div style="font-size:15px;font-weight:700;color:var(--text)">${fmt(Math.round(totalBuy))}</div>
-    </div>
-    <div style="background:rgba(192,57,43,0.08);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">累計売却</div>
-      <div style="font-size:15px;font-weight:700;color:var(--danger)">${fmt(Math.round(totalSell))}</div>
-    </div>
-    <div style="background:rgba(41,128,185,0.08);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">売却損益</div>
-      <div style="font-size:15px;font-weight:700;color:${totalSell-totalBuy>=0?'var(--green)':'var(--danger)'}">${totalSell-totalBuy>=0?'+':''}${fmt(Math.round(totalSell-totalBuy))}</div>
-    </div>`;
-
-  // IN/OUT累計ラインチャート
-  const sorted=[...tradeData].sort((a,b)=>a.date.localeCompare(b.date));
-  if(sorted.length>=2){
-    // 売却済み銘柄名セット
-    const soldNames=new Set(sorted.filter(d=>d.type==='sell').map(d=>d.name));
-    let cumIn=0,cumOut=0;
-    const labels=[],inLine=[],outLine=[];
-    sorted.forEach(d=>{
-      if(d.type==='buy'&&soldNames.has(d.name)){cumIn+=d.amount;}
-      else if(d.type==='sell'||d.type==='dividend'){cumOut+=d.amount;}
-      else return;
-      labels.push(d.date);inLine.push(cumIn);outLine.push(cumOut);
-    });
-    trDestroyChart('tradeLineChart');
-    const isDark=document.body.classList.contains('dark');
-    const tickColor=isDark?'#aaa':'#666';
-    chartInstances['tradeLineChart']=new Chart(document.getElementById('tradeLineChart'),{type:'line',data:{labels,datasets:[
-      {label:'累計買付',data:inLine,borderColor:'#E24B4A',backgroundColor:'transparent',borderWidth:2,pointRadius:2,tension:0.3},
-      {label:'累計売却+配当',data:outLine,borderColor:'#0F6E56',backgroundColor:'rgba(15,110,86,0.08)',borderWidth:2,pointRadius:2,fill:true,tension:0.3},
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}},datalabels:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.raw)+'円'}}},scales:{y:{ticks:{callback:v=>fmt(v)+'円',color:tickColor,font:{size:10}},grid:{color:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}},x:{ticks:{color:tickColor,font:{size:10},maxTicksLimit:8},grid:{display:false}}}},plugins:[ChartDataLabels]});
-  }
-
-  // 一覧
-  const typeLabel={buy:'🟢 買い',sell:'🔴 売り',dividend:'💰 配当'};
-  const typeColor={buy:'var(--text)',sell:'var(--danger)',dividend:'var(--green)'};
-  const recentSorted=[...sorted].reverse();
-  document.getElementById('tradeList').innerHTML=recentSorted.map(d=>`
-    <div style="background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-      <div style="font-size:20px;flex-shrink:0">${d.type==='buy'?'🟢':d.type==='sell'?'🔴':'💰'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(d.name)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${d.date}${d.shares?' ／ '+d.shares+'株'+( d.price?' @ '+fmt(d.price)+'円':''):''}${d.memo?' ／ '+esc(d.memo):''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:15px;font-weight:700;color:${typeColor[d.type]}">${fmt(d.amount)}円</div>
-      </div>
-      <button onclick="tradeDelete('${d.id}')" style="background:none;border:none;color:var(--danger);font-size:18px;cursor:pointer;flex-shrink:0">✕</button>
-    </div>`).join('');
-}
-
-// タブ切り替え時に描画
-const _origSwitchForDvTrade=window.switchTab;
-window.switchTab=function(t){
-  _origSwitchForDvTrade&&_origSwitchForDvTrade(t);
-  if(t==='dividend'){dvLoad();dvRender();}
-  if(t==='trades'){tradeLoad();tradeRender();}
-};
 function wlDownloadCSV(){
   const data=wlLoad();
   if(!data||!data.length){showToast('データがありません',2000);return;}
@@ -10787,8 +10403,7 @@ const _origRefreshHome=refreshHome;
 window.refreshHome=function(){
   _origRefreshHome&&_origRefreshHome();
   try{cfLoad();cfRefreshHomeIncome();}catch(e){}
-};
-</script>
+};</script>
 
 
 
