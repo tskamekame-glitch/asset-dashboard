@@ -2151,34 +2151,21 @@ function amRenderHeatmap(accounts,total){
   if(!el)return;
 
   const EXCL_CATS=['銀行','年金','その他','預り金'];
-  // prevSBIAmount（前回CSV取込金額）がある銘柄はSBI差分%、ない場合は含み損益%にフォールバック
+  // prevSBIAmount（前回CSV取込金額）がある銘柄のみ表示（SBI未掲載銘柄は除外）
   const items=accounts
-    .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat))
+    .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.prevSBIAmount>0)
     .map(a=>{
-      let pct=0,hasPrev=false;
-      if(a.prevSBIAmount>0&&a.amount>0){
-        // 前回SBI取込との比較（当日変動率）
-        pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
-        hasPrev=true;
-      } else if(a.costPrice>0){
-        // フォールバック：含み損益率
-        const shares=a.shares||0;
-        const cp=a.costPrice||0;
-        const cost=shares>0?shares*cp:cp;
-        pct=cost>0?(a.amount-cost)/cost*100:0;
-      }
-      return{name:a.name,amount:a.amount,pct,hasPrev,cat:a.cat,id:a.id};
+      const pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
+      return{name:a.name,amount:a.amount,pct,cat:a.cat,id:a.id};
     })
-    .filter(a=>a.amount>0)
     .sort((a,b)=>b.amount-a.amount);
 
   if(!items.length){
-    el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">データがありません</p>';
+    el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">SBI CSV取込済みの銘柄がありません</p>';
     return;
   }
 
-  // prevSBIAmountを持つ銘柄が存在するか（ラベル表示用）
-  const hasPrevData=items.some(i=>i.hasPrev);
+  const hasPrevData=true;
 
   // 色：SBI差分モードは小さい変動幅（±5%が基準）で色分け
   const pctToColor=pct=>{
