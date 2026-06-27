@@ -1897,13 +1897,16 @@ function refreshHome(){
       if(PAYPAY.test(a.name))return;
       const isFx=(a.cat==='外国株式');
       const fxRate=isFx?(a.fxRate||amGetFxRate()||150):1;
-      const isUnit=(a.cat==='個別株'||a.cat==='高配当'||isFx);
       const isIdx=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+      // amRenderCardと同一ロジック：shares>0かつprice>0なら単価×株数モード
+      const isUnitBased=(a.cat==='個別株'||a.cat==='高配当'||isFx)||(isIdx&&!PAYPAY.test(a.name)&&a.shares>0&&a.price>0);
       let gain=0,pct=null;
-      if(isUnit&&a.shares>0&&a.price>0&&a.costPrice>0){
+      if(isUnitBased&&a.shares>0&&a.price>0&&a.costPrice>0){
+        // 単価ベース：(現在値 - 取得単価) × 株数
         gain=isFx?(a.price-a.costPrice)*a.shares*fxRate:(a.price-a.costPrice)*a.shares;
         pct=(a.price-a.costPrice)/a.costPrice*100;
-      }else if(isIdx&&!PAYPAY.test(a.name)&&a.costPrice>0){
+      }else if(isIdx&&!PAYPAY.test(a.name)&&a.costPrice>0&&a.amount>0){
+        // 総額ベース（PayPay系投信など shares なし）: 時価総額 - 取得総額
         gain=a.amount-a.costPrice;
         pct=gain/a.costPrice*100;
       }
