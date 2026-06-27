@@ -10894,13 +10894,29 @@ function pnlInitDateSelectors(){
 // 評価損益を計算（amAccountsから）
 function pnlCalcUnrealized(){
   const EXCL=['銀行','年金','その他','預り金'];
+  // 名前ベースでも除外（DC年金・PayPay・持ち株など損益計算不要のもの）
+  const EXCL_NAME_PAT=/PayPay|ペイペイ|確定拠出|DC年金|ＤＣ年金|iDeCo|イデコ|TOPIX100|ポイント|持ち株/i;
+  // 株式カテゴリ（単価×株数でcost計算）
+  const STOCK_CATS=['個別株','高配当','外国株式'];
+  // 投信カテゴリ（costPrice=取得総額）
+  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
   let items=[];
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>!a.sold&&a.amount>0&&!EXCL.includes(a.cat)&&a.costPrice>0).forEach(a=>{
-      const cost=a.shares>0?a.costPrice*a.shares:a.costPrice;
+    accs.filter(a=>!a.sold&&a.amount>0&&!EXCL.includes(a.cat)&&a.costPrice>0&&!EXCL_NAME_PAT.test(a.name)).forEach(a=>{
+      const isStock=STOCK_CATS.includes(a.cat);
+      const isIndex=INDEX_CATS.includes(a.cat);
+      let cost;
+      if(isStock&&a.shares>0){
+        // 株式：取得単価×株数
+        cost=a.costPrice*a.shares;
+      } else {
+        // 投信・その他：costPrice=取得総額をそのまま使用
+        cost=a.costPrice;
+      }
+      if(!(cost>0))return;
       const gain=a.amount-cost;
-      const pct=cost>0?gain/cost*100:0;
+      const pct=gain/cost*100;
       items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,cost,badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
     });
   }catch(e){}
