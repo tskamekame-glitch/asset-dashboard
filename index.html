@@ -10940,36 +10940,34 @@ function pnlCalcUnrealized(){
   return items;
 }
 
-// 確定損益を計算（slData + jpSells、期間フィルタ付き）
-// SBI CSV掲載済み銘柄のみ（amAccountsのprevSBIAmount>0の銘柄名セット）に絞る
+// 確定損益を計算 — amAccountsのsold=trueの銘柄から直接算出（最も正確）
+// amRenderCardの売却済みカードと完全に同じcost計算ロジックを使用
+// y1,m1,y2,m2=null のときは全期間
 function pnlCalcRealized(y1,m1,y2,m2){
-  // SBI掲載銘柄名セット（評価損益と同じ基準）
-  const sbiNames=new Set();
-  try{
-    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>a.prevSBIAmount>0).forEach(a=>sbiNames.add(a.name));
-  }catch(e){}
-
-  const items=[];
+  const allPeriod=(y1==null);
   const inRange=(dateStr)=>{
-    if(!dateStr)return false;
+    if(allPeriod)return true;  // 全期間モード
+    if(!dateStr)return true;   // 日付未設定は期間フィルター不問で含める
     const [y,m]=dateStr.slice(0,7).split('-').map(Number);
     const from=y1*100+m1, to=y2*100+m2, cur=y*100+m;
     return cur>=from&&cur<=to;
   };
+  const items=[];
   try{
-    const sl=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');
-    sl.filter(r=>inRange(r.date)&&r.gain!=null&&sbiNames.has(r.name)).forEach(r=>{
-      items.push({name:r.name,cat:r.cat||'株式',gain:r.gain,pct:r.cost>0?r.gain/r.cost*100:null,
-        date:r.date,badge:'売却',badgeColor:'#8e44ad',type:'realized'});
-    });
-  }catch(e){}
-  try{
-    const jp=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
-    (jp.sells||[]).filter(r=>inRange(r.date)&&r.gain!=null&&sbiNames.has(r.name)).forEach(r=>{
-      const cost=(r.buyPrice||0)*(r.shares||0);
-      items.push({name:r.name,cat:'日本株',gain:r.gain,pct:cost>0?r.gain/cost*100:null,
-        date:r.date,badge:'売却',badgeColor:'#8e44ad',type:'realized'});
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    accs.filter(a=>a.sold&&inRange(a.soldDate)).forEach(a=>{
+      // amRenderCard（行2362）と同一のcost計算
+      const costTotal=a.shares>0&&a.costPrice>0 ? a.shares*a.costPrice : (a.costPrice||0);
+      const soldTotal=a.soldAmount||0;
+      if(!(soldTotal>0&&costTotal>0))return;
+      const gain=soldTotal-costTotal;
+      const pct=gain/costTotal*100;
+      items.push({
+        name:a.name, cat:a.cat, gain, pct,
+        soldTotal, costTotal,
+        date:a.soldDate||'日付未設定',
+        badge:'売却', badgeColor:'#8e44ad', type:'realized'
+      });
     });
   }catch(e){}
   items.sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
@@ -11009,10 +11007,9 @@ function pnlRender(){
     totalEl.style.color=col;
     subEl.textContent=`確定損益（${y1}年${m1}月〜${y2}年${m2}月・${items.length}件）`;
 
-  } else { // total
+  } else { // total — 評価損益（現在保有）＋ 確定損益（全期間の売却済み）
     const u=pnlCalcUnrealized();
-    const now=new Date();
-    const r=pnlCalcRealized(now.getFullYear(),1,now.getFullYear(),12);
+    const r=pnlCalcRealized(null,null,null,null); // 全期間
     items=[...u,...r].sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
     const uTotal=u.reduce((s,i)=>s+i.gain,0);
     const rTotal=r.reduce((s,i)=>s+i.gain,0);
@@ -11020,7 +11017,7 @@ function pnlRender(){
     const col=total>=0?'var(--green)':'var(--danger)';
     totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
     totalEl.style.color=col;
-    subEl.textContent=`評価${(uTotal>=0?'＋':'')+Math.round(uTotal).toLocaleString()}円 ＋ 確定${(rTotal>=0?'＋':'')+Math.round(rTotal).toLocaleString()}円（${now.getFullYear()}年）`;
+    subEl.textContent=`評価${(uTotal>=0?'＋':'')+Math.round(uTotal).toLocaleString()}円 ＋ 確定${(rTotal>=0?'＋':'')+Math.round(rTotal).toLocaleString()}円（累計）`;
   }
 
   // リスト描画
@@ -11034,7 +11031,7 @@ function pnlRender(){
     const gainStr=(item.gain>=0?'＋':'')+Math.round(item.gain).toLocaleString()+'円';
     const pctStr=item.pct!=null?((item.pct>=0?'＋':'')+item.pct.toFixed(1)+'%'):'';
     const subLabel=item.type==='unrealized'?'評価損益':
-                   item.type==='realized'?('期間損益'+(item.date?' · '+item.date.slice(0,7):'')):'損益';
+                   item.type==='realized'?('確定損益'+(item.date?' · '+item.date:'')):'損益';
     const leftBar=item.gain>=0?'#27ae60':'#e74c3c';
     return `<div style="display:flex;align-items:stretch;background:var(--bg2);border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:default">
       <div style="width:4px;background:${leftBar};flex-shrink:0"></div>
