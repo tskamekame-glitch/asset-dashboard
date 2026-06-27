@@ -1842,6 +1842,58 @@ input[type=number] { -moz-appearance: textfield; }
 
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
+
+      <!-- 📊 分析フィールド（個別株・高配当・外国株のみ） -->
+      <div id="fAnalysisFields" style="display:none">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin:12px 0 8px;padding-top:10px;border-top:0.5px solid var(--border)">📊 銘柄分析（任意）</div>
+        <!-- 売却目標 -->
+        <div class="field">
+          <label>売却目標①（堅実）</label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" id="fSell1" placeholder="例: 7307" inputmode="decimal" step="0.1" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none">
+            <span style="font-size:12px;color:var(--text3)">円</span>
+            <span id="fSell1Pct" style="font-size:11px;color:var(--text3);min-width:44px;text-align:right"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>売却目標②（本命）</label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" id="fSell2" placeholder="例: 8000" inputmode="decimal" step="0.1" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none" oninput="amCalcSellPct()">
+            <span style="font-size:12px;color:var(--text3)">円</span>
+            <span id="fSell2Pct" style="font-size:11px;color:var(--text3);min-width:44px;text-align:right"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>売却目標③（強気）</label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" id="fSell3" placeholder="例: 8600" inputmode="decimal" step="0.1" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none" oninput="amCalcSellPct()">
+            <span style="font-size:12px;color:var(--text3)">円</span>
+            <span id="fSell3Pct" style="font-size:11px;color:var(--text3);min-width:44px;text-align:right"></span>
+          </div>
+        </div>
+        <!-- バリュエーション -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="field" style="margin:0">
+            <label>PER（倍）</label>
+            <input type="number" id="fPer" placeholder="例: 20.5" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+          <div class="field" style="margin:0">
+            <label>PBR（倍）</label>
+            <input type="number" id="fPbr" placeholder="例: 3.2" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div class="field" style="margin:0">
+            <label>EPS今期（円）</label>
+            <input type="number" id="fEps1" placeholder="例: 119" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+          <div class="field" style="margin:0">
+            <label>EPS来期（円）</label>
+            <input type="number" id="fEps2" placeholder="例: 130" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+        </div>
+        <div id="fAnalysisMemo" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+      </div>
     </div>
     <div class="sheet-btns">
       <button class="btn-cancel" onclick="closeSheet()">キャンセル</button>
@@ -2356,6 +2408,26 @@ function amRenderCard(a){
   const fxRateVal=a.fxRate||amGetFxRate()||145;
   const calcVal=isForeignStock&&a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price*fxRateVal)):(!isForeignStock&&a.shares>0&&a.price>0?fmt(Math.round(a.shares*a.price)):'');
   const noteHtml=a.note?'<div class="acct-note">'+esc(a.note)+'</div>':'';
+  // 売却目標アラート（現在価格が目標に近い・超えた場合）
+  const sellTargetHtml=(()=>{
+    if(!a.price||!a.costPrice)return'';
+    const targets=[
+      {n:'①',v:a.sell1},{n:'②',v:a.sell2},{n:'③',v:a.sell3}
+    ].filter(t=>t.v>0);
+    if(!targets.length)return'';
+    const cur=a.price;
+    const reached=targets.filter(t=>cur>=t.v);
+    const next=targets.find(t=>cur<t.v);
+    if(reached.length){
+      const last=reached[reached.length-1];
+      return`<span style="font-size:11px;font-weight:600;color:#e67e22;background:#fef3e2;border-radius:6px;padding:2px 7px">🎯 目標${last.n} ¥${last.v.toLocaleString()} 達成！</span>`;
+    }
+    if(next){
+      const pct=(next.v-cur)/cur*100;
+      if(pct<=5)return`<span style="font-size:11px;color:#e67e22;background:#fef3e2;border-radius:6px;padding:2px 7px">📈 目標${next.n} ¥${next.v.toLocaleString()} まで+${pct.toFixed(1)}%</span>`;
+    }
+    return'';
+  })();
 
   // 売却済みカードは簡略表示
   if(a.sold){
@@ -2453,6 +2525,7 @@ function amRenderCard(a){
         +'<div style="flex:1;min-width:0">'
           +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+'</div>'
           +noteHtml
+          +(sellTargetHtml?'<div style="margin-top:3px">'+sellTargetHtml+'</div>':'')
           +(a.earningsDate?'<div style="font-size:11px;color:var(--accent);margin-top:2px">📅 決算: '+esc(a.earningsDate)+'</div>':'')
           +codeInput
           +fxInput
@@ -2872,6 +2945,7 @@ function openAddModal(defaultCat){
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value='';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value='';
+  ['fSell1','fSell2','fSell3','fPer','fPbr','fEps1','fEps2'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
@@ -2942,6 +3016,15 @@ function openEditModal(id){
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value=a.soldAmount&&a.sold?a.soldAmount:'';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value=a.earningsDate||'';
+  // 分析フィールド
+  if(document.getElementById('fSell1'))document.getElementById('fSell1').value=a.sell1||'';
+  if(document.getElementById('fSell2'))document.getElementById('fSell2').value=a.sell2||'';
+  if(document.getElementById('fSell3'))document.getElementById('fSell3').value=a.sell3||'';
+  if(document.getElementById('fPer'))document.getElementById('fPer').value=a.per||'';
+  if(document.getElementById('fPbr'))document.getElementById('fPbr').value=a.pbr||'';
+  if(document.getElementById('fEps1'))document.getElementById('fEps1').value=a.eps1||'';
+  if(document.getElementById('fEps2'))document.getElementById('fEps2').value=a.eps2||'';
+  setTimeout(amCalcSellPct,50);
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
@@ -2984,8 +3067,17 @@ async function saveAccount(){
     costPrice=parseFloat(document.getElementById('fCost')?.value)||0;
   }
   const earningsDate=(document.getElementById('fEarningsDate')?.value||'').trim();
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,updated:todayStr()});}
+  // 分析フィールド
+  const sell1=parseFloat(document.getElementById('fSell1')?.value)||undefined;
+  const sell2=parseFloat(document.getElementById('fSell2')?.value)||undefined;
+  const sell3=parseFloat(document.getElementById('fSell3')?.value)||undefined;
+  const per=parseFloat(document.getElementById('fPer')?.value)||undefined;
+  const pbr=parseFloat(document.getElementById('fPbr')?.value)||undefined;
+  const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
+  const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
+  const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
 }
 function amMoveAccount(id,dir){
@@ -3057,7 +3149,34 @@ function amToggleStockFields(){
     if(document.getElementById('fCost'))document.getElementById('fCost').value='';
     if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   }
+  // 分析フィールドは個別株・高配当・外国株のみ表示
+  const analysisF=document.getElementById('fAnalysisFields');
+  if(analysisF)analysisF.style.display=(isStock||isForeignStock)?'block':'none';
   amCalcAmount();
+  amCalcSellPct();
+}
+function amCalcSellPct(){
+  const cost=parseFloat(document.getElementById('fCost')?.value)||0;
+  ['1','2','3'].forEach(n=>{
+    const val=parseFloat(document.getElementById('fSell'+n)?.value)||0;
+    const el=document.getElementById('fSell'+n+'Pct');
+    if(!el)return;
+    if(val>0&&cost>0){
+      const pct=(val-cost)/cost*100;
+      el.textContent=(pct>=0?'+':'')+pct.toFixed(1)+'%';
+      el.style.color=pct>=0?'var(--green)':'var(--danger)';
+    }else{el.textContent='';}
+  });
+  // 分析メモ：PER×EPS から理論株価
+  const per=parseFloat(document.getElementById('fPer')?.value)||0;
+  const eps1=parseFloat(document.getElementById('fEps1')?.value)||0;
+  const eps2=parseFloat(document.getElementById('fEps2')?.value)||0;
+  const memoEl=document.getElementById('fAnalysisMemo');
+  if(!memoEl)return;
+  const parts=[];
+  if(per>0&&eps1>0)parts.push(`理論株価(今期): ¥${Math.round(per*eps1).toLocaleString()}`);
+  if(per>0&&eps2>0)parts.push(`理論株価(来期): ¥${Math.round(per*eps2).toLocaleString()}`);
+  memoEl.textContent=parts.join('　');
 }
 function amCalcAmount(){
   const cat=document.getElementById('fCat').value;
@@ -3887,10 +4006,10 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||''
     ])];
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:Q${values.length+10}`,valueInputOption:'RAW',resource:{values}});
     if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:Q1000`});
@@ -4002,6 +4121,13 @@ async function amLoadFromSheet(){
       soldAmount:r[13]?parseFloat(r[13])||0:0,
       soldPrice:r[14]?parseFloat(r[14])||0:0,
       prevSBIAmount:r[15]?parseFloat(r[15])||0:0,
+      sell1:r[17]?parseFloat(r[17])||undefined:undefined,
+      sell2:r[18]?parseFloat(r[18])||undefined:undefined,
+      sell3:r[19]?parseFloat(r[19])||undefined:undefined,
+      per:r[20]?parseFloat(r[20])||undefined:undefined,
+      pbr:r[21]?parseFloat(r[21])||undefined:undefined,
+      eps1:r[22]?parseFloat(r[22])||undefined:undefined,
+      eps2:r[23]?parseFloat(r[23])||undefined:undefined,
       earningsDate:r[16]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
