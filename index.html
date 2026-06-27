@@ -721,7 +721,7 @@ input[type=number] { -moz-appearance: textfield; }
       <!-- ヒートマップ -->
       <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between">
         <div style="font-size:13px;font-weight:600;color:var(--text2)">🟥 保有銘柄ヒートマップ</div>
-        <div style="font-size:11px;color:var(--text3)">面積=評価額 / 色=損益率</div>
+        <div style="font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
       </div>
       <div id="amHeatmap" style="padding:0 16px 12px"></div>
     </div>
@@ -2151,92 +2151,130 @@ function amRenderHeatmap(accounts,total){
   if(!el)return;
 
   const EXCL_CATS=['銀行','年金','その他','預り金'];
+  // prevSBIAmount（前回CSV取込金額）がある銘柄はSBI差分%、ない場合は含み損益%にフォールバック
   const items=accounts
-    .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.costPrice>0)
+    .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat))
     .map(a=>{
-      const shares=a.shares||0;
-      const cp=a.costPrice||0;
-      const cost=shares>0?shares*cp:cp;
-      const gain=a.amount-cost;
-      const pct=cost>0?gain/cost*100:0;
-      const acct=accounts.find(x=>x.name===a.name);
-      return{name:a.name,amount:a.amount,gain,pct,cat:a.cat,id:acct?.id};
+      let pct=0,hasPrev=false;
+      if(a.prevSBIAmount>0&&a.amount>0){
+        // 前回SBI取込との比較（当日変動率）
+        pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
+        hasPrev=true;
+      } else if(a.costPrice>0){
+        // フォールバック：含み損益率
+        const shares=a.shares||0;
+        const cp=a.costPrice||0;
+        const cost=shares>0?shares*cp:cp;
+        pct=cost>0?(a.amount-cost)/cost*100:0;
+      }
+      return{name:a.name,amount:a.amount,pct,hasPrev,cat:a.cat,id:a.id};
     })
+    .filter(a=>a.amount>0)
     .sort((a,b)=>b.amount-a.amount);
 
   if(!items.length){
-    el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得単価が入力された銘柄が表示されます</p>';
+    el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">データがありません</p>';
     return;
   }
 
+  // prevSBIAmountを持つ銘柄が存在するか（ラベル表示用）
+  const hasPrevData=items.some(i=>i.hasPrev);
+
+  // 色：SBI差分モードは小さい変動幅（±5%が基準）で色分け
   const pctToColor=pct=>{
-    if(pct>=20)return'#0a5e3f';
-    if(pct>=10)return'#0f7a50';
-    if(pct>=5) return'#1a9e6a';
-    if(pct>=2) return'#27b87f';
-    if(pct>=0) return'#3ecf97';
-    if(pct>=-2)return'#e07068';
-    if(pct>=-5)return'#cc4a40';
-    if(pct>=-10)return'#b03028';
-    return'#8b1e18';
+    if(hasPrevData){
+      // 日次変動モード（±5%以内がほとんど）
+      if(pct>=3)  return'#0a5e3f';
+      if(pct>=1.5)return'#0f7a50';
+      if(pct>=0.5)return'#1a9e6a';
+      if(pct>=0)  return'#3ecf97';
+      if(pct>=-0.5)return'#e07068';
+      if(pct>=-1.5)return'#cc4a40';
+      if(pct>=-3) return'#b03028';
+      return'#8b1e18';
+    } else {
+      // 含み損益モード（±20%が基準）
+      if(pct>=20)return'#0a5e3f';
+      if(pct>=10)return'#0f7a50';
+      if(pct>=5) return'#1a9e6a';
+      if(pct>=2) return'#27b87f';
+      if(pct>=0) return'#3ecf97';
+      if(pct>=-2)return'#e07068';
+      if(pct>=-5)return'#cc4a40';
+      if(pct>=-10)return'#b03028';
+      return'#8b1e18';
+    }
   };
 
-  // ── Squarified Treemap アルゴリズム ──
+  // ── Squarified Treemap ──
   const GAP=2;
   const containerW=el.clientWidth||340;
-  const TOTAL_H=Math.round(containerW*0.72); // アスペクト比 ~1.4
+  // 銘柄数に応じて高さを調整（四角に近づける）
+  const n=items.length;
+  const TOTAL_H=Math.round(containerW*(n<=6?0.6:n<=12?0.85:n<=20?1.05:1.2));
   const totalAmt=items.reduce((s,i)=>s+i.amount,0);
 
-  // 正規化された面積値
-  const normed=items.map(i=>({...i,area:i.amount/totalAmt}));
+  // 正規化された面積値（全体面積=W×H）
+  const totalArea=containerW*TOTAL_H;
+  const normed=items.map(i=>({...i,area:i.amount/totalAmt*totalArea}));
 
-  // --- Strip-based Treemap実装 ---
+  // Squarified Treemap（アスペクト比最小化）
   const rects=[];
-  function layoutStrip(nodes,x,y,w,h){
+
+  // 最悪アスペクト比を計算
+  function worstRatio(row,w){
+    const s=row.reduce((a,n)=>a+n.area,0);
+    let worst=0;
+    for(const n of row){
+      const h=n.area/s*w; // 短辺方向の長さ
+      const len=s/w;      // 長辺方向の長さ（スライス幅）
+      const r=len>h?len/h:h/len;
+      if(r>worst)worst=r;
+    }
+    return worst;
+  }
+
+  function squarify(nodes,x,y,w,h){
     if(!nodes.length)return;
-    const sumArea=nodes.reduce((s,n)=>s+n.area,0);
-    if(nodes.length===1){rects.push({node:nodes[0],x,y,w,h});return;}
+    if(nodes.length===1){
+      rects.push({node:nodes[0],x,y,w,h});
+      return;
+    }
+    const shortSide=Math.min(w,h);
+    const isHoriz=w>=h; // スライスを短辺に沿って積む
 
-    const isHoriz=w>=h; // 横長なら縦スライス
-    let sliceEnd=0,rowNodes=[];
-    let bestWorst=Infinity,rowSum=0;
-    const side=isHoriz?h:w;
-
-    for(let i=0;i<nodes.length;i++){
-      const candidate=[...rowNodes,nodes[i]];
-      const cSum=rowSum+nodes[i].area;
-      const sliceW=cSum/sumArea*(isHoriz?w:h);
-      let worst=0;
-      candidate.forEach(n=>{
-        const tw=isHoriz?sliceW:n.area/cSum*sliceW;
-        const th=isHoriz?n.area/cSum*side:sliceW;
-        const ar=isHoriz?tw/th:th/tw;
-        const ratio=ar>1?ar:1/ar;
-        if(ratio>worst)worst=ratio;
-      });
-      if(worst<bestWorst||i===0){
-        bestWorst=worst;rowNodes=candidate;rowSum=cSum;sliceEnd=i+1;
-      } else break;
+    let row=[],rest=[...nodes];
+    while(rest.length){
+      const candidate=[...row,rest[0]];
+      if(row.length===0||worstRatio(candidate,shortSide)<=worstRatio(row,shortSide)){
+        row.push(rest.shift());
+      } else {
+        break;
+      }
     }
 
-    // rowNodesを配置
-    const sliceW=rowSum/sumArea*(isHoriz?w:h);
+    // rowを配置
+    const rowArea=row.reduce((a,n)=>a+n.area,0);
+    const sliceLen=rowArea/shortSide; // スライス幅
     let offset=isHoriz?y:x;
-    rowNodes.forEach(n=>{
-      const len=n.area/rowSum*side;
-      if(isHoriz){rects.push({node:n,x,y:offset,w:sliceW,h:len});}
-      else{rects.push({node:n,x:offset,y,w:len,h:sliceW});}
-      offset+=len;
-    });
+    for(const n of row){
+      const tileLen=n.area/rowArea*shortSide;
+      if(isHoriz){rects.push({node:n,x,y:offset,w:sliceLen,h:tileLen});}
+      else       {rects.push({node:n,x:offset,y,w:tileLen,h:sliceLen});}
+      offset+=tileLen;
+    }
     // 残りを再帰
-    const rest=nodes.slice(sliceEnd);
     if(rest.length){
-      if(isHoriz) layoutStrip(rest,x+sliceW,y,w-sliceW,h);
-      else         layoutStrip(rest,x,y+sliceW,w,h-sliceW);
+      if(isHoriz) squarify(rest,x+sliceLen,y,w-sliceLen,h);
+      else         squarify(rest,x,y+sliceLen,w,h-sliceLen);
     }
   }
 
-  layoutStrip(normed,0,0,containerW,TOTAL_H);
+  squarify(normed,0,0,containerW,TOTAL_H);
+
+  // サブタイトル動的更新
+  const subtitleEl=document.getElementById('amHeatmapSubtitle');
+  if(subtitleEl) subtitleEl.textContent='面積=評価額 / 色='+(hasPrevData?'前回CSV比変動率':'含み損益率（前回データなし）');
 
   // SVG描画
   const fmtM=v=>{
@@ -2257,19 +2295,21 @@ function amRenderHeatmap(accounts,total){
     const area=rw*rh;
     const cpId='cp'+idx;
 
-    // 名称を幅に応じて短縮
+    // フォントサイズ：タイルの短辺に合わせてスケール
+    const shortSideTile=Math.min(rw,rh);
+    const nameFz=Math.min(Math.max(shortSideTile*0.18,8),15);
+    const pctFz =Math.min(Math.max(shortSideTile*0.16,7),13);
+    const amtFz =Math.min(Math.max(shortSideTile*0.12,6),10);
+
+    // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
     let dispName=node.name;
-    const maxChars=Math.max(Math.floor(rw/7.5),2);
+    const maxChars=Math.max(Math.floor(rw/(nameFz*0.9)),2);
     if(dispName.length>maxChars) dispName=dispName.slice(0,maxChars);
 
-    const nameFz=Math.min(Math.max(Math.sqrt(area)*0.085,8),15);
-    const pctFz =Math.min(Math.max(Math.sqrt(area)*0.075,7),13);
-    const amtFz =Math.min(Math.max(Math.sqrt(area)*0.060,6),10);
-
     const cx=(rx+rw/2).toFixed(1);
-    const showName=rh>16&&rw>20;
-    const showPct =rh>28&&rw>20;
-    const showAmt =rh>42&&rw>30&&area>4500;
+    const showName=rh>nameFz*1.2&&rw>nameFz;
+    const showPct =rh>nameFz*1.2+pctFz*1.4&&rw>pctFz*2;
+    const showAmt =rh>nameFz*1.2+pctFz*1.4+amtFz*1.4&&rw>amtFz*3&&area>3000;
 
     const lines=[];
     if(showName) lines.push({t:escX(dispName),fz:nameFz,fw:'bold',op:1});
@@ -2288,11 +2328,12 @@ function amRenderHeatmap(accounts,total){
     });
   });
 
-  // 凡例
-  const legendItems=[
-    {c:'#0a5e3f',l:'+20%〜'},{c:'#1a9e6a',l:'+5〜20%'},{c:'#3ecf97',l:'0〜5%'},
-    {c:'#e07068',l:'0〜-5%'},{c:'#8b1e18',l:'-10%〜'}
-  ];
+  // 凡例（モードによって閾値表示を切り替え）
+  const legendItems=hasPrevData
+    ?[{c:'#0a5e3f',l:'+3%〜'},{c:'#1a9e6a',l:'+0.5〜3%'},{c:'#3ecf97',l:'0〜+0.5%'},
+      {c:'#e07068',l:'-0.5〜0%'},{c:'#8b1e18',l:'〜-3%'}]
+    :[{c:'#0a5e3f',l:'+20%〜'},{c:'#1a9e6a',l:'+5〜20%'},{c:'#3ecf97',l:'0〜5%'},
+      {c:'#e07068',l:'-5〜0%'},{c:'#8b1e18',l:'〜-10%'}];
   const lgY=TOTAL_H+8;
   const lgW=Math.floor(containerW/5);
   let lgStr='';
