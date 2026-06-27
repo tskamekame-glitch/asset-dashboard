@@ -723,7 +723,7 @@ input[type=number] { -moz-appearance: textfield; }
         <div style="font-size:13px;font-weight:600;color:var(--text2)">🟥 保有銘柄ヒートマップ</div>
         <div style="font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
       </div>
-      <div id="amHeatmap" style="padding:0 16px 12px"></div>
+      <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
@@ -2195,7 +2195,8 @@ function amRenderHeatmap(accounts,total){
 
   // ── Squarified Treemap ──
   const GAP=2;
-  const containerW=el.clientWidth||340;
+  // padding分を引いた実幅を使用（スマホで見切れ防止）
+  const containerW=Math.max((el.clientWidth||el.offsetWidth||340)-2,100);
   // 銘柄数に応じて高さを調整（四角に近づける）
   const n=items.length;
   const TOTAL_H=Math.round(containerW*(n<=6?0.6:n<=12?0.85:n<=20?1.05:1.2));
@@ -2330,7 +2331,7 @@ function amRenderHeatmap(accounts,total){
     lgStr+=`<text x="${lx+14}" y="${lgY+9}" font-size="9" fill="#888" font-family="-apple-system,sans-serif">${li.l}</text>`;
   });
 
-  el.innerHTML=`<svg width="${containerW}" height="${TOTAL_H+28}" style="display:block"><defs>${defsStr}</defs>${bodyStr}${lgStr}</svg>`;
+  el.innerHTML=`<svg viewBox="0 0 ${containerW} ${TOTAL_H+28}" width="100%" style="display:block"><defs>${defsStr}</defs>${bodyStr}${lgStr}</svg>`;
 }
 // ── 口座カード1件レンダリング（保有中・売却済み共通） ──
 function amRenderCard(a){
