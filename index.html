@@ -9351,12 +9351,15 @@ function tradeRender(){
   // IN/OUT累計ラインチャート
   const sorted=[...tradeData].sort((a,b)=>a.date.localeCompare(b.date));
   if(sorted.length>=2){
+    // 売却済み銘柄名セット
+    const soldNames=new Set(sorted.filter(d=>d.type==='sell').map(d=>d.name));
     let cumIn=0,cumOut=0;
-    const labels=[],inLine=[],outLine=[],netLine=[];
+    const labels=[],inLine=[],outLine=[];
     sorted.forEach(d=>{
-      if(d.type==='buy'){cumIn+=d.amount;}
+      if(d.type==='buy'&&soldNames.has(d.name)){cumIn+=d.amount;}
       else if(d.type==='sell'||d.type==='dividend'){cumOut+=d.amount;}
-      labels.push(d.date);inLine.push(cumIn);outLine.push(cumOut);netLine.push(cumOut-cumIn);
+      else return;
+      labels.push(d.date);inLine.push(cumIn);outLine.push(cumOut);
     });
     trDestroyChart('tradeLineChart');
     const isDark=document.body.classList.contains('dark');
