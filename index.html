@@ -10941,7 +10941,15 @@ function pnlCalcUnrealized(){
 }
 
 // 確定損益を計算（slData + jpSells、期間フィルタ付き）
+// SBI CSV掲載済み銘柄のみ（amAccountsのprevSBIAmount>0の銘柄名セット）に絞る
 function pnlCalcRealized(y1,m1,y2,m2){
+  // SBI掲載銘柄名セット（評価損益と同じ基準）
+  const sbiNames=new Set();
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    accs.filter(a=>a.prevSBIAmount>0).forEach(a=>sbiNames.add(a.name));
+  }catch(e){}
+
   const items=[];
   const inRange=(dateStr)=>{
     if(!dateStr)return false;
@@ -10951,14 +10959,14 @@ function pnlCalcRealized(y1,m1,y2,m2){
   };
   try{
     const sl=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');
-    sl.filter(r=>inRange(r.date)&&r.gain!=null).forEach(r=>{
+    sl.filter(r=>inRange(r.date)&&r.gain!=null&&sbiNames.has(r.name)).forEach(r=>{
       items.push({name:r.name,cat:r.cat||'株式',gain:r.gain,pct:r.cost>0?r.gain/r.cost*100:null,
         date:r.date,badge:'売却',badgeColor:'#8e44ad',type:'realized'});
     });
   }catch(e){}
   try{
     const jp=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
-    (jp.sells||[]).filter(r=>inRange(r.date)&&r.gain!=null).forEach(r=>{
+    (jp.sells||[]).filter(r=>inRange(r.date)&&r.gain!=null&&sbiNames.has(r.name)).forEach(r=>{
       const cost=(r.buyPrice||0)*(r.shares||0);
       items.push({name:r.name,cat:'日本株',gain:r.gain,pct:cost>0?r.gain/cost*100:null,
         date:r.date,badge:'売却',badgeColor:'#8e44ad',type:'realized'});
