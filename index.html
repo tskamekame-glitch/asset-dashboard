@@ -9331,12 +9331,13 @@ function tradeDelete(id){
 
 function tradeRender(){
   tradeLoad();
-  const totalBuy=tradeData.filter(d=>d.type==='buy').reduce((s,d)=>s+d.amount,0);
+  const soldNamesForSummary=new Set(tradeData.filter(d=>d.type==='sell').map(d=>d.name));
+  const totalBuy=tradeData.filter(d=>d.type==='buy'&&soldNamesForSummary.has(d.name)).reduce((s,d)=>s+d.amount,0);
   const totalSell=tradeData.filter(d=>d.type==='sell').reduce((s,d)=>s+d.amount,0);
   const totalDiv=tradeData.filter(d=>d.type==='dividend').reduce((s,d)=>s+d.amount,0);
   document.getElementById('tradeSummaryGrid').innerHTML=`
     <div style="background:rgba(15,110,86,0.08);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">累計買付</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">売却銘柄の取得コスト</div>
       <div style="font-size:15px;font-weight:700;color:var(--text)">${fmt(Math.round(totalBuy))}</div>
     </div>
     <div style="background:rgba(192,57,43,0.08);border-radius:12px;padding:12px;text-align:center">
@@ -9344,8 +9345,8 @@ function tradeRender(){
       <div style="font-size:15px;font-weight:700;color:var(--danger)">${fmt(Math.round(totalSell))}</div>
     </div>
     <div style="background:rgba(41,128,185,0.08);border-radius:12px;padding:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">累計配当</div>
-      <div style="font-size:15px;font-weight:700;color:var(--accent)">${fmt(Math.round(totalDiv))}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">売却損益</div>
+      <div style="font-size:15px;font-weight:700;color:${totalSell-totalBuy>=0?'var(--green)':'var(--danger)'}">${totalSell-totalBuy>=0?'+':''}${fmt(Math.round(totalSell-totalBuy))}</div>
     </div>`;
 
   // IN/OUT累計ラインチャート
