@@ -1689,7 +1689,11 @@ input[type=number] { -moz-appearance: textfield; }
 <div class="panel" id="tab-trades">
   <div style="padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <h1 style="font-size:18px;font-weight:700;margin:0">📋 取引履歴</h1>
-    <button onclick="tradeOpenAdd()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">＋ 追加</button>
+    <div style="display:flex;gap:8px">
+      <button onclick="document.getElementById('tradeCSVInput').click()" style="padding:8px 12px;background:#e6931a;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">📥 SBI読込</button>
+      <input type="file" id="tradeCSVInput" accept=".csv" style="display:none" onchange="tradeImportSBI(event)">
+      <button onclick="tradeOpenAdd()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">＋ 追加</button>
+    </div>
   </div>
   <!-- サマリー -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px" id="tradeSummaryGrid"></div>
@@ -9193,6 +9197,72 @@ function tradeUID(){return 't'+Date.now()+Math.random().toString(36).slice(2,5);
 function tradeLoad(){try{tradeData=JSON.parse(localStorage.getItem(TRADE_KEY)||'[]');}catch(e){tradeData=[];}}
 function tradeSaveData(){try{localStorage.setItem(TRADE_KEY,JSON.stringify(tradeData));}catch(e){}}
 
+function tradeImportSBI(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  event.target.value='';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const text=e.target.result;
+      const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+      const toH=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();
+      const toNum=s=>parseFloat((s||'').replace(/[,，\+\s円]/g,''))||0;
+
+      let added=0,skipped=0;
+      tradeLoad();
+      const existing=new Set(tradeData.map(d=>`${d.name}_${d.date}_${d.type}_${d.amount}`));
+
+      for(let i=0;i<lines.length;i++){
+        const cols=lines[i].split(',').map(c=>c.replace(/^"|"$/g,'').trim());
+        if(cols.length<8)continue;
+        // 売買行の判定：銘柄コード or 銘柄名がある行
+        const code=toH(cols[0]);
+        const name=toH(cols[1]);
+        const type=toH(cols[5]);// 現物売、現物買、国内投信解約 等
+        const dateStr=cols[3]?.replace(/\//g,'-');
+        const sellAmt=toNum(cols[7]);
+        const buyAmt=toNum(cols[10]);
+        const gainAmt=toNum(cols[11]);
+        const sharesStr=toH(cols[4]||'');
+        const shares=parseFloat(sharesStr)||0;
+
+        if(!name||!dateStr||!type)continue;
+        if(type.includes('譲渡益'))continue;// 税行はスキップ
+        if(!dateStr.match(/^\d{4}-\d{2}-\d{2}$/))continue;
+
+        let tradeType,amount,price=0;
+        if(type.includes('売')||type.includes('解約')){
+          tradeType='sell';amount=sellAmt;
+          price=shares>0?Math.round(sellAmt/shares):0;
+        }else if(type.includes('買')){
+          tradeType='buy';amount=buyAmt;
+          price=shares>0?Math.round(buyAmt/shares):0;
+        }else continue;
+
+        if(!amount)continue;
+        const key=`${name}_${dateStr}_${tradeType}_${amount}`;
+        if(existing.has(key)){skipped++;continue;}
+
+        tradeData.push({
+          id:tradeUID(),
+          type:tradeType,
+          date:dateStr,
+          name,
+          code:code.trim()||'',
+          shares,price,amount,
+          gain:gainAmt||0,
+          memo:''
+        });
+        existing.add(key);
+        added++;
+      }
+      tradeSaveData();tradeRender();
+      showToast(`✅ ${added}件インポート${skipped?` / ${skipped}件重複スキップ`:''}`,4000);
+    }catch(err){console.error(err);showToast('⚠ 読み込みエラー: '+err.message);}
+  };
+  reader.readAsText(file,'Shift-JIS');
+}
 function tradeOpenAdd(){
   tradeEditId=null;
   document.getElementById('tradeModalTitle').textContent='取引を追加';
