@@ -568,6 +568,7 @@ input[type=number] { -moz-appearance: textfield; }
   <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
   <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
+  <button class="nav-btn" data-tab="pnl" onclick="switchTab('pnl')"><span class="ni">📊</span>損益</button>
   <button class="nav-btn" data-tab="jpstock" onclick="switchTab('jpstock')"><span class="ni">📈</span>日本株</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
@@ -1978,6 +1979,7 @@ function switchTab(tab){
   if(tab==='jpstock')jpRenderAll();
   if(tab==='trend')trRenderAll();
   if(tab==='returns')retRender();
+  if(tab==='pnl')pnlRender();
 }
 
 // ============================================================
@@ -8921,6 +8923,34 @@ var _origJpLoad = null;
   }, 200);
 })();
 </script>
+<div class="panel" id="tab-pnl">
+  <div style="padding:12px 16px 8px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:0.5px solid var(--border)">
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px">📊 損益一覧</div>
+    <!-- モード切り替えタブ -->
+    <div style="display:flex;background:var(--bg2);border-radius:10px;padding:3px;gap:2px;margin-bottom:10px">
+      <button id="pnl-tab-total"  onclick="pnlSetMode('total')"  style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;transition:all 0.2s">合計損益</button>
+      <button id="pnl-tab-unrealized" onclick="pnlSetMode('unrealized')" style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);transition:all 0.2s">評価損益</button>
+      <button id="pnl-tab-realized"   onclick="pnlSetMode('realized')"   style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);transition:all 0.2s">確定損益</button>
+    </div>
+    <!-- 日付フィルター（確定損益モード時のみ有効） -->
+    <div id="pnl-date-row" style="display:flex;align-items:center;gap:8px;opacity:0.35;pointer-events:none">
+      <span style="font-size:12px;color:var(--text3)">期間</span>
+      <select id="pnl-y1" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
+      <select id="pnl-m1" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
+      <span style="color:var(--text3)">〜</span>
+      <select id="pnl-y2" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
+      <select id="pnl-m2" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
+    </div>
+  </div>
+  <!-- 合計金額 -->
+  <div style="padding:20px 20px 12px;text-align:left">
+    <div id="pnl-total-amt" style="font-size:36px;font-weight:800;letter-spacing:-0.5px">—</div>
+    <div id="pnl-total-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+  </div>
+  <!-- リスト -->
+  <div id="pnl-list" style="padding:0 12px 16px"></div>
+</div>
+
 <div class="panel" id="tab-watchlist">
   <div class="wl-top">
     <span class="wl-title">👀 購入検討リスト</span>
@@ -10804,6 +10834,184 @@ var _origJpLoad = null;
     }
   }, 200);
 })();
+</script>
+
+<script>
+// ============================================================
+// 損益一覧タブ (pnl)
+// ============================================================
+let pnlMode='total'; // 'total' | 'unrealized' | 'realized'
+
+function pnlSetMode(mode){
+  pnlMode=mode;
+  // タブUIの切り替え
+  ['total','unrealized','realized'].forEach(m=>{
+    const btn=document.getElementById('pnl-tab-'+m);
+    if(!btn)return;
+    const active=m===mode;
+    btn.style.background=active?'var(--accent)':'transparent';
+    btn.style.color=active?'#fff':'var(--text2)';
+  });
+  // 日付フィルターは確定損益のみ有効
+  const dr=document.getElementById('pnl-date-row');
+  if(dr){
+    dr.style.opacity=mode==='realized'?'1':'0.35';
+    dr.style.pointerEvents=mode==='realized'?'auto':'none';
+  }
+  pnlRender();
+}
+
+// 年月セレクタ初期化
+function pnlInitDateSelectors(){
+  const now=new Date();
+  const cy=now.getFullYear(), cm=now.getMonth()+1;
+  // slDataとjpSellsから年を収集
+  let years=new Set([cy]);
+  try{
+    const sl=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');
+    sl.forEach(r=>{if(r.date)years.add(parseInt(r.date.slice(0,4)));});
+  }catch(e){}
+  try{
+    const jp=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
+    (jp.sells||[]).forEach(r=>{if(r.date)years.add(parseInt(r.date.slice(0,4)));});
+  }catch(e){}
+  const yrs=[...years].filter(y=>!isNaN(y)).sort((a,b)=>b-a);
+  const months=Array.from({length:12},(_,i)=>i+1);
+  ['pnl-y1','pnl-y2'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.innerHTML=yrs.map(y=>`<option value="${y}">${y}年</option>`).join('');
+    el.value=cy;
+  });
+  ['pnl-m1','pnl-m2'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.innerHTML=months.map(m=>`<option value="${m}">${m}月</option>`).join('');
+    el.value=cm;
+  });
+}
+
+// 評価損益を計算（amAccountsから）
+function pnlCalcUnrealized(){
+  const EXCL=['銀行','年金','その他','預り金'];
+  let items=[];
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    accs.filter(a=>!a.sold&&a.amount>0&&!EXCL.includes(a.cat)&&a.costPrice>0).forEach(a=>{
+      const cost=a.shares>0?a.costPrice*a.shares:a.costPrice;
+      const gain=a.amount-cost;
+      const pct=cost>0?gain/cost*100:0;
+      items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,cost,badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
+    });
+  }catch(e){}
+  items.sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
+  return items;
+}
+
+// 確定損益を計算（slData + jpSells、期間フィルタ付き）
+function pnlCalcRealized(y1,m1,y2,m2){
+  const items=[];
+  const inRange=(dateStr)=>{
+    if(!dateStr)return false;
+    const [y,m]=dateStr.slice(0,7).split('-').map(Number);
+    const from=y1*100+m1, to=y2*100+m2, cur=y*100+m;
+    return cur>=from&&cur<=to;
+  };
+  try{
+    const sl=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');
+    sl.filter(r=>inRange(r.date)&&r.gain!=null).forEach(r=>{
+      items.push({name:r.name,cat:r.cat||'株式',gain:r.gain,pct:r.cost>0?r.gain/r.cost*100:null,
+        date:r.date,badge:'売却',badgeColor:'#8e44ad',type:'realized'});
+    });
+  }catch(e){}
+  try{
+    const jp=JSON.parse(localStorage.getItem('jpstock_v1')||'{}');
+    (jp.sells||[]).filter(r=>inRange(r.date)&&r.gain!=null).forEach(r=>{
+      const cost=(r.buyPrice||0)*(r.shares||0);
+      items.push({name:r.name,cat:'日本株',gain:r.gain,pct:cost>0?r.gain/cost*100:null,
+        date:r.date,badge:'売却',badgeColor:'#8e44ad',type:'realized'});
+    });
+  }catch(e){}
+  items.sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
+  return items;
+}
+
+function pnlRender(){
+  // セレクタ初期化（初回のみ）
+  const y1el=document.getElementById('pnl-y1');
+  if(y1el&&!y1el.options.length)pnlInitDateSelectors();
+
+  const y1=parseInt(document.getElementById('pnl-y1')?.value||new Date().getFullYear());
+  const m1=parseInt(document.getElementById('pnl-m1')?.value||1);
+  const y2=parseInt(document.getElementById('pnl-y2')?.value||new Date().getFullYear());
+  const m2=parseInt(document.getElementById('pnl-m2')?.value||12);
+
+  const totalEl=document.getElementById('pnl-total-amt');
+  const subEl=document.getElementById('pnl-total-sub');
+  const listEl=document.getElementById('pnl-list');
+  if(!listEl)return;
+
+  let items=[];
+
+  if(pnlMode==='unrealized'){
+    items=pnlCalcUnrealized();
+    const total=items.reduce((s,i)=>s+i.gain,0);
+    const col=total>=0?'var(--green)':'var(--danger)';
+    totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
+    totalEl.style.color=col;
+    subEl.textContent='評価損益（保有'+items.length+'銘柄）';
+
+  } else if(pnlMode==='realized'){
+    items=pnlCalcRealized(y1,m1,y2,m2);
+    const total=items.reduce((s,i)=>s+i.gain,0);
+    const col=total>=0?'var(--green)':'var(--danger)';
+    totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
+    totalEl.style.color=col;
+    subEl.textContent=`確定損益（${y1}年${m1}月〜${y2}年${m2}月・${items.length}件）`;
+
+  } else { // total
+    const u=pnlCalcUnrealized();
+    const now=new Date();
+    const r=pnlCalcRealized(now.getFullYear(),1,now.getFullYear(),12);
+    items=[...u,...r].sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
+    const uTotal=u.reduce((s,i)=>s+i.gain,0);
+    const rTotal=r.reduce((s,i)=>s+i.gain,0);
+    const total=uTotal+rTotal;
+    const col=total>=0?'var(--green)':'var(--danger)';
+    totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
+    totalEl.style.color=col;
+    subEl.textContent=`評価${(uTotal>=0?'＋':'')+Math.round(uTotal).toLocaleString()}円 ＋ 確定${(rTotal>=0?'＋':'')+Math.round(rTotal).toLocaleString()}円（${now.getFullYear()}年）`;
+  }
+
+  // リスト描画
+  if(!items.length){
+    listEl.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text3);font-size:14px">データがありません</div>';
+    return;
+  }
+
+  listEl.innerHTML=items.map(item=>{
+    const gainCol=item.gain>=0?'var(--green)':'var(--danger)';
+    const gainStr=(item.gain>=0?'＋':'')+Math.round(item.gain).toLocaleString()+'円';
+    const pctStr=item.pct!=null?((item.pct>=0?'＋':'')+item.pct.toFixed(1)+'%'):'';
+    const subLabel=item.type==='unrealized'?'評価損益':
+                   item.type==='realized'?('期間損益'+(item.date?' · '+item.date.slice(0,7):'')):'損益';
+    const leftBar=item.gain>=0?'#27ae60':'#e74c3c';
+    return `<div style="display:flex;align-items:stretch;background:var(--bg2);border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:default">
+      <div style="width:4px;background:${leftBar};flex-shrink:0"></div>
+      <div style="flex:1;padding:12px 14px;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
+          <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${item.badgeColor}22;color:${item.badgeColor};border:1px solid ${item.badgeColor}44;flex-shrink:0">${item.badge}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}</div>
+      </div>
+      <div style="padding:12px 16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0">
+        <div style="font-size:16px;font-weight:700;color:${gainCol}">${gainStr}</div>
+        ${pctStr?`<div style="font-size:11px;color:${gainCol};opacity:0.85">${pctStr}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
 </script>
 </body>
 </html>
