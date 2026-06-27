@@ -10933,6 +10933,7 @@ function pnlCalcUnrealized(){
       }
       if(!isFinite(gain)||!isFinite(pct))return;
       items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,
+        code:a.code||'',costPrice:a.costPrice||0,updated:a.updated||'',
         badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
     });
   }catch(e){}
@@ -11032,6 +11033,10 @@ function pnlRender(){
     const pctStr=item.pct!=null?((item.pct>=0?'＋':'')+item.pct.toFixed(1)+'%'):'';
     const subLabel=item.type==='unrealized'?'評価損益':
                    item.type==='realized'?('確定損益'+(item.date?' · '+item.date:'')):'損益';
+    // チャートリンク（コードがある保有銘柄のみ）
+    const chartLink=item.type==='unrealized'&&item.code
+      ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
+      :'';
     const leftBar=item.gain>=0?'#27ae60':'#e74c3c';
     return `<div style="display:flex;align-items:stretch;background:var(--bg2);border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:default">
       <div style="width:4px;background:${leftBar};flex-shrink:0"></div>
@@ -11040,7 +11045,7 @@ function pnlRender(){
           <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
           <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${item.badgeColor}22;color:${item.badgeColor};border:1px solid ${item.badgeColor}44;flex-shrink:0">${item.badge}</span>
         </div>
-        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}${chartLink}</div>
       </div>
       <div style="padding:12px 16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0">
         <div style="font-size:16px;font-weight:700;color:${gainCol}">${gainStr}</div>
@@ -11048,6 +11053,198 @@ function pnlRender(){
       </div>
     </div>`;
   }).join('');
+}
+
+// ── 損益タブ用 独立株価チャートモーダル ──
+// amAccounts の code/costPrice から直接描画（日本株タブ不依存）
+
+let pnlChartInstance=null;
+let pnlChartPeriod='3mo';
+
+function pnlOpenChart(code, name, costPrice, buyDate){
+  // モーダル作成
+  let modal=document.getElementById('pnlChartModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='pnlChartModal';
+    modal.style.cssText='position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center';
+    modal.onclick=e=>{if(e.target===modal)pnlCloseChart();};
+    document.body.appendChild(modal);
+  }
+  pnlChartPeriod='3mo';
+  modal.innerHTML=`
+    <div style="width:100%;max-width:640px;background:var(--bg);border-radius:20px 20px 0 0;padding:18px 16px 32px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:700;color:var(--text)">${esc(name)} <span style="font-size:12px;color:var(--text3);font-weight:400">(${esc(code)})</span></div>
+        <button onclick="pnlCloseChart()" style="background:var(--bg2);border:none;width:28px;height:28px;border-radius:50%;font-size:15px;cursor:pointer;color:var(--text2)">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px" id="pnl-chart-period-btns">
+        <button class="pnl-cp-btn active" onclick="pnlSetPeriod('3mo',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}')">3ヶ月</button>
+        <button class="pnl-cp-btn" onclick="pnlSetPeriod('6mo',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}')">6ヶ月</button>
+        <button class="pnl-cp-btn" onclick="pnlSetPeriod('1y',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}')">1年</button>
+        <button class="pnl-cp-btn" onclick="pnlSetPeriod('buy',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}')">購入日〜</button>
+      </div>
+      <div id="pnl-chart-area" style="min-height:240px;display:flex;align-items:center;justify-content:center">
+        <div style="color:var(--text3)">読み込み中...</div>
+      </div>
+      <div id="pnl-chart-info" style="display:none;margin-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center"></div>
+    </div>`;
+  // ボタンスタイル注入
+  if(!document.getElementById('pnlChartStyle')){
+    const st=document.createElement('style');
+    st.id='pnlChartStyle';
+    st.textContent='.pnl-cp-btn{flex:1;padding:7px 4px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:var(--bg2);color:var(--text2)}.pnl-cp-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}';
+    document.head.appendChild(st);
+  }
+  modal.style.display='flex';
+  pnlFetchChart(code, name, costPrice, buyDate||'', '3mo');
+}
+
+function pnlCloseChart(){
+  const modal=document.getElementById('pnlChartModal');
+  if(modal) modal.style.display='none';
+  if(pnlChartInstance){pnlChartInstance.destroy();pnlChartInstance=null;}
+}
+
+function pnlSetPeriod(period, btn, code, name, costPrice, buyDate){
+  document.querySelectorAll('.pnl-cp-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  pnlFetchChart(code, name, costPrice, buyDate, period);
+}
+
+async function pnlFetchChart(code, name, costPrice, buyDate, period){
+  const areaEl=document.getElementById('pnl-chart-area');
+  const infoEl=document.getElementById('pnl-chart-info');
+  if(!areaEl)return;
+  areaEl.innerHTML='<div style="color:var(--text3);font-size:13px"><div style="font-size:20px;display:inline-block">⏳</div> データ取得中...</div>';
+  if(infoEl)infoEl.style.display='none';
+
+  try{
+    // 期間決定
+    let range=period;
+    let startMs=null;
+    if(period==='buy'&&buyDate){
+      const bd=new Date(buyDate);
+      startMs=bd.getTime();
+      const days=(Date.now()-startMs)/86400000;
+      if(days<=90) range='3mo';
+      else if(days<=180) range='6mo';
+      else if(days<=365) range='1y';
+      else if(days<=365*2) range='2y';
+      else range='5y';
+    }
+
+    const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+    const resp=await fetch(`${WORKER}?code=${code}&range=${range}`);
+    if(!resp.ok) throw new Error('取得失敗');
+    const data=await resp.json();
+    const result=data?.chart?.result?.[0];
+    if(!result) throw new Error('データなし');
+
+    const timestamps=result.timestamp||[];
+    const closes=result.indicators?.quote?.[0]?.close||[];
+
+    // nullフィルタ＋購入日フィルタ
+    let pairs=timestamps.map((t,i)=>({t:t*1000,c:closes[i]})).filter(x=>x.c!=null);
+    if(period==='buy'&&startMs) pairs=pairs.filter(x=>x.t>=startMs);
+    if(!pairs.length) throw new Error('データなし');
+
+    const labels=pairs.map(x=>{
+      const d=new Date(x.t);
+      return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+    });
+    const prices=pairs.map(x=>Math.round(x.c));
+    const latestPrice=prices[prices.length-1];
+    const spanDays=pairs.length>1?(pairs[pairs.length-1].t-pairs[0].t)/86400000:0;
+    const isGain=latestPrice>=costPrice;
+    const gainPct=costPrice>0?((latestPrice-costPrice)/costPrice*100):0;
+    const chartColor=isGain?'#22c55e':'#ef4444';
+    const bgColor=isGain?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)';
+
+    // 購入日縦線インデックス
+    let buyIdx=-1;
+    if(buyDate&&startMs===null){
+      const buyMs=new Date(buyDate).getTime();
+      let minDiff=Infinity;
+      pairs.forEach((p,i)=>{
+        const diff=Math.abs(p.t-buyMs);
+        if(diff<minDiff){minDiff=diff;buyIdx=i;}
+      });
+      if(minDiff>7*86400000) buyIdx=-1;
+    }
+
+    areaEl.innerHTML='<canvas id="pnl-stock-chart" style="width:100%;height:240px"></canvas>';
+    if(pnlChartInstance){pnlChartInstance.destroy();pnlChartInstance=null;}
+    const ctx=document.getElementById('pnl-stock-chart').getContext('2d');
+
+    const buyDatePlugin={
+      id:'pnlBuyLine',
+      afterDraw(chart){
+        if(buyIdx<0)return;
+        const{ctx:c,chartArea:ca,scales:sc}=chart;
+        const x=sc.x.getPixelForValue(buyIdx);
+        if(x<ca.left||x>ca.right)return;
+        c.save();
+        c.beginPath();c.strokeStyle='rgba(251,191,36,0.85)';c.lineWidth=1.5;c.setLineDash([4,3]);
+        c.moveTo(x,ca.top);c.lineTo(x,ca.bottom);c.stroke();
+        c.setLineDash([]);c.fillStyle='rgba(251,191,36,0.9)';
+        const lw=26,lh=16,lx=Math.min(x-lw/2,ca.right-lw);
+        c.beginPath();
+        c.roundRect?c.roundRect(lx,ca.top-1,lw,lh,4):c.rect(lx,ca.top-1,lw,lh);
+        c.fill();c.fillStyle='#fff';c.font='bold 10px sans-serif';
+        c.textAlign='center';c.textBaseline='middle';
+        c.fillText('買',x,ca.top+lh/2-1);c.restore();
+      }
+    };
+
+    pnlChartInstance=new Chart(ctx,{
+      type:'line',
+      data:{
+        labels,
+        datasets:[
+          {label:name,data:prices,borderColor:chartColor,backgroundColor:bgColor,borderWidth:2,fill:true,tension:0.3,pointRadius:0,pointHoverRadius:5},
+          {label:`取得単価 ¥${costPrice.toLocaleString()}`,data:prices.map(()=>costPrice),borderColor:'rgba(150,150,150,0.6)',borderWidth:1.5,borderDash:[6,4],fill:false,tension:0,pointRadius:0,pointHoverRadius:0}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{intersect:false,mode:'index'},
+        plugins:{
+          pnlBuyLine:{},legend:{display:false},
+          tooltip:{callbacks:{label:c=>c.datasetIndex===0?`株価: ¥${c.raw.toLocaleString()}`:`取得単価: ¥${costPrice.toLocaleString()}`}}
+        },
+        scales:{
+          x:{grid:{display:false},ticks:{maxTicksLimit:6,color:'var(--text3)',font:{size:10},
+            callback:function(val,idx,all){
+              const lbl=this.getLabelForValue(val);if(!lbl)return'';
+              const[y,m,d]=lbl.split('/').map(Number);
+              if(spanDays>300){
+                const prev=idx>0?this.getLabelForValue(all[idx-1].value):null;
+                const py=prev?parseInt(prev.split('/')[0]):null;
+                return py!==y?`${y}年${m}月`:`${m}/${d}`;
+              }
+              return`${m}/${d}`;
+            }
+          }},
+          y:{position:'right',grid:{color:'rgba(128,128,128,0.1)'},ticks:{color:'var(--text3)',font:{size:10},callback:v=>'¥'+v.toLocaleString()}}
+        }
+      },
+      plugins:[buyDatePlugin]
+    });
+
+    // 情報欄
+    if(infoEl){
+      const gc=gainPct>=0?'var(--green)':'var(--danger)';
+      const gs=gainPct>=0?'+':'';
+      infoEl.style.display='grid';
+      infoEl.innerHTML=`
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">現在値</div><div style="font-size:15px;font-weight:700;color:var(--text)">¥${latestPrice.toLocaleString()}</div></div>
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">取得比</div><div style="font-size:15px;font-weight:700;color:${gc}">${gs}${gainPct.toFixed(1)}%</div></div>
+        <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">評価損益</div><div style="font-size:15px;font-weight:700;color:${gc}">${gs}¥${Math.abs(latestPrice-costPrice).toLocaleString()}</div></div>`;
+    }
+  }catch(e){
+    if(areaEl) areaEl.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:13px">📋 株価データを取得できませんでした<br><small>${e.message}</small></div>`;
+  }
 }
 </script>
 </body>
