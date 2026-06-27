@@ -2145,12 +2145,11 @@ function amRender(){
     try{pfRenderDonutCharts();}catch(e){}
   }
 }
-// ── 保有銘柄ヒートマップ ──
+// ── 保有銘柄ヒートマップ（Squarified Treemap） ──
 function amRenderHeatmap(accounts,total){
   const el=document.getElementById('amHeatmap');
   if(!el)return;
 
-  // 損益計算できる銘柄のみ（銀行・年金・その他除く）
   const EXCL_CATS=['銀行','年金','その他','預り金'];
   const items=accounts
     .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.costPrice>0)
@@ -2160,61 +2159,150 @@ function amRenderHeatmap(accounts,total){
       const cost=shares>0?shares*cp:cp;
       const gain=a.amount-cost;
       const pct=cost>0?gain/cost*100:0;
-      return{name:a.name,amount:a.amount,gain,pct,cat:a.cat,code:a.code||''};
+      const acct=accounts.find(x=>x.name===a.name);
+      return{name:a.name,amount:a.amount,gain,pct,cat:a.cat,id:acct?.id};
     })
     .sort((a,b)=>b.amount-a.amount);
 
-  if(!items.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得単価が入力された銘柄が表示されます</p>';return;}
+  if(!items.length){
+    el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得単価が入力された銘柄が表示されます</p>';
+    return;
+  }
 
-  const maxAmt=items[0].amount;
-  const totalAmt=items.reduce((s,i)=>s+i.amount,0);
-
-  // 色関数（損益率に応じてグラデーション）
   const pctToColor=pct=>{
     if(pct>=20)return'#0a5e3f';
-    if(pct>=10)return'#0f8a5a';
-    if(pct>=5)return'#17b27a';
-    if(pct>=2)return'#2ecc8f';
-    if(pct>=0)return'#52d9a8';
-    if(pct>=-2)return'#e8847a';
-    if(pct>=-5)return'#e05a50';
-    if(pct>=-10)return'#c0392b';
-    return'#922b21';
+    if(pct>=10)return'#0f7a50';
+    if(pct>=5) return'#1a9e6a';
+    if(pct>=2) return'#27b87f';
+    if(pct>=0) return'#3ecf97';
+    if(pct>=-2)return'#e07068';
+    if(pct>=-5)return'#cc4a40';
+    if(pct>=-10)return'#b03028';
+    return'#8b1e18';
   };
 
-  // ツリーマップ風レイアウト（横幅に比例してタイル配置）
-  const html=items.map(item=>{
-    const widthPct=Math.max(item.amount/totalAmt*100,3);
-    const color=pctToColor(item.pct);
-    const textColor='#fff';
-    const sign=item.pct>=0?'+':'';
-    const shortName=item.name.length>6?item.name.slice(0,6)+'…':item.name;
-    return`<div onclick="openEditModal(${accounts.find(a=>a.name===item.name)?.id})" style="
-      display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
-      width:calc(${widthPct.toFixed(1)}% - 4px);
-      min-width:52px;
-      height:${Math.max(widthPct*0.9,44).toFixed(0)}px;
-      background:${color};border-radius:8px;margin:2px;
-      cursor:pointer;vertical-align:top;overflow:hidden;
-      box-shadow:0 1px 3px rgba(0,0,0,0.15);
-      transition:transform 0.15s;
-      " onmouseenter="this.style.transform='scale(1.03)'" onmouseleave="this.style.transform='scale(1)'">
-      <div style="font-size:${widthPct>8?11:9}px;font-weight:700;color:${textColor};text-align:center;padding:0 4px;word-break:break-all;line-height:1.2">${esc(shortName)}</div>
-      <div style="font-size:${widthPct>8?10:8}px;color:${textColor};opacity:0.9;margin-top:2px">${sign}${item.pct.toFixed(1)}%</div>
-      ${widthPct>10?`<div style="font-size:8px;color:${textColor};opacity:0.75">${fmt(item.amount)}</div>`:''}
-    </div>`;
-  }).join('');
+  // ── Squarified Treemap アルゴリズム ──
+  const GAP=2;
+  const containerW=el.clientWidth||340;
+  const TOTAL_H=Math.round(containerW*0.72); // アスペクト比 ~1.4
+  const totalAmt=items.reduce((s,i)=>s+i.amount,0);
+
+  // 正規化された面積値
+  const normed=items.map(i=>({...i,area:i.amount/totalAmt}));
+
+  // --- Strip-based Treemap実装 ---
+  const rects=[];
+  function layoutStrip(nodes,x,y,w,h){
+    if(!nodes.length)return;
+    const sumArea=nodes.reduce((s,n)=>s+n.area,0);
+    if(nodes.length===1){rects.push({node:nodes[0],x,y,w,h});return;}
+
+    const isHoriz=w>=h; // 横長なら縦スライス
+    let sliceEnd=0,rowNodes=[];
+    let bestWorst=Infinity,rowSum=0;
+    const side=isHoriz?h:w;
+
+    for(let i=0;i<nodes.length;i++){
+      const candidate=[...rowNodes,nodes[i]];
+      const cSum=rowSum+nodes[i].area;
+      const sliceW=cSum/sumArea*(isHoriz?w:h);
+      let worst=0;
+      candidate.forEach(n=>{
+        const tw=isHoriz?sliceW:n.area/cSum*sliceW;
+        const th=isHoriz?n.area/cSum*side:sliceW;
+        const ar=isHoriz?tw/th:th/tw;
+        const ratio=ar>1?ar:1/ar;
+        if(ratio>worst)worst=ratio;
+      });
+      if(worst<bestWorst||i===0){
+        bestWorst=worst;rowNodes=candidate;rowSum=cSum;sliceEnd=i+1;
+      } else break;
+    }
+
+    // rowNodesを配置
+    const sliceW=rowSum/sumArea*(isHoriz?w:h);
+    let offset=isHoriz?y:x;
+    rowNodes.forEach(n=>{
+      const len=n.area/rowSum*side;
+      if(isHoriz){rects.push({node:n,x,y:offset,w:sliceW,h:len});}
+      else{rects.push({node:n,x:offset,y,w:len,h:sliceW});}
+      offset+=len;
+    });
+    // 残りを再帰
+    const rest=nodes.slice(sliceEnd);
+    if(rest.length){
+      if(isHoriz) layoutStrip(rest,x+sliceW,y,w-sliceW,h);
+      else         layoutStrip(rest,x,y+sliceW,w,h-sliceW);
+    }
+  }
+
+  layoutStrip(normed,0,0,containerW,TOTAL_H);
+
+  // SVG描画
+  const fmtM=v=>{
+    if(v>=1e8)return(v/1e4).toFixed(0)+'万';
+    if(v>=1e4)return(v/1e4).toFixed(1)+'万';
+    return fmt(v);
+  };
+  const escX=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  let defsStr='';
+  let bodyStr='';
+
+  rects.forEach(({node,x,y,w,h},idx)=>{
+    const rx=x+GAP/2,ry=y+GAP/2,rw=Math.max(w-GAP,1),rh=Math.max(h-GAP,1);
+    const color=pctToColor(node.pct);
+    const sign=node.pct>=0?'+':'';
+    const pctStr=sign+node.pct.toFixed(2)+'%';
+    const area=rw*rh;
+    const cpId='cp'+idx;
+
+    // 名称を幅に応じて短縮
+    let dispName=node.name;
+    const maxChars=Math.max(Math.floor(rw/7.5),2);
+    if(dispName.length>maxChars) dispName=dispName.slice(0,maxChars);
+
+    const nameFz=Math.min(Math.max(Math.sqrt(area)*0.085,8),15);
+    const pctFz =Math.min(Math.max(Math.sqrt(area)*0.075,7),13);
+    const amtFz =Math.min(Math.max(Math.sqrt(area)*0.060,6),10);
+
+    const cx=(rx+rw/2).toFixed(1);
+    const showName=rh>16&&rw>20;
+    const showPct =rh>28&&rw>20;
+    const showAmt =rh>42&&rw>30&&area>4500;
+
+    const lines=[];
+    if(showName) lines.push({t:escX(dispName),fz:nameFz,fw:'bold',op:1});
+    if(showPct)  lines.push({t:escX(pctStr),fz:pctFz,fw:'600',op:0.92});
+    if(showAmt)  lines.push({t:escX(fmtM(node.amount)),fz:amtFz,fw:'normal',op:0.75});
+
+    const totalTH=lines.reduce((s,l)=>s+l.fz*1.35,0);
+    let ty=(ry+rh/2)-totalTH/2;
+
+    defsStr+=`<clipPath id="${cpId}"><rect x="${(rx+2).toFixed(1)}" y="${ry.toFixed(1)}" width="${Math.max(rw-4,0).toFixed(1)}" height="${rh.toFixed(1)}"/></clipPath>`;
+    bodyStr+=`<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="5" fill="${color}" style="cursor:pointer" onclick="openEditModal(${node.id})" onmouseenter="this.style.opacity='0.82'" onmouseleave="this.style.opacity='1'"/>`;
+    lines.forEach(l=>{
+      const ly=(ty+l.fz*0.68).toFixed(1);
+      ty+=l.fz*1.35;
+      bodyStr+=`<text x="${cx}" y="${ly}" text-anchor="middle" font-size="${l.fz.toFixed(1)}" font-weight="${l.fw}" fill="white" fill-opacity="${l.op}" font-family="-apple-system,BlinkMacSystemFont,sans-serif" clip-path="url(#${cpId})">${l.t}</text>`;
+    });
+  });
 
   // 凡例
-  const legend=`<div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap;font-size:10px;color:var(--text3)">
-    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#0a5e3f"></div>+20%以上</div>
-    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#17b27a"></div>+5〜20%</div>
-    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#52d9a8"></div>0〜5%</div>
-    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#e8847a"></div>-5〜0%</div>
-    <div style="display:flex;align-items:center;gap:3px"><div style="width:12px;height:12px;border-radius:3px;background:#922b21"></div>-10%以下</div>
-  </div>`;
+  const legendItems=[
+    {c:'#0a5e3f',l:'+20%〜'},{c:'#1a9e6a',l:'+5〜20%'},{c:'#3ecf97',l:'0〜5%'},
+    {c:'#e07068',l:'0〜-5%'},{c:'#8b1e18',l:'-10%〜'}
+  ];
+  const lgY=TOTAL_H+8;
+  const lgW=Math.floor(containerW/5);
+  let lgStr='';
+  legendItems.forEach((li,i)=>{
+    const lx=i*lgW;
+    lgStr+=`<rect x="${lx}" y="${lgY}" width="10" height="10" rx="2" fill="${li.c}"/>`;
+    lgStr+=`<text x="${lx+14}" y="${lgY+9}" font-size="9" fill="#888" font-family="-apple-system,sans-serif">${li.l}</text>`;
+  });
 
-  el.innerHTML=`<div style="line-height:0;display:flex;flex-wrap:wrap;align-items:flex-start">${html}</div>${legend}`;
+  el.innerHTML=`<svg width="${containerW}" height="${TOTAL_H+28}" style="display:block"><defs>${defsStr}</defs>${bodyStr}${lgStr}</svg>`;
 }
 // ── 口座カード1件レンダリング（保有中・売却済み共通） ──
 function amRenderCard(a){
