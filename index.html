@@ -614,6 +614,9 @@ input[type=number] { -moz-appearance: textfield; }
       </div>
     </div>
 
+    <!-- ── 前日比±銘柄数カード（データあれば表示） ── -->
+    <div id="home-daily-pnl" style="padding:0 14px 8px;display:none"></div>
+
     <!-- ── 月初来損益カード ── -->
     <div style="padding:0 14px 8px">
       <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:14px 16px;cursor:pointer" onclick="switchTab('pnl')">
@@ -1847,6 +1850,39 @@ function refreshHome(){
       if(diffEl){diffEl.textContent='—';diffEl.style.color='';}
       const tb=document.getElementById('hbadge-trend');
       if(tb)tb.textContent=snaps.length>0?snaps.length+'件記録':'CSVなし';
+    }
+  }catch(e){}
+
+  // ── 2.5 前日比±銘柄数 ──
+  try{
+    const cmp=dailySnapCompare();
+    const el=document.getElementById('home-daily-pnl');
+    if(el){
+      if(cmp&&(cmp.plus>0||cmp.minus>0)){
+        el.style.display='block';
+        const dateLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'前日比';
+        el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
+            <div style="font-size:9px;color:var(--text3)">${dateLabel}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+              <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:3px">前日比＋</div>
+              <div style="font-size:26px;font-weight:800;color:#4ade80;line-height:1">${cmp.plus}</div>
+              <div style="font-size:10px;color:rgba(74,222,128,0.7);margin-top:2px">銘柄</div>
+            </div>
+            <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+              <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:3px">前日比ー</div>
+              <div style="font-size:26px;font-weight:800;color:#f87171;line-height:1">${cmp.minus}</div>
+              <div style="font-size:10px;color:rgba(248,113,113,0.7);margin-top:2px">銘柄</div>
+            </div>
+          </div>
+          ${cmp.unchanged>0?`<div style="text-align:right;margin-top:4px;font-size:9px;color:var(--text3)">変動なし ${cmp.unchanged}銘柄</div>`:''}
+        </div>`;
+      }else{
+        el.style.display='none';
+      }
     }
   }catch(e){}
 
@@ -3774,7 +3810,7 @@ function importCSV(e){
         if(ex){ex.amount=imp.amount;ex.cat=imp.cat;if(imp.note)ex.note=imp.note;ex.updated=imp.updated||todayStr();updated++;}
         else{const maxId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id)):0;amAccounts.push({id:maxId+added+1,...imp});added++;}
       });
-      amRender();await amSaveToSheet();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();
+      amRender();await amSaveToSheet();dailySnapSave();showToast(`✓ ${updated}件更新・${added}件追加`,3000);refreshHome();
     }else{showToast('有効なデータがありませんでした');}
     e.target.value='';
   };reader.readAsText(file,'UTF-8');
@@ -3820,9 +3856,58 @@ function sendToTrend(){
   snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
+  dailySnapSave();
   showToast('✓ 推移グラフに記録しました（'+dateStr+'）',3000);
   refreshHome();
 }
+// ── 日次銘柄スナップショット保存・比較 ──
+const DAILY_SNAP_KEY='dailySnapshot_v1';
+
+function dailySnapSave(){
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const today=todayStr();
+    const existing=JSON.parse(localStorage.getItem(DAILY_SNAP_KEY)||'{}');
+    // 銘柄ごとの残高をid+nameをキーに保存
+    const snap={date:today,items:{}};
+    accs.filter(a=>!a.sold&&a.amount>0).forEach(a=>{
+      const key=String(a.id)+'_'+a.name;
+      snap.items[key]={id:a.id,name:a.name,cat:a.cat,amount:a.amount};
+    });
+    // 今日のデータを保存（前日を退避してから）
+    if(existing.today&&existing.today.date!==today){
+      existing.prev=existing.today;// 前日に格上げ
+    }
+    if(!existing.today||existing.today.date!==today){
+      existing.today=snap;
+    }else{
+      // 同日再読込は上書き
+      existing.today=snap;
+    }
+    localStorage.setItem(DAILY_SNAP_KEY,JSON.stringify(existing));
+  }catch(e){console.error('dailySnapSave',e);}
+}
+
+function dailySnapCompare(){
+  // 今日と前日のスナップを比較して+/-銘柄数を返す
+  try{
+    const data=JSON.parse(localStorage.getItem(DAILY_SNAP_KEY)||'{}');
+    if(!data.today||!data.prev)return null;
+    const today=data.today.items,prev=data.prev.items;
+    let plus=0,minus=0,unchanged=0;
+    const prevDate=data.prev.date,todayDate=data.today.date;
+    // todayのキーをbaseに比較
+    Object.keys(today).forEach(key=>{
+      if(!prev[key])return;// 新規銘柄はスキップ
+      const d=today[key].amount-prev[key].amount;
+      if(d>0)plus++;
+      else if(d<0)minus++;
+      else unchanged++;
+    });
+    return{plus,minus,unchanged,prevDate,todayDate};
+  }catch(e){return null;}
+}
+
 async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
