@@ -10892,30 +10892,47 @@ function pnlInitDateSelectors(){
 }
 
 // 評価損益を計算（amAccountsから）
-// ヒートマップと同じ条件：prevSBIAmount>0（SBI CSV掲載済み）の銘柄のみ
-// → SBG・SBKK（野村/みずほ）など非SBI銘柄を自動除外、かつcost計算も正確
+// amRenderCardと同じロジックで損益計算、prevSBIAmount>0の銘柄のみ表示
 function pnlCalcUnrealized(){
   const EXCL=['銀行','年金','その他','預り金'];
-  const STOCK_CATS=['個別株','高配当','外国株式'];
+  const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
+  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
+  const STOCK_CATS=['個別株','高配当'];
+  const FOREIGN_CATS=['外国株式'];
   let items=[];
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const fxRate=(typeof amGetFxRate==='function')?amGetFxRate():145;
     accs.filter(a=>
       !a.sold &&
       a.amount>0 &&
       !EXCL.includes(a.cat) &&
       a.costPrice>0 &&
-      a.prevSBIAmount>0  // SBI CSV取込済みの銘柄のみ
+      a.prevSBIAmount>0  // SBI CSV掲載済み銘柄のみ
     ).forEach(a=>{
       const isStock=STOCK_CATS.includes(a.cat);
-      // 株式：取得単価×株数、投信：costPrice=取得総額をそのまま使用
-      const cost=isStock&&a.shares>0 ? a.costPrice*a.shares : a.costPrice;
-      if(!(cost>0))return;
-      const gain=a.amount-cost;
-      const pct=gain/cost*100;
-      // 損益率が異常値（±10000%超）の場合はcost計算が疑わしいのでスキップ
-      if(Math.abs(pct)>10000)return;
-      items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,cost,
+      const isForeign=FOREIGN_CATS.includes(a.cat);
+      const isIndex=INDEX_CATS.includes(a.cat);
+      const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
+      // amRenderCardと同じロジック
+      // isUnitBased = 個別株 or 外国株 or (投信 かつ PayPayでない)
+      const isUnitBased=isStock||isForeign||(isIndex&&!isPayPay);
+      let gain, pct;
+      if(isForeign&&a.shares>0&&a.price>0){
+        gain=(a.price-a.costPrice)*a.shares*(a.fxRate||fxRate);
+        pct=(a.price-a.costPrice)/a.costPrice*100;
+      } else if(isUnitBased&&a.shares>0&&a.price>0){
+        gain=(a.price-a.costPrice)*a.shares;
+        pct=(a.price-a.costPrice)/a.costPrice*100;
+      } else if(!isUnitBased&&isIndex&&a.amount>0){
+        // PayPay系投信：costPrice=取得総額
+        gain=a.amount-a.costPrice;
+        pct=gain/a.costPrice*100;
+      } else {
+        return; // price未入力などで計算不可
+      }
+      if(!isFinite(gain)||!isFinite(pct))return;
+      items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,
         badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
     });
   }catch(e){}
