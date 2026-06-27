@@ -10892,32 +10892,31 @@ function pnlInitDateSelectors(){
 }
 
 // 評価損益を計算（amAccountsから）
+// ヒートマップと同じ条件：prevSBIAmount>0（SBI CSV掲載済み）の銘柄のみ
+// → SBG・SBKK（野村/みずほ）など非SBI銘柄を自動除外、かつcost計算も正確
 function pnlCalcUnrealized(){
   const EXCL=['銀行','年金','その他','預り金'];
-  // 名前ベースでも除外（DC年金・PayPay・持ち株など損益計算不要のもの）
-  const EXCL_NAME_PAT=/PayPay|ペイペイ|確定拠出|DC年金|ＤＣ年金|iDeCo|イデコ|TOPIX100|ポイント|持ち株/i;
-  // 株式カテゴリ（単価×株数でcost計算）
   const STOCK_CATS=['個別株','高配当','外国株式'];
-  // 投信カテゴリ（costPrice=取得総額）
-  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
   let items=[];
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>!a.sold&&a.amount>0&&!EXCL.includes(a.cat)&&a.costPrice>0&&!EXCL_NAME_PAT.test(a.name)).forEach(a=>{
+    accs.filter(a=>
+      !a.sold &&
+      a.amount>0 &&
+      !EXCL.includes(a.cat) &&
+      a.costPrice>0 &&
+      a.prevSBIAmount>0  // SBI CSV取込済みの銘柄のみ
+    ).forEach(a=>{
       const isStock=STOCK_CATS.includes(a.cat);
-      const isIndex=INDEX_CATS.includes(a.cat);
-      let cost;
-      if(isStock&&a.shares>0){
-        // 株式：取得単価×株数
-        cost=a.costPrice*a.shares;
-      } else {
-        // 投信・その他：costPrice=取得総額をそのまま使用
-        cost=a.costPrice;
-      }
+      // 株式：取得単価×株数、投信：costPrice=取得総額をそのまま使用
+      const cost=isStock&&a.shares>0 ? a.costPrice*a.shares : a.costPrice;
       if(!(cost>0))return;
       const gain=a.amount-cost;
       const pct=gain/cost*100;
-      items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,cost,badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
+      // 損益率が異常値（±10000%超）の場合はcost計算が疑わしいのでスキップ
+      if(Math.abs(pct)>10000)return;
+      items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,cost,
+        badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
     });
   }catch(e){}
   items.sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
