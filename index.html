@@ -138,6 +138,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .home-card .hc-title{font-size:13px;font-weight:600;margin-bottom:4px}
 .home-card .hc-meta{font-size:11px;color:var(--text2);line-height:1.4}
 .home-card .hc-badge{font-size:10px;margin-top:6px;padding:2px 8px;border-radius:10px;display:inline-block;font-weight:600;background:rgba(24,95,165,0.1);color:var(--accent)}
+/* ── New Home ── */
+#tab-home .page-inner{padding:0}
 .home-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 
 /* ============================================================
@@ -583,88 +585,141 @@ input[type=number] { -moz-appearance: textfield; }
 
 <!-- ========== HOME ========== -->
 <div class="panel active" id="tab-home">
-  <div class="page-inner">
-    <div class="home-header">
-      <h2>💼 資産管理</h2>
-      <p>4つのツールを一元管理</p>
-    </div>
-    <div class="home-total">
-      <div class="ht-label">総資産</div>
-      <div class="ht-value" id="home-total">—</div>
-      <div class="ht-sub" id="home-total-sub">口座を登録してください</div>
-    </div>
-    <div class="home-summary-grid">
-      <div class="metric"><div class="label">口座数</div><div class="value" id="home-accounts">—</div></div>
-      <div class="metric"><div class="label">前月比</div><div class="value" id="home-diff">—</div></div>
-      <div class="metric"><div class="label">TODO残り</div><div class="value" id="home-todo">—</div></div>
-    </div>
-    <!-- 売り目標到達アラートバナー -->
-    <div id="home-sell-alert" style="display:none;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:12px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">🎯 売り目標 到達アラート</div>
-      <div id="home-sell-alert-list"></div>
-    </div>
-    <!-- インカム収益サマリー -->
-    <div id="home-income-bar" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;display:none">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">💎 インカム収益（年間予想）</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-        <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">高配当・配当</div><div id="home-income-div" style="font-size:15px;font-weight:700;color:#8B5CF6">—</div></div>
-        <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">積立（月次換算）</div><div id="home-income-acc" style="font-size:15px;font-weight:700;color:var(--accent)">—</div></div>
-        <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">副業収入</div><div id="home-income-side" style="font-size:15px;font-weight:700;color:var(--green)">—</div></div>
-      </div>
-      <div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;color:var(--text3)">月次合計（概算）</span>
-        <span id="home-income-total" style="font-size:14px;font-weight:700;color:var(--text)">—</span>
-      </div>
-      <div id="home-income-div-actual-row" style="margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);display:none;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;color:var(--text3)">今年の配当受取実績</span>
-        <span id="home-income-div-actual" style="font-size:13px;font-weight:700;color:#8B5CF6">—</span>
-      </div>
-    </div>
-    <!-- 配当・決算カレンダー -->
-    <div id="home-earnings-cal" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;display:none">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.04em">📅 配当・決算カレンダー（直近）</div>
-      <div id="home-earnings-list"></div>
-    </div>
-    <div class="home-grid">
-      <div class="home-card" onclick="switchTab('manager')">
-        <div class="hc-icon">💰</div>
-        <div class="hc-title">資産管理</div>
-        <div class="hc-meta">口座・残高を登録<br>CSVで推移ツールへ</div>
-        <div class="hc-badge" id="hbadge-manager">—</div>
-      </div>
-      <div class="home-card" onclick="switchTab('trend')">
-        <div class="hc-icon">📈</div>
-        <div class="hc-title">資産推移グラフ</div>
-        <div class="hc-meta">CSVを読み込んで<br>月次推移を可視化</div>
-        <div class="hc-badge" id="hbadge-trend">—</div>
-      </div>
-      <div class="home-card" onclick="switchTab('todo')">
-        <div class="hc-icon">✅</div>
-        <div class="hc-title">TODOリスト</div>
-        <div class="hc-meta">投資・税金・手続き<br>期限日・優先度付き</div>
-        <div class="hc-badge" id="hbadge-todo">—</div>
-      </div>
-      <div class="home-card" onclick="switchTab('fire')">
-        <div class="hc-icon">🔥</div>
-        <div class="hc-title">FIREシミュレーター</div>
-        <div class="hc-meta">独身・家族ありで<br>資産寿命を試算</div>
-        <div class="hc-badge">サイド収入20万円</div>
-      </div>
+  <div style="background:var(--bg);min-height:100vh;padding-bottom:80px">
 
-      <div class="home-card" onclick="switchTab('cashflow')">
-        <div class="hc-icon">💸</div>
-        <div class="hc-title">月次収支</div>
-        <div class="hc-meta">収入・支出・副業<br>キャッシュフロー管理</div>
-        <div class="hc-badge" id="hbadge-cashflow">タップして入力</div>
+    <!-- ── TOP HERO：資産総額 ＋ ベスト/ワースト ── -->
+    <div style="display:grid;grid-template-columns:3fr 2fr;gap:8px;padding:12px 14px 8px">
+      <!-- 左：資産総額 -->
+      <div style="background:linear-gradient(135deg,#1a2a3a,#0d1f2d);border-radius:16px;padding:16px 14px;cursor:pointer" onclick="switchTab('manager')">
+        <div style="font-size:10px;color:rgba(255,255,255,0.55);font-weight:600;letter-spacing:0.06em;margin-bottom:4px">資産総額</div>
+        <div id="home-total" style="font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1.1">—</div>
+        <div id="home-prev-diff" style="font-size:11px;margin-top:5px;color:rgba(255,255,255,0.5)">—</div>
+        <div id="home-unrealized-row" style="margin-top:8px;padding-top:8px;border-top:0.5px solid rgba(255,255,255,0.1)">
+          <div style="font-size:10px;color:rgba(255,255,255,0.45);margin-bottom:2px">評価損益</div>
+          <div id="home-unrealized" style="font-size:15px;font-weight:700;color:#4ade80">—</div>
+        </div>
       </div>
-        <div class="hc-title">配当金管理</div>
-        <div class="hc-meta">受取配当金の記録<br>月別・年別グラフ</div>
-      </div>
-        <div class="hc-title">取引履歴</div>
-        <div class="hc-meta">買い・売り・配当を記録<br>累計IN/OUT推移</div>
+      <!-- 右：ベスト/ワースト 2枠 -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div id="home-best-card" style="background:#1a3a2a;border-radius:12px;padding:10px 12px;flex:1;cursor:pointer;min-height:0" onclick="switchTab('pnl')">
+          <div style="font-size:9px;color:rgba(255,255,255,0.45);font-weight:600;letter-spacing:0.05em;margin-bottom:3px">BEST</div>
+          <div id="home-best-name" style="font-size:11px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+          <div id="home-best-pct" style="font-size:16px;font-weight:800;color:#4ade80;letter-spacing:-0.3px">—</div>
+        </div>
+        <div id="home-worst-card" style="background:#3a1a1a;border-radius:12px;padding:10px 12px;flex:1;cursor:pointer;min-height:0" onclick="switchTab('pnl')">
+          <div style="font-size:9px;color:rgba(255,255,255,0.45);font-weight:600;letter-spacing:0.05em;margin-bottom:3px">WORST</div>
+          <div id="home-worst-name" style="font-size:11px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+          <div id="home-worst-pct" style="font-size:16px;font-weight:800;color:#f87171;letter-spacing:-0.3px">—</div>
+        </div>
       </div>
     </div>
-    <div class="hint"><strong>ヒント：</strong>「資産管理」でCSV書き出し→「推移グラフ」に読み込むと月次推移を記録できます。</div>
+
+    <!-- ── 月初来損益カード ── -->
+    <div style="padding:0 14px 8px">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:14px 16px;cursor:pointer" onclick="switchTab('pnl')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.04em">月初来損益</div>
+          <div id="home-month-range" style="font-size:10px;color:var(--text3)">—</div>
+        </div>
+        <div id="home-month-total" style="font-size:30px;font-weight:800;color:var(--green);letter-spacing:-0.5px;margin-bottom:8px">—</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--bg2);border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">評価損益</div>
+            <div id="home-month-unrealized" style="font-size:13px;font-weight:700;color:var(--text)">—</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">確定損益</div>
+            <div id="home-month-realized" style="font-size:13px;font-weight:700;color:var(--text)">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 売り目標アラート ── -->
+    <div id="home-sell-alert" style="display:none;padding:0 14px 8px">
+      <div style="background:var(--bg);border:0.5px solid #e67e22;border-radius:14px;padding:12px 14px">
+        <div style="font-size:11px;color:#e67e22;margin-bottom:8px;font-weight:600">🎯 売り目標 到達アラート</div>
+        <div id="home-sell-alert-list"></div>
+      </div>
+    </div>
+
+    <!-- ── 3列クイックメトリクス ── -->
+    <div style="padding:0 14px 8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">口座数</div>
+          <div id="home-accounts" style="font-size:18px;font-weight:700;color:var(--text)">—</div>
+        </div>
+        <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 10px;text-align:center;cursor:pointer" onclick="switchTab('trend')">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">前回比</div>
+          <div id="home-diff" style="font-size:14px;font-weight:700;color:var(--text)">—</div>
+        </div>
+        <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 10px;text-align:center;cursor:pointer" onclick="switchTab('todo')">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">TODO残り</div>
+          <div id="home-todo" style="font-size:18px;font-weight:700;color:var(--text)">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 決算予定カード ── -->
+    <div id="home-earnings-cal" style="padding:0 14px 8px;display:none">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:600;letter-spacing:0.04em">📅 決算発表予定（直近）</div>
+        <div id="home-earnings-list"></div>
+      </div>
+    </div>
+
+    <!-- ── ヒートマップ ── -->
+    <div style="padding:0 14px 8px">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px;cursor:pointer" onclick="switchTab('trend')">
+        <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:0.04em;margin-bottom:8px">🔥 ヒートマップ（前回CSV比）</div>
+        <div id="home-heatmap-mini" style="min-height:80px">
+          <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">SBI CSVを読み込むと表示されます</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── タブナビゲーションカード ── -->
+    <div style="padding:0 14px 8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer" onclick="switchTab('trend')">
+          <div style="font-size:20px;margin-bottom:4px">📈</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">資産推移</div>
+          <div id="hbadge-trend" style="font-size:9px;color:var(--text3);margin-top:2px">—</div>
+        </div>
+        <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer" onclick="switchTab('fire')">
+          <div style="font-size:20px;margin-bottom:4px">🔥</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">FIRE</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px">シミュレーター</div>
+        </div>
+        <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer" onclick="switchTab('cashflow')">
+          <div style="font-size:20px;margin-bottom:4px">💸</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">月次収支</div>
+          <div id="hbadge-cashflow" style="font-size:9px;color:var(--text3);margin-top:2px">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── インカム収益（非表示→データあれば表示） ── -->
+    <div id="home-income-bar" style="padding:0 14px 8px;display:none">
+      <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:600">💎 インカム収益（年間予想）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">配当</div><div id="home-income-div" style="font-size:14px;font-weight:700;color:#8B5CF6">—</div></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">積立</div><div id="home-income-acc" style="font-size:14px;font-weight:700;color:var(--accent)">—</div></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">副業</div><div id="home-income-side" style="font-size:14px;font-weight:700;color:var(--green)">—</div></div>
+        </div>
+        <div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:var(--text3)">月次合計</span>
+          <span id="home-income-total" style="font-size:14px;font-weight:700;color:var(--text)">—</span>
+        </div>
+        <div id="home-income-div-actual-row" style="margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);display:none;justify-content:space-between">
+          <span style="font-size:11px;color:var(--text3)">今年の配当実績</span>
+          <span id="home-income-div-actual" style="font-size:13px;font-weight:700;color:#8B5CF6">—</span>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1764,58 +1819,178 @@ function switchTab(tab){
 // HOME
 // ============================================================
 function refreshHome(){
+  // ── 1. 資産総額 ──
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    const total=accs.reduce((s,a)=>s+(a.amount||0),0);
-    document.getElementById('home-total').textContent=total>0?fmt(total):'—';
-    document.getElementById('home-accounts').textContent=accs.length>0?accs.length+'口座':'—';
-    document.getElementById('home-total-sub').textContent=accs.length>0?accs.length+'口座':'口座を登録してください';
-    document.getElementById('hbadge-manager').textContent=accs.length>0?accs.length+'口座 · '+fmt(total):'データなし';
-  }catch(e){}
-  try{
-    const snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');
-    if(snaps.length>=2){
-      const d=snaps[snaps.length-1].total-snaps[snaps.length-2].total;
-      const el=document.getElementById('home-diff');
-      el.textContent=(d>=0?'＋':'')+Math.round(d).toLocaleString()+'円';
-      el.className='value '+(d>=0?'up':'down');
-      document.getElementById('hbadge-trend').textContent=snaps.length+'件記録済み';
-    }else{
-      document.getElementById('hbadge-trend').textContent=snaps.length>0?snaps.length+'件記録':'CSVなし';
-    }
-  }catch(e){}
-  try{
-    const pf=JSON.parse(localStorage.getItem(PF_KEY)||'[]');
-    const done=pf.filter(d=>d.status==='done'||d.status==='done-credit').length;
-    document.getElementById('hbadge-portfolio').textContent=pf.length>0?done+'/'+pf.length+'件 購入済み':'データなし';
+    const active=accs.filter(a=>!a.sold);
+    const total=active.reduce((s,a)=>s+(a.amount||0),0);
+    const totalEl=document.getElementById('home-total');
+    if(totalEl)totalEl.textContent=total>0?fmt(total):'—';
+    const acEl=document.getElementById('home-accounts');
+    if(acEl)acEl.textContent=active.length>0?active.length+'口座':'—';
   }catch(e){}
 
+  // ── 2. 前回CSV比（スナップショット差分）──
+  try{
+    const snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');
+    const diffEl=document.getElementById('home-diff');
+    const prevEl=document.getElementById('home-prev-diff');
+    if(snaps.length>=2){
+      const d=snaps[snaps.length-1].total-snaps[snaps.length-2].total;
+      const sign=d>=0?'＋':'';
+      const col=d>=0?'#4ade80':'#f87171';
+      if(diffEl){diffEl.textContent=sign+Math.round(d).toLocaleString()+'円';diffEl.style.color=col;}
+      if(prevEl){prevEl.textContent='前回比 '+sign+Math.round(d).toLocaleString()+'円';prevEl.style.color=col;}
+      const tb=document.getElementById('hbadge-trend');
+      if(tb)tb.textContent=snaps.length+'件記録済み';
+    }else{
+      if(diffEl){diffEl.textContent='—';diffEl.style.color='';}
+      const tb=document.getElementById('hbadge-trend');
+      if(tb)tb.textContent=snaps.length>0?snaps.length+'件記録':'CSVなし';
+    }
+  }catch(e){}
+
+  // ── 3. 評価損益（保有中・SBI掲載銘柄）＋ ベスト/ワースト ──
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const active=accs.filter(a=>!a.sold&&a.prevSBIAmount>0);
+    const PAYPAY=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
+    const rankings=[];
+    let totalUnrealized=0;
+    active.forEach(a=>{
+      if(PAYPAY.test(a.name))return;
+      const isFx=(a.cat==='外国株式');
+      const fxRate=isFx?(a.fxRate||amGetFxRate()||150):1;
+      const isUnit=(a.cat==='個別株'||a.cat==='高配当'||isFx);
+      const isIdx=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+      let gain=0,pct=null;
+      if(isUnit&&a.shares>0&&a.price>0&&a.costPrice>0){
+        gain=isFx?(a.price-a.costPrice)*a.shares*fxRate:(a.price-a.costPrice)*a.shares;
+        pct=(a.price-a.costPrice)/a.costPrice*100;
+      }else if(isIdx&&!PAYPAY.test(a.name)&&a.costPrice>0){
+        gain=a.amount-a.costPrice;
+        pct=gain/a.costPrice*100;
+      }
+      if(pct!==null){
+        totalUnrealized+=gain;
+        rankings.push({name:a.name,pct,gain});
+      }
+    });
+    const urEl=document.getElementById('home-unrealized');
+    if(urEl){
+      if(totalUnrealized!==0){
+        const s=totalUnrealized>=0?'＋':'';
+        urEl.textContent=s+Math.round(totalUnrealized).toLocaleString()+'円';
+        urEl.style.color=totalUnrealized>=0?'#4ade80':'#f87171';
+      }else{urEl.textContent='—';}
+    }
+    // ベスト/ワースト
+    rankings.sort((a,b)=>b.pct-a.pct);
+    const best=rankings[0],worst=rankings[rankings.length-1];
+    const bn=document.getElementById('home-best-name'),bp=document.getElementById('home-best-pct');
+    const wn=document.getElementById('home-worst-name'),wp=document.getElementById('home-worst-pct');
+    if(best&&bn){bn.textContent=best.name;bp.textContent='＋'+best.pct.toFixed(1)+'%';}
+    if(worst&&wn){wn.textContent=worst.name;wp.textContent=worst.pct.toFixed(1)+'%';}
+  }catch(e){}
+
+  // ── 4. 月初来損益（評価＋確定）──
+  try{
+    const now=new Date();
+    const y=now.getFullYear(),m=now.getMonth()+1;
+    const d1=String(m).padStart(2,'0');
+    const rangeEl=document.getElementById('home-month-range');
+    if(rangeEl)rangeEl.textContent=`${m}月1日〜${now.getDate()}日`;
+    // 評価損益は全期間累計（pnlCalcUnrealized使用）
+    const uItems=typeof pnlCalcUnrealized==='function'?pnlCalcUnrealized():[];
+    const uTotal=uItems.reduce((s,i)=>s+i.gain,0);
+    // 確定損益は今月
+    const rItems=typeof pnlCalcRealized==='function'?pnlCalcRealized(y,m,y,m):[];
+    const rTotal=rItems.reduce((s,i)=>s+i.gain,0);
+    const total=uTotal+rTotal;
+    const colTotal=total>=0?'var(--green)':'var(--danger)';
+    const colU=uTotal>=0?'var(--green)':'var(--danger)';
+    const colR=rTotal>=0?'var(--green)':'var(--danger)';
+    const s=v=>((v>=0?'＋':'')+Math.round(v).toLocaleString()+'円');
+    const mt=document.getElementById('home-month-total');
+    const mu=document.getElementById('home-month-unrealized');
+    const mr=document.getElementById('home-month-realized');
+    if(mt){mt.textContent=s(total);mt.style.color=colTotal;}
+    if(mu){mu.textContent=s(uTotal);mu.style.color=colU;}
+    if(mr){mr.textContent=s(rTotal);mr.style.color=colR;}
+  }catch(e){}
+
+  // ── 5. TODO ──
   try{
     const ts=JSON.parse(localStorage.getItem('todo_kb_v3')||'{}');
     const cats=ts.categories||[];const chk=ts.checked||{};
     let t=0,dn=0;cats.forEach(c=>c.items.forEach(i=>{t++;if(chk[i.id])dn++;}));
     const rem=t-dn;
-    document.getElementById('home-todo').textContent=rem>0?rem+'件':t>0?'完了🎉':'—';
-    document.getElementById('hbadge-todo').textContent=t>0?dn+'/'+t+'件 完了':'データなし';
+    const el=document.getElementById('home-todo');
+    if(el)el.textContent=rem>0?rem+'件':t>0?'完了🎉':'—';
   }catch(e){}
+
+  // ── 6. 決算カレンダー ──
   try{wlRenderEarningsCalendar();}catch(e){}
 
-  // 推移タブ：銘柄変動アラート件数をバッジに反映
+  // ── 7. ミニヒートマップ ──
+  try{homeRenderMiniHeatmap();}catch(e){}
+
+  // ── 8. cashflowバッジ ──
   try{
-    const alertCard=document.getElementById('priceAlertCard');
-    const badge=document.getElementById('priceAlertBadge');
-    const count=badge?parseInt(badge.textContent)||0:0;
-    const trendBadge=document.getElementById('hbadge-trend');
-    if(trendBadge&&count>0){
-      // 既存テキストにアラート件数を追記
-      if(!trendBadge.textContent.includes('⚠')){
-        trendBadge.textContent+=' · ⚠'+count+'件';
-        trendBadge.style.color='var(--danger)';
+    const cfEl=document.getElementById('hbadge-cashflow');
+    if(cfEl){
+      const cf=JSON.parse(localStorage.getItem('cashflowData_v2')||'[]');
+      if(cf.length>0){
+        const now=new Date();
+        const thisMonth=cf.filter(r=>r.date&&r.date.startsWith(now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')));
+        const inc=thisMonth.filter(r=>r.type==='income').reduce((s,r)=>s+(r.amount||0),0);
+        const exp=thisMonth.filter(r=>r.type==='expense').reduce((s,r)=>s+(r.amount||0),0);
+        cfEl.textContent=inc>0||exp>0?`収入${fmt(inc)} / 支出${fmt(exp)}`:'今月未入力';
       }
     }
   }catch(e){}
+}
+
+// ── ミニヒートマップ（ホーム用）──
+function homeRenderMiniHeatmap(){
+  const el=document.getElementById('home-heatmap-mini');
+  if(!el)return;
   try{
-  }catch(e){}
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const PAYPAY=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
+    const items=accs.filter(a=>!a.sold&&a.prevSBIAmount>0&&!PAYPAY.test(a.name)&&a.amount>0);
+    if(!items.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">SBI CSVを読み込むと表示されます</div>';return;}
+    const total=items.reduce((s,a)=>s+a.amount,0);
+    // 変動率計算
+    const withPct=items.map(a=>{
+      const d=a.amount-a.prevSBIAmount;
+      const pct=a.prevSBIAmount>0?d/a.prevSBIAmount*100:0;
+      return{...a,pct};
+    });
+    withPct.sort((a,b)=>b.amount-a.amount);
+    const color=p=>{
+      if(p>=3)return'#16a34a';if(p>=1.5)return'#22c55e';if(p>=0.5)return'#4ade80';
+      if(p>=-0.5)return'#6b7280';if(p>=-1.5)return'#f87171';if(p>=-3)return'#ef4444';
+      return'#b91c1c';
+    };
+    const textCol=p=>Math.abs(p)<1.5?'#fff':'#fff';
+    const W=el.clientWidth||320;
+    // 簡易タイル
+    const cols=Math.min(4,Math.ceil(Math.sqrt(withPct.length)));
+    const html=withPct.slice(0,12).map(a=>{
+      const pct=a.pct;
+      const s=pct>=0?'＋':'';
+      const shortName=a.name.length>6?a.name.slice(0,6)+'…':a.name;
+      return`<div style="background:${color(pct)};border-radius:6px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px">
+        <div style="font-size:9px;color:rgba(255,255,255,0.85);font-weight:600;text-align:center;line-height:1.2">${shortName}</div>
+        <div style="font-size:12px;font-weight:800;color:#fff;margin-top:2px">${s}${pct.toFixed(1)}%</div>
+      </div>`;
+    }).join('');
+    el.style.display='grid';
+    el.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+    el.style.gap='4px';
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">データなし</div>';}
 }
 
 // ============================================================
