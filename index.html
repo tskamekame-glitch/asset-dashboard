@@ -1895,24 +1895,20 @@ function refreshHome(){
     let totalUnrealized=0;
     active.forEach(a=>{
       if(PAYPAY.test(a.name))return;
+      // BEST/WORSTは前回CSV比（prevSBIAmount）で計算
+      if(!(a.prevSBIAmount>0&&a.amount>0))return;
+      const pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
+      const gain=a.amount-a.prevSBIAmount;
+      rankings.push({name:a.name,pct,gain});
+      // 評価損益は従来ロジックで別途計算
       const isFx=(a.cat==='外国株式');
       const fxRate=isFx?(a.fxRate||amGetFxRate()||150):1;
       const isIdx=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
-      // amRenderCardと同一ロジック：shares>0かつprice>0なら単価×株数モード
-      const isUnitBased=(a.cat==='個別株'||a.cat==='高配当'||isFx)||(isIdx&&!PAYPAY.test(a.name)&&a.shares>0&&a.price>0);
-      let gain=0,pct=null;
+      const isUnitBased=(a.cat==='個別株'||a.cat==='高配当'||isFx)||(isIdx&&a.shares>0&&a.price>0);
       if(isUnitBased&&a.shares>0&&a.price>0&&a.costPrice>0){
-        // 単価ベース：(現在値 - 取得単価) × 株数
-        gain=isFx?(a.price-a.costPrice)*a.shares*fxRate:(a.price-a.costPrice)*a.shares;
-        pct=(a.price-a.costPrice)/a.costPrice*100;
-      }else if(isIdx&&!PAYPAY.test(a.name)&&a.costPrice>0&&a.amount>0){
-        // 総額ベース（PayPay系投信など shares なし）: 時価総額 - 取得総額
-        gain=a.amount-a.costPrice;
-        pct=gain/a.costPrice*100;
-      }
-      if(pct!==null){
-        totalUnrealized+=gain;
-        rankings.push({name:a.name,pct,gain});
+        totalUnrealized+=isFx?(a.price-a.costPrice)*a.shares*fxRate:(a.price-a.costPrice)*a.shares;
+      }else if(isIdx&&a.costPrice>0&&a.amount>0){
+        totalUnrealized+=a.amount-a.costPrice;
       }
     });
     const urEl=document.getElementById('home-unrealized');
@@ -1928,8 +1924,8 @@ function refreshHome(){
     const best=rankings[0],worst=rankings[rankings.length-1];
     const bn=document.getElementById('home-best-name'),bp=document.getElementById('home-best-pct');
     const wn=document.getElementById('home-worst-name'),wp=document.getElementById('home-worst-pct');
-    if(best&&bn){bn.textContent=best.name;bp.textContent='＋'+best.pct.toFixed(1)+'%';}
-    if(worst&&wn){wn.textContent=worst.name;wp.textContent=worst.pct.toFixed(1)+'%';}
+    if(best&&bn){bn.textContent=best.name;bp.textContent=(best.pct>=0?'＋':'')+best.pct.toFixed(1)+'%';}
+    if(worst&&wn){wn.textContent=worst.name;wp.textContent=(worst.pct>=0?'＋':'')+worst.pct.toFixed(1)+'%';}
   }catch(e){}
 
   // ── 4. 月初来損益（評価＋確定）──
