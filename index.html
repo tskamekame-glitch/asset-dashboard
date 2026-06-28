@@ -3573,45 +3573,81 @@ async function amApplySBIRows(rows){
 
   codeGroups.forEach((groupRows,code)=>{
     // この銘柄コードに対応する既存の資産管理口座をすべて収集
-    // 外国株ティッカーは大文字小文字を区別しない
     const accIdxList=[];
     amAccounts.forEach((acc,i)=>{
       const accCode=String(acc.code||'').replace(/[^0-9A-Za-z.]/g,'');
       if(accCode.toUpperCase()===code.toUpperCase())accIdxList.push(i);
     });
-    // CSV行と既存口座を順番に1対1で対応させる
-    groupRows.forEach((row,gi)=>{
-      const accIdx=accIdxList[gi];
-      if(accIdx===undefined||usedAccIdx.has(accIdx)){
-        // 対応する既存口座が無い（CSV行数 > 既存口座数）→ 新規追加対象
-        noMatch.push(row);
-        return;
-      }
-      usedAccIdx.add(accIdx);
-      const acc=amAccounts[accIdx];
-      const oldVal=acc.amount||0;
-      const newVal=row.evalAmt;// SBI評価額は既に円換算済み
-      const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
-      if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
 
-      if(oldVal>0)acc.prevSBIAmount=oldVal;// 前回SBI金額を保存
-      acc.amount=newVal;
-      if(row.shares>0)acc.shares=row.shares;
-      // 外国株の場合: priceはUSD建て株価。evalAmtが円換算済みなので、
-      // fxRateを逆算して保存（shares×price×fxRate=evalAmt）
-      if(row.isForeignStock&&row.shares>0&&row.price>0&&newVal>0){
-        acc.price=row.price;// USD建て株価をそのまま保存
-        const impliedFx=Math.round(newVal/(row.shares*row.price)*100)/100;
-        if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
-      }else if(row.price>0){
-        acc.price=row.price;
-      }
-      if(row.costPrice>0)acc.costPrice=row.costPrice;
-      acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+    // ── CSV行数 vs 既存口座数で動作を切り替え ──
+    if(groupRows.length>accIdxList.length&&accIdxList.length>0){
+      // 株式分割などでCSV行数 > 既存口座数の場合：同コード全行を合算して既存口座に集約
+      // 例: 分割で買付日が2行になったが amAccounts には1口座しかない
+      const mergedShares=groupRows.reduce((s,r)=>s+(r.shares||0),0);
+      const mergedAmt=groupRows.reduce((s,r)=>s+(r.evalAmt||0),0);
+      // 取得単価は加重平均（shares×costPrice の合計 / 合計shares）
+      const totalCostBasis=groupRows.reduce((s,r)=>s+(r.costPrice||0)*(r.shares||0),0);
+      const mergedCostPrice=mergedShares>0?Math.round(totalCostBasis/mergedShares*10)/10:groupRows[0].costPrice||0;
+      // 現在値は最初の行から（全行同じはず）
+      const mergedPrice=groupRows[0].price||0;
+      const isFx=groupRows[0].isForeignStock;
 
-      updated++;
-      log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:row.acctSuffix});
-    });
+      // 既存口座に合算値を反映（1口座目に集約）
+      accIdxList.forEach((accIdx,li)=>{
+        if(usedAccIdx.has(accIdx))return;
+        usedAccIdx.add(accIdx);
+        const acc=amAccounts[accIdx];
+        const oldVal=acc.amount||0;
+        // li===0 のみ合算値を反映、他の既存口座は変更しない
+        if(li>0)return;
+        if(oldVal>0)acc.prevSBIAmount=oldVal;
+        acc.amount=mergedAmt;
+        if(mergedShares>0)acc.shares=mergedShares;
+        if(mergedCostPrice>0)acc.costPrice=mergedCostPrice;
+        if(isFx&&mergedShares>0&&mergedPrice>0&&mergedAmt>0){
+          acc.price=mergedPrice;
+          const impliedFx=Math.round(mergedAmt/(mergedShares*mergedPrice)*100)/100;
+          if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
+        }else if(mergedPrice>0){
+          acc.price=mergedPrice;
+        }
+        acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+        updated++;
+        log.push({sbi:groupRows.map(r=>r.nameRaw).join('+'),am:acc.name,val:mergedAmt,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:groupRows[0].acctSuffix});
+        showToast(`🔀 ${acc.name}：${groupRows.length}ロット合算（株式分割等）`,3500);
+      });
+    }else{
+      // 通常処理：CSV行と既存口座を順番に1対1で対応させる
+      groupRows.forEach((row,gi)=>{
+        const accIdx=accIdxList[gi];
+        if(accIdx===undefined||usedAccIdx.has(accIdx)){
+          // 対応する既存口座が無い（CSV行数 > 既存口座数）→ 新規追加対象
+          noMatch.push(row);
+          return;
+        }
+        usedAccIdx.add(accIdx);
+        const acc=amAccounts[accIdx];
+        const oldVal=acc.amount||0;
+        const newVal=row.evalAmt;
+        const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+        if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
+
+        if(oldVal>0)acc.prevSBIAmount=oldVal;
+        acc.amount=newVal;
+        if(row.shares>0)acc.shares=row.shares;
+        if(row.isForeignStock&&row.shares>0&&row.price>0&&newVal>0){
+          acc.price=row.price;
+          const impliedFx=Math.round(newVal/(row.shares*row.price)*100)/100;
+          if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
+        }else if(row.price>0){
+          acc.price=row.price;
+        }
+        if(row.costPrice>0)acc.costPrice=row.costPrice;
+        acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+        updated++;
+        log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:row.acctSuffix});
+      });
+    }
   });
 
   // ── 投信・コードなし銘柄：従来通りスコアベースのマッチング（1対1）──
