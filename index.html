@@ -2144,68 +2144,65 @@ function amRenderHeatmap(accounts,total){
     }
   };
 
-  // ── Squarified Treemap ──
+  // ── Squarified Treemap（面積＝評価額・評価額降順で左上から配置）──
   const GAP=2;
-  // padding分を引いた実幅を使用（スマホで見切れ防止）
   const containerW=Math.max((el.clientWidth||el.offsetWidth||340)-2,100);
-  // 銘柄数に応じて高さを調整（四角に近づける）
   const n=items.length;
-  const TOTAL_H=Math.round(containerW*(n<=6?0.6:n<=12?0.85:n<=20?1.05:1.2));
+  const TOTAL_H=Math.round(containerW*(n<=4?0.55:n<=8?0.75:n<=14?1.0:n<=20?1.2:1.4));
   const totalAmt=items.reduce((s,i)=>s+i.amount,0);
-
-  // 正規化された面積値（全体面積=W×H）
-  const totalArea=containerW*TOTAL_H;
+  const totalArea=(containerW-GAP)*(TOTAL_H-GAP);
   const normed=items.map(i=>({...i,area:i.amount/totalAmt*totalArea}));
 
-  // Squarified Treemap（アスペクト比最小化）
   const rects=[];
 
-  // 最悪アスペクト比を計算
   function worstRatio(row,w){
     const s=row.reduce((a,n)=>a+n.area,0);
+    if(s===0||w===0)return Infinity;
     let worst=0;
     for(const n of row){
-      const h=n.area/s*w; // 短辺方向の長さ
-      const len=s/w;      // 長辺方向の長さ（スライス幅）
+      const h=s>0?n.area/s*w:0;
+      const len=w>0?s/w:0;
+      if(h===0||len===0)continue;
       const r=len>h?len/h:h/len;
       if(r>worst)worst=r;
     }
     return worst;
   }
 
+  // 左上から右→下の順序で配置（評価額降順を維持）
   function squarify(nodes,x,y,w,h){
-    if(!nodes.length)return;
+    if(!nodes.length||w<1||h<1)return;
     if(nodes.length===1){
-      rects.push({node:nodes[0],x,y,w,h});
+      rects.push({node:nodes[0],x,y,w:Math.max(w,1),h:Math.max(h,1)});
       return;
     }
+    // 常に横長なら縦方向スライス、縦長なら横方向スライス
+    const isHoriz=w>=h;
     const shortSide=Math.min(w,h);
-    const isHoriz=w>=h; // スライスを短辺に沿って積む
 
     let row=[],rest=[...nodes];
     while(rest.length){
       const candidate=[...row,rest[0]];
-      if(row.length===0||worstRatio(candidate,shortSide)<=worstRatio(row,shortSide)){
+      if(row.length===0||worstRatio(candidate,shortSide)<=worstRatio(row,shortSide)+0.001){
         row.push(rest.shift());
-      } else {
-        break;
-      }
+      }else{break;}
     }
 
-    // rowを配置
     const rowArea=row.reduce((a,n)=>a+n.area,0);
-    const sliceLen=rowArea/shortSide; // スライス幅
-    let offset=isHoriz?y:x;
+    const sliceLen=shortSide>0?rowArea/shortSide:0;
+    let offset=0;
     for(const n of row){
-      const tileLen=n.area/rowArea*shortSide;
-      if(isHoriz){rects.push({node:n,x,y:offset,w:sliceLen,h:tileLen});}
-      else       {rects.push({node:n,x:offset,y,w:tileLen,h:sliceLen});}
+      const tileLen=rowArea>0?n.area/rowArea*shortSide:0;
+      if(isHoriz){
+        rects.push({node:n,x,y:y+offset,w:Math.max(sliceLen-GAP,1),h:Math.max(tileLen-GAP,1)});
+      }else{
+        rects.push({node:n,x:x+offset,y,w:Math.max(tileLen-GAP,1),h:Math.max(sliceLen-GAP,1)});
+      }
       offset+=tileLen;
     }
-    // 残りを再帰
     if(rest.length){
       if(isHoriz) squarify(rest,x+sliceLen,y,w-sliceLen,h);
-      else         squarify(rest,x,y+sliceLen,w,h-sliceLen);
+      else        squarify(rest,x,y+sliceLen,w,h-sliceLen);
     }
   }
 
