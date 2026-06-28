@@ -574,7 +574,7 @@ input[type=number] { -moz-appearance: textfield; }
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
   <button class="nav-btn" data-tab="cashflow" onclick="switchTab('cashflow')"><span class="ni">💸</span>収支</button>
-  <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>購入検討</button>
+  <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>ウォッチ銘柄</button>
   <button class="nav-btn" data-tab="returns" onclick="switchTab('returns')"><span class="ni">📅</span>収益レポート</button>
 </nav>
 
@@ -7473,7 +7473,7 @@ window.addEventListener('load', function(){
 
 <div class="panel" id="tab-watchlist">
   <div class="wl-top">
-    <span class="wl-title">👀 購入検討リスト</span>
+    <span class="wl-title">👀 ウォッチ銘柄</span>
     <div style="display:flex;gap:6px">
       <button class="wl-add-btn" onclick="wlSyncFromSheet()" style="font-size:12px;padding:5px 10px">↓ 読込</button>
       <button class="wl-add-btn" onclick="wlSyncToSheet(true)" style="font-size:12px;padding:5px 10px">↑ 保存</button>
@@ -7670,7 +7670,7 @@ function wlSaveData(d){
       }catch(e){
         console.warn('[wl] auto-sync failed:',e);
         if(syncEl)syncEl.textContent='⚠';
-        showToast('⚠ 購入検討の同期に失敗しました',3000);
+        showToast('⚠ ウォッチ銘柄の同期に失敗しました',3000);
       }
     },1000);
   }
@@ -7776,7 +7776,7 @@ function wlDownloadCSV(){
   a.href=url;
   const today=new Date();
   const dateStr=today.getFullYear()+String(today.getMonth()+1).padStart(2,'0')+String(today.getDate()).padStart(2,'0');
-  a.download=`購入検討リスト_${dateStr}.csv`;
+  a.download=`ウォッチ銘柄_${dateStr}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
