@@ -8810,7 +8810,7 @@ function cfParseSMBC(text){
     const cols=cfSplitCSV(line);
     // ヘッダー行検出（年月日・お引出し・お預入れ・お取り扱い内容 等）
     if(dateCol===-1){
-      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      const h=cols.map(c=>c.replace(/"/g,'').replace(/\r/g,'').trim());
       const di=h.findIndex(c=>/年月日|取引日|日付/.test(c));
       const oi=h.findIndex(c=>/お引出し|引出|出金/.test(c));
       const ii=h.findIndex(c=>/お預入れ|預入|入金/.test(c));
@@ -8889,7 +8889,7 @@ function cfParsePaypay(text){
     const cols=cfSplitCSV(line);
     // ヘッダー行検出
     if(yCol===-1){
-      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      const h=cols.map(c=>c.replace(/"/g,'').replace(/\r/g,'').trim());
       // 年/月/日が別列のパターン（操作日(年)等）
       const yi=h.findIndex(c=>/年/.test(c)&&/日/.test(c));
       const mi=h.findIndex(c=>/月/.test(c)&&/日/.test(c)&&h.indexOf(c)!==yi);
@@ -8947,7 +8947,7 @@ function cfParsePaypayApp(text){
     const cols=cfSplitCSV(line);
     // ヘッダー行検出
     if(dateCol===-1){
-      const h=cols.map(c=>c.replace(/"/g,'').trim());
+      const h=cols.map(c=>c.replace(/"/g,'').replace(/\r/g,'').trim());
       dateCol=h.findIndex(c=>/取引日/i.test(c));
       outCol =h.findIndex(c=>/出金金額/i.test(c));
       inCol  =h.findIndex(c=>/入金金額/i.test(c));
@@ -9053,7 +9053,7 @@ function cfOnFileSelect(e){
 
 function cfParseFile(file){
   // PayPayアプリ・PayPay銀行・SMBCはUTF-8、VpassはShift-JIS
-  const firstEncoding=(cfImportFmt==='vpass')?'Shift-JIS':'UTF-8';
+  const firstEncoding=(cfImportFmt==='vpass'||cfImportFmt==='smbc')?'Shift-JIS':'UTF-8';
   const tryParse=(encoding)=>{
     const reader=new FileReader();
     reader.onload=ev=>{
