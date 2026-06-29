@@ -3573,6 +3573,7 @@ async function amApplySBIRows(rows){
     // この銘柄コードに対応する既存の資産管理口座をすべて収集
     const accIdxList=[];
     amAccounts.forEach((acc,i)=>{
+      if(acc.sold)return; // 売却済みはマッチ対象外
       const accCode=String(acc.code||'').replace(/[^0-9A-Za-z.]/g,'');
       if(accCode.toUpperCase()===code.toUpperCase())accIdxList.push(i);
     });
@@ -3653,6 +3654,7 @@ async function amApplySBIRows(rows){
     let bestIdx=-1,bestScore=0;
     amAccounts.forEach((acc,i)=>{
       if(usedAccIdx.has(i))return;// すでに他のCSV行がマッチ済みの口座は対象外
+      if(acc.sold)return; // 売却済みはマッチ対象外
       const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'',row.code||'');
       if(score>bestScore){bestScore=score;bestIdx=i;}
     });
