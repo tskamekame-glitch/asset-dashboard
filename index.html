@@ -1429,6 +1429,19 @@ input[type=number] { -moz-appearance: textfield; }
     <div id="cf-sync-banner" style="display:none;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.6">
       💡 現在この端末のみに保存されています。「資産管理」タブでGoogleログインすると、Mac・スマホ間で収支データが自動同期されます。
     </div>
+    <!-- 月次推移グラフ -->
+    <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2)">📊 月次推移</div>
+        <div style="display:flex;gap:4px" id="cf-chart-tabs">
+          <button onclick="cfSetChartMode('balance')" id="cf-ct-balance" style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">収支</button>
+          <button onclick="cfSetChartMode('cat')" id="cf-ct-cat" style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);cursor:pointer;font-family:inherit">カテゴリ別</button>
+        </div>
+      </div>
+      <div style="position:relative;height:180px">
+        <canvas id="cf-trend-chart"></canvas>
+      </div>
+    </div>
     <!-- サマリーカード -->
     <div id="cf-summary-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
     <!-- 月切替 -->
@@ -8455,8 +8468,105 @@ function cfRender(){
   const badge=document.getElementById('hbadge-cashflow');
   if(badge) badge.textContent=balance>=0?'＋'+cfFmt(balance)+'黒字':'-'+cfFmt(balance)+'赤字';
 
+  // グラフ描画
+  cfRenderTrendChart();
+
   // インカムバー更新
   cfRefreshHomeIncome();
+}
+
+// ── 月次推移グラフ ──
+let cfChartMode='balance';
+let cfTrendChartInstance=null;
+
+function cfSetChartMode(mode){
+  cfChartMode=mode;
+  ['balance','cat'].forEach(m=>{
+    const btn=document.getElementById('cf-ct-'+m);
+    if(!btn)return;
+    if(m===mode){btn.style.background='var(--accent)';btn.style.color='#fff';btn.style.borderColor='var(--accent)';}
+    else{btn.style.background='var(--bg2)';btn.style.color='var(--text2)';btn.style.borderColor='var(--border2)';}
+  });
+  cfRenderTrendChart();
+}
+
+function cfRenderTrendChart(){
+  const canvas=document.getElementById('cf-trend-chart');
+  if(!canvas)return;
+  cfLoad();
+
+  // 過去12ヶ月のラベルを生成
+  const months=[];
+  const now=new Date();
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+
+  if(cfTrendChartInstance){cfTrendChartInstance.destroy();cfTrendChartInstance=null;}
+  const ctx=canvas.getContext('2d');
+
+  if(cfChartMode==='balance'){
+    // 収支モード：収入・支出・月次収支
+    const incomes=months.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='income').reduce((s,d)=>s+d.amount,0));
+    const expenses=months.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='expense').reduce((s,d)=>s+d.amount,0));
+    const balances=months.map((_,i)=>incomes[i]-expenses[i]);
+
+    cfTrendChartInstance=new Chart(ctx,{
+      type:'bar',
+      data:{
+        labels:months.map(m=>m.slice(5)+'月'),
+        datasets:[
+          {label:'収入',data:incomes,backgroundColor:'rgba(34,197,94,0.7)',borderRadius:4,order:2},
+          {label:'支出',data:expenses,backgroundColor:'rgba(239,68,68,0.7)',borderRadius:4,order:2},
+          {label:'収支',data:balances,type:'line',borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:'#f59e0b',order:1,tension:0.3},
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:8}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ¥${Math.abs(c.raw).toLocaleString()}`}}},
+        scales:{
+          x:{grid:{display:false},ticks:{font:{size:9},color:'var(--text3)'}},
+          y:{position:'right',grid:{color:'rgba(128,128,128,0.1)'},ticks:{font:{size:9},color:'var(--text3)',callback:v=>v>=10000?'¥'+(v/10000)+'万':'¥'+v}}
+        }
+      }
+    });
+  } else {
+    // カテゴリ別モード：支出カテゴリを積み上げ棒グラフ
+    const expCats=['家賃','食費','電気','水道','ガス','酒・ウイスキー','通信費','交際費','税金・保険','娯楽','生活費','その他支出'];
+    const datasets=expCats.map(cat=>({
+      label:cat,
+      data:months.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='expense'&&d.cat===cat).reduce((s,d)=>s+d.amount,0)),
+      backgroundColor:CF_CAT_COLOR[cat]||'#888',
+      borderRadius:2,
+      stack:'exp'
+    })).filter(ds=>ds.data.some(v=>v>0));// データがある項目のみ
+
+    // 収入ラインを追加
+    const incomes=months.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='income').reduce((s,d)=>s+d.amount,0));
+    datasets.push({
+      label:'収入',data:incomes,type:'line',
+      borderColor:'#4ade80',backgroundColor:'transparent',
+      borderWidth:2,pointRadius:3,pointBackgroundColor:'#4ade80',
+      order:-1,tension:0.3,stack:undefined
+    });
+
+    cfTrendChartInstance=new Chart(ctx,{
+      type:'bar',
+      data:{labels:months.map(m=>m.slice(5)+'月'),datasets},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{position:'bottom',labels:{font:{size:9},boxWidth:8,padding:6}},
+          tooltip:{callbacks:{label:c=>c.raw>0?`${c.dataset.label}: ¥${c.raw.toLocaleString()}`:null}}
+        },
+        scales:{
+          x:{grid:{display:false},ticks:{font:{size:9},color:'var(--text3)'}},
+          y:{position:'right',stacked:true,grid:{color:'rgba(128,128,128,0.1)'},ticks:{font:{size:9},color:'var(--text3)',callback:v=>v>=10000?'¥'+(v/10000)+'万':'¥'+v}}
+        }
+      }
+    });
+  }
 }
 
 function cfRefreshHomeIncome(){
