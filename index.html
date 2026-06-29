@@ -1498,6 +1498,7 @@ input[type=number] { -moz-appearance: textfield; }
       <div class="form-group"><label class="form-label">日付</label><input class="form-input" type="date" id="cf-f-date"></div>
     </div>
     <div class="form-group"><label class="form-label">メモ（任意）</label><input class="form-input" id="cf-f-memo" placeholder="例: SBKKの配当 Q1"></div>
+    <div id="cf-source-label" style="display:none;font-size:11px;color:var(--text3);padding:4px 8px;background:var(--bg2);border-radius:6px;margin-bottom:4px"></div>
     <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">
       <div id="cf-del-wrap" style="display:none"><button class="btn-danger" onclick="cfDeleteEntry()">削除</button></div>
       <div style="display:flex;gap:8px">
@@ -8332,7 +8333,7 @@ let cfCurrentType='income';
 function cfLoad(){try{cfData=JSON.parse(localStorage.getItem(CF_KEY)||'[]');}catch(e){cfData=[];}}
 function cfSave(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}cfSaveToSheet();}
 
-const CF_COLS=['id','type','cat','amount','date','memo'];
+const CF_COLS=['id','type','cat','amount','date','memo','source'];
 
 async function cfSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){
@@ -8464,10 +8465,11 @@ function cfRender(){
     const col=isTransfer?'#888':(CF_CAT_COLOR[d.cat]||'#888');
     const amtColor=isTransfer?'var(--text3)':isIn?'var(--green)':'var(--text)';
     const amtPrefix=isTransfer?'↔':isIn?'＋':'－';
+    const srcBadge=d.source?`<span style="font-size:9px;background:${d.source==='manual'?'#3b82f6':'#6b7280'};color:#fff;border-radius:3px;padding:1px 4px;margin-left:4px;flex-shrink:0">${d.source==='manual'?'手入力':d.source.replace('csv:','')}</span>`:'';
     return `<div onclick="cfOpenEdit('${d.id}')" style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;opacity:${isTransfer?'0.55':'1'}">
       <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:500">${isTransfer?'<span style="font-size:10px;background:#888;color:#fff;border-radius:3px;padding:1px 4px;margin-right:4px">振替</span>':''}${d.cat}<span style="color:var(--text3);font-weight:400;margin-left:6px;font-size:11px">${d.date}</span></div>
+        <div style="font-size:13px;font-weight:500;display:flex;align-items:center;flex-wrap:wrap;gap:4px">${isTransfer?'<span style="font-size:10px;background:#888;color:#fff;border-radius:3px;padding:1px 4px">振替</span>':''}${d.cat}<span style="color:var(--text3);font-weight:400;font-size:11px">${d.date}</span>${srcBadge}</div>
         ${d.memo?`<div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.memo}</div>`:''}
       </div>
       <div style="font-size:15px;font-weight:700;color:${amtColor};">${amtPrefix}${cfFmt(d.amount)}</div>
@@ -8692,6 +8694,8 @@ function cfOpenModal(){
   document.getElementById('cf-f-memo').value='';
   document.getElementById('cf-f-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('cf-del-wrap').style.display='none';
+  const srcEl=document.getElementById('cf-source-label');
+  if(srcEl)srcEl.style.display='none';
   cfSetType('income');
   document.getElementById('cfModal').style.display='flex';
 }
@@ -8708,6 +8712,16 @@ function cfOpenEdit(id){
   document.getElementById('cf-f-date').value=entry.date;
   document.getElementById('cf-f-memo').value=entry.memo||'';
   document.getElementById('cf-del-wrap').style.display='block';
+  // 出典表示
+  const srcEl=document.getElementById('cf-source-label');
+  if(srcEl){
+    const src=entry.source;
+    srcEl.style.display=src?'block':'none';
+    if(src){
+      const label=src==='manual'?'✏️ 手入力':('📥 CSV: '+src.replace('csv:',''));
+      srcEl.textContent='出典: '+label;
+    }
+  }
   document.getElementById('cfModal').style.display='flex';
 }
 
@@ -8724,7 +8738,7 @@ function cfSaveEntry(){
     const idx=cfData.findIndex(d=>d.id===cfEditId);
     if(idx>=0)cfData[idx]={...cfData[idx],type:cfCurrentType,cat,amount,date,memo};
   }else{
-    cfData.push({id:cfUID(),type:cfCurrentType,cat,amount,date,memo});
+    cfData.push({id:cfUID(),type:cfCurrentType,cat,amount,date,memo,source:'manual'});
   }
   cfSave();cfCloseModal();cfRender();showToast('✅ 保存しました');
 }
@@ -9124,7 +9138,8 @@ function cfShowPreview(rows){
 function cfImportConfirm(){
   if(!cfImportPending.length){showToast('⚠ 取込データがありません');return;}
   cfLoad();
-  cfData.push(...cfImportPending);
+  const sourceLabel='csv:'+cfImportFmt;
+  cfData.push(...cfImportPending.map(r=>({...r,source:r.source||sourceLabel})));
   // 日付順にソート
   cfData.sort((a,b)=>b.date.localeCompare(a.date));
   cfSave();
