@@ -3689,6 +3689,14 @@ async function amApplySBIRows(rows){
   // 取得単価が異なる買付ロットとして区別するため、行ごとに別の口座を新規追加する
   let added=0;
   noMatch.forEach(row=>{
+    // 同一コードの未売却口座が既に存在する場合は重複追加しない
+    if(row.code){
+      const exists=amAccounts.some(a=>!a.sold&&String(a.code||'').replace(/[^0-9A-Za-z]/g,'').toUpperCase()===String(row.code).toUpperCase());
+      if(exists){
+        updated++;// 既存扱いにカウント
+        return;
+      }
+    }
     // カテゴリ推定：nameRaw（全角含む）とnameNorm（半角変換済み）の両方で試みる
     const guessedCat=amGuessCat(row.nameNorm)||amGuessCat(row.nameRaw)||
       (row.isForeignStock?'外国株式':row.isFund?'全世界インデックス':'個別株');
