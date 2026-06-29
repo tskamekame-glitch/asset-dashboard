@@ -3692,7 +3692,7 @@ async function amApplySBIRows(rows){
     // カテゴリ推定：nameRaw（全角含む）とnameNorm（半角変換済み）の両方で試みる
     const guessedCat=amGuessCat(row.nameNorm)||amGuessCat(row.nameRaw)||
       (row.isForeignStock?'外国株式':row.isFund?'全世界インデックス':'個別株');
-    const validCat=AM_VALID_CATS.includes(guessedCat)?guessedCat:'その他';
+    const validCat=(guessedCat&&AM_VALID_CATS.includes(guessedCat))?guessedCat:'個別株';
 
     // 表示名：全角英数を半角に変換して使いやすい名前に
     function toH(s){return s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
