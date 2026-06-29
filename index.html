@@ -4045,7 +4045,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:Q1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:X1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -4078,7 +4078,7 @@ async function amLoadFromSheet(){
     amSaveToLocal();amRender();
     // 推移グラフの損益除外リストをQ1セルから読み込む（端末間で共有）
     try{
-      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Q1'});
+      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Y1'});
       const raw=exRes.result.values?.[0]?.[0];
       if(raw){trGainExcludeNames=JSON.parse(raw);trSaveGainExclude();}
     }catch(e){
