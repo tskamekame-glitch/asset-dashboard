@@ -8850,15 +8850,17 @@ function cfParseSMBC(text){
 // 文字コード: Shift-JIS
 function cfParseVpass(text){
   // Vpass（三井住友カード）ご利用明細CSV
-  // 列構成パターン（カードにより異なる）:
-  //   A: 日付,店舗名,利用額,回数,支払回数,支払額,備考  <- Oliveゴールド等（7列）
-  //   B: 日付,店舗名,金額,,,,備考                      <- Amazonマスター等（3列目が金額）
-  //   1ファイルに複数カードブロックが含まれる場合あり
-  // 全角数字（１２等）は分割回数のため数値化は支払額列のみ使用
+  // 対応フォーマット:
+  //   形式A（旧）: 日付,店舗名,利用額,回数,支払回数,支払額,備考     ← Oliveゴールド等
+  //   形式B（旧）: 日付,店舗名,金額,,,,備考                         ← Amazonマスター等
+  //   形式C（新）: 日付,店舗名,本人/家族,支払方法,分割情報,請求月,支払額,合計額,...
+  //   1ファイルに複数カードブロックが含まれる場合あり・ヘッダー行なし
   const toNum=s=>{
     const h=(s||'').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
     return parseFloat(h.replace(/[",，\s]/g,''))||0;
   };
+  // 形式Cの支払方法キーワード判定
+  const isPayMethod=s=>/払い|分割|一括|リボ|ご本人|家族/.test(s||'');
   text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   const lines=text.split('\n').filter(l=>l.trim());
   const rows=[];
@@ -8874,21 +8876,18 @@ function cfParseVpass(text){
     const desc=(cols[1]||'').replace(/"/g,'').trim();
     if(!desc)continue;
 
-    // 金額列の判定:
-    // 7列形式（Oliveゴールド）: 3列目=利用額, 4列目=回数(全角), 5列目=支払回数, 6列目=支払額
-    //   分割払いは6列目(支払額)が正しい1回分金額
-    //   一括払い: 3列目=6列目で同じ値
-    // 4列以下形式（Amazonマスター）: 3列目=金額
     let amt=0;
-    const col5raw=cols.length>=6?(cols[5]||'').replace(/"/g,'').trim():'';
-    const col2raw=(cols[2]||'').replace(/"/g,'').trim();
-    const col5num=toNum(col5raw);
-    const col2num=toNum(col2raw);
-
-    if(cols.length>=6 && col5num>0){
-      amt=col5num; // 6列目の支払額を優先（分割払い対応）
-    }else if(col2num>0){
-      amt=col2num; // 3列目の金額（Amazonマスター形式等）
+    // 形式C判定: 3列目が「ご本人」「1回払い」等の文字列
+    if(cols.length>=7 && isPayMethod((cols[2]||'').replace(/"/g,'').trim())){
+      // 形式C: 7列目（index6）が支払額
+      amt=toNum((cols[6]||'').replace(/"/g,'').trim());
+    }else{
+      // 形式A/B: 6列目があれば支払額優先、なければ3列目
+      const col5raw=cols.length>=6?(cols[5]||'').replace(/"/g,'').trim():'';
+      const col2raw=(cols[2]||'').replace(/"/g,'').trim();
+      const col5num=toNum(col5raw);
+      const col2num=toNum(col2raw);
+      amt=cols.length>=6&&col5num>0?col5num:col2num;
     }
     if(!amt)continue;
 
@@ -9060,7 +9059,7 @@ function cfSelectFmt(fmt){
 
   const hints={
     smbc:'三井住友銀行アプリ→「入出金明細」→「ダウンロード」からCSVを取得。UTF-8/Shift-JIS両対応。UCS（ドンペンカード）引き落とし行も自動検出。',
-    vpass:'VpassサイトPC→「ご利用明細」→「CSV形式で保存する」。Olive Gold・Amazonゴールド・Amazonマスター共通。1ファイルに複数カード混在でも対応。分割払いも支払額（月々の金額）で取込。Shift-JIS対応。',
+    vpass:'VpassサイトPC→「ご利用明細」→「CSV形式で保存する」。Olive Gold・Amazonゴールド共通。Shift-JIS対応。',
     paypay:'PayPay銀行サイトPC→「取引明細」→「CSVダウンロード」。UTF-8。入出金を自動判定してカテゴリ振り分け。',
     paypayapp:'PayPayアプリ→「取引履歴」→右上ダウンロードアイコン→期間選択→申請→通知後にダウンロード。店名まで取得できるため、カテゴリ自動判定の精度が高い。UTF-8。',
   };
