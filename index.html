@@ -8551,7 +8551,7 @@ function cfRenderTrendChart(){
 
     const datasets=orderedCats.map(cat=>({
       label:cat,
-      data:months.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='expense'&&d.cat===cat).reduce((s,d)=>s+d.amount,0)),
+      data:months.map(m=>Math.max(0,cfData.filter(d=>d.date?.startsWith(m)&&d.type==='expense'&&d.cat===cat).reduce((s,d)=>s+d.amount,0))),
       backgroundColor:CF_CAT_COLOR[cat]||'#94a3b8',
       borderWidth:0,
       stack:'exp',
