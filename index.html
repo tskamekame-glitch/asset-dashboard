@@ -1441,6 +1441,7 @@ input[type=number] { -moz-appearance: textfield; }
       <div style="position:relative;height:220px">
         <canvas id="cf-trend-chart"></canvas>
       </div>
+      <div id="cf-monthly-table-wrap" style="margin-top:14px;overflow-x:auto"></div>
     </div>
     <!-- サマリーカード -->
     <div id="cf-summary-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
@@ -8597,6 +8598,93 @@ function cfRenderTrendChart(){
       }
     });
   }
+
+  cfRenderMonthlyTable(months);
+}
+
+// ── 月次カテゴリ別合計テーブル（最新月は前月比表示） ──
+function cfRenderMonthlyTable(months){
+  const wrap=document.getElementById('cf-monthly-table-wrap');
+  if(!wrap)return;
+
+  const ALL_EXP_CATS=['家賃','電気','水道','ガス','食費','日用品','酒・ウイスキー','通信費','交際費','税金・保険','娯楽','積立','その他支出'];
+  const existCats=new Set(cfData.filter(d=>d.type==='expense').map(d=>d.cat));
+  const orderedCats=[...ALL_EXP_CATS.filter(c=>existCats.has(c)),...[...existCats].filter(c=>!ALL_EXP_CATS.includes(c)&&c!=='振替')];
+
+  // データが1件もない月は表示対象から外す（先頭の空月を間引く）
+  const monthsWithData=months.filter(m=>cfData.some(d=>d.date?.startsWith(m)&&d.type!=='transfer'));
+  const showMonths=monthsWithData.length>0?monthsWithData:months.slice(-3);
+
+  // 各カテゴリ×各月の合計を算出
+  const catTotals={};// cat -> [合計,...]（showMonthsの順）
+  orderedCats.forEach(cat=>{
+    catTotals[cat]=showMonths.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='expense'&&d.cat===cat).reduce((s,d)=>s+d.amount,0));
+  });
+  const incomeTotals=showMonths.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='income').reduce((s,d)=>s+d.amount,0));
+  const expenseTotals=showMonths.map((_,i)=>orderedCats.reduce((s,cat)=>s+catTotals[cat][i],0));
+
+  const lastIdx=showMonths.length-1;
+  const pctChange=(arr)=>{
+    if(lastIdx<1)return null;
+    const prev=arr[lastIdx-1],cur=arr[lastIdx];
+    if(prev===0)return cur>0?Infinity:null;
+    return ((cur-prev)/prev)*100;
+  };
+  const fmtPct=(p)=>{
+    if(p===null)return '';
+    if(p===Infinity)return '<span style="color:var(--danger);font-size:10px;margin-left:4px">new</span>';
+    const sign=p>=0?'+':'';
+    const color=p>0?'var(--danger)':p<0?'var(--green)':'var(--text3)';
+    const arrow=p>0?'▲':p<0?'▼':'';
+    return `<span style="color:${color};font-size:10px;margin-left:4px">${arrow}${sign}${p.toFixed(0)}%</span>`;
+  };
+
+  const monthHeaders=showMonths.map((m,i)=>{
+    const label=m.slice(5)+'月';
+    const isLast=i===lastIdx;
+    return `<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3);font-weight:600;white-space:nowrap;${isLast?'color:var(--text);background:rgba(99,102,241,0.06)':''}">${label}${isLast?'<br><span style="font-size:8px;font-weight:400">(前月比)</span>':''}</th>`;
+  }).join('');
+
+  const rows=orderedCats.filter(cat=>catTotals[cat].some(v=>v>0)).map(cat=>{
+    const cells=showMonths.map((m,i)=>{
+      const v=catTotals[cat][i];
+      const isLast=i===lastIdx;
+      const pct=isLast?fmtPct(pctChange(catTotals[cat])):'';
+      return `<td style="padding:6px 8px;text-align:right;font-size:11px;white-space:nowrap;${isLast?'background:rgba(99,102,241,0.06);font-weight:600':''}">${v>0?'¥'+v.toLocaleString():'<span style="color:var(--text3)">—</span>'}${pct}</td>`;
+    }).join('');
+    return `<tr style="border-top:0.5px solid var(--border)">
+      <td style="padding:6px 8px;font-size:11px;white-space:nowrap;display:flex;align-items:center;gap:5px">
+        <span style="width:7px;height:7px;border-radius:50%;background:${CF_CAT_COLOR[cat]||'#888'};display:inline-block;flex-shrink:0"></span>${cat}
+      </td>${cells}
+    </tr>`;
+  }).join('');
+
+  const expenseRow=`<tr style="border-top:1.5px solid var(--border2);font-weight:700">
+    <td style="padding:7px 8px;font-size:11px;white-space:nowrap">支出合計</td>
+    ${showMonths.map((m,i)=>{
+      const isLast=i===lastIdx;
+      const pct=isLast?fmtPct(pctChange(expenseTotals)):'';
+      return `<td style="padding:7px 8px;text-align:right;font-size:11px;white-space:nowrap;${isLast?'background:rgba(99,102,241,0.06)':''}">¥${expenseTotals[i].toLocaleString()}${pct}</td>`;
+    }).join('')}
+  </tr>`;
+
+  const incomeRow=`<tr style="border-top:0.5px solid var(--border)">
+    <td style="padding:6px 8px;font-size:11px;white-space:nowrap;color:var(--green)">収入</td>
+    ${showMonths.map((m,i)=>{
+      const isLast=i===lastIdx;
+      const pct=isLast?fmtPct(pctChange(incomeTotals)):'';
+      return `<td style="padding:6px 8px;text-align:right;font-size:11px;white-space:nowrap;color:var(--green);${isLast?'background:rgba(99,102,241,0.06)':''}">¥${incomeTotals[i].toLocaleString()}${pct}</td>`;
+    }).join('')}
+  </tr>`;
+
+  wrap.innerHTML=`
+    <table style="width:100%;border-collapse:collapse;min-width:${360+showMonths.length*70}px">
+      <thead><tr style="border-bottom:1px solid var(--border2)">
+        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text3);font-weight:600">カテゴリ</th>
+        ${monthHeaders}
+      </tr></thead>
+      <tbody>${rows}${expenseRow}${incomeRow}</tbody>
+    </table>`;
 }
 
 function cfRefreshHomeIncome(){
@@ -8772,14 +8860,14 @@ const CF_CAT_RULES=[
   {pat:/ﾗｸﾃﾝｶ-ﾄﾞ|楽天カード|ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ|三井住友カード|ｼﾞﾔﾂｸｽ|JACCS|ジャックス|UCS|PayPayカード|ﾍﾟｲﾍﾟｲｶ-ﾄﾞ|引落.*カード|カード.*引落|振替.*カード/i, type:'transfer', cat:'振替'},
   // 税金・社会保険
   {pat:/国民健康保険|国民年金|住民税|所得税|社会保険|年金保険料/i, type:'expense', cat:'税金・保険'},
-  // 日用品（ダイソー等。マツキヨ・ドンキは食費へ）
-  {pat:/ダイソー|ＮＦＣ|薬局|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|ビックカメラ/i, type:'expense', cat:'日用品'},
-  // 娯楽・サブスク・通販（デジタルコンテンツ・配信・宅配。コンビニ等は食費ルールへ譲る）
-  {pat:/Amazon|アマゾン|AMAZON|ＡＭＡＺＯＮ|Netflix|ネットフリックス|Spotify|Hulu|ユーネクスト|U-NEXT|映画|ゲーム|書籍|本屋|ＰＡＹＰＡＹ|PayPay|ペイペイ|GOOGLE|ＧＯＯＧＬＥ|YOUTUBE|ＹＯＵＴＵＢＥ|APPLE|ＡＰＰＬＥ|ウーバー|UBER|まぐまぐ|TEMU|SEAART/i, type:'expense', cat:'娯楽'},
+  // 娯楽・サブスク・通販（デジタルコンテンツ・配信・宅配）
+  {pat:/Amazon|アマゾン|AMAZON|ＡＭＡＺＯＮ|Netflix|ネットフリックス|Spotify|Hulu|ユーネクスト|U-NEXT|映画|ゲーム|書籍|本屋|コンビニ|セブン|ローソン|ファミマ|ファミリ|フアミリ|ＰＡＹＰＡＹ|PayPay|ペイペイ|GOOGLE|ＧＯＯＧＬＥ|YOUTUBE|ＹＯＵＴＵＢＥ|APPLE|ＡＰＰＬＥ|ウーバー|UBER|まぐまぐ|TEMU|SEAART/i, type:'expense', cat:'娯楽'},
   // 酒・ウイスキー
   {pat:/酒|ウイスキー|ワイン|ビール|酒屋|リカー|LIKKA|liquor|whisky|whiskey|BAR|バー|居酒屋/i, type:'expense', cat:'酒・ウイスキー'},
-  // 食費（カスミ・コンビニ全般・マツモトキヨシ・ドンキホーテ含む）
-  {pat:/スーパー|イオン|西友|マルエツ|ライフ|食料品|食費|外食|レストラン|スシロー|カフェ|コーヒー|カスミ|コンビニ|セブン|ローソン|ファミマ|ファミリ|フアミリ|マツモトキヨシ|マツキヨＤＳ|ドンキ|ドン・キホーテ|ドンキホーテ/i, type:'expense', cat:'食費'},
+  // 食費
+  {pat:/スーパー|イオン|西友|マルエツ|ライフ|食料品|食費|外食|レストラン|スシロー|カフェ|コーヒー|コンビニ|セブン|ローソン|ファミマ|ファミリ|カスミ/i, type:'expense', cat:'食費'},
+  // 生活費（広めに最後）
+  {pat:/ドンキ|ドン・キホーテ|薬局|マツキヨ|マツモトキヨシ|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|ダイソー|ビックカメラ|ドンキホーテ/i, type:'expense', cat:'生活費'},
 ];
 
 function cfGuessCat(desc,isExpense){
