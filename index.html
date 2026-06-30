@@ -8653,14 +8653,14 @@ function cfRenderMonthlyTable(months){
       return `<td style="padding:6px 8px;text-align:right;font-size:11px;white-space:nowrap;${isLast?'background:rgba(99,102,241,0.06);font-weight:600':''}">${v>0?'¥'+v.toLocaleString():'<span style="color:var(--text3)">—</span>'}${pct}</td>`;
     }).join('');
     return `<tr style="border-top:0.5px solid var(--border)">
-      <td style="padding:6px 8px;font-size:11px;white-space:nowrap;display:flex;align-items:center;gap:5px">
+      <td style="padding:6px 8px;font-size:11px;white-space:nowrap;display:flex;align-items:center;gap:5px;position:sticky;left:0;background:var(--bg);z-index:1;min-width:90px;box-shadow:2px 0 4px -2px rgba(0,0,0,0.08)">
         <span style="width:7px;height:7px;border-radius:50%;background:${CF_CAT_COLOR[cat]||'#888'};display:inline-block;flex-shrink:0"></span>${cat}
       </td>${cells}
     </tr>`;
   }).join('');
 
   const expenseRow=`<tr style="border-top:1.5px solid var(--border2);font-weight:700">
-    <td style="padding:7px 8px;font-size:11px;white-space:nowrap">支出合計</td>
+    <td style="padding:7px 8px;font-size:11px;white-space:nowrap;position:sticky;left:0;background:var(--bg);z-index:1;min-width:90px;box-shadow:2px 0 4px -2px rgba(0,0,0,0.08)">支出合計</td>
     ${showMonths.map((m,i)=>{
       const isLast=i===lastIdx;
       const pct=isLast?fmtPct(pctChange(expenseTotals)):'';
@@ -8669,7 +8669,7 @@ function cfRenderMonthlyTable(months){
   </tr>`;
 
   const incomeRow=`<tr style="border-top:0.5px solid var(--border)">
-    <td style="padding:6px 8px;font-size:11px;white-space:nowrap;color:var(--green)">収入</td>
+    <td style="padding:6px 8px;font-size:11px;white-space:nowrap;color:var(--green);position:sticky;left:0;background:var(--bg);z-index:1;min-width:90px;box-shadow:2px 0 4px -2px rgba(0,0,0,0.08)">収入</td>
     ${showMonths.map((m,i)=>{
       const isLast=i===lastIdx;
       const pct=isLast?fmtPct(pctChange(incomeTotals)):'';
@@ -8680,7 +8680,7 @@ function cfRenderMonthlyTable(months){
   wrap.innerHTML=`
     <table style="width:100%;border-collapse:collapse;min-width:${360+showMonths.length*70}px">
       <thead><tr style="border-bottom:1px solid var(--border2)">
-        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text3);font-weight:600">カテゴリ</th>
+        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text3);font-weight:600;position:sticky;left:0;background:var(--bg);z-index:2;min-width:90px;box-shadow:2px 0 4px -2px rgba(0,0,0,0.08)">カテゴリ</th>
         ${monthHeaders}
       </tr></thead>
       <tbody>${rows}${expenseRow}${incomeRow}</tbody>
