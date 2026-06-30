@@ -8710,12 +8710,13 @@ function cfOpenEdit(id){
   if(!entry)return;
   cfEditId=id;
   document.getElementById('cfModalTitle').textContent='収支を編集';
-  cfSetType(entry.type);
-  document.getElementById('cf-f-cat').value=entry.cat;
+  const entryIsTransfer=cfIsTransfer(entry);
+  document.getElementById('cf-f-transfer').checked=entryIsTransfer;
+  cfSetType(entryIsTransfer?'expense':entry.type);
+  document.getElementById('cf-f-cat').value=entryIsTransfer?'その他支出':(entry.cat||'');
   document.getElementById('cf-f-amount').value=entry.amount;
   document.getElementById('cf-f-date').value=entry.date;
   document.getElementById('cf-f-memo').value=entry.memo||'';
-  document.getElementById('cf-f-transfer').checked=cfIsTransfer(entry);
   document.getElementById('cf-del-wrap').style.display='block';
   document.getElementById('cfModal').style.display='flex';
 }
@@ -8729,14 +8730,14 @@ function cfSaveEntry(){
   const memo=document.getElementById('cf-f-memo').value.trim();
   if(!amount||!date){showToast('⚠ 金額と日付は必須です');return;}
   const isTransfer=document.getElementById('cf-f-transfer').checked;
-  const saveType=isTransfer?'transfer':cfCurrentType;
-  const saveCat=isTransfer?'振替':cat;
+  const finalType=isTransfer?'transfer':(cfCurrentType==='transfer'?'expense':cfCurrentType);
+  const finalCat=isTransfer?'振替':cat;
   cfLoad();
   if(cfEditId){
     const idx=cfData.findIndex(d=>d.id===cfEditId);
-    if(idx>=0)cfData[idx]={...cfData[idx],type:saveType,cat:saveCat,amount,date,memo};
+    if(idx>=0)cfData[idx]={...cfData[idx],type:finalType,cat:finalCat,amount,date,memo};
   }else{
-    cfData.push({id:cfUID(),type:saveType,cat:saveCat,amount,date,memo});
+    cfData.push({id:cfUID(),type:finalType,cat:finalCat,amount,date,memo});
   }
   cfSave();cfCloseModal();cfRender();showToast('✅ 保存しました');
 }
