@@ -1638,18 +1638,6 @@ input[type=number] { -moz-appearance: textfield; }
         <div id="fGainResult" style="font-size:12px;font-weight:600;margin-top:4px"></div>
       </div>
 
-      <div class="field" id="fBrokerField" style="display:none">
-        <label>証券会社</label>
-        <select id="fBroker">
-          <option value="">未設定</option>
-          <option value="SBI証券">SBI証券</option>
-          <option value="野村証券">野村証券</option>
-          <option value="みずほ証券">みずほ証券</option>
-          <option value="PayPay証券">PayPay証券</option>
-          <option value="その他">その他</option>
-        </select>
-      </div>
-
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
 
@@ -2251,9 +2239,26 @@ function amRenderHeatmap(accounts,total){
     const amtFz =Math.min(Math.max(shortSideTile*0.12,6),10);
 
     // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
+    // 括弧内（S&P500・全世界・日本等の差別化情報）を優先して見せるロジック
     let dispName=node.name;
     const maxChars=Math.max(Math.floor(rw/(nameFz*0.9)),2);
-    if(dispName.length>maxChars) dispName=dispName.slice(0,maxChars);
+    if(dispName.length>maxChars){
+      // 「（」「(」を含む場合は括弧内容を優先的に残す
+      const bracketMatch=dispName.match(/^(.*?)[（(]([^）)]+)[）)]/);
+      if(bracketMatch){
+        const head=bracketMatch[1].trim();
+        const inner=bracketMatch[2].trim();
+        // 括弧内だけで収まるならそれを表示、収まらなければ先頭を削って括弧内を活かす
+        if(inner.length<=maxChars){
+          const remain=maxChars-inner.length-1;// "…"の分
+          dispName=remain>0?head.slice(0,remain)+'…'+inner:inner;
+        }else{
+          dispName=inner.slice(0,maxChars);
+        }
+      }else{
+        dispName=dispName.slice(0,maxChars);
+      }
+    }
 
     const cx=(rx+rw/2).toFixed(1);
     const showName=rh>nameFz*1.2&&rw>nameFz;
@@ -2262,6 +2267,10 @@ function amRenderHeatmap(accounts,total){
 
     const lines=[];
     if(showName) lines.push({t:escX(dispName),fz:nameFz,fw:'bold',op:1});
+    // カテゴリラベル（インデックスの種類等の判別用）。十分な高さがある場合のみ表示
+    const catFz=Math.min(Math.max(shortSideTile*0.13,7),11);
+    const showCat=node.cat&&rh>nameFz*1.2+catFz*1.4&&rw>catFz*3&&area>2500;
+    if(showCat) lines.push({t:escX(node.cat),fz:catFz,fw:'500',op:0.8});
     if(showPct)  lines.push({t:escX(pctStr),fz:pctFz,fw:'600',op:0.92});
     if(showAmt)  lines.push({t:escX(fmtM(node.amount)),fz:amtFz,fw:'normal',op:0.75});
 
@@ -2852,7 +2861,6 @@ function openAddModal(defaultCat){
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value='';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value='';
-  if(document.getElementById('fBroker'))document.getElementById('fBroker').value='';
   ['fSell1','fSell2','fSell3','fPer','fPbr','fEps1','fEps2'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
@@ -2897,14 +2905,6 @@ function amGuessCat(name){
   }
   return null;
 }
-function amGuessBroker(name,note){
-  const text=`${name||''} ${note||''}`;
-  if(/野村/.test(text))return'野村証券';
-  if(/みずほ/.test(text))return'みずほ証券';
-  if(/SBI/i.test(text))return'SBI証券';
-  if(/PayPay|ペイペイ/.test(text))return'PayPay証券';
-  return'';
-}
 const AM_OLD_CAT_MAP={
   '証券':'個別株','証券-JP':'日本インデックス','証券-インド':'インドインデックス',
   '証券-高配当':'高配当','証券-個別':'個別株',
@@ -2932,7 +2932,7 @@ function openEditModal(id){
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value=a.soldAmount&&a.sold?a.soldAmount:'';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value=a.earningsDate||'';
-  if(document.getElementById('fBroker'))document.getElementById('fBroker').value=a.broker||amGuessBroker(a.name,a.note)||'';
+  // 分析フィールド
   if(document.getElementById('fSell1'))document.getElementById('fSell1').value=a.sell1||'';
   if(document.getElementById('fSell2'))document.getElementById('fSell2').value=a.sell2||'';
   if(document.getElementById('fSell3'))document.getElementById('fSell3').value=a.sell3||'';
@@ -2983,7 +2983,6 @@ async function saveAccount(){
     costPrice=parseFloat(document.getElementById('fCost')?.value)||0;
   }
   const earningsDate=(document.getElementById('fEarningsDate')?.value||'').trim();
-  const broker=(document.getElementById('fBroker')?.value||'').trim();
   // 分析フィールド
   const sell1=parseFloat(document.getElementById('fSell1')?.value)||undefined;
   const sell2=parseFloat(document.getElementById('fSell2')?.value)||undefined;
@@ -2993,8 +2992,8 @@ async function saveAccount(){
   const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
   const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
   const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,broker:broker||undefined,...analysis,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,broker:broker||undefined,...analysis,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
 }
 function amMoveAccount(id,dir){
@@ -3051,8 +3050,6 @@ function amToggleStockFields(){
   if(sf)sf.style.display=(isUnitBased&&!showIndexFields)?'block':'none';
   if(cf)cf.style.display=(isStock||isForeignStock)?'block':'none';
   if(costF)costF.style.display=(isStock||isForeignStock)?'block':'none';// 株のみ取得単価欄
-  const brokerF=document.getElementById('fBrokerField');
-  if(brokerF)brokerF.style.display=(isStock||isForeignStock)?'block':'none';// 株のみ証券会社欄
   if(idxF)idxF.style.display=showIndexFields?'block':'none';// インデックス専用
   if(costLabel)costLabel.textContent=isStock?'取得株価（円/株）':isForeignStock?'取得株価（USD/株）':'取得価格（円・総額）';
   if(sfLabel)sfLabel.textContent=isStock?'株式自動計算':isForeignStock?'外国株 自動計算（USD×為替→円）':'投資信託 自動計算';
@@ -3983,15 +3980,15 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','broker'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.broker||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:Y${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:X${values.length+10}`,valueInputOption:'RAW',resource:{values}});
     if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:Q1000`});
-    // 推移グラフの損益計算から除外する銘柄リストをAB1セルに保存（端末間で共有するため）
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!AB1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
+    // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
   }catch(e){setSyncStatus('err','同期失敗');amSaveToLocal();showToast('⚠ ローカル保存しました');}
 }
@@ -4104,30 +4101,23 @@ async function amLoadFromSheet(){
       eps1:r[22]?parseFloat(r[22])||undefined:undefined,
       eps2:r[23]?parseFloat(r[23])||undefined:undefined,
       earningsDate:r[16]||'',
-      broker:r[24]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
     amSaveToLocal();amRender();
-    // 推移グラフの損益除外リストをAB1/AC1セルから読み込む（端末間で共有）
+    // 推移グラフの損益除外リストをQ1セルから読み込む（端末間で共有）
     try{
-      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!AB1'});
+      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Y1'});
       const raw=exRes.result.values?.[0]?.[0];
-      if(raw){trGainExcludeNames=JSON.parse(raw);}
+      if(raw){trGainExcludeNames=JSON.parse(raw);trSaveGainExclude();}
     }catch(e){
-      // 旧形式（Q1セル）のフォールバック
+      // 旧形式（L1セル）のフォールバック
       try{
-        const exRes2=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Q1'});
+        const exRes2=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!L1'});
         const raw2=exRes2.result.values?.[0]?.[0];
-        if(raw2){trGainExcludeNames=JSON.parse(raw2);}
+        if(raw2){trGainExcludeNames=JSON.parse(raw2);trSaveGainExclude();}
       }catch(e2){}
     }
-    try{
-      const exResB=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!AC1'});
-      const rawB=exResB.result.values?.[0]?.[0];
-      if(rawB){trGainExcludeBrokers=JSON.parse(rawB);}
-    }catch(e){}
-    trSaveGainExclude();
   }catch(e){amLoadFromLocal();amRender();}
 }
 async function onSignedIn(){
@@ -4756,10 +4746,8 @@ let snapshots=[];let activeFilter='all';let chartInstances={};
 // 除外された銘柄は取り消し線で表示され、損益計算（折れ線・横棒の合計）から外れる。
 // ============================================================
 let trGainExcludeNames=[];
-let trGainExcludeBrokers=[];
 function trLoadGainExclude(){
   try{trGainExcludeNames=JSON.parse(localStorage.getItem('trGainExclude')||'[]');}catch(e){trGainExcludeNames=[];}
-  try{trGainExcludeBrokers=JSON.parse(localStorage.getItem('trGainExcludeBrokers')||'[]');}catch(e){trGainExcludeBrokers=[];}
   // SBG・SBKKはデフォルトで除外（初回のみ追加、ユーザーが復帰させたら尊重）
   const DEFAULTS_EXCLUDED=['SBG','SBKK'];
   const alreadyInitKey='trGainExcludeDefaultsSet';
@@ -4774,22 +4762,12 @@ function trLoadGainExclude(){
 }
 function trSaveGainExclude(){
   try{localStorage.setItem('trGainExclude',JSON.stringify(trGainExcludeNames));}catch(e){}
-  try{localStorage.setItem('trGainExcludeBrokers',JSON.stringify(trGainExcludeBrokers));}catch(e){}
-  // Googleログイン中はaccountsシートのセルにも保存し、他端末と共有する
+  // Googleログイン中はaccountsシートのL1セルにも保存し、他端末と共有する
   if(amIsOnline&&amSpreadsheetId){
     try{
-      gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!AB1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
-      gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!AC1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeBrokers)]]}});
+      gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     }catch(e){console.warn('trSaveGainExclude sheet sync error',e);}
   }
-}
-function trToggleGainExcludeBroker(broker){
-  if(!broker)return;
-  const idx=trGainExcludeBrokers.indexOf(broker);
-  if(idx>=0)trGainExcludeBrokers.splice(idx,1);
-  else trGainExcludeBrokers.push(broker);
-  trSaveGainExclude();
-  trRenderAll();
 }
 function trToggleGainExclude(name){
   // 名前そのもの、またはプレフィックス除外（SBG/SBKK系）をチェック
@@ -4827,12 +4805,7 @@ window.diagSnapshots=function(){
     console.groupEnd();
   });
 };
-function trIsExcluded(nameOrAccount){
-  const name=typeof nameOrAccount==='string'?nameOrAccount:(nameOrAccount?.name||'');
-  const broker=typeof nameOrAccount==='object'?(nameOrAccount?.broker||''):'';
-  // 証券会社ベースの除外（broker完全一致）
-  if(broker&&trGainExcludeBrokers.includes(broker))return true;
-  // 旧来の銘柄名ベース除外（broker未設定の銘柄向けフォールバック）
+function trIsExcluded(name){
   return trGainExcludeNames.some(ex=>{
     if(!ex)return false;
     if(name===ex)return true;
@@ -5590,15 +5563,8 @@ function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
   // ── 除外バナー ──
   if(summaryEl){
     let html='';
-    const parts=[];
     if(trGainExcludeNames.length>0){
-      parts.push(`銘柄: ${trGainExcludeNames.map(n=>esc(n)).join('・')}`);
-    }
-    if(trGainExcludeBrokers.length>0){
-      parts.push(`証券会社: ${trGainExcludeBrokers.map(n=>esc(n)).join('・')}`);
-    }
-    if(parts.length>0){
-      html=`<span style="font-size:11px">🚫 除外中 — ${parts.join(' ／ ')} <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="trGainExcludeNames=[];trGainExcludeBrokers=[];trSaveGainExclude();trRenderAll();">すべて解除</span></span>`;
+      html=`<span style="font-size:11px">🚫 除外中: ${trGainExcludeNames.map(n=>esc(n)).join('・')} <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="trGainExcludeNames=[];trSaveGainExclude();trRenderAll();">すべて解除</span></span>`;
     }
     summaryEl.innerHTML=html;
   }
@@ -6100,10 +6066,10 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const evalTotal=a.amount||0;
     const gain=evalTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
-    const excluded=trIsExcluded(a);
+    const excluded=trIsExcluded(a.name);
     const isStock=STOCK_CATS.includes(a.cat);
     const isIndex=INDEX_CATS.includes(a.cat);
-    return{name:a.name,cat:a.cat,broker:a.broker||'',gain,pct,evalTotal,costTotal,excluded,isStock,isIndex,isSold:false};
+    return{name:a.name,cat:a.cat,gain,pct,evalTotal,costTotal,excluded,isStock,isIndex,isSold:false};
   }).sort((a,b)=>b.gain-a.gain);
 
   // 売却済み銘柄（確定損益）
@@ -6112,10 +6078,10 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
     const soldTotal=a.soldAmount||0;
     const gain=soldTotal-costTotal;
     const pct=costTotal>0?gain/costTotal*100:0;
-    const excluded=trIsExcluded(a);
+    const excluded=trIsExcluded(a.name);
     const isStock=STOCK_CATS.includes(a.cat);
     const isIndex=INDEX_CATS.includes(a.cat);
-    return{name:a.name+(a.soldDate?` (${a.soldDate}売)` :''),origName:a.name,cat:a.cat,broker:a.broker||'',gain,pct,evalTotal:soldTotal,costTotal,excluded,isStock,isIndex,isSold:true,soldDate:a.soldDate||''};
+    return{name:a.name+(a.soldDate?` (${a.soldDate}売)` :''),origName:a.name,cat:a.cat,gain,pct,evalTotal:soldTotal,costTotal,excluded,isStock,isIndex,isSold:true,soldDate:a.soldDate||''};
   }).sort((a,b)=>b.gain-a.gain);
 
   const stockItems=allItems.filter(i=>i.isStock);
@@ -6309,13 +6275,12 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
         const col=i.excluded?'var(--text3)':(i.gain>=0?'var(--green)':'var(--danger)');
         const nameStyle=i.excluded?'text-decoration:line-through;color:var(--text3)':'';
         const catBadge=`<span style="font-size:10px;color:var(--text3);margin-left:6px">${i.cat}</span>`;
-        const brokerBadge=i.broker?`<span onclick="event.stopPropagation();trToggleGainExcludeBroker('${i.broker.replace(/'/g,"\\'")}')" style="font-size:9px;background:${trGainExcludeBrokers.includes(i.broker)?'#9ca3af':'var(--bg2)'};color:${trGainExcludeBrokers.includes(i.broker)?'#fff':'var(--text3)'};border-radius:4px;padding:1px 5px;margin-left:6px;cursor:pointer">${i.broker}</span>`:'';
         const soldBadge=i.isSold?`<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#C0392B20;color:#C0392B;border:1px solid #C0392B40;margin-left:4px">確定</span>`:'';
         const evalLabel=i.isSold?'売却額':'評価額';
         const toggleName=i.isSold?(i.origName||i.name):i.name;
         return`<div onclick="trToggleGainExclude('${toggleName.replace(/'/g,"\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border);cursor:pointer;${i.excluded?'opacity:0.55':''}${i.isSold?';background:var(--bg2);padding:8px 10px;border-radius:6px;margin-bottom:2px':''};border-left:${i.isSold?'3px solid #C0392B40':'none'};padding-left:${i.isSold?'10px':'0'}">
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${catBadge}${brokerBadge}${soldBadge}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
+            <div style="font-size:13px;font-weight:500;${nameStyle}">${i.name}${catBadge}${soldBadge}${i.excluded?' <span style="font-size:10px;font-weight:600">（除外中）</span>':''}</div>
             <div style="font-size:11px;color:var(--text3)">${evalLabel} ${trFmt(i.evalTotal)} ／ 取得額 ${trFmt(i.costTotal)}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
