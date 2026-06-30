@@ -7504,13 +7504,14 @@ window.addEventListener('load', function(){
     <table class="wl-tbl">
       <thead>
         <tr>
-          <th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
+          <th>順番</th><th>優先</th><th>操作</th><th>銘柄</th>
+          <th>テクニカル</th><th>アナリスト</th><th>みんなの評価</th>
+          <th>コード</th><th>株数</th>
           <th>指値</th><th>現在値</th><th>乖離率</th><th>合計</th>
           <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
           <th>目標株価</th><th>上昇余地</th>
           <th>理論PER</th><th>理論PBR</th>
-          <th>テクニカル</th><th>アナリスト</th><th>みんなの評価</th>
-          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th><th>操作</th>
+          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th>
         </tr>
       </thead>
       <tbody id="wl-tbody"></tbody>
@@ -8042,7 +8043,14 @@ function wlRender(){
         <button class="wl-move-btn" onclick="if(confirm('「${s.name}」を削除しますか？')){var d=wlLoad();wlSaveData(d.filter(function(x){return x.id!=='${s.id}';}));wlRender();}" style="color:#C0392B;border-color:#C0392B;margin-top:3px" title="削除">✕</button>
       </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
+      <td style="white-space:nowrap">
+        <button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button>
+        <button class="wl-edit-btn" style="background:var(--green);color:#fff;border-color:var(--green);margin-top:3px" onclick="wlBuyConfirm('${s.id}')">✅ 購入</button>
+      </td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
+      <td>${wlRatingSelect(s.id,'technical',s.technical)}</td>
+      <td>${wlRatingSelect(s.id,'analyst',s.analyst)}</td>
+      <td>${wlCrowdInput(s.id,s.crowdPct)}</td>
       <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
       <td style="font-size:11px">${(s.shares||0).toLocaleString()}株</td>
       <td style="font-weight:500;color:#3B6D11">${wlFmt(s.limit)}</td>
@@ -8056,16 +8064,10 @@ function wlRender(){
       <td>${upStr}</td>
       <td>${perStr}</td>
       <td>${pbrStr}</td>
-      <td>${wlRatingSelect(s.id,'technical',s.technical)}</td>
-      <td>${wlRatingSelect(s.id,'analyst',s.analyst)}</td>
-      <td>${wlCrowdInput(s.id,s.crowdPct)}</td>
       <td>${gainStr}</td>
       <td style="font-size:11px;white-space:nowrap">${s.earningsDate?wlFmtEarnings(s.earningsDate):'—'}</td>
       <td>${wlAcctBadge(s.account)}</td>
       <td>${wlStatusBadge(s.status)}</td>
-      <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button>
-        <button class="wl-edit-btn" style="background:var(--green);color:#fff;border-color:var(--green);margin-top:3px" onclick="wlBuyConfirm('${s.id}')">✅ 購入</button>
-      </td>
     </tr>`;
   }).join('');
 }
@@ -8304,7 +8306,6 @@ function wlBuyConfirm(id){
 ウォッチ銘柄からは削除されます。よろしいですか？`;
   if(!confirm(confirmMsg))return;
 
-  // 資産管理（amAccounts）の個別株として新規追加
   const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;
   amAccounts.push({
     id:newId,
@@ -8325,7 +8326,6 @@ function wlBuyConfirm(id){
     updated:todayStr(),
   });
 
-  // ウォッチ銘柄から削除
   wlSaveData(d.filter(x=>x.id!==id));
 
   amRender();
