@@ -1498,6 +1498,13 @@ input[type=number] { -moz-appearance: textfield; }
       <div class="form-group"><label class="form-label">日付</label><input class="form-input" type="date" id="cf-f-date"></div>
     </div>
     <div class="form-group"><label class="form-label">メモ（任意）</label><input class="form-input" id="cf-f-memo" placeholder="例: SBKKの配当 Q1"></div>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--radius);cursor:pointer;user-select:none">
+      <input type="checkbox" id="cf-f-transfer" style="width:18px;height:18px;cursor:pointer;accent-color:#9ca3af">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">振替として扱う</div>
+        <div style="font-size:11px;color:var(--text3)">収支集計から除外されます（カード引落・口座間移動等）</div>
+      </div>
+    </label>
     <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">
       <div id="cf-del-wrap" style="display:none"><button class="btn-danger" onclick="cfDeleteEntry()">削除</button></div>
       <div style="display:flex;gap:8px">
@@ -8692,6 +8699,7 @@ function cfOpenModal(){
   document.getElementById('cf-f-memo').value='';
   document.getElementById('cf-f-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('cf-del-wrap').style.display='none';
+  document.getElementById('cf-f-transfer').checked=false;
   cfSetType('income');
   document.getElementById('cfModal').style.display='flex';
 }
@@ -8707,6 +8715,7 @@ function cfOpenEdit(id){
   document.getElementById('cf-f-amount').value=entry.amount;
   document.getElementById('cf-f-date').value=entry.date;
   document.getElementById('cf-f-memo').value=entry.memo||'';
+  document.getElementById('cf-f-transfer').checked=cfIsTransfer(entry);
   document.getElementById('cf-del-wrap').style.display='block';
   document.getElementById('cfModal').style.display='flex';
 }
@@ -8719,12 +8728,15 @@ function cfSaveEntry(){
   const date=document.getElementById('cf-f-date').value;
   const memo=document.getElementById('cf-f-memo').value.trim();
   if(!amount||!date){showToast('⚠ 金額と日付は必須です');return;}
+  const isTransfer=document.getElementById('cf-f-transfer').checked;
+  const saveType=isTransfer?'transfer':cfCurrentType;
+  const saveCat=isTransfer?'振替':cat;
   cfLoad();
   if(cfEditId){
     const idx=cfData.findIndex(d=>d.id===cfEditId);
-    if(idx>=0)cfData[idx]={...cfData[idx],type:cfCurrentType,cat,amount,date,memo};
+    if(idx>=0)cfData[idx]={...cfData[idx],type:saveType,cat:saveCat,amount,date,memo};
   }else{
-    cfData.push({id:cfUID(),type:cfCurrentType,cat,amount,date,memo});
+    cfData.push({id:cfUID(),type:saveType,cat:saveCat,amount,date,memo});
   }
   cfSave();cfCloseModal();cfRender();showToast('✅ 保存しました');
 }
@@ -8849,18 +8861,6 @@ function cfParseSMBC(text){
 //   フッター行:   日付列が空、または合計行（※マイ・ペイすリボ...等）
 // 文字コード: Shift-JIS
 function cfParseVpass(text){
-  // Vpass（三井住友カード）ご利用明細CSV
-  // 対応フォーマット:
-  //   形式A（旧）: 日付,店舗名,利用額,回数,支払回数,支払額,備考     ← Oliveゴールド等
-  //   形式B（旧）: 日付,店舗名,金額,,,,備考                         ← Amazonマスター等
-  //   形式C（新）: 日付,店舗名,本人/家族,支払方法,分割情報,請求月,支払額,合計額,...
-  //   1ファイルに複数カードブロックが含まれる場合あり・ヘッダー行なし
-  const toNum=s=>{
-    const h=(s||'').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-    return parseFloat(h.replace(/[",，\s]/g,''))||0;
-  };
-  // 形式Cの支払方法キーワード判定
-  const isPayMethod=s=>/払い|分割|一括|リボ|ご本人|家族/.test(s||'');
   text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   const lines=text.split('\n').filter(l=>l.trim());
   const rows=[];
@@ -8869,28 +8869,16 @@ function cfParseVpass(text){
     if(cols.length<3)continue;
 
     const dateRaw=(cols[0]||'').replace(/"/g,'').trim();
+    // 明細行のみ処理: 1列目が "YYYY/MM/DD" または "YYYY-MM-DD"（1〜2桁月日も許容）
     const dm=dateRaw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-    if(!dm)continue;
+    if(!dm)continue;// カード情報行・フッター行はスキップ
     const date=`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
 
     const desc=(cols[1]||'').replace(/"/g,'').trim();
-    if(!desc)continue;
+    const amt=parseFloat((cols[2]||'').replace(/[",，\s]/g,''))||0;
+    if(!amt||!desc)continue;
 
-    let amt=0;
-    // 形式C判定: 3列目が「ご本人」「1回払い」等の文字列
-    if(cols.length>=7 && isPayMethod((cols[2]||'').replace(/"/g,'').trim())){
-      // 形式C: 7列目（index6）が支払額
-      amt=toNum((cols[6]||'').replace(/"/g,'').trim());
-    }else{
-      // 形式A/B: 6列目があれば支払額優先、なければ3列目
-      const col5raw=cols.length>=6?(cols[5]||'').replace(/"/g,'').trim():'';
-      const col2raw=(cols[2]||'').replace(/"/g,'').trim();
-      const col5num=toNum(col5raw);
-      const col2num=toNum(col2raw);
-      amt=cols.length>=6&&col5num>0?col5num:col2num;
-    }
-    if(!amt)continue;
-
+    // クレカ明細は全て支出
     const{type,cat}=cfGuessCat(desc,true);
     rows.push({id:cfUID(),type,cat,amount:amt,date,memo:desc});
   }
