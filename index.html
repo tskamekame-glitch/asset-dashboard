@@ -1481,7 +1481,8 @@ input[type=number] { -moz-appearance: textfield; }
           <option value="その他収入">その他収入</option>
         </optgroup>
         <optgroup label="支出" id="cf-opt-expense">
-          <option value="生活費">生活費（食費・日用品）</option>
+          <option value="食費">食費</option>
+          <option value="日用品">日用品</option>
           <option value="家賃">家賃・住居費</option>
           <option value="交通費">交通費</option>
           <option value="通信費">通信費</option>
@@ -1498,6 +1499,13 @@ input[type=number] { -moz-appearance: textfield; }
       <div class="form-group"><label class="form-label">日付</label><input class="form-input" type="date" id="cf-f-date"></div>
     </div>
     <div class="form-group"><label class="form-label">メモ（任意）</label><input class="form-input" id="cf-f-memo" placeholder="例: SBKKの配当 Q1"></div>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--radius);cursor:pointer;user-select:none">
+      <input type="checkbox" id="cf-f-transfer" style="width:18px;height:18px;cursor:pointer;accent-color:#9ca3af">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">振替として扱う</div>
+        <div style="font-size:11px;color:var(--text3)">収支集計から除外されます（カード引落・口座間移動等）</div>
+      </div>
+    </label>
     <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">
       <div id="cf-del-wrap" style="display:none"><button class="btn-danger" onclick="cfDeleteEntry()">削除</button></div>
       <div style="display:flex;gap:8px">
@@ -8334,7 +8342,12 @@ let cfCurrentMonth='';
 let cfEditId=null;
 let cfCurrentType='income';
 
-function cfLoad(){try{cfData=JSON.parse(localStorage.getItem(CF_KEY)||'[]');}catch(e){cfData=[];}}
+function cfLoad(){
+  try{cfData=JSON.parse(localStorage.getItem(CF_KEY)||'[]');}catch(e){cfData=[];}
+  let migrated=false;
+  cfData.forEach(d=>{if(d.cat==='生活費'){d.cat='日用品';migrated=true;}});
+  if(migrated)localStorage.setItem(CF_KEY,JSON.stringify(cfData));
+}
 function cfSave(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}cfSaveToSheet();}
 
 const CF_COLS=['id','type','cat','amount','date','memo'];
@@ -8379,7 +8392,7 @@ function cfFmt(n){return'¥'+Math.abs(Math.round(n)).toLocaleString('ja-JP');}
 
 const CF_CAT_TYPE={
   '給与':'income','副業':'income','配当':'income','売却益':'income','年金':'income','その他収入':'income',
-  '生活費':'expense','家賃':'expense','交通費':'expense','通信費':'expense','積立':'expense',
+  '食費':'expense','日用品':'expense','家賃':'expense','交通費':'expense','通信費':'expense','積立':'expense',
   '保険':'expense','税金':'expense','娯楽':'expense','その他支出':'expense'
 };
 const CF_CAT_COLOR={
@@ -8387,9 +8400,9 @@ const CF_CAT_COLOR={
   '給与':'#185fa5','副業':'#0f6e56','配当':'#8B5CF6','売却益':'#e24b4a','年金':'#D4537E','その他収入':'#888780',
   // 支出
   '家賃':'#ef9f27','電気':'#f59e0b','水道':'#38bdf8','ガス':'#f97316',
-  '食費':'#84cc16','酒・ウイスキー':'#a78bfa','交際費':'#D4537E',
+  '酒・ウイスキー':'#a78bfa','交際費':'#D4537E',
   '通信費':'#4A90D9','税金・保険':'#e24b4a','積立':'#0f6e56',
-  '生活費':'#ba7517','交通費':'#888780','保険':'#9b9b97','税金':'#e24b4a','娯楽':'#D4537E',
+  '食費':'#84cc16','日用品':'#ba7517','交通費':'#888780','保険':'#9b9b97','税金':'#e24b4a','娯楽':'#D4537E',
   'その他支出':'#b4b2a9',
   // 振替（グレー）
   '振替':'#9ca3af'
@@ -8548,7 +8561,7 @@ function cfRenderTrendChart(){
     });
   } else {
     // カテゴリ別モード：全支出カテゴリを積み上げ棒グラフ
-    const ALL_EXP_CATS=['家賃','電気','水道','ガス','食費','酒・ウイスキー','通信費','交際費','税金・保険','娯楽','生活費','積立','その他支出'];
+    const ALL_EXP_CATS=['家賃','電気','水道','ガス','食費','日用品','酒・ウイスキー','通信費','交際費','税金・保険','娯楽','積立','その他支出'];
     // データに存在するカテゴリのみ表示
     const existCats=new Set(cfData.filter(d=>d.type==='expense').map(d=>d.cat));
     const orderedCats=[...ALL_EXP_CATS.filter(c=>existCats.has(c)),...[...existCats].filter(c=>!ALL_EXP_CATS.includes(c)&&c!=='振替')];
@@ -8697,6 +8710,8 @@ function cfOpenModal(){
   document.getElementById('cf-f-memo').value='';
   document.getElementById('cf-f-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('cf-del-wrap').style.display='none';
+  const _tfEl=document.getElementById('cf-f-transfer');
+  if(_tfEl)_tfEl.checked=false;
   cfSetType('income');
   document.getElementById('cfModal').style.display='flex';
 }
@@ -8707,8 +8722,11 @@ function cfOpenEdit(id){
   if(!entry)return;
   cfEditId=id;
   document.getElementById('cfModalTitle').textContent='収支を編集';
-  cfSetType(entry.type);
-  document.getElementById('cf-f-cat').value=entry.cat;
+  const _isTransfer=cfIsTransfer(entry);
+  const _tfEl2=document.getElementById('cf-f-transfer');
+  if(_tfEl2)_tfEl2.checked=_isTransfer;
+  cfSetType(_isTransfer?'expense':entry.type);
+  document.getElementById('cf-f-cat').value=_isTransfer?'その他支出':(entry.cat||'');
   document.getElementById('cf-f-amount').value=entry.amount;
   document.getElementById('cf-f-date').value=entry.date;
   document.getElementById('cf-f-memo').value=entry.memo||'';
@@ -8724,12 +8742,16 @@ function cfSaveEntry(){
   const date=document.getElementById('cf-f-date').value;
   const memo=document.getElementById('cf-f-memo').value.trim();
   if(!amount||!date){showToast('⚠ 金額と日付は必須です');return;}
+  const _tfEl3=document.getElementById('cf-f-transfer');
+  const _isTransfer3=_tfEl3?_tfEl3.checked:false;
+  const finalType=_isTransfer3?'transfer':(cfCurrentType==='transfer'?'expense':cfCurrentType);
+  const finalCat=_isTransfer3?'振替':cat;
   cfLoad();
   if(cfEditId){
     const idx=cfData.findIndex(d=>d.id===cfEditId);
-    if(idx>=0)cfData[idx]={...cfData[idx],type:cfCurrentType,cat,amount,date,memo};
+    if(idx>=0)cfData[idx]={...cfData[idx],type:finalType,cat:finalCat,amount,date,memo};
   }else{
-    cfData.push({id:cfUID(),type:cfCurrentType,cat,amount,date,memo});
+    cfData.push({id:cfUID(),type:finalType,cat:finalCat,amount,date,memo});
   }
   cfSave();cfCloseModal();cfRender();showToast('✅ 保存しました');
 }
@@ -8784,7 +8806,7 @@ const CF_CAT_RULES=[
   // 食費
   {pat:/スーパー|イオン|西友|マルエツ|ライフ|食料品|食費|外食|レストラン|スシロー|カフェ|コーヒー|コンビニ|セブン|ローソン|ファミマ|ファミリ|カスミ/i, type:'expense', cat:'食費'},
   // 生活費（広めに最後）
-  {pat:/ドンキ|ドン・キホーテ|薬局|マツキヨ|マツモトキヨシ|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|ダイソー|ビックカメラ|ドンキホーテ/i, type:'expense', cat:'生活費'},
+  {pat:/ドンキ|ドン・キホーテ|薬局|マツキヨ|マツモトキヨシ|ウエルシア|ツルハ|日用品|ホームセンター|ニトリ|無印|ユニクロ|GU|ダイソー|ビックカメラ|ドンキホーテ/i, type:'expense', cat:'日用品'},
 ];
 
 function cfGuessCat(desc,isExpense){
