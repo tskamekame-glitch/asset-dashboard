@@ -1441,6 +1441,7 @@ input[type=number] { -moz-appearance: textfield; }
       <div style="position:relative;height:220px">
         <canvas id="cf-trend-chart"></canvas>
       </div>
+      <div id="cf-monthly-table-wrap" style="margin-top:14px;overflow-x:auto;-webkit-overflow-scrolling:touch"></div>
     </div>
     <!-- サマリーカード -->
     <div id="cf-summary-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
@@ -8615,6 +8616,90 @@ function cfRenderTrendChart(){
       }
     });
   }
+  cfRenderMonthlyTable();
+}
+
+// ── 月次カテゴリ別合計テーブル ──
+function cfRenderMonthlyTable(){
+  const wrap=document.getElementById('cf-monthly-table-wrap');
+  if(!wrap)return;
+  cfLoad();
+
+  // 直近12ヶ月を算出
+  const now=new Date();
+  const months=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  // データがある月だけ絞る
+  const activeMonths=months.filter(m=>cfData.some(d=>d.date?.startsWith(m)&&d.type!=='transfer'));
+  if(!activeMonths.length){wrap.innerHTML='';return;}
+
+  const ALL_EXP_CATS=['家賃','電気','水道','ガス','食費','日用品','酒・ウイスキー','通信費','交際費','税金・保険','娯楽','積立','その他支出'];
+  const existCats=new Set(cfData.filter(d=>d.type==='expense').map(d=>d.cat));
+  const orderedCats=[...ALL_EXP_CATS.filter(c=>existCats.has(c)),...[...existCats].filter(c=>!ALL_EXP_CATS.includes(c)&&c!=='振替')];
+
+  // 各カテゴリ×各月の合計
+  const catTotals={};
+  orderedCats.forEach(cat=>{
+    catTotals[cat]=activeMonths.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='expense'&&d.cat===cat).reduce((s,d)=>s+d.amount,0));
+  });
+  const expTotals=activeMonths.map((_,i)=>orderedCats.reduce((s,cat)=>s+(catTotals[cat][i]||0),0));
+  const incTotals=activeMonths.map(m=>cfData.filter(d=>d.date?.startsWith(m)&&d.type==='income').reduce((s,d)=>s+d.amount,0));
+
+  const lastIdx=activeMonths.length-1;
+
+  // 前月比計算
+  const pctChange=(arr,i)=>{
+    if(i===0)return null;
+    const prev=arr[i-1],cur=arr[i];
+    if(prev===0)return cur>0?null:null;
+    return((cur-prev)/prev)*100;
+  };
+  const fmtPct=p=>{
+    if(p===null||isNaN(p))return'';
+    const sign=p>=0?'+':'';
+    const color=p>0?'var(--danger)':p<0?'var(--green)':'var(--text3)';
+    const arrow=p>0?'▲':p<0?'▼':'';
+    return `<span style="color:${color};font-size:9px;margin-left:3px">${arrow}${sign}${p.toFixed(0)}%</span>`;
+  };
+
+  // ヘッダー
+  const thStyle=`padding:6px 10px;text-align:right;font-size:10px;color:var(--text3);font-weight:600;white-space:nowrap;background:var(--bg)`;
+  const thStickyStyle=`padding:6px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:600;position:sticky;left:0;background:var(--bg);z-index:2;min-width:80px;box-shadow:2px 0 4px -2px rgba(0,0,0,0.07)`;
+  const headers=activeMonths.map((m,i)=>{
+    const isLast=i===lastIdx;
+    const label=m.slice(5)+'月';
+    return `<th style="${thStyle};${isLast?'background:rgba(99,102,241,0.06);color:var(--text)':''}">${label}</th>`;
+  }).join('');
+
+  // 行生成
+  const makeRow=(label,totals,color='var(--text)',bold=false)=>{
+    const cells=activeMonths.map((m,i)=>{
+      const v=totals[i]||0;
+      const isLast=i===lastIdx;
+      const pct=fmtPct(pctChange(totals,i));
+      const tdStyle=`padding:6px 10px;text-align:right;font-size:11px;white-space:nowrap;${isLast?'background:rgba(99,102,241,0.06);':''}${bold?'font-weight:700':''}`;
+      return `<td style="${tdStyle}">${v>0?`¥${v.toLocaleString()}${isLast?pct:''}`:'<span style="color:var(--text3)">—</span>'}</td>`;
+    }).join('');
+    const dot=CF_CAT_COLOR[label]?`<span style="width:7px;height:7px;border-radius:50%;background:${CF_CAT_COLOR[label]};display:inline-block;margin-right:5px;flex-shrink:0"></span>`:'';
+    return `<tr style="border-top:0.5px solid var(--border)">
+      <td style="${thStickyStyle};font-weight:${bold?700:400};color:${color}">${dot}${label}</td>${cells}
+    </tr>`;
+  };
+
+  const catRows=orderedCats.filter(cat=>catTotals[cat].some(v=>v>0)).map(cat=>makeRow(cat,catTotals[cat])).join('');
+  const expRow=makeRow('支出合計',expTotals,'var(--text)',true).replace('border-top:0.5px solid var(--border)','border-top:1.5px solid var(--border2)');
+  const incRow=makeRow('収入',incTotals,'var(--green)',false);
+
+  wrap.innerHTML=`
+    <table style="width:100%;border-collapse:collapse;min-width:${80+activeMonths.length*90}px">
+      <thead><tr style="border-bottom:1px solid var(--border2)">
+        <th style="${thStickyStyle}">カテゴリ</th>${headers}
+      </tr></thead>
+      <tbody>${catRows}${expRow}${incRow}</tbody>
+    </table>`;
 }
 
 function cfRefreshHomeIncome(){
