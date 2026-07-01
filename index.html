@@ -5428,59 +5428,71 @@ function trRenderCharts(){
 // ============================================================
 // useCurrentAccounts=true の場合、スナップショットの口座構成ではなく
 // 現在のamAccounts全体をそのまま使って計算する（「最新の銘柄別損益」と完全に一致させるため）
-function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
-  const sourceAccounts=useCurrentAccounts?(amAccounts||[]):(s.accounts||[]);
-  if(!sourceAccounts.length)return null;
+// ── 銘柄ごとの取得総額を計算するシンプルな関数 ──
+// 投信（インデックス）：shares×costPrice÷10000 または costPrice（取得総額として登録済み）
+// 個別株・高配当：shares×costPrice
+// PayPay系・確定拠出：costPrice=取得総額
+function _calcCostTotal(a){
+  if(!a||!a.costPrice||a.costPrice<=0)return 0;
+  const BP=/PayPay|paypay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ|TOPIX100/i;
+  const INDEX_CATS=['全世界インデックス','日本インデックス','インドインデックス'];
+  const STOCK_CATS=['個別株','高配当','外国株式'];
+  const cp=a.costPrice;
+  const sh=parseFloat(a.shares)||0;
+  const amt=a.amount||0;
+  if(BP.test(a.name||'')){return cp;}// 取得総額
+  if(INDEX_CATS.includes(a.cat)){
+    if(sh>0){
+      const calc=sh*cp;
+      const ratio=amt>0?calc/amt:0;
+      if(ratio>50)return Math.round(calc/10000);// 1万口単価方式
+      if(ratio>=0.3&&ratio<=10)return Math.round(calc);// 取得総額方式
+    }
+    return cp;// sharesなし→取得総額
+  }
+  if(STOCK_CATS.includes(a.cat)){
+    return sh>0?Math.round(sh*cp):cp;
+  }
+  return 0;
+}
 
+function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
   const STOCK_CATS_F=['個別株','高配当','外国株式'];
   const INDEX_CATS_F=['全世界インデックス','日本インデックス','インドインデックス'];
-  const BALANCE_PAT=/PayPay|paypay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ|TOPIX100/i;
   const isExcluded=name=>trIsExcluded(name);
-  const amMap={};
-  (amAccounts||[]).forEach(a=>{if(!a.sold&&a.name&&a.costPrice>0)amMap[a.name]=a;});
+
+  // 現在のamAccountsから銘柄名→取得総額のマップを作成
+  const costMap={};
+  (amAccounts||[]).filter(a=>!a.sold&&a.costPrice>0&&a.amount>0).forEach(a=>{
+    const cost=_calcCostTotal(a);
+    if(cost>0)costMap[a.name]=cost;
+  });
+
+  // スナップショットの各銘柄について：評価額はスナップ、取得総額はcostMapから
+  const accounts=useCurrentAccounts?(amAccounts||[]):(s?.accounts||[]);
+  if(!accounts.length)return null;
 
   let evalSum=0,costSum=0,count=0;
-  sourceAccounts.forEach(a=>{
+  accounts.forEach(a=>{
     if(a.sold)return;
     if(isExcluded(a.name))return;
     if(!a.amount||a.amount<=0)return;
     const cat=a.cat||'';
     if(catFilter==='stock'&&!STOCK_CATS_F.includes(cat))return;
     if(catFilter==='index'&&!INDEX_CATS_F.includes(cat))return;
-    const isBalance=BALANCE_PAT.test(a.name||'');
-    const isIndex=INDEX_CATS_F.includes(cat);
-    const isStock=STOCK_CATS_F.includes(cat);
-    const am=amMap[a.name];
-    const cp=a.costPrice>0?a.costPrice:(am?am.costPrice:0);
-    if(!cp||cp<=0)return;
-    const evalTotal=a.amount;
-    let costTotal=0;
-    if(isBalance){
-      costTotal=cp;
-    }else if(isIndex){
-      const cIT=a.costIsTotal||(am?am.costIsTotal:false);
-      if(cIT){
-        costTotal=cp;
-      }else{
-        const sh=a.shares>0?a.shares:(am?am.shares||0:0);
-        if(sh>0){
-          const calc=sh*cp;
-          const ratio=calc/evalTotal;
-          if(ratio>50){costTotal=Math.round(calc/10000);}
-          else if(ratio>=0.3&&ratio<=10){costTotal=Math.round(calc);}
-          else{costTotal=cp;}
-        }else{
-          costTotal=cp;
-        }
-      }
-    }else if(isStock){
-      const sh=a.shares>0?a.shares:(am?am.shares||0:0);
-      costTotal=sh>0?sh*cp:cp;
-    }else{return;}
-    if(!costTotal||costTotal<=0)return;
-    const r=evalTotal/costTotal;
-    if(r>50||r<0.02)return;
-    evalSum+=evalTotal;costSum+=costTotal;count++;
+    if(![...STOCK_CATS_F,...INDEX_CATS_F].includes(cat))return;
+
+    // 取得総額：costMapから（なければスナップ自身のcostPriceで計算）
+    const cost=costMap[a.name]||_calcCostTotal(a);
+    if(!cost||cost<=0)return;
+
+    // 異常値ガード
+    const ratio=a.amount/cost;
+    if(ratio>50||ratio<0.02)return;
+
+    evalSum+=a.amount;
+    costSum+=cost;
+    count++;
   });
   if(count===0)return null;
   return{evalSum,costSum,gain:evalSum-costSum,pct:costSum>0?(evalSum-costSum)/costSum*100:0};
