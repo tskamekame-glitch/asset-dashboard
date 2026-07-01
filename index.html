@@ -7504,14 +7504,12 @@ window.addEventListener('load', function(){
     <table class="wl-tbl">
       <thead>
         <tr>
-          <th>順番</th><th>優先</th><th>操作</th><th>銘柄</th>
-          <th>テクニカル</th><th>アナリスト</th><th>みんなの評価</th>
-          <th>コード</th><th>株数</th>
+          <th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
           <th>指値</th><th>現在値</th><th>乖離率</th><th>合計</th>
           <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
           <th>目標株価</th><th>上昇余地</th>
           <th>理論PER</th><th>理論PBR</th>
-          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th>
+          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th><th>操作</th>
         </tr>
       </thead>
       <tbody id="wl-tbody"></tbody>
@@ -7956,49 +7954,6 @@ function wlAcctBadge(a){
 function wlPriColor(p){return{1:'#A32D2D',2:'#854F0B',3:'#185FA5',4:'#888780'}[p]||'#888';}
 function wlPriLabel(p){return{1:'今日',2:'今週',3:'後日',4:'長期'}[p]||p;}
 
-// 評価（テクニカル・アナリスト共通）
-const WL_RATING_OPTS=[
-  {v:'',label:'—',color:'var(--text3)'},
-  {v:'strong_sell',label:'強い売り',color:'#8b1e18'},
-  {v:'sell',label:'売り',color:'#cc4a40'},
-  {v:'neutral',label:'中立',color:'#888780'},
-  {v:'buy',label:'買い',color:'#1a9e6a'},
-  {v:'strong_buy',label:'強い買い',color:'#0a5e3f'},
-];
-function wlRatingColor(v){return(WL_RATING_OPTS.find(o=>o.v===v)||WL_RATING_OPTS[0]).color;}
-function wlRatingSelect(id,field,value){
-  const opts=WL_RATING_OPTS.map(o=>`<option value="${o.v}" ${value===o.v?'selected':''}>${o.label}</option>`).join('');
-  const color=wlRatingColor(value||'');
-  return `<select class="wl-rating-sel" style="color:${color};font-weight:600;border:1px solid var(--border2);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--bg2);font-family:inherit" onchange="wlUpdateRating('${id}','${field}',this.value)">${opts}</select>`;
-}
-function wlUpdateRating(id,field,value){
-  const d=wlLoad();
-  const idx=d.findIndex(x=>x.id===id);
-  if(idx>=0){d[idx][field]=value;wlSaveData(d);wlRender();}
-}
-// みんなの評価（買いたい率%、直接入力）
-function wlCrowdColor(pct){
-  if(pct==null||pct==='')return'var(--text3)';
-  if(pct>=70)return'#0a5e3f';
-  if(pct>=55)return'#1a9e6a';
-  if(pct>=45)return'#888780';
-  if(pct>=30)return'#cc4a40';
-  return'#8b1e18';
-}
-function wlCrowdInput(id,value){
-  const color=wlCrowdColor(value);
-  return `<input type="number" min="0" max="100" step="1" class="wl-price-inp" style="width:56px;color:${color};font-weight:600" value="${value!=null&&value!==''?value:''}" placeholder="%" onchange="wlUpdateCrowd('${id}',this.value)">`;
-}
-function wlUpdateCrowd(id,val){
-  const d=wlLoad();
-  const idx=d.findIndex(x=>x.id===id);
-  if(idx>=0){
-    let v=parseFloat(val);
-    if(isNaN(v))v=null;else v=Math.max(0,Math.min(100,v));
-    d[idx].crowdPct=v;wlSaveData(d);wlRender();
-  }
-}
-
 function wlRender(){
   const data=wlLoad().sort((a,b)=>a.priority-b.priority);
   let totalAmt=0,orderCnt=0,waitCnt=0,doneCnt=0;
@@ -8043,14 +7998,7 @@ function wlRender(){
         <button class="wl-move-btn" onclick="if(confirm('「${s.name}」を削除しますか？')){var d=wlLoad();wlSaveData(d.filter(function(x){return x.id!=='${s.id}';}));wlRender();}" style="color:#C0392B;border-color:#C0392B;margin-top:3px" title="削除">✕</button>
       </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
-      <td style="white-space:nowrap">
-        <button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button>
-        <button class="wl-edit-btn" style="background:var(--green);color:#fff;border-color:var(--green);margin-top:3px" onclick="wlBuyConfirm('${s.id}')">✅ 購入</button>
-      </td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
-      <td>${wlRatingSelect(s.id,'technical',s.technical)}</td>
-      <td>${wlRatingSelect(s.id,'analyst',s.analyst)}</td>
-      <td>${wlCrowdInput(s.id,s.crowdPct)}</td>
       <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
       <td style="font-size:11px">${(s.shares||0).toLocaleString()}株</td>
       <td style="font-weight:500;color:#3B6D11">${wlFmt(s.limit)}</td>
@@ -8068,6 +8016,7 @@ function wlRender(){
       <td style="font-size:11px;white-space:nowrap">${s.earningsDate?wlFmtEarnings(s.earningsDate):'—'}</td>
       <td>${wlAcctBadge(s.account)}</td>
       <td>${wlStatusBadge(s.status)}</td>
+      <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
     </tr>`;
   }).join('');
 }
@@ -8250,7 +8199,6 @@ function wlSave(){
   console.log('[wl] name:', name, 'shares:', shares);
   if(!name){alert('銘柄名は必須です');return;}
   const d=wlLoad();
-  const existing=wlEditId?d.find(x=>x.id===wlEditId):null;
   const item={
     id:wlEditId||wlUID(),
     code:gv('wf-code').trim(),
@@ -8274,9 +8222,6 @@ function wlSave(){
     shikiho1:gv('wf-shikiho1').trim(),shikiho2:gv('wf-shikiho2').trim(),
     floatRatio:gf('wf-float'),
     roe:gv('wf-roe').trim(),
-    technical:existing?existing.technical:undefined,
-    analyst:existing?existing.analyst:undefined,
-    crowdPct:existing?existing.crowdPct:undefined,
   };
   if(wlEditId){const i=d.findIndex(x=>x.id===wlEditId);if(i>=0)d[i]=item;}
   else{d.push(item);}
@@ -8285,53 +8230,6 @@ function wlSave(){
   try{wlCloseModal();}catch(e){console.error('[wl] wlCloseModal error:',e);}
   try{wlRender();}catch(e){console.error('[wl] wlRender error:',e);}
   console.log('[wl] wlSave complete');
-}
-
-function wlBuyConfirm(id){
-  const d=wlLoad();
-  const s=d.find(x=>x.id===id);
-  if(!s){showToast('⚠ 銘柄が見つかりません');return;}
-
-  const costPrice=s.limit||s.current||0;
-  if(!costPrice){alert('指値（取得単価）が未設定です。編集画面から指値を入力してください。');return;}
-  if(!s.shares){alert('株数が未設定です。編集画面から株数を入力してください。');return;}
-
-  const amount=Math.round(costPrice*s.shares);
-  const confirmMsg=`「${s.name}」を資産管理（個別株）に追加します。
-
-株数: ${s.shares.toLocaleString()}株
-取得単価: ¥${costPrice.toLocaleString()}（指値）
-評価額: ¥${amount.toLocaleString()}
-
-ウォッチ銘柄からは削除されます。よろしいですか？`;
-  if(!confirm(confirmMsg))return;
-
-  const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;
-  amAccounts.push({
-    id:newId,
-    name:s.name,
-    cat:'個別株',
-    code:s.code||'',
-    amount,
-    note:s.memo||'',
-    shares:s.shares,
-    price:costPrice,
-    costPrice,
-    earningsDate:s.earningsDate||undefined,
-    sell1:s.sell1||undefined,
-    sell2:s.sell2||undefined,
-    sell3:s.sell3||undefined,
-    per:s.per||undefined,
-    pbr:s.pbr||undefined,
-    updated:todayStr(),
-  });
-
-  wlSaveData(d.filter(x=>x.id!==id));
-
-  amRender();
-  amSaveToSheet();
-  wlRender();
-  showToast(`✓ 「${s.name}」を資産管理に追加しました`,3000);
 }
 
 function wlDelete(){
@@ -8377,11 +8275,11 @@ async function wlSyncToSheet(manual=false){
     if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
     await wlEnsureWatchlistTab(sid);
     const data=wlLoad();
-    const hdr=[['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo','earningsDate','technical','analyst','crowdPct']];
-    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.sell1||'',s.sell2||'',s.sell3||'',s.target||'',s.per||'',s.pbr||'',s.account,s.status,s.priority,s.memo||'',s.earningsDate||'',s.technical||'',s.analyst||'',s.crowdPct!=null?s.crowdPct:'']);
+    const hdr=[['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo','earningsDate']];
+    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.sell1||'',s.sell2||'',s.sell3||'',s.target||'',s.per||'',s.pbr||'',s.account,s.status,s.priority,s.memo||'',s.earningsDate||'']);
     const vals=[...hdr,...rows];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:T${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
-    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:T1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:Q${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
+    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:Q1000`});
     if(syncEl)syncEl.textContent='✓';
     if(manual)showToast('✅ 保存しました');
   }catch(e){
@@ -8403,10 +8301,10 @@ async function wlSyncFromSheet(){
     const sid=await wlGetSheetId();
     if(!sid){showToast('⚠ まずMacで↑保存してください');return;}
     await wlEnsureWatchlistTab(sid);
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:T1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:Q1000'});
     const rows=res.result.values||[];
     if(!rows.length){showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');return;}
-    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||'',earningsDate:r[16]||'',technical:r[17]||'',analyst:r[18]||'',crowdPct:r[19]!==undefined&&r[19]!==''?parseFloat(r[19]):null})).filter(x=>x.name);
+    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||'',earningsDate:r[16]||''})).filter(x=>x.name);
     wlSaveData._loading=true;
     wlSaveData(data);
     wlSaveData._loading=false;
@@ -9707,7 +9605,7 @@ function pnlCalcRealized(y1,m1,y2,m2){
       const gain=soldTotal-costTotal;
       const pct=gain/costTotal*100;
       items.push({
-        name:a.name, cat:a.cat, gain, pct,
+        id:a.id, name:a.name, cat:a.cat, gain, pct,
         soldTotal, costTotal,
         date:a.soldDate||'日付未設定',
         badge:'売却', badgeColor:'#8e44ad', type:'realized'
@@ -9780,6 +9678,10 @@ function pnlRender(){
     const chartLink=item.type==='unrealized'&&item.code
       ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
       :'';
+    // 確定損益カードの編集ボタン
+    const editBtn=item.type==='realized'&&item.id!=null
+      ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
+      :'';
     const leftBar=item.gain>=0?'#27ae60':'#e74c3c';
     return `<div style="display:flex;align-items:stretch;background:var(--bg2);border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:default">
       <div style="width:4px;background:${leftBar};flex-shrink:0"></div>
@@ -9788,7 +9690,7 @@ function pnlRender(){
           <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
           <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${item.badgeColor}22;color:${item.badgeColor};border:1px solid ${item.badgeColor}44;flex-shrink:0">${item.badge}</span>
         </div>
-        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}${chartLink}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}${chartLink}${editBtn}</div>
       </div>
       <div style="padding:12px 16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0">
         <div style="font-size:16px;font-weight:700;color:${gainCol}">${gainStr}</div>
