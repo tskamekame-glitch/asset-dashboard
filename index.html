@@ -2639,6 +2639,8 @@ async function amConfirmSold(){
   amSyncSoldToSlData(a,soldAmount,soldPrice,dateVal,isIndex);
   await amSaveToSheet();
   refreshHome();
+  // 損益タブも再描画
+  if(typeof pnlRender==='function')pnlRender();
   showToast('✅ 売却済みとして記録しました（売却タブにも追加）');
   if(!amShowSold)amToggleSoldView();
 }
