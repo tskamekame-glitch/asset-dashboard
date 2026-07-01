@@ -783,7 +783,7 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
 
 <!-- 売却済みマークモーダル -->
-<div id="amSoldModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;align-items:flex-end;justify-content:center" onclick="if(event.target===this)amCloseSoldModal()">
+<div id="amSoldModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:flex-end;justify-content:center" onclick="if(event.target===this)amCloseSoldModal()">
   <div style="width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.2)">
 
     <!-- ヘッダー -->
@@ -2538,7 +2538,11 @@ function amOpenSoldModal(id){
   }
   document.getElementById('amSoldDate').value=todayStr();
   document.getElementById('amSoldGainPreview').innerHTML='';
-  document.getElementById('amSoldModalBg').style.display='flex';
+  // overflow:autoのパネル内からposition:fixedが効かない問題を回避するためbody直下に移動
+  const bg=document.getElementById('amSoldModalBg');
+  if(bg.parentNode!==document.body)document.body.appendChild(bg);
+  bg.style.zIndex='9999';
+  bg.style.display='flex';
   setTimeout(()=>{
     const focusEl=isIndex?document.getElementById('amSoldAmountTotal'):document.getElementById('amSoldPrice');
     focusEl.focus();
@@ -9605,7 +9609,7 @@ function pnlCalcRealized(y1,m1,y2,m2){
       const gain=soldTotal-costTotal;
       const pct=gain/costTotal*100;
       items.push({
-        id:a.id, name:a.name, cat:a.cat, gain, pct,
+        name:a.name, cat:a.cat, gain, pct,
         soldTotal, costTotal,
         date:a.soldDate||'日付未設定',
         badge:'売却', badgeColor:'#8e44ad', type:'realized'
@@ -9674,11 +9678,9 @@ function pnlRender(){
     const pctStr=item.pct!=null?((item.pct>=0?'＋':'')+item.pct.toFixed(1)+'%'):'';
     const subLabel=item.type==='unrealized'?'評価損益':
                    item.type==='realized'?('確定損益'+(item.date?' · '+item.date:'')):'損益';
+    // チャートリンク（コードがある保有銘柄のみ）
     const chartLink=item.type==='unrealized'&&item.code
       ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
-      :'';
-    const editBtn=item.type==='realized'&&item.id!=null
-      ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
       :'';
     const leftBar=item.gain>=0?'#27ae60':'#e74c3c';
     return `<div style="display:flex;align-items:stretch;background:var(--bg2);border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:default">
@@ -9688,7 +9690,7 @@ function pnlRender(){
           <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
           <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${item.badgeColor}22;color:${item.badgeColor};border:1px solid ${item.badgeColor}44;flex-shrink:0">${item.badge}</span>
         </div>
-        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}${chartLink}${editBtn}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}${chartLink}</div>
       </div>
       <div style="padding:12px 16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0">
         <div style="font-size:16px;font-weight:700;color:${gainCol}">${gainStr}</div>
