@@ -9653,15 +9653,28 @@ function pnlCalcUnrealized(){
       if(isForeign&&a.shares>0&&a.price>0){
         gain=(a.price-a.costPrice)*a.shares*(a.fxRate||fxRate);
         pct=(a.price-a.costPrice)/a.costPrice*100;
-      } else if(isUnitBased&&a.shares>0&&a.price>0){
+      } else if(isStock&&a.shares>0&&a.price>0){
         gain=(a.price-a.costPrice)*a.shares;
         pct=(a.price-a.costPrice)/a.costPrice*100;
-      } else if(!isUnitBased&&isIndex&&a.amount>0){
-        // PayPay系投信：costPrice=取得総額
-        gain=a.amount-a.costPrice;
+      } else if(isIndex&&a.amount>0&&a.costPrice>0){
+        // インデックス投信：costPrice=取得総額（shares=0の場合も対応）
+        // shares>0の場合は口数×(現在単価-取得単価)で計算
+        if(a.shares>0&&a.price>0&&!isPayPay){
+          const sh=parseFloat(a.shares);
+          const calc=sh*a.price;
+          const ratio=a.amount>0?calc/a.amount:0;
+          // 1万口単価方式
+          if(ratio>50){
+            gain=Math.round(sh*a.price/10000)-a.costPrice;
+          }else{
+            gain=a.amount-a.costPrice;
+          }
+        }else{
+          gain=a.amount-a.costPrice;
+        }
         pct=gain/a.costPrice*100;
       } else {
-        return; // price未入力などで計算不可
+        return;
       }
       if(!isFinite(gain)||!isFinite(pct))return;
       items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,
