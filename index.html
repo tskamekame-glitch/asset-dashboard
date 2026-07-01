@@ -783,7 +783,7 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
 
 <!-- 売却済みマークモーダル -->
-<div id="amSoldModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:flex-end;justify-content:center" onclick="if(event.target===this)amCloseSoldModal()">
+<div id="amSoldModalBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;align-items:flex-end;justify-content:center" onclick="if(event.target===this)amCloseSoldModal()">
   <div style="width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.2)">
 
     <!-- ヘッダー -->
@@ -9674,11 +9674,9 @@ function pnlRender(){
     const pctStr=item.pct!=null?((item.pct>=0?'＋':'')+item.pct.toFixed(1)+'%'):'';
     const subLabel=item.type==='unrealized'?'評価損益':
                    item.type==='realized'?('確定損益'+(item.date?' · '+item.date:'')):'損益';
-    // チャートリンク（コードがある保有銘柄のみ）
     const chartLink=item.type==='unrealized'&&item.code
       ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
       :'';
-    // 確定損益カードの編集ボタン
     const editBtn=item.type==='realized'&&item.id!=null
       ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
       :'';
