@@ -5429,115 +5429,61 @@ function trRenderCharts(){
 // useCurrentAccounts=true の場合、スナップショットの口座構成ではなく
 // 現在のamAccounts全体をそのまま使って計算する（「最新の銘柄別損益」と完全に一致させるため）
 function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
-  // catFilter: 'stock'=個別株・高配当・外国株式のみ, 'index'=インデックスのみ, undefined=全体
   const sourceAccounts=useCurrentAccounts?(amAccounts||[]):(s.accounts||[]);
   if(!sourceAccounts.length)return null;
-  // 現在の資産管理データから名前→{costPrice,shares,price,cat}の参照マップを作成（フォールバック用）
-  const amInfoMap={};
-  const amCatCostMap={};// カテゴリ別の取得総額集計（名前マッチしない場合のフォールバック）
-  try{
-    (amAccounts||[]).forEach(a=>{
-      if(a.costPrice>0&&!a.sold&&(a.amount||0)>0){
-        amInfoMap[a.name]={costPrice:a.costPrice,shares:a.shares||0,price:a.price||0,cat:a.cat};
-        // カテゴリ別集計
-        const cat=a.cat;
-        if(!amCatCostMap[cat])amCatCostMap[cat]={evalSum:0,costSum:0};
-        const sh=a.shares||0;
-        const cp=a.costPrice||0;
-        const costTotal=sh>0?sh*cp:cp;
-        const evalTotal=a.amount||0;
-        if(evalTotal>0&&costTotal>0&&evalTotal/costTotal<100&&evalTotal/costTotal>0.01){
-          amCatCostMap[cat].evalSum+=evalTotal;
-          amCatCostMap[cat].costSum+=costTotal;
-        }
-      }
-    });
-  }catch(e){}
-  const UNIT_BASED_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
-  const BALANCE_BASED_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
-  let evalSum=0,costSum=0,hasAny=false;
+
   const STOCK_CATS_F=['個別株','高配当','外国株式'];
   const INDEX_CATS_F=['全世界インデックス','日本インデックス','インドインデックス'];
+  const BALANCE_PAT=/PayPay|paypay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ|TOPIX100/i;
   const isExcluded=name=>trIsExcluded(name);
+  const amMap={};
+  (amAccounts||[]).forEach(a=>{if(!a.sold&&a.name&&a.costPrice>0)amMap[a.name]=a;});
+
+  let evalSum=0,costSum=0,count=0;
   sourceAccounts.forEach(a=>{
     if(a.sold)return;
     if(isExcluded(a.name))return;
-    // 評価額が0の口座は損益計算から除外（売却済み・解約済み）
     if(!a.amount||a.amount<=0)return;
-    // スナップショット自体にcostPriceがなければ、現在の資産管理データから同名口座の情報を補完
-    const fallback=amInfoMap[a.name];
-    const cp=(a.costPrice>0)?a.costPrice:(fallback?fallback.costPrice:0);
-    if(!cp||cp<=0)return;
-
-    // costIsTotalが設定済みの場合はshares=0で扱う（fallbackのshares補完を無効化）
-    const shares=(a.costIsTotal)?0:(a.shares>0)?a.shares:(fallback?fallback.shares:0);
-    const price=(a.price>0)?a.price:(fallback?fallback.price:0);
-    const cat=a.cat||(fallback?fallback.cat:'');
-    // costIsTotalをfallbackのamAccountsからも引き継ぐ
-    const costIsTotal=a.costIsTotal||(fallback?fallback.costIsTotal:false);
-    const evalTotal=a.amount||0;
-
-    const isBalanceBased=BALANCE_BASED_PAT.test(a.name||'');
-    const isUnitBased=UNIT_BASED_CATS.includes(cat)&&!isBalanceBased;
-
-    // catFilterによる絞り込み
+    const cat=a.cat||'';
     if(catFilter==='stock'&&!STOCK_CATS_F.includes(cat))return;
     if(catFilter==='index'&&!INDEX_CATS_F.includes(cat))return;
-
-    let costTotal;
-    if(isUnitBased){
-      const isIndexFund=INDEX_CATS_F.includes(cat);
-      if(costIsTotal||!(shares>0)){
-        costTotal=cp>0?cp:0;
-        if(!costTotal)return;
-      }else if(isIndexFund){
-        costTotal=shares*cp/10000;
-        if(evalTotal>0&&costTotal>0&&(costTotal>evalTotal*10||costTotal<evalTotal/10)){
-          costTotal=cp>0?cp:0;
-        }
+    const isBalance=BALANCE_PAT.test(a.name||'');
+    const isIndex=INDEX_CATS_F.includes(cat);
+    const isStock=STOCK_CATS_F.includes(cat);
+    const am=amMap[a.name];
+    const cp=a.costPrice>0?a.costPrice:(am?am.costPrice:0);
+    if(!cp||cp<=0)return;
+    const evalTotal=a.amount;
+    let costTotal=0;
+    if(isBalance){
+      costTotal=cp;
+    }else if(isIndex){
+      const cIT=a.costIsTotal||(am?am.costIsTotal:false);
+      if(cIT){
+        costTotal=cp;
       }else{
-        costTotal=shares*cp;
-        if(evalTotal>0&&costTotal>0&&costTotal>evalTotal*100){
+        const sh=a.shares>0?a.shares:(am?am.shares||0:0);
+        if(sh>0){
+          const calc=sh*cp;
+          const ratio=calc/evalTotal;
+          if(ratio>50){costTotal=Math.round(calc/10000);}
+          else if(ratio>=0.3&&ratio<=10){costTotal=Math.round(calc);}
+          else{costTotal=cp;}
+        }else{
           costTotal=cp;
         }
       }
-    }else{
-      costTotal=cp;
-    }
-
-    // 異常値ガード（評価額と取得額の比率が100倍超 or 1/100未満）
-    if(evalTotal>0&&costTotal>0){
-      const ratio=evalTotal/costTotal;
-      if(ratio>100||ratio<0.01)return;
-    }
-
-    hasAny=true;
-    evalSum+=evalTotal;
-    costSum+=costTotal;
+    }else if(isStock){
+      const sh=a.shares>0?a.shares:(am?am.shares||0:0);
+      costTotal=sh>0?sh*cp:cp;
+    }else{return;}
+    if(!costTotal||costTotal<=0)return;
+    const r=evalTotal/costTotal;
+    if(r>50||r<0.02)return;
+    evalSum+=evalTotal;costSum+=costTotal;count++;
   });
-  if(!hasAny&&!useCurrentAccounts&&catFilter){
-    // 名前マッチも個別計算も失敗した場合、amCatCostMapのカテゴリ集計で代替
-    const cats=catFilter==='stock'?STOCK_CATS_F:catFilter==='index'?INDEX_CATS_F:null;
-    if(cats){
-      // スナップショットのカテゴリ別評価額合計を計算
-      let snapEvalSum=0;
-      (s.accounts||[]).forEach(a=>{
-        if(!cats.includes(a.cat))return;
-        if(isExcluded(a.name))return;
-        if(BALANCE_BASED_PAT.test(a.name||''))return;
-        if((a.amount||0)<=0)return;
-        snapEvalSum+=a.amount;
-      });
-      // 現在のamAccountsのカテゴリ別取得総額を取得
-      let catCostSum=0;
-      cats.forEach(cat=>{if(amCatCostMap[cat])catCostSum+=amCatCostMap[cat].costSum;});
-      if(snapEvalSum>0&&catCostSum>0){
-        return{evalSum:snapEvalSum,costSum:catCostSum,gain:snapEvalSum-catCostSum,pct:catCostSum>0?(snapEvalSum-catCostSum)/catCostSum*100:0};
-      }
-    }
-  }
-  if(!hasAny)return null;
-  return {evalSum,costSum,gain:evalSum-costSum,pct:costSum>0?(evalSum-costSum)/costSum*100:0};
+  if(count===0)return null;
+  return{evalSum,costSum,gain:evalSum-costSum,pct:costSum>0?(evalSum-costSum)/costSum*100:0};
 }
 
 function trRenderGainLineChart(filtered,labels,tickColor,gridColor){
