@@ -9640,7 +9640,7 @@ function pnlCalcUnrealized(){
       a.amount>0 &&
       !EXCL.includes(a.cat) &&
       a.costPrice>0 &&
-      a.prevSBIAmount>0  // SBI CSV掲載済み銘柄のみ
+      (a.prevSBIAmount>0||INDEX_CATS.includes(a.cat))// インデックスはprevSBI不問
     ).forEach(a=>{
       const isStock=STOCK_CATS.includes(a.cat);
       const isForeign=FOREIGN_CATS.includes(a.cat);
