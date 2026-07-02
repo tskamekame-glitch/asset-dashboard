@@ -7491,6 +7491,28 @@ window.addEventListener('load', function(){
     </div>
   </div>
   <p class="wl-note">Google連携済みなら「↓読込」でiPhone⇔Mac同期。「↑保存」で手動アップ。現在値は直接入力してください。</p>
+
+  <!-- ═══ セクター動向（TOPIX-17 ETF） ═══ -->
+  <div id="sec-card" style="background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="secToggle()">
+        <span style="font-size:14px;font-weight:700">📊 セクター動向</span>
+        <span style="font-size:10px;color:var(--text3)">TOPIX-17 ETF</span>
+        <span id="sec-arrow" style="font-size:10px;color:var(--text3)">▼</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div id="sec-period-btns" style="display:flex;gap:2px;background:var(--bg2,rgba(128,128,128,0.1));border-radius:8px;padding:2px">
+          <button onclick="secSetSort('w1')" data-p="w1" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">1週</button>
+          <button onclick="secSetSort('m1')" data-p="m1" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">1ヶ月</button>
+          <button onclick="secSetSort('m3')" data-p="m3" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">3ヶ月</button>
+        </div>
+        <button class="wl-add-btn" onclick="secUpdate(true)" style="font-size:12px;padding:5px 10px" id="sec-refresh-btn">🔄 更新</button>
+      </div>
+    </div>
+    <div id="sec-status" style="font-size:10px;color:var(--text3);margin-bottom:8px"></div>
+    <div id="sec-body"></div>
+  </div>
+
   <div class="wl-summary" id="wl-summary"></div>
   <div class="wl-tbl-wrap">
     <table class="wl-tbl">
@@ -8304,13 +8326,192 @@ async function wlSyncFromSheet(){
   }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
 }
 
+// ============================================================
+// SECTOR TREND — TOPIX-17 セクターETF騰落率
+// ============================================================
+const SEC_KEY='sectorTrend_v1';
+const SEC_ETFS=[
+  {code:'1617',name:'食品'},
+  {code:'1618',name:'エネルギー資源'},
+  {code:'1619',name:'建設・資材'},
+  {code:'1620',name:'素材・化学'},
+  {code:'1621',name:'医薬品'},
+  {code:'1622',name:'自動車・輸送機'},
+  {code:'1623',name:'鉄鋼・非鉄'},
+  {code:'1624',name:'機械'},
+  {code:'1625',name:'電機・精密'},
+  {code:'1626',name:'情報通信・サービス'},
+  {code:'1627',name:'電力・ガス'},
+  {code:'1628',name:'運輸・物流'},
+  {code:'1629',name:'商社・卸売'},
+  {code:'1630',name:'小売'},
+  {code:'1631',name:'銀行'},
+  {code:'1632',name:'金融(除く銀行)'},
+  {code:'1633',name:'不動産'}
+];
+let secSortKey='m1';
+let secCollapsed=false;
+let secLoading=false;
+
+function secLoadCache(){
+  try{return JSON.parse(localStorage.getItem(SEC_KEY)||'null');}catch(e){return null;}
+}
+function secSaveCache(obj){
+  try{localStorage.setItem(SEC_KEY,JSON.stringify(obj));}catch(e){}
+}
+
+// 指定日数前に最も近い終値を取得
+function secCloseNear(pairs,daysAgo){
+  const target=Date.now()-daysAgo*86400000;
+  let best=null,bestDiff=Infinity;
+  for(const p of pairs){
+    const d=Math.abs(p.t-target);
+    if(d<bestDiff){bestDiff=d;best=p;}
+  }
+  return best?best.c:null;
+}
+
+async function secFetchOne(etf){
+  const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+  const resp=await fetch(`${WORKER}?code=${etf.code}&range=3mo`);
+  if(!resp.ok)throw new Error('fetch fail '+etf.code);
+  const data=await resp.json();
+  const result=data?.chart?.result?.[0];
+  const ts=result?.timestamp||[];
+  const cl=result?.indicators?.quote?.[0]?.close||[];
+  const pairs=ts.map((t,i)=>({t:t*1000,c:cl[i]})).filter(x=>x.c!=null);
+  if(pairs.length<2)throw new Error('no data '+etf.code);
+  const last=pairs[pairs.length-1].c;
+  const w1=secCloseNear(pairs,7), m1=secCloseNear(pairs,30), m3=pairs[0].c;
+  return{
+    code:etf.code,name:etf.name,
+    w1:w1?(last-w1)/w1*100:null,
+    m1:m1?(last-m1)/m1*100:null,
+    m3:m3?(last-m3)/m3*100:null
+  };
+}
+
+async function secUpdate(manual){
+  if(secLoading)return;
+  secLoading=true;
+  const btn=document.getElementById('sec-refresh-btn');
+  const st=document.getElementById('sec-status');
+  if(btn)btn.textContent='⏳ 取得中...';
+  if(st)st.textContent='17セクターのデータを取得しています...';
+  const rows=[];const errs=[];
+  try{
+    // 4並列で取得
+    const queue=[...SEC_ETFS];
+    const workers=Array.from({length:4},async()=>{
+      while(queue.length){
+        const etf=queue.shift();
+        try{rows.push(await secFetchOne(etf));}
+        catch(e){errs.push(etf.name);}
+      }
+    });
+    await Promise.all(workers);
+    if(rows.length){
+      const cache={ts:Date.now(),rows};
+      secSaveCache(cache);
+      secRender(cache);
+      if(errs.length&&st)st.textContent+=` ⚠取得失敗: ${errs.join(',')}`;
+    }else{
+      if(st)st.textContent='⚠ データを取得できませんでした';
+    }
+  }catch(e){
+    if(st)st.textContent='⚠ 取得エラー: '+e.message;
+  }finally{
+    secLoading=false;
+    if(btn)btn.textContent='🔄 更新';
+  }
+}
+
+function secSetSort(k){
+  secSortKey=k;
+  const c=secLoadCache();
+  if(c)secRender(c);
+  else secUpdatePeriodBtns();
+}
+function secUpdatePeriodBtns(){
+  document.querySelectorAll('#sec-period-btns button').forEach(b=>{
+    const on=b.dataset.p===secSortKey;
+    b.style.background=on?'var(--accent,#3b82f6)':'transparent';
+    b.style.color=on?'#fff':'var(--text3)';
+    b.style.fontWeight=on?'700':'400';
+  });
+}
+function secToggle(){
+  secCollapsed=!secCollapsed;
+  const body=document.getElementById('sec-body');
+  const arrow=document.getElementById('sec-arrow');
+  if(body)body.style.display=secCollapsed?'none':'';
+  if(arrow)arrow.textContent=secCollapsed?'▶':'▼';
+}
+
+function secFmtPct(v){
+  if(v==null)return'<span style="color:var(--text3)">—</span>';
+  const c=v>=0?'var(--green,#22c55e)':'var(--danger,#ef4444)';
+  const s=v>=0?'+':'';
+  return`<span style="color:${c};font-weight:600">${s}${v.toFixed(1)}%</span>`;
+}
+
+function secRender(cache){
+  secUpdatePeriodBtns();
+  const body=document.getElementById('sec-body');
+  const st=document.getElementById('sec-status');
+  if(!body||!cache)return;
+  const rows=[...cache.rows].sort((a,b)=>(b[secSortKey]??-999)-(a[secSortKey]??-999));
+  const maxAbs=Math.max(...rows.map(r=>Math.abs(r[secSortKey]??0)),0.1);
+  const periodLabel={w1:'1週',m1:'1ヶ月',m3:'3ヶ月'}[secSortKey];
+
+  let html='<div style="display:grid;grid-template-columns:18px minmax(90px,1fr) minmax(60px,1.2fr) 52px 52px 52px;gap:4px 6px;align-items:center;font-size:12px">';
+  html+='<div></div><div style="font-size:10px;color:var(--text3)">セクター</div><div style="font-size:10px;color:var(--text3);text-align:right">'+periodLabel+'騰落</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-align:right">1週</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-align:right">1ヶ月</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-align:right">3ヶ月</div>';
+  rows.forEach((r,i)=>{
+    const v=r[secSortKey]??0;
+    const w=Math.min(Math.abs(v)/maxAbs*100,100);
+    const barColor=v>=0?'rgba(34,197,94,0.65)':'rgba(239,68,68,0.65)';
+    const rankColor=i===0?'#22c55e':(i===rows.length-1?'#ef4444':'var(--text3)');
+    html+=`<div style="font-size:10px;color:${rankColor};text-align:right">${i+1}</div>`
+        +`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>`
+        +`<div style="position:relative;height:14px;background:rgba(128,128,128,0.08);border-radius:3px;overflow:hidden">`
+        +`<div style="position:absolute;top:0;bottom:0;${v>=0?'left:50%':'right:50%'};width:${w/2}%;background:${barColor};border-radius:2px"></div>`
+        +`<div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(128,128,128,0.3)"></div></div>`
+        +`<div style="text-align:right">${secFmtPct(r.w1)}</div>`
+        +`<div style="text-align:right">${secFmtPct(r.m1)}</div>`
+        +`<div style="text-align:right">${secFmtPct(r.m3)}</div>`;
+  });
+  html+='</div>';
+  body.innerHTML=html;
+
+  if(st){
+    const d=new Date(cache.ts);
+    st.textContent=`最終更新: ${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}（NEXT FUNDS TOPIX-17 ETF終値ベース）`;
+  }
+}
+
+function secOnTabOpen(){
+  const c=secLoadCache();
+  if(c){
+    secRender(c);
+    // 12時間以上古ければ自動更新
+    if(Date.now()-c.ts>12*3600*1000)secUpdate(false);
+  }else{
+    secUpdate(false);
+  }
+}
+
 const _origSwitch=window.switchTab;
 window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
-  if(t==='watchlist'){wlRender();/* 自動読込はしない（手動↓読込ボタンで同期）*/}
+  if(t==='watchlist'){wlRender();secOnTabOpen();/* 自動読込はしない（手動↓読込ボタンで同期）*/}
   if(t==='cashflow'){cfRender();}
 };
 wlRender();
+// キャッシュがあれば初期表示
+(function(){const c=secLoadCache();if(c)secRender(c);else secUpdatePeriodBtns();})();
 
 // ============================================================
 // CASHFLOW — 月次収支トラッカー
