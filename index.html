@@ -7542,7 +7542,7 @@ window.addEventListener('load', function(){
     <table class="wl-tbl">
       <thead>
         <tr>
-          <th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>株数</th>
+          <th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>セクター</th><th>株数</th>
           <th>指値</th><th>現在値</th><th>乖離率</th><th>合計</th>
           <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
           <th>目標株価</th><th>上昇余地</th>
@@ -7563,7 +7563,7 @@ window.addEventListener('load', function(){
     <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:0.08em;margin-bottom:6px">📋 基本情報</div>
     <div class="wl-fg2">
       <div class="wl-frow"><label>銘柄コード</label><input id="wf-code" placeholder="例: 2413" maxlength="6" inputmode="numeric"></div>
-      <div class="wl-frow"><label>業種</label><input id="wf-sector" placeholder="例: 情報通信"></div>
+      <div class="wl-frow"><label>業種</label><input id="wf-sector" list="wf-sector-list" placeholder="例: 情報通信・サービス"><datalist id="wf-sector-list"></datalist></div>
     </div>
     <div class="wl-frow"><label>銘柄名</label><input id="wf-name" placeholder="例: エムスリー"></div>
     <div class="wl-fg2">
@@ -8008,7 +8008,7 @@ function wlRender(){
     <div class="wl-sc"><div class="sl">今日購入予定</div><div class="sv" style="color:#A32D2D">${waitCnt}</div></div>
   `;
   const tbody=document.getElementById('wl-tbody');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="20" class="wl-empty">銘柄がありません</td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="22" class="wl-empty">銘柄がありません</td></tr>`;return;}
   tbody.innerHTML=data.map((s,idx)=>{
     const amt=(s.limit||0)*s.shares;
     const diff=s.current&&s.limit?((s.current-s.limit)/s.limit*100):null;
@@ -8038,6 +8038,7 @@ function wlRender(){
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
       <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap">${wlSectorCell(s)}</td>
       <td style="font-size:11px">${(s.shares||0).toLocaleString()}株</td>
       <td style="font-weight:500;color:#3B6D11">${wlFmt(s.limit)}</td>
       <td><input class="wl-price-inp" type="number" value="${s.current||''}" placeholder="入力" onchange="wlUpdatePrice('${s.id}',this.value)"></td>
@@ -8497,6 +8498,7 @@ async function secUpdate(manual){
       const cache={ts:Date.now(),rows};
       secSaveCache(cache);
       secRender(cache);
+      try{wlRender();}catch(e){}
       if(errs.length&&st)st.textContent+=` ⚠取得失敗: ${errs.join(',')}`;
     }else{
       if(st)st.textContent='⚠ データを取得できませんでした';
@@ -8514,6 +8516,7 @@ function secSetSort(k){
   const c=secLoadCache();
   if(c)secRender(c);
   else secUpdatePeriodBtns();
+  try{wlRender();}catch(e){}
 }
 function secUpdatePeriodBtns(){
   document.querySelectorAll('#sec-period-btns button').forEach(b=>{
@@ -8647,6 +8650,52 @@ function secSuggestSector(name){
   return'';
 }
 
+// ─── ウォッチ銘柄 × セクター動向の連携 ───
+// 自由入力のセクター文字列をTOPIX-17名に正規化（例:「情報通信」→「情報通信・サービス」）
+function wlMapSectorText(t){
+  if(!t)return'';
+  const norm=x=>x.replace(/[・（）()\s]/g,'');
+  const nt=norm(t);
+  for(const e of SEC_ETFS){
+    const ne=norm(e.name);
+    if(ne===nt||ne.includes(nt)||nt.includes(ne))return e.name;
+  }
+  return'';
+}
+// ウォッチ銘柄の所属セクターを解決: 設定値→正規化→銘柄名から推定
+function wlResolveSector(s){
+  const direct=wlMapSectorText(s.sector);
+  if(direct)return{name:direct,estimated:false};
+  const guess=typeof secSuggestSector==='function'?secSuggestSector(s.name):'';
+  if(guess)return{name:guess,estimated:true};
+  return null;
+}
+// テーブルセル: セクター名 + 騰落率 + TOPIX-17内順位
+function wlSectorCell(s){
+  const r=wlResolveSector(s);
+  if(!r)return'<span style="color:var(--text3)">—</span>';
+  const est=r.estimated?'<span title="銘柄名から自動推定" style="color:#fbbf24">✦</span>':'';
+  const cache=typeof secLoadCache==='function'?secLoadCache():null;
+  let perfHtml='<span style="color:var(--text3);font-size:10px">動向未取得</span>';
+  if(cache&&cache.rows){
+    const sorted=[...cache.rows].sort((a,b)=>(b[secSortKey]??-999)-(a[secSortKey]??-999));
+    const idx=sorted.findIndex(x=>x.name===r.name);
+    if(idx>=0){
+      const row=sorted[idx];
+      const v=row[secSortKey];
+      const periodLabel={w1:'1週',m1:'1M',m3:'3M'}[secSortKey];
+      const rank=idx+1;
+      const hot=rank<=5,cold=rank>=13;
+      const c=v==null?'var(--text3)':(v>=0?'#3B6D11':'#A32D2D');
+      const rankBadge=hot?`<span style="color:#3B6D11;font-weight:700">${rank}位🔥</span>`
+        :cold?`<span style="color:#A32D2D;font-weight:700">${rank}位🥶</span>`
+        :`<span style="color:var(--text3)">${rank}位</span>`;
+      perfHtml=`<span style="color:${c};font-weight:600">${v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%'}</span><span style="color:var(--text3);font-size:9px">(${periodLabel})</span> ${rankBadge}`;
+    }
+  }
+  return`<div style="font-size:10px;color:var(--text2)">${r.name}${est}</div><div style="font-size:11px">${perfHtml}</div>`;
+}
+
 function secOpenAssign(){
   const bg=document.getElementById('sec-assign-bg');
   const list=document.getElementById('sec-assign-list');
@@ -8718,6 +8767,8 @@ wlRender();
 (function(){
   const sel=document.getElementById('fSector');
   if(sel)SEC_ETFS.forEach(e=>{const o=document.createElement('option');o.value=e.name;o.textContent=e.name;sel.appendChild(o);});
+  const dl=document.getElementById('wf-sector-list');
+  if(dl)SEC_ETFS.forEach(e=>{const o=document.createElement('option');o.value=e.name;dl.appendChild(o);});
   const c=secLoadCache();if(c)secRender(c);else secUpdatePeriodBtns();
 })();
 
