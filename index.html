@@ -4125,6 +4125,7 @@ async function onSignedIn(){
   amShowMain();setSyncStatus('syncing','同期中...');
   await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
   try{trRenderAll();}catch(e){}
+  try{if(typeof wlAutoSync==='function')wlAutoSync(true);}catch(e){}
 }
 function signIn(){if(amTokenClient)amTokenClient.requestAccessToken({prompt:'consent'});}
 function signOut(){
@@ -8299,6 +8300,36 @@ async function wlEnsureWatchlistTab(sid){
     if(!has)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:sid,resource:{requests:[{addSheet:{properties:{title:'watchlist'}}}]}});
   }catch(e){console.warn('wl tab ensure err',e);}
 }
+// Sheets行→ウォッチ銘柄オブジェクト（保存列と対で管理）
+// A-Q: 従来17列 / R以降: 分析フィールド追加分
+const WL_SHEET_COLS=['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo','earningsDate',
+  'sector','eps1','eps2','op0','op1','op2','sales0','sales1','sales2','actper','targetper','mktcap','shikiho1','shikiho2','floatRatio','roe'];
+const WL_NUM_COLS=new Set(['limit','current','sell1','sell2','sell3','target','per','pbr','eps1','eps2','op0','op1','op2','sales0','sales1','sales2','actper','targetper','mktcap','floatRatio']);
+function wlRowToItem(r,cols){
+  cols=cols||WL_SHEET_COLS;
+  const o={};
+  cols.forEach((k,i)=>{
+    const v=r[i];
+    if(k==='id'){o.id=v||wlUID();return;}
+    if(k==='shares'){o.shares=parseFloat(v)||0;return;}
+    if(k==='priority'){o.priority=parseInt(v)||3;return;}
+    if(k==='account'){o.account=v||'特定';return;}
+    if(k==='status'){o.status=v||'購入検討';return;}
+    if(WL_NUM_COLS.has(k)){o[k]=(v===''||v==null)?null:(parseFloat(v)||null);return;}
+    o[k]=v||'';
+  });
+  return o;
+}
+function wlItemToRow(s){
+  return WL_SHEET_COLS.map(k=>{
+    const v=s[k];
+    if(k==='id')return s.id;
+    if(k==='shares')return s.shares||0;
+    if(k==='priority')return s.priority||3;
+    return(v===null||v===undefined)?'':v;
+  });
+}
+
 async function wlSyncToSheet(manual=false){
   if(!wlHasToken()){
     if(manual)showToast('⚠ 資産管理タブでGoogleサインインしてください');
@@ -8312,11 +8343,9 @@ async function wlSyncToSheet(manual=false){
     if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
     await wlEnsureWatchlistTab(sid);
     const data=wlLoad();
-    const hdr=[['id','code','name','shares','limit','current','sell1','sell2','sell3','target','per','pbr','account','status','priority','memo','earningsDate']];
-    const rows=data.map(s=>[s.id,s.code||'',s.name,s.shares,s.limit||'',s.current||'',s.sell1||'',s.sell2||'',s.sell3||'',s.target||'',s.per||'',s.pbr||'',s.account,s.status,s.priority,s.memo||'',s.earningsDate||'']);
-    const vals=[...hdr,...rows];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:Q${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
-    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:Q1000`});
+    const vals=[WL_SHEET_COLS,...data.map(wlItemToRow)];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`watchlist!A1:AG${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
+    if(data.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`watchlist!A${data.length+2}:AG1000`});
     if(syncEl)syncEl.textContent='✓';
     if(manual)showToast('✅ 保存しました');
   }catch(e){
@@ -8325,28 +8354,59 @@ async function wlSyncToSheet(manual=false){
     if(manual)showToast('⚠ 保存失敗');
   }
 }
-async function wlSyncFromSheet(){
-  if(!wlHasToken()){showToast('⚠ 資産管理タブでGoogleサインインしてください');return;}
+async function wlSyncFromSheet(silent=false){
+  if(!wlHasToken()){if(!silent)showToast('⚠ 資産管理タブでGoogleサインインしてください');return;}
   // 未送信の自動同期タイマーがある場合は先に送信してから読み込む
   if(wlSaveData._timer){
     clearTimeout(wlSaveData._timer);
     wlSaveData._timer=null;
     try{await wlSyncToSheet();}catch(e){}
   }
-  showToast('↓ 読み込み中...');
+  const syncEl=document.getElementById('wl-sync-status');
+  if(!silent)showToast('↓ 読み込み中...');
+  else if(syncEl)syncEl.textContent='⏳';
   try{
     const sid=await wlGetSheetId();
-    if(!sid){showToast('⚠ まずMacで↑保存してください');return;}
+    if(!sid){if(!silent)showToast('⚠ まずMacで↑保存してください');else if(syncEl)syncEl.textContent='';return;}
     await wlEnsureWatchlistTab(sid);
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A2:Q1000'});
-    const rows=res.result.values||[];
-    if(!rows.length){showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');return;}
-    const data=rows.map(r=>({id:r[0]||wlUID(),code:r[1]||'',name:r[2]||'',shares:parseFloat(r[3])||0,limit:parseFloat(r[4])||null,current:parseFloat(r[5])||null,sell1:parseFloat(r[6])||null,sell2:parseFloat(r[7])||null,sell3:parseFloat(r[8])||null,target:parseFloat(r[9])||null,per:parseFloat(r[10])||null,pbr:parseFloat(r[11])||null,account:r[12]||'特定',status:r[13]||'購入検討',priority:parseInt(r[14])||3,memo:r[15]||'',earningsDate:r[16]||''})).filter(x=>x.name);
-    wlSaveData._loading=true;
-    wlSaveData(data);
-    wlSaveData._loading=false;
-    wlRender();showToast(`✅ ${data.length}件を読み込みました`);
-  }catch(e){console.warn('wl load err',e);showToast('⚠ 読み込み失敗');}
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'watchlist!A1:AG1000'});
+    const allRows=res.result.values||[];
+    if(allRows.length<2){if(!silent)showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');else if(syncEl)syncEl.textContent='';return;}
+    // ヘッダ行からシートに実在する列を判定（旧17列シートでもローカルの拡張フィールドを消さない）
+    let cols=allRows[0].filter(h=>WL_SHEET_COLS.includes(h));
+    if(!cols.length||cols[0]!=='id')cols=WL_SHEET_COLS.slice(0,allRows[0].length||17);
+    const localById={};wlLoad().forEach(x=>{localById[x.id]=x;});
+    const data=allRows.slice(1).map(r=>{
+      const partial=wlRowToItem(r,cols);
+      const base=localById[partial.id];
+      return base?{...base,...partial}:partial;
+    }).filter(x=>x.name);
+    // 差分がある場合のみ反映（不要な再描画を避ける）
+    const canon=arr=>JSON.stringify(arr.map(o=>{const m={};Object.keys(o).sort().forEach(k=>{const v=o[k];if(v!==null&&v!==undefined&&v!=='')m[k]=v;});return m;}));
+    const changed=canon(data)!==canon(wlLoad());
+    if(changed){
+      wlSaveData._loading=true;
+      wlSaveData(data);
+      wlSaveData._loading=false;
+      wlRender();
+    }
+    if(!silent)showToast(`✅ ${data.length}件を読み込みました`);
+    else if(syncEl){syncEl.textContent=changed?'✓':'';if(changed)setTimeout(()=>{if(syncEl.textContent==='✓')syncEl.textContent='';},2500);}
+  }catch(e){
+    console.warn('wl load err',e);
+    if(!silent)showToast('⚠ 読み込み失敗');
+    else if(syncEl)syncEl.textContent='';
+  }
+}
+
+// タブを開いたときの自動読込（60秒スロットル・サイレント）
+let wlLastAutoSync=0;
+function wlAutoSync(force=false){
+  if(!wlHasToken())return;
+  const now=Date.now();
+  if(!force&&now-wlLastAutoSync<60000)return;
+  wlLastAutoSync=now;
+  wlSyncFromSheet(true);
 }
 
 // ============================================================
@@ -8650,7 +8710,7 @@ function secOnTabOpen(){
 const _origSwitch=window.switchTab;
 window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
-  if(t==='watchlist'){wlRender();secOnTabOpen();/* 自動読込はしない（手動↓読込ボタンで同期）*/}
+  if(t==='watchlist'){wlRender();secOnTabOpen();wlAutoSync();/* Sheetsから自動読込（60秒スロットル）。手動↓読込も引き続き可 */}
   if(t==='cashflow'){cfRender();}
 };
 wlRender();
