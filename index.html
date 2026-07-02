@@ -1649,6 +1649,7 @@ input[type=number] { -moz-appearance: textfield; }
 
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
+      <div class="field"><label>セクター（TOPIX-17・任意）</label><select id="fSector" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定 —</option></select></div>
 
       <!-- 📊 分析フィールド（個別株・高配当・外国株のみ） -->
       <div id="fAnalysisFields" style="display:none">
@@ -2854,6 +2855,7 @@ function openAddModal(defaultCat){
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value='';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value='';
+  if(document.getElementById('fSector'))document.getElementById('fSector').value='';
   ['fSell1','fSell2','fSell3','fPer','fPbr','fEps1','fEps2'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
@@ -2925,6 +2927,7 @@ function openEditModal(id){
   if(document.getElementById('fIndexSell'))document.getElementById('fIndexSell').value=a.soldAmount&&a.sold?a.soldAmount:'';
   if(document.getElementById('fIndexGainResult'))document.getElementById('fIndexGainResult').innerHTML='';
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value=a.earningsDate||'';
+  if(document.getElementById('fSector'))document.getElementById('fSector').value=a.sector||'';
   // 分析フィールド
   if(document.getElementById('fSell1'))document.getElementById('fSell1').value=a.sell1||'';
   if(document.getElementById('fSell2'))document.getElementById('fSell2').value=a.sell2||'';
@@ -2976,6 +2979,7 @@ async function saveAccount(){
     costPrice=parseFloat(document.getElementById('fCost')?.value)||0;
   }
   const earningsDate=(document.getElementById('fEarningsDate')?.value||'').trim();
+  const sector=(document.getElementById('fSector')?.value||'').trim();
   // 分析フィールド
   const sell1=parseFloat(document.getElementById('fSell1')?.value)||undefined;
   const sell2=parseFloat(document.getElementById('fSell2')?.value)||undefined;
@@ -2985,8 +2989,8 @@ async function saveAccount(){
   const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
   const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
   const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,...analysis,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,...analysis,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
 }
 function amMoveAccount(id,dir){
@@ -3975,13 +3979,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:X${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:Q1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:Y${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:Y1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -4069,7 +4073,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:X1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:Y1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -4096,13 +4100,14 @@ async function amLoadFromSheet(){
       eps1:r[22]?parseFloat(r[22])||undefined:undefined,
       eps2:r[23]?parseFloat(r[23])||undefined:undefined,
       earningsDate:r[16]||'',
+      sector:r[24]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
     amSaveToLocal();amRender();
     // 推移グラフの損益除外リストをQ1セルから読み込む（端末間で共有）
     try{
-      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Y1'});
+      const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Q1'});
       const raw=exRes.result.values?.[0]?.[0];
       if(raw){trGainExcludeNames=JSON.parse(raw);trSaveGainExclude();}
     }catch(e){
@@ -7506,11 +7511,29 @@ window.addEventListener('load', function(){
           <button onclick="secSetSort('m1')" data-p="m1" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">1ヶ月</button>
           <button onclick="secSetSort('m3')" data-p="m3" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">3ヶ月</button>
         </div>
+        <button class="wl-add-btn" onclick="secOpenAssign()" style="font-size:12px;padding:5px 10px">🏷 保有設定</button>
         <button class="wl-add-btn" onclick="secUpdate(true)" style="font-size:12px;padding:5px 10px" id="sec-refresh-btn">🔄 更新</button>
       </div>
     </div>
     <div id="sec-status" style="font-size:10px;color:var(--text3);margin-bottom:8px"></div>
+    <div id="sec-pf-summary" style="margin-bottom:8px"></div>
     <div id="sec-body"></div>
+  </div>
+
+  <!-- セクター一括設定モーダル -->
+  <div id="sec-assign-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998" onclick="if(event.target===this)secCloseAssign()">
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:80vh;overflow-y:auto;background:var(--bg,#111);border:0.5px solid var(--border);border-radius:16px;padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <h3 style="margin:0;font-size:15px">🏷 保有銘柄のセクター設定</h3>
+        <button onclick="secCloseAssign()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin:0 0 10px">日本の個別株・高配当銘柄にTOPIX-17セクターを割り当てます。設定するとランキングに保有比率が重なって表示されます。</p>
+      <div id="sec-assign-list"></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="wl-add-btn" onclick="secSaveAssign()" style="flex:1;padding:10px;font-size:14px;background:var(--accent,#3b82f6);color:#fff;border:none;border-radius:8px;cursor:pointer">保存（Sheets同期）</button>
+        <button class="wl-add-btn" onclick="secCloseAssign()" style="padding:10px 16px;font-size:14px">閉じる</button>
+      </div>
+    </div>
   </div>
 
   <div class="wl-summary" id="wl-summary"></div>
@@ -8455,40 +8478,161 @@ function secFmtPct(v){
   return`<span style="color:${c};font-weight:600">${s}${v.toFixed(1)}%</span>`;
 }
 
+// PFのセクター別評価額（日本個別株: 個別株+高配当、売却済み除く）
+function secGetPortfolio(){
+  const stocks=amAccounts.filter(a=>!a.sold&&(a.cat==='個別株'||a.cat==='高配当')&&(a.amount||0)>0);
+  const total=stocks.reduce((s,a)=>s+(a.amount||0),0);
+  const bySector={};let unsetCount=0,unsetAmt=0;
+  stocks.forEach(a=>{
+    if(a.sector){bySector[a.sector]=(bySector[a.sector]||0)+(a.amount||0);}
+    else{unsetCount++;unsetAmt+=(a.amount||0);}
+  });
+  return{total,bySector,unsetCount,unsetAmt,stocks};
+}
+
 function secRender(cache){
   secUpdatePeriodBtns();
   const body=document.getElementById('sec-body');
   const st=document.getElementById('sec-status');
   if(!body||!cache)return;
+  const pf=secGetPortfolio();
   const rows=[...cache.rows].sort((a,b)=>(b[secSortKey]??-999)-(a[secSortKey]??-999));
   const maxAbs=Math.max(...rows.map(r=>Math.abs(r[secSortKey]??0)),0.1);
   const periodLabel={w1:'1週',m1:'1ヶ月',m3:'3ヶ月'}[secSortKey];
+  const GRID='grid-template-columns:18px minmax(90px,1.4fr) minmax(50px,1fr) 50px 50px 50px';
 
-  let html='<div style="display:grid;grid-template-columns:18px minmax(90px,1fr) minmax(60px,1.2fr) 52px 52px 52px;gap:4px 6px;align-items:center;font-size:12px">';
-  html+='<div></div><div style="font-size:10px;color:var(--text3)">セクター</div><div style="font-size:10px;color:var(--text3);text-align:right">'+periodLabel+'騰落</div>'
-      +'<div style="font-size:10px;color:var(--text3);text-align:right">1週</div>'
-      +'<div style="font-size:10px;color:var(--text3);text-align:right">1ヶ月</div>'
-      +'<div style="font-size:10px;color:var(--text3);text-align:right">3ヶ月</div>';
+  let html=`<div style="display:grid;${GRID};gap:4px 6px;align-items:center;font-size:10px;color:var(--text3);margin-bottom:2px">`
+      +'<div></div><div>セクター</div><div style="text-align:right">'+periodLabel+'騰落</div>'
+      +'<div style="text-align:right">1週</div><div style="text-align:right">1ヶ月</div><div style="text-align:right">3ヶ月</div></div>';
   rows.forEach((r,i)=>{
     const v=r[secSortKey]??0;
     const w=Math.min(Math.abs(v)/maxAbs*100,100);
     const barColor=v>=0?'rgba(34,197,94,0.65)':'rgba(239,68,68,0.65)';
     const rankColor=i===0?'#22c55e':(i===rows.length-1?'#ef4444':'var(--text3)');
-    html+=`<div style="font-size:10px;color:${rankColor};text-align:right">${i+1}</div>`
-        +`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>`
+    const held=pf.bySector[r.name]||0;
+    const heldPct=pf.total>0?held/pf.total*100:0;
+    const rowBg=held>0?'background:rgba(59,130,246,0.09);':'';
+    const badge=held>0?`<span style="display:inline-block;margin-left:4px;font-size:9px;font-weight:700;color:#fff;background:rgba(59,130,246,0.85);border-radius:8px;padding:1px 5px;vertical-align:1px">保有${heldPct.toFixed(0)}%</span>`:'';
+    html+=`<div style="display:grid;${GRID};gap:4px 6px;align-items:center;font-size:12px;${rowBg}border-radius:6px;padding:2px 0">`
+        +`<div style="font-size:10px;color:${rankColor};text-align:right">${i+1}</div>`
+        +`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}${badge}</div>`
         +`<div style="position:relative;height:14px;background:rgba(128,128,128,0.08);border-radius:3px;overflow:hidden">`
         +`<div style="position:absolute;top:0;bottom:0;${v>=0?'left:50%':'right:50%'};width:${w/2}%;background:${barColor};border-radius:2px"></div>`
         +`<div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(128,128,128,0.3)"></div></div>`
         +`<div style="text-align:right">${secFmtPct(r.w1)}</div>`
         +`<div style="text-align:right">${secFmtPct(r.m1)}</div>`
-        +`<div style="text-align:right">${secFmtPct(r.m3)}</div>`;
+        +`<div style="text-align:right">${secFmtPct(r.m3)}</div></div>`;
   });
-  html+='</div>';
   body.innerHTML=html;
+  secRenderPfSummary(cache,pf);
 
   if(st){
     const d=new Date(cache.ts);
     st.textContent=`最終更新: ${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}（NEXT FUNDS TOPIX-17 ETF終値ベース）`;
+  }
+}
+
+// PFセクター構成サマリー（集中度警告つき）
+function secRenderPfSummary(cache,pf){
+  const el=document.getElementById('sec-pf-summary');
+  if(!el)return;
+  if(!pf||pf.total<=0){el.innerHTML='';return;}
+  const entries=Object.entries(pf.bySector).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length&&!pf.unsetCount){el.innerHTML='';return;}
+  const perfMap={};(cache?.rows||[]).forEach(r=>perfMap[r.name]=r);
+  let chips=entries.map(([name,amt])=>{
+    const pct=amt/pf.total*100;
+    const perf=perfMap[name]?.[secSortKey];
+    const pc=perf==null?'var(--text3)':(perf>=0?'var(--green,#22c55e)':'var(--danger,#ef4444)');
+    const ps=perf==null?'':`<span style="color:${pc};margin-left:3px">${perf>=0?'+':''}${perf.toFixed(1)}%</span>`;
+    return`<span style="display:inline-flex;align-items:center;font-size:11px;background:rgba(128,128,128,0.1);border-radius:10px;padding:3px 8px;white-space:nowrap"><b>${name}</b><span style="margin-left:4px;color:var(--text2)">${pct.toFixed(0)}%</span>${ps}</span>`;
+  }).join('');
+  if(pf.unsetCount){
+    chips+=`<span onclick="secOpenAssign()" style="display:inline-flex;align-items:center;font-size:11px;background:rgba(251,191,36,0.15);border:0.5px dashed rgba(251,191,36,0.5);border-radius:10px;padding:3px 8px;cursor:pointer;white-space:nowrap">⚠ 未設定 ${pf.unsetCount}銘柄（${(pf.unsetAmt/pf.total*100).toFixed(0)}%）→設定</span>`;
+  }
+  // 集中度警告: 最大セクターが40%超
+  let warn='';
+  if(entries.length&&entries[0][1]/pf.total>0.4){
+    const[name,amt]=entries[0];
+    const perf=perfMap[name]?.m1;
+    warn=`<div style="font-size:11px;color:#fbbf24;margin-top:5px">⚠ <b>${name}</b>に${(amt/pf.total*100).toFixed(0)}%集中しています${perf!=null&&perf<0?`（1ヶ月${perf.toFixed(1)}%と軟調）`:''}</div>`;
+  }
+  el.innerHTML=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px">あなたのPF構成（日本個別株 ¥${Math.round(pf.total).toLocaleString()}）</div><div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>${warn}`;
+}
+
+// ─── セクター一括設定モーダル ───
+// 銘柄名からのセクター自動サジェスト（未設定銘柄の初期値に使用・保存するまで確定しない）
+function secSuggestSector(name){
+  const rules=[
+    [/銀行|フィナンシャル.*グループ|FG$/,'銀行'],
+    [/証券|保険|リース|カード|東京海上|オリックス/,'金融(除く銀行)'],
+    [/不動産|ビルディング|地所|ハウス|ホーム/,'不動産'],
+    [/電力|ガス|エネルギーHD/,'電力・ガス'],
+    [/海運|商船|郵船|川崎汽船|鉄道|JR|空港|航空|ANA|JAL|物流|運輸|倉庫/,'運輸・物流'],
+    [/商事|物産|伊藤忠|丸紅|豊田通商|双日|卸/,'商社・卸売'],
+    [/製鉄|鉄鋼|金属|非鉄|住友電|古河電/,'鉄鋼・非鉄'],
+    [/薬品|製薬|ファーマ|バイオ/,'医薬品'],
+    [/自動車|トヨタ|ホンダ|日産|スズキ|SUBARU|マツダ|デンソー|アイシン|タイヤ|ブリヂストン/,'自動車・輸送機'],
+    [/化学|化成|信越|旭化成|素材|ガラス|セメント|紙|パルプ|繊維|東レ/,'素材・化学'],
+    [/建設|工務|ゼネコン|大成|鹿島|清水建設|大林|資材/,'建設・資材'],
+    [/食品|飲料|ビール|キリン|アサヒ|サントリー|明治|味の素|水産|ハム|製粉|たばこ|JT/,'食品'],
+    [/石油|INPEX|ENEOS|エネオス|出光|コスモ|鉱業/,'エネルギー資源'],
+    [/電機|電気|ソニー|パナソニック|日立|東芝|富士通|NEC|キーエンス|精密|半導体|レーザ|東京エレ|アドバンテスト|ディスコ|ローム|ルネサス|キヤノン|ニコン|オリンパス|テルモ|村田|TDK|京セラ/,'電機・精密'],
+    [/機械|重工|クボタ|コマツ|ダイキン|SMC|ファナック|安川|荏原|IHI/,'機械'],
+    [/銀行|ゆうちょ/,'銀行'],
+    [/通信|NTT|KDDI|ソフトバンク|楽天|情報|システム|ソフト|ネット|サイバー|ゲーム|任天堂|エムスリー|リクルート|サービス|放送|広告|電通/,'情報通信・サービス'],
+    [/小売|イオン|セブン|ローソン|ファースト|ニトリ|百貨店|ドラッグ|ユニクロ/,'小売'],
+  ];
+  for(const[re,sec]of rules){if(re.test(name))return sec;}
+  return'';
+}
+
+function secOpenAssign(){
+  const bg=document.getElementById('sec-assign-bg');
+  const list=document.getElementById('sec-assign-list');
+  if(!bg||!list)return;
+  const pf=secGetPortfolio();
+  if(!pf.stocks.length){showToast('対象の個別株がありません');return;}
+  const opts=SEC_ETFS.map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
+  const sorted=[...pf.stocks].sort((a,b)=>(b.amount||0)-(a.amount||0));
+  list.innerHTML=sorted.map(a=>{
+    const cur=a.sector||secSuggestSector(a.name);
+    const isSuggest=!a.sector&&cur;
+    return`<div style="display:grid;grid-template-columns:1fr 130px;gap:6px;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border)">
+      <div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+      <div style="font-size:10px;color:var(--text3)">¥${Math.round(a.amount||0).toLocaleString()}${isSuggest?' <span style="color:#fbbf24">✦自動推定</span>':''}</div></div>
+      <select data-sec-id="${a.id}" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);outline:none${isSuggest?';border-color:rgba(251,191,36,0.6)':''}">
+        <option value="">— 未設定 —</option>${opts}
+      </select></div>`;
+  }).join('');
+  // 値をセット（HTML文字列内のselected指定より確実）
+  sorted.forEach(a=>{
+    const sel=list.querySelector(`select[data-sec-id="${a.id}"]`);
+    if(sel)sel.value=a.sector||secSuggestSector(a.name)||'';
+  });
+  bg.style.display='block';
+}
+function secCloseAssign(){
+  const bg=document.getElementById('sec-assign-bg');
+  if(bg)bg.style.display='none';
+}
+async function secSaveAssign(){
+  const list=document.getElementById('sec-assign-list');
+  if(!list)return;
+  let changed=0;
+  list.querySelectorAll('select[data-sec-id]').forEach(sel=>{
+    const id=parseInt(sel.dataset.secId);
+    const a=amAccounts.find(x=>x.id===id);
+    if(!a)return;
+    const v=sel.value||undefined;
+    if((a.sector||undefined)!==v){a.sector=v;changed++;}
+  });
+  secCloseAssign();
+  if(changed){
+    showToast(`✅ ${changed}銘柄のセクターを更新`);
+    await amSaveToSheet();
+    const c=secLoadCache();
+    if(c)secRender(c);
   }
 }
 
@@ -8510,8 +8654,12 @@ window.switchTab=function(t){
   if(t==='cashflow'){cfRender();}
 };
 wlRender();
-// キャッシュがあれば初期表示
-(function(){const c=secLoadCache();if(c)secRender(c);else secUpdatePeriodBtns();})();
+// キャッシュがあれば初期表示 + 編集モーダルのセクター選択肢を投入
+(function(){
+  const sel=document.getElementById('fSector');
+  if(sel)SEC_ETFS.forEach(e=>{const o=document.createElement('option');o.value=e.name;o.textContent=e.name;sel.appendChild(o);});
+  const c=secLoadCache();if(c)secRender(c);else secUpdatePeriodBtns();
+})();
 
 // ============================================================
 // CASHFLOW — 月次収支トラッカー
