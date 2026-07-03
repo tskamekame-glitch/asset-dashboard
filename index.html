@@ -5555,10 +5555,10 @@ function trCalcBrokerData(accounts){
     if(a.sold)return;
     if(!a.amount||a.amount<=0)return;
     const b=trGuessBroker(a);
-    if(!TR_BROKERS.includes(b))return;// 銀行・その他は投資把握の対象外
     if(!out[b])out[b]={evalSum:0,gEval:0,cost:0,count:0};
     out[b].evalSum+=a.amount;
     // 損益: trCalcSnapshotGainと同一の対象・除外・整合ガード
+    if(!TR_BROKERS.includes(b))return;// 銀行・その他は評価額のみ集計
     if(trIsExcluded(a.name))return;
     if(!ALL_CATS_B.includes(a.cat||''))return;
     const cost=_calcCostTotal(a);
@@ -5600,7 +5600,12 @@ function trRenderBrokerCard(filtered,labels,tickColor,gridColor){
   const latest=perSnap[perSnap.length-1]||{};
   const sumEl=document.getElementById('brokerSummary');
   if(sumEl){
-    const totalEval=present.reduce((s,b)=>s+(latest[b]?.evalSum||0),0);
+    // 表示行: 投資機関 + 銀行 + その他（存在するもののみ）
+    const tableRows=[...present,...['銀行','その他'].filter(b=>latest[b]?.evalSum>0)];
+    const totalEval=tableRows.reduce((s,b)=>s+(latest[b]?.evalSum||0),0);
+    const totalCost=tableRows.reduce((s,b)=>s+(latest[b]?.cost||0),0);
+    const totalGain=tableRows.reduce((s,b)=>s+(latest[b]?(latest[b].gEval-latest[b].cost):0),0);
+    const BANK_COLORS={'銀行':'#5B8A72','その他':'#888780'};
     sumEl.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap">
       <thead><tr style="color:var(--text3)">
         <th style="text-align:left;padding:4px 6px;font-weight:500">機関</th>
@@ -5610,22 +5615,31 @@ function trRenderBrokerCard(filtered,labels,tickColor,gridColor){
         <th style="text-align:right;padding:4px 6px;font-weight:500">含み損益</th>
         <th style="text-align:right;padding:4px 6px;font-weight:500">損益率</th>
       </tr></thead><tbody>`+
-      present.map(b=>{
+      tableRows.map(b=>{
         const d=latest[b];
         if(!d)return'';
         const gain=d.gEval-d.cost;
         const pct=d.cost>0?gain/d.cost*100:null;
         const gc=gain>=0?'var(--green)':'var(--danger)';
         const share=totalEval>0?d.evalSum/totalEval*100:0;
+        const dot=TR_BROKER_COLORS[b]||BANK_COLORS[b]||'#888';
         return`<tr style="border-top:0.5px solid var(--border)">
-          <td style="padding:5px 6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TR_BROKER_COLORS[b]};margin-right:5px;vertical-align:0"></span><b>${b}</b></td>
+          <td style="padding:5px 6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:5px;vertical-align:0"></span><b>${b}</b></td>
           <td style="text-align:right;padding:5px 6px;font-weight:600">${trFmt(d.evalSum)}</td>
           <td style="text-align:right;padding:5px 6px;color:var(--text3)">${share.toFixed(0)}%</td>
           <td style="text-align:right;padding:5px 6px;color:var(--text2)">${d.cost>0?trFmt(d.cost):'—'}</td>
           <td style="text-align:right;padding:5px 6px;font-weight:600;color:${d.cost>0?gc:'var(--text3)'}">${d.cost>0?(gain>=0?'+':'')+trFmt(gain):'—'}</td>
           <td style="text-align:right;padding:5px 6px;font-weight:600;color:${pct==null?'var(--text3)':gc}">${pct==null?'—':(pct>=0?'+':'')+pct.toFixed(1)+'%'}</td>
         </tr>`;
-      }).join('')+`</tbody></table></div>`;
+      }).join('')+
+      `<tr style="border-top:1.5px solid var(--border2);background:rgba(128,128,128,0.06)">
+        <td style="padding:6px 6px;font-weight:700">💰 金融資産合計</td>
+        <td style="text-align:right;padding:6px 6px;font-weight:700;font-size:12px">${trFmt(totalEval)}</td>
+        <td style="text-align:right;padding:6px 6px;color:var(--text3)">100%</td>
+        <td style="text-align:right;padding:6px 6px;color:var(--text2)">${totalCost>0?trFmt(totalCost):'—'}</td>
+        <td style="text-align:right;padding:6px 6px;font-weight:700;color:${totalGain>=0?'var(--green)':'var(--danger)'}">${totalCost>0?(totalGain>=0?'+':'')+trFmt(totalGain):'—'}</td>
+        <td style="text-align:right;padding:6px 6px;font-weight:700;color:${totalGain>=0?'var(--green)':'var(--danger)'}">${totalCost>0?((totalGain>=0?'+':'')+(totalGain/totalCost*100).toFixed(1)+'%'):'—'}</td>
+      </tr></tbody></table></div>`;
   }
 
   // ── 推移グラフ ──
