@@ -8650,7 +8650,7 @@ function wlRender(){
         <button class="wl-move-btn" onclick="wlMarkPurchased('${s.id}')" style="color:${s.status==='購入済'?'var(--text3)':'#3B6D11'};border-color:${s.status==='購入済'?'var(--border2)':'#3B6D11'};margin-top:3px" title="購入済にして保有銘柄（個別株）に追加">💰</button>
       </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
-      <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
+      <td><div style="font-weight:500">${s.name}</div>${wlGsBadge(s)}${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
       <td style="color:var(--text2);font-size:11px">${s.code||'—'}</td>
       <td style="font-size:11px;white-space:nowrap">${wlSectorCell(s)}</td>
       <td style="font-size:11px">${(s.shares||0).toLocaleString()}株</td>
@@ -9315,6 +9315,64 @@ function wlResolveSector(s){
   return null;
 }
 // テーブルセル: セクター名 + 騰落率 + TOPIX-17内順位
+// ─── 高市政権 成長戦略17分野（2026/6/24公表・官民投資370兆円超） ───
+// 出所: 内閣官房資料・野村證券まとめ(2026/6/29)。amountは分野合計(兆円)、rankは17分野中の投資額順位
+const GS_FIELDS=[
+  {rank:1, name:'AI・半導体',              amount:101.6},
+  {rank:2, name:'デジタル・サイバーセキュリティー', amount:55.4},
+  {rank:3, name:'創薬・先端医療',           amount:43.3},
+  {rank:4, name:'コンテンツ',              amount:33.7},
+  {rank:5, name:'合成生物学・バイオ',        amount:33.6},
+  {rank:6, name:'情報通信',                amount:28.8},
+  {rank:6, name:'資源・エネルギー・GX',      amount:28.8},
+  {rank:8, name:'航空・宇宙',              amount:18.5},
+  {rank:9, name:'量子',                   amount:13.2},
+  {rank:10,name:'マテリアル',              amount:12.7},
+  {rank:11,name:'フードテック',            amount:9.7},
+  {rank:12,name:'防衛産業',                amount:4.7},
+  {rank:13,name:'海洋',                   amount:3.3},
+  {rank:14,name:'核融合',                 amount:3.1},
+  {rank:15,name:'防災・国土強靭化',         amount:2.6},
+  {rank:16,name:'港湾ロジスティクス',       amount:1.2},
+  {rank:17,name:'造船',                   amount:1.1},
+];
+// 銘柄名→戦略分野のマッチングルール（上から順に評価・最初にマッチした分野を採用）
+const GS_RULES=[
+  [/東京エレクトロン|東京エレク|アドバンテスト|レーザーテック|レーザーテク|ディスコ|SCREEN|スクリーン|ルネサス|キオクシア|ソシオネクstep|ソシオネクスト|ローム|SUMCO|イビデン|新光電気|レゾナック|芝浦メカ|東京精密|KOKUSAI|コクサイエレ|マイクロニクス|TOWA|半導体|エヌビディア|NVIDIA|TSMC|信越化学/i,'AI・半導体'],
+  [/さくらインターネット|さくらネット|IIJ|インターネットイニシアティブ|トレンドマイクロ|NEC|日本電気|富士通|日立製作|NTTデータ|GMO|データセンター|サイバーセキュリティ|GSユアサ|ジーエス・ユアサ|蓄電池/i,'デジタル・サイバーセキュリティー'],
+  [/中外製薬|第一三共|エーザイ|塩野義|武田薬品|アステラス|小野薬品|住友ファーマ|ペプチドリーム|そーせい|大塚HD|大塚ホールディングス|製薬|薬品|エムスリー|メドレー|メドピア/i,'創薬・先端医療'],
+  [/任天堂|カプコン|スクウェア|スクエニ|コーエーテクモ|バンダイナムコ|バンナム|セガサミー|コナミ|ネクソン|ディー・エヌ・エー|DeNA|グリー|ミクシィ|MIXI|東映アニメ|KADOKAWA|カドカワ|ソニーG|ソニーグループ|サンリオ|集英社|アニメ|ゲーム/i,'コンテンツ'],
+  [/協和キリン|カネカ|味の素|Spiber|バイオ/i,'合成生物学・バイオ'],
+  [/NTT|日本電信|KDDI|ソフトバンク|SBKK|フジクラ|古河電気|古河電工|住友電気|住友電工|光ファイバ|海底ケーブル/i,'情報通信'],
+  [/INPEX|ENEOS|エネオス|出光|レノバ|イーレックス|東京電力|関西電力|中部電力|九州電力|日本製鉄|神戸製鋼|積水化学|岩谷産業|水素|ペロブスカイト|洋上風力|地熱/i,'資源・エネルギー・GX'],
+  [/三菱重工|川崎重工|IHI|石川島/i,'防衛産業'],
+  [/ispace|アイスペース|QPS研究所|アストロスケール|スカパー|SUBARU|人工衛星|ロケット|宇宙/i,'航空・宇宙'],
+  [/量子|フィックスターズ/i,'量子'],
+  [/住友金属鉱山|三菱マテリアル|DOWA|東邦チタニウム|大阪チタニウム|プロテリアル|チタン|レアアース|永久磁石/i,'マテリアル'],
+  [/植物工場|陸上養殖|フードテック/i,'フードテック'],
+  [/核融合|助川電気|木村化工機/i,'核融合'],
+  [/応用地質|防災/i,'防災・国土強靭化'],
+  [/名村造船|内海造船|ジャパンエンジン|三井E&S|造船/i,'造船'],
+  [/商船三井|日本郵船|川崎汽船|海洋/i,'海洋'],
+];
+function gsMatchField(name){
+  const n=name||'';
+  for(const[re,fieldName]of GS_RULES){
+    if(re.test(n))return GS_FIELDS.find(f=>f.name===fieldName)||null;
+  }
+  return null;
+}
+// ウォッチ銘柄の成長戦略バッジ（対象銘柄に🚀マーク+投資額順位）
+function wlGsBadge(s){
+  const f=gsMatchField(s.name);
+  if(!f)return'';
+  const hot=f.rank<=3,mid=f.rank<=7;
+  const bg=hot?'rgba(228,0,43,0.14)':mid?'rgba(239,159,39,0.16)':'rgba(128,128,128,0.12)';
+  const bd=hot?'rgba(228,0,43,0.5)':mid?'rgba(239,159,39,0.5)':'var(--border2)';
+  const fg=hot?'#E4002B':mid?'#c07a10':'var(--text2)';
+  return`<div style="margin-top:1px"><span title="高市政権 成長戦略17分野: ${f.name}（官民投資${f.amount}兆円・投資額${f.rank}位/17分野）2040年度まで370兆円超の官民投資対象" style="display:inline-block;font-size:9px;font-weight:700;color:${fg};background:${bg};border:0.5px solid ${bd};border-radius:8px;padding:1px 6px;white-space:nowrap;cursor:help">🚀成長戦略 ${f.name} ${f.rank}位/${f.amount}兆円</span></div>`;
+}
+
 function wlSectorCell(s){
   const r=wlResolveSector(s);
   if(!r)return'<span style="color:var(--text3)">—</span>';
