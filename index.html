@@ -2307,7 +2307,7 @@ function amRenderTop10(accounts,el,subtitleEl){
   }).join('');
   if(subtitleEl){
     const hasQ=q&&q.quotes;
-    subtitleEl.textContent=`保有金額 上位10銘柄（投資分 ¥${fmt(investTotal)}中）`+(hasQ?'・バー色=当日騰落':'・当日騰落モードで一度更新すると騰落色が付きます');
+    subtitleEl.textContent=`SBI証券のみ・保有金額 上位10銘柄（投資分 ¥${fmt(investTotal)}中）`+(hasQ?'・バー色=当日騰落':'・当日騰落モードで一度更新すると騰落色が付きます');
   }
 }
 
@@ -2318,7 +2318,8 @@ function amRenderComposition(accounts,el,subtitleEl){
     {name:'日本株式',color:'#E4536B',test:a=>a.cat==='個別株'||a.cat==='高配当'},
     {name:'米国株式',color:'#3B82C4',test:a=>a.cat==='外国株式'},
     {name:'投資信託',color:'#C7D24A',test:a=>IDX.includes(a.cat)},
-    {name:'現金',color:'#EFB53C',test:a=>a.cat==='銀行'||a.cat==='預り金'},
+    {name:'銀行',color:'#EFB53C',test:a=>a.cat==='銀行'},
+    {name:'現金（預り金）',color:'#5B8A72',test:a=>a.cat==='預り金'},
     {name:'年金',color:'#8B5CF6',test:a=>a.cat==='年金'},
     {name:'その他',color:'#888780',test:a=>true},
   ];
@@ -2371,8 +2372,11 @@ function amRenderHeatmap(accounts,total){
   const subtitleEl0=document.getElementById('amHeatmapSubtitle');
 
   // ── ビュー分岐 ──
-  if(amHmView==='top10'){amRenderTop10(accounts,el,subtitleEl0);return;}
+  // ヒートマップ/上位10はSBI証券の口座のみ対象（機関は名前/手動設定から判定）
+  const sbiOnly=arr=>arr.filter(a=>{try{return trGuessBroker(a)==='SBI証券';}catch(e){return true;}});
+  if(amHmView==='top10'){amRenderTop10(sbiOnly(accounts),el,subtitleEl0);return;}
   if(amHmView==='comp'){amRenderComposition(accounts,el,subtitleEl0);return;}
+  accounts=sbiOnly(accounts);
 
   const EXCL_CATS=['銀行','年金','その他','預り金'];
   let items;
@@ -2389,7 +2393,7 @@ function amRenderHeatmap(accounts,total){
     const missing=targets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
     if(missing.length){
       el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
-      if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色=当日騰落率（前日終値比）';
+      if(subtitleEl0)subtitleEl0.textContent='SBI証券のみ・面積=評価額 / 色=当日騰落率（前日終値比）';
       if(!amDailyFetching){
         amFetchDailyQuotes([...new Set(targets.map(t=>t.qcode))]).then(()=>{
           try{amRenderHeatmap(accounts,total);}catch(e){}
@@ -2410,7 +2414,7 @@ function amRenderHeatmap(accounts,total){
     }
     if(subtitleEl0){
       const d=new Date(q.ts);
-      subtitleEl0.textContent=`面積=評価額 / 色=当日騰落率（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄取得失敗`:'');
+      subtitleEl0.textContent=`SBI証券のみ・面積=評価額 / 色=当日騰落率（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄取得失敗`:'');
     }
   }else{
     // ── 前回CSV比モード（従来） ──
@@ -2523,7 +2527,7 @@ function amRenderHeatmap(accounts,total){
 
   // サブタイトル動的更新（当日モードはアイテム生成時に設定済み）
   const subtitleEl=document.getElementById('amHeatmapSubtitle');
-  if(subtitleEl&&amHeatmapMode!=='daily') subtitleEl.textContent='面積=評価額 / 色='+(hasPrevData?'前回CSV比変動率':'含み損益率（前回データなし）');
+  if(subtitleEl&&amHeatmapMode!=='daily') subtitleEl.textContent='SBI証券のみ・面積=評価額 / 色='+(hasPrevData?'前回CSV比変動率':'含み損益率（前回データなし）');
 
   // SVG描画
   const fmtM=v=>{
