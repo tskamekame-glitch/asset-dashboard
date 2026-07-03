@@ -2619,6 +2619,13 @@ function amRenderHeatmap(accounts,total){
     const pctFz =Math.min(Math.max(shortSideTile*0.16,7),13);
     const amtFz =Math.min(Math.max(shortSideTile*0.12,6),10);
 
+    // 損益額: 騰落率から期間開始時点の評価額を逆算
+    let gainStr='';
+    if(node.pct!=null&&isFinite(node.pct)&&node.pct>-99.9){
+      const gain=node.amount-node.amount/(1+node.pct/100);
+      gainStr=(gain>=0?'＋':'－')+fmtM(Math.abs(gain));
+    }
+
     // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
     let dispName=node.name;
     const maxChars=Math.max(Math.floor(rw/(nameFz*0.9)),2);
@@ -2628,11 +2635,13 @@ function amRenderHeatmap(accounts,total){
     const showName=rh>nameFz*1.2&&rw>nameFz;
     const showPct =rh>nameFz*1.2+pctFz*1.4&&rw>pctFz*2;
     const showAmt =rh>nameFz*1.2+pctFz*1.4+amtFz*1.4&&rw>amtFz*3&&area>3000;
+    const showGain=!!gainStr&&rh>nameFz*1.2+pctFz*1.4+amtFz*2.8&&rw>amtFz*4&&area>4200;
 
     const lines=[];
     if(showName) lines.push({t:escX(dispName),fz:nameFz,fw:'bold',op:1});
     if(showPct)  lines.push({t:escX(pctStr),fz:pctFz,fw:'600',op:0.92});
     if(showAmt)  lines.push({t:escX(fmtM(node.amount)),fz:amtFz,fw:'normal',op:0.75});
+    if(showGain) lines.push({t:escX(gainStr),fz:amtFz,fw:'600',op:0.9});
 
     const totalTH=lines.reduce((s,l)=>s+l.fz*1.35,0);
     let ty=(ry+rh/2)-totalTH/2;
