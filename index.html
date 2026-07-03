@@ -772,10 +772,14 @@ input[type=number] { -moz-appearance: textfield; }
       </div>
       <div class="account-list"><div class="chart-wrap"><div class="bar-chart" id="amBarChart"></div></div></div>
       <!-- ヒートマップ -->
-      <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between">
+      <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:600;color:var(--text2)">🟥 保有銘柄ヒートマップ</div>
-        <div style="font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
+        <div id="am-hm-btns" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
+          <button onclick="amSetHeatmapMode('csv')" data-m="csv" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">前回CSV比</button>
+          <button onclick="amSetHeatmapMode('daily')" data-m="daily" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">当日騰落</button>
+        </div>
       </div>
+      <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
       <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
     <div id="accountSections"></div>
@@ -2139,23 +2143,124 @@ function amRender(){
   }
 }
 // ── 保有銘柄ヒートマップ（Squarified Treemap） ──
+// モード: 'csv'=前回CSV比 / 'daily'=当日騰落（前日終値 vs 現在値）
+let amHeatmapMode=localStorage.getItem('amHeatmapMode')||'csv';
+let amDailyFetching=false;
+const AM_QUOTE_KEY='amDailyQuotes_v1';
+const AM_QUOTE_TTL=10*60*1000;// 10分キャッシュ
+
+function amLoadDailyQuotes(){
+  try{return JSON.parse(localStorage.getItem(AM_QUOTE_KEY)||'null');}catch(e){return null;}
+}
+function amSetHeatmapMode(m){
+  if(m==='daily'&&amHeatmapMode==='daily'){
+    // 当日モードで再タップ → 強制更新
+    try{const q=amLoadDailyQuotes();if(q){q.ts=0;localStorage.setItem(AM_QUOTE_KEY,JSON.stringify(q));}}catch(e){}
+  }
+  amHeatmapMode=m;
+  try{localStorage.setItem('amHeatmapMode',m);}catch(e){}
+  amRender();
+}
+function amUpdateHmBtns(){
+  document.querySelectorAll('#am-hm-btns button').forEach(b=>{
+    const on=b.dataset.m===amHeatmapMode;
+    b.style.background=on?'var(--accent,#185FA5)':'transparent';
+    b.style.color=on?'#fff':'var(--text3)';
+    b.style.fontWeight=on?'700':'400';
+  });
+}
+// Worker経由で前日終値と現在値を取得（4並列・キャッシュ保存）
+async function amFetchDailyQuotes(codes){
+  if(amDailyFetching)return;
+  amDailyFetching=true;
+  const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+  const old=amLoadDailyQuotes();
+  const quotes=(old&&old.quotes)||{};
+  const queue=[...codes];
+  const runners=Array.from({length:4},async()=>{
+    while(queue.length){
+      const code=queue.shift();
+      try{
+        const resp=await fetch(`${WORKER}?code=${code}&range=5d`);
+        if(!resp.ok)throw new Error('http '+resp.status);
+        const data=await resp.json();
+        const result=data?.chart?.result?.[0];
+        const cl=(result?.indicators?.quote?.[0]?.close||[]).filter(v=>v!=null);
+        const meta=result?.meta||{};
+        if(cl.length>=2){
+          const cur=(meta.regularMarketPrice&&meta.regularMarketPrice>0)?meta.regularMarketPrice:cl[cl.length-1];
+          const prev=cl[cl.length-2];
+          quotes[code]={cur,prev};
+        }else{
+          quotes[code]={err:1};
+        }
+      }catch(e){quotes[code]={err:1};}
+    }
+  });
+  await Promise.all(runners);
+  try{localStorage.setItem(AM_QUOTE_KEY,JSON.stringify({ts:Date.now(),quotes}));}catch(e){}
+  amDailyFetching=false;
+}
+
 function amRenderHeatmap(accounts,total){
   const el=document.getElementById('amHeatmap');
   if(!el)return;
+  amUpdateHmBtns();
+  const subtitleEl0=document.getElementById('amHeatmapSubtitle');
 
   const EXCL_CATS=['銀行','年金','その他','預り金'];
-  // prevSBIAmount（前回CSV取込金額）がある銘柄のみ表示（SBI未掲載銘柄は除外）
-  const items=accounts
-    .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.prevSBIAmount>0)
-    .map(a=>{
-      const pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
-      return{name:a.name,amount:a.amount,pct,cat:a.cat,id:a.id};
-    })
-    .sort((a,b)=>b.amount-a.amount);
+  let items;
 
-  if(!items.length){
-    el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">SBI CSV取込済みの銘柄がありません</p>';
-    return;
+  if(amHeatmapMode==='daily'){
+    // ── 当日騰落モード: 前日終値 vs 現在値 ──
+    const coded=accounts.filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&(a.cat==='個別株'||a.cat==='高配当')&&/^[0-9][0-9A-Za-z]{3}$/.test((a.code||'').trim()));
+    if(!coded.length){
+      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">証券コード付きの個別株・高配当銘柄がありません</p>';
+      return;
+    }
+    const q=amLoadDailyQuotes();
+    const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
+    const missing=coded.filter(a=>!(fresh&&q.quotes&&q.quotes[a.code.trim()]));
+    if(missing.length){
+      el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${coded.length}銘柄）</p>`;
+      if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色=当日騰落率（前日終値比）';
+      if(!amDailyFetching){
+        amFetchDailyQuotes(coded.map(a=>a.code.trim())).then(()=>{
+          try{amRenderHeatmap(accounts,total);}catch(e){}
+        });
+      }
+      return;
+    }
+    const errNames=[];
+    items=coded.map(a=>{
+      const qd=q.quotes[a.code.trim()];
+      if(!qd||qd.err||!qd.prev||qd.prev<=0){errNames.push(a.name);return null;}
+      const pct=(qd.cur-qd.prev)/qd.prev*100;
+      return{name:a.name,amount:a.amount,pct,cat:a.cat,id:a.id};
+    }).filter(Boolean).sort((a,b)=>b.amount-a.amount);
+    if(!items.length){
+      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">⚠ 株価を取得できませんでした（当日騰落ボタンを再タップで再取得）</p>';
+      return;
+    }
+    if(subtitleEl0){
+      const d=new Date(q.ts);
+      subtitleEl0.textContent=`面積=評価額 / 色=当日騰落率（前日終値比）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄取得失敗`:'');
+    }
+  }else{
+    // ── 前回CSV比モード（従来） ──
+    // prevSBIAmount（前回CSV取込金額）がある銘柄のみ表示（SBI未掲載銘柄は除外）
+    items=accounts
+      .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.prevSBIAmount>0)
+      .map(a=>{
+        const pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
+        return{name:a.name,amount:a.amount,pct,cat:a.cat,id:a.id};
+      })
+      .sort((a,b)=>b.amount-a.amount);
+
+    if(!items.length){
+      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">SBI CSV取込済みの銘柄がありません</p>';
+      return;
+    }
   }
 
   const hasPrevData=true;
@@ -2250,9 +2355,9 @@ function amRenderHeatmap(accounts,total){
 
   squarify(normed,0,0,containerW,TOTAL_H);
 
-  // サブタイトル動的更新
+  // サブタイトル動的更新（当日モードはアイテム生成時に設定済み）
   const subtitleEl=document.getElementById('amHeatmapSubtitle');
-  if(subtitleEl) subtitleEl.textContent='面積=評価額 / 色='+(hasPrevData?'前回CSV比変動率':'含み損益率（前回データなし）');
+  if(subtitleEl&&amHeatmapMode!=='daily') subtitleEl.textContent='面積=評価額 / 色='+(hasPrevData?'前回CSV比変動率':'含み損益率（前回データなし）');
 
   // SVG描画
   const fmtM=v=>{
