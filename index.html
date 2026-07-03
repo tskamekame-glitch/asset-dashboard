@@ -2158,7 +2158,7 @@ function amRender(){
 let amHeatmapMode=localStorage.getItem('amHeatmapMode')||'csv';
 let amHmView=localStorage.getItem('amHmView')||'map';
 let amDailyFetching=false;
-const AM_QUOTE_KEY='amDailyQuotes_v2';
+const AM_QUOTE_KEY='amDailyQuotes_v3';
 const AM_QUOTE_TTL=10*60*1000;// 10分キャッシュ
 const AM_QUOTE_MODES=['daily','m1','y1'];// 株価取得が必要な期間モード
 
@@ -2238,10 +2238,11 @@ async function amFetchDailyQuotes(codes){
           const cur=(meta.regularMarketPrice&&meta.regularMarketPrice>0)?meta.regularMarketPrice:pairs[pairs.length-1].c;
           const prev=pairs[pairs.length-2].c;
           // 約1ヶ月前・約1年前に最も近い終値
-          const near=days=>{const tg=Date.now()-days*86400000;let best=null,bd=Infinity;for(const p of pairs){const d=Math.abs(p.t-tg);if(d<bd){bd=d;best=p;}}return best?best.c:null;};
-          const m1=near(30);
-          const y1=pairs[0].c;// 1yレンジの先頭≒1年前（上場が新しい場合は上場来）
-          quotes[code]={cur,prev,m1,y1};
+          const near=days=>{const tg=Date.now()-days*86400000;let best=null,bd=Infinity;for(const p of pairs){const d=Math.abs(p.t-tg);if(d<bd){bd=d;best=p;}}return best;};
+          const m1p=near(30);
+          const y1p=pairs[0];// 1yレンジの先頭≒1年前（上場が新しい場合は上場来）
+          quotes[code]={cur,prev,m1:m1p?m1p.c:null,y1:y1p.c,
+            curT:pairs[pairs.length-1].t,prevT:pairs[pairs.length-2].t,m1T:m1p?m1p.t:null,y1T:y1p.t};
         }else{
           quotes[code]={err:1};
         }
@@ -2408,7 +2409,7 @@ function amRenderHeatmap(accounts,total){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得価格データのある銘柄がありません</p>';
       return;
     }
-    if(subtitleEl0)subtitleEl0.textContent='SBI証券のみ・面積=評価額 / 色=取得来の含み損益率';
+    if(subtitleEl0)subtitleEl0.textContent='SBI証券のみ・色=取得来の含み損益率【各銘柄の取得時 → 現在】';
   }else if(AM_QUOTE_MODES.includes(amHeatmapMode)){
     // ── 当日/月間/年間モード: 株価取得ベース（投信は連動指数ETFで近似） ──
     const targets=amDailyTargets(accounts);
@@ -2444,8 +2445,19 @@ function amRenderHeatmap(accounts,total){
     }
     if(subtitleEl0){
       const d=new Date(q.ts);
-      const modeLabel={daily:'当日騰落率（前日終値比）',m1:'月間騰落率（約1ヶ月前比）',y1:'年間騰落率（約1年前比）'}[amHeatmapMode];
-      subtitleEl0.textContent=`SBI証券のみ・面積=評価額 / 色=${modeLabel}（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄対象外`:'');
+      const modeLabel={daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode];
+      // 期間の日付範囲: 有効な最初の銘柄の基準日→最新日（日本株は全銘柄ほぼ共通）
+      const baseTKey={daily:'prevT',m1:'m1T',y1:'y1T'}[amHeatmapMode];
+      let rangeStr='';
+      for(const t of targets){
+        const qd=q.quotes[t.qcode];
+        if(qd&&!qd.err&&qd[baseTKey]&&qd.curT){
+          const fd=tm=>{const dd=new Date(tm);const y=dd.getFullYear()!==new Date().getFullYear()?dd.getFullYear()+'/':'';return y+(dd.getMonth()+1)+'/'+dd.getDate();};
+          rangeStr=`${fd(qd[baseTKey])}終値 → ${fd(qd.curT)}`;
+          break;
+        }
+      }
+      subtitleEl0.textContent=`SBI証券のみ・色=${modeLabel}${rangeStr?`【${rangeStr}】`:''}（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄対象外`:'');
     }
   }else{
     // ── 前回CSV比モード（従来） ──
@@ -2545,7 +2557,7 @@ function amRenderHeatmap(accounts,total){
 
   // サブタイトル動的更新（当日モードはアイテム生成時に設定済み）
   const subtitleEl=document.getElementById('amHeatmapSubtitle');
-  if(subtitleEl&&amHeatmapMode==='csv') subtitleEl.textContent='SBI証券のみ・面積=評価額 / 色='+(hasPrevData?'前回CSV比変動率':'含み損益率（前回データなし）');
+  if(subtitleEl&&amHeatmapMode==='csv') subtitleEl.textContent='SBI証券のみ・色='+(hasPrevData?'前回CSV比変動率【前回SBI CSV取込時 → 現在】':'含み損益率（前回データなし）');
 
   // SVG描画
   const fmtM=v=>{
