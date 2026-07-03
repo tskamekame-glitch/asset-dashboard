@@ -2256,6 +2256,36 @@ async function amFetchDailyQuotes(codes){
   amDailyFetching=false;
 }
 
+// ── 同一銘柄ロットの合算（追加購入対応） ──
+// キー: 証券コード優先、なければ「（…買付…）」サフィックスを除いた銘柄名
+function amLotKey(a){
+  const c=(a.code||'').trim();
+  if(c)return'c:'+c;
+  return'n:'+String(a.name||'').replace(/（[^）]*買付[^）]*）$/,'').trim();
+}
+function amLotBaseName(name){
+  return String(name||'').replace(/（[^）]*買付[^）]*）$/,'').trim();
+}
+// entries: {key,name,amount,gain(null可),base,id} → 合算items {name,amount,pct,gain,base,id}
+// gain=nullのロット(取得価格未設定など)は評価額のみ合算し、名前に†を付けて部分計算を明示
+function amMergeLots(entries){
+  const g={};
+  entries.forEach(e=>{
+    const k=e.key;
+    if(!g[k])g[k]={name:e.name,amount:0,gain:0,base:0,id:e.id,partial:false,any:false,lots:0};
+    const m=g[k];
+    m.amount+=e.amount;m.lots++;
+    if(e.gain!=null&&e.base>0){m.gain+=e.gain;m.base+=e.base;m.any=true;}
+    else m.partial=true;
+  });
+  return Object.values(g).filter(m=>m.any).map(m=>({
+    name:m.name+(m.partial?'†':''),
+    amount:m.amount,
+    pct:m.gain/m.base*100,
+    gain:m.gain,base:m.base,id:m.id,lots:m.lots
+  }));
+}
+
 // 当日騰落の取得対象: 個別株/高配当は自コード、投信は自コードまたは連動ETF近似
 function amDailyTargets(accounts){
   const EXCL=['銀行','年金','その他','預り金'];
@@ -2281,7 +2311,14 @@ function amDailyTargets(accounts){
 // ── 上位10銘柄ビュー（保有金額ランキング・当日騰落色付き） ──
 function amRenderTop10(accounts,el,subtitleEl){
   const INVEST=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
-  const items=accounts.filter(a=>!a.sold&&a.amount>0&&INVEST.includes(a.cat))
+  // 同一銘柄のロットを合算してからランキング
+  const lotGroups={};
+  accounts.filter(a=>!a.sold&&a.amount>0&&INVEST.includes(a.cat)).forEach(a=>{
+    const k=amLotKey(a);
+    if(!lotGroups[k]){lotGroups[k]={...a,name:amLotBaseName(a.name),amount:0,_lots:0};}
+    lotGroups[k].amount+=a.amount;lotGroups[k]._lots++;
+  });
+  const items=Object.values(lotGroups)
     .sort((a,b)=>b.amount-a.amount).slice(0,10);
   if(!items.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">投資銘柄がありません</p>';return;}
   const investTotal=accounts.filter(a=>!a.sold&&a.amount>0&&INVEST.includes(a.cat)).reduce((s,a)=>s+a.amount,0);
@@ -2308,7 +2345,7 @@ function amRenderTop10(accounts,el,subtitleEl){
       <div style="width:16px;font-size:11px;color:var(--text3);text-align:right;flex-shrink:0">${i+1}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;gap:6px;font-size:12px">
-          <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</span>
+          <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}${a._lots>1?` <span style="font-size:9px;color:var(--text3)">×${a._lots}口</span>`:''}</span>
           ${pctStr}
         </div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
@@ -2415,16 +2452,22 @@ function amRenderHeatmap(accounts,total){
       subtitleEl0.textContent=`SBI証券のみ・色=取得来の含み損益率【${left} → ${todayS}】`;
     }
     const ALL_INV=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
-    items=accounts.filter(a=>!a.sold&&a.amount>0&&ALL_INV.includes(a.cat)).map(a=>{
+    const entries=accounts.filter(a=>!a.sold&&a.amount>0&&ALL_INV.includes(a.cat)).map(a=>{
       const cost=(typeof _calcCostTotal==='function')?_calcCostTotal(a):0;
-      if(!cost||cost<=0)return null;
-      const ratio=a.amount/cost;
-      if(ratio>50||ratio<0.02)return null;// 整合性ガード
-      return{name:a.name,amount:a.amount,pct:(a.amount-cost)/cost*100,cat:a.cat,id:a.id};
-    }).filter(Boolean).sort((a,b)=>b.amount-a.amount);
+      let gain=null,base=0;
+      if(cost&&cost>0){
+        const ratio=a.amount/cost;
+        if(ratio<=50&&ratio>=0.02){gain=a.amount-cost;base=cost;}// 整合性ガード
+      }
+      return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain,base,id:a.id};
+    });
+    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
     if(!items.length){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得価格データのある銘柄がありません</p>';
       return;
+    }
+    if(subtitleEl0&&items.some(i=>i.name.endsWith('†'))){
+      subtitleEl0.textContent+='　†=取得価格未設定のロットを含む（評価額のみ合算・編集で取得単価を入力すると損益に反映）';
     }
   }else if(AM_QUOTE_MODES.includes(amHeatmapMode)){
     // ── 当日/月間/年間モード: 株価取得ベース（投信は連動指数ETFで近似） ──
@@ -2449,13 +2492,15 @@ function amRenderHeatmap(accounts,total){
     }
     const errNames=[];
     const baseKey={daily:'prev',m1:'m1',y1:'y1'}[amHeatmapMode];
-    items=targets.map(t=>{
+    const entries=targets.map(t=>{
       const qd=q.quotes[t.qcode];
-      const base=qd&&!qd.err?qd[baseKey]:null;
-      if(!base||base<=0){errNames.push(t.a.name);return null;}
-      const pct=(qd.cur-base)/base*100;
-      return{name:t.approx?t.a.name+'≈':t.a.name,amount:t.a.amount,pct,cat:t.a.cat,id:t.a.id};
-    }).filter(Boolean).sort((a,b)=>b.amount-a.amount);
+      const bp=qd&&!qd.err?qd[baseKey]:null;
+      if(!bp||bp<=0){errNames.push(t.a.name);return null;}
+      const pct=(qd.cur-bp)/bp*100;
+      const startVal=t.a.amount/(1+pct/100);
+      return{key:amLotKey(t.a),name:amLotBaseName(t.a.name)+(t.approx?'≈':''),amount:t.a.amount,gain:t.a.amount-startVal,base:startVal,id:t.a.id};
+    }).filter(Boolean);
+    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
     if(!items.length){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">⚠ 株価を取得できませんでした（当日騰落ボタンを再タップで再取得）</p>';
       return;
@@ -2479,13 +2524,10 @@ function amRenderHeatmap(accounts,total){
   }else{
     // ── 前回CSV比モード（従来） ──
     // prevSBIAmount（前回CSV取込金額）がある銘柄のみ表示（SBI未掲載銘柄は除外）
-    items=accounts
+    const entries=accounts
       .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.prevSBIAmount>0)
-      .map(a=>{
-        const pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
-        return{name:a.name,amount:a.amount,pct,cat:a.cat,id:a.id};
-      })
-      .sort((a,b)=>b.amount-a.amount);
+      .map(a=>({key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-a.prevSBIAmount,base:a.prevSBIAmount,id:a.id}));
+    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
 
     if(!items.length){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">SBI CSV取込済みの銘柄がありません</p>';
@@ -2497,6 +2539,7 @@ function amRenderHeatmap(accounts,total){
   if(hmTotalEl){
     let g=0,b=0,cnt=0;
     items.forEach(it=>{
+      if(it.gain!=null&&isFinite(it.gain)&&it.base>0){g+=it.gain;b+=it.base;cnt++;return;}
       if(it.pct==null||!isFinite(it.pct)||it.pct<=-99.9)return;
       const base=it.amount/(1+it.pct/100);
       g+=it.amount-base;b+=base;cnt++;
@@ -2619,11 +2662,12 @@ function amRenderHeatmap(accounts,total){
     const pctFz =Math.min(Math.max(shortSideTile*0.16,7),13);
     const amtFz =Math.min(Math.max(shortSideTile*0.12,6),10);
 
-    // 損益額: 騰落率から期間開始時点の評価額を逆算
+    // 損益額: 合算済みのgainを優先、なければ騰落率から逆算
     let gainStr='';
-    if(node.pct!=null&&isFinite(node.pct)&&node.pct>-99.9){
-      const gain=node.amount-node.amount/(1+node.pct/100);
-      gainStr=(gain>=0?'＋':'－')+fmtM(Math.abs(gain));
+    const nodeGain=(node.gain!=null&&isFinite(node.gain))?node.gain
+      :(node.pct!=null&&isFinite(node.pct)&&node.pct>-99.9)?node.amount-node.amount/(1+node.pct/100):null;
+    if(nodeGain!=null){
+      gainStr=(nodeGain>=0?'＋':'－')+fmtM(Math.abs(nodeGain));
     }
 
     // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
