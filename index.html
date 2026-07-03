@@ -1695,6 +1695,7 @@ input[type=number] { -moz-appearance: textfield; }
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
       <div class="field"><label>セクター（TOPIX-17・任意）</label><select id="fSector" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定 —</option></select></div>
       <div class="field"><label>金融機関（未設定なら名前から自動判定）</label><select id="fBroker" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 自動判定 —</option><option>SBI証券</option><option>PayPay証券</option><option>野村證券</option><option>みずほ証券</option><option>iDeCo・DC</option><option>銀行</option><option>その他</option></select></div>
+      <div class="field"><label>取得日（任意・全期間表示や保有期間に使用）</label><input type="date" id="fBuyDate" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"></div>
 
       <!-- 📊 分析フィールド（個別株・高配当・外国株のみ） -->
       <div id="fAnalysisFields" style="display:none">
@@ -2397,6 +2398,20 @@ function amRenderHeatmap(accounts,total){
 
   if(amHeatmapMode==='all'){
     // ── 全期間モード: 取得来の含み損益率（取得価格 vs 現在評価額・株価取得不要） ──
+    if(subtitleEl0){
+      const now=new Date();
+      const todayS=`${now.getMonth()+1}/${now.getDate()}`;
+      const dates=accounts.filter(a=>!a.sold&&a.amount>0&&a.buyDate).map(a=>a.buyDate).sort();
+      let left='各銘柄の取得時';
+      if(dates.length){
+        const d=new Date(dates[0]);
+        if(!isNaN(d)){
+          const y=d.getFullYear()!==now.getFullYear()?d.getFullYear()+'/':'';
+          left=`最古の取得日 ${y}${d.getMonth()+1}/${d.getDate()}`;
+        }
+      }
+      subtitleEl0.textContent=`SBI証券のみ・色=取得来の含み損益率【${left} → ${todayS}】`;
+    }
     const ALL_INV=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
     items=accounts.filter(a=>!a.sold&&a.amount>0&&ALL_INV.includes(a.cat)).map(a=>{
       const cost=(typeof _calcCostTotal==='function')?_calcCostTotal(a):0;
@@ -2409,7 +2424,6 @@ function amRenderHeatmap(accounts,total){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得価格データのある銘柄がありません</p>';
       return;
     }
-    if(subtitleEl0)subtitleEl0.textContent='SBI証券のみ・色=取得来の含み損益率【各銘柄の取得時 → 現在】';
   }else if(AM_QUOTE_MODES.includes(amHeatmapMode)){
     // ── 当日/月間/年間モード: 株価取得ベース（投信は連動指数ETFで近似） ──
     const targets=amDailyTargets(accounts);
@@ -3191,6 +3205,7 @@ function openAddModal(defaultCat){
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value='';
   if(document.getElementById('fSector'))document.getElementById('fSector').value='';
   if(document.getElementById('fBroker'))document.getElementById('fBroker').value='';
+  if(document.getElementById('fBuyDate'))document.getElementById('fBuyDate').value='';
   ['fSell1','fSell2','fSell3','fPer','fPbr','fEps1','fEps2'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
@@ -3264,6 +3279,7 @@ function openEditModal(id){
   if(document.getElementById('fEarningsDate'))document.getElementById('fEarningsDate').value=a.earningsDate||'';
   if(document.getElementById('fSector'))document.getElementById('fSector').value=a.sector||'';
   if(document.getElementById('fBroker'))document.getElementById('fBroker').value=a.broker||'';
+  if(document.getElementById('fBuyDate'))document.getElementById('fBuyDate').value=a.buyDate||'';
   // 分析フィールド
   if(document.getElementById('fSell1'))document.getElementById('fSell1').value=a.sell1||'';
   if(document.getElementById('fSell2'))document.getElementById('fSell2').value=a.sell2||'';
@@ -3319,6 +3335,7 @@ async function saveAccount(){
   const earningsDate=(document.getElementById('fEarningsDate')?.value||'').trim();
   const sector=(document.getElementById('fSector')?.value||'').trim();
   const broker=(document.getElementById('fBroker')?.value||'').trim();
+  const buyDate=(document.getElementById('fBuyDate')?.value||'').trim();
   // 分析フィールド
   const sell1=parseFloat(document.getElementById('fSell1')?.value)||undefined;
   const sell2=parseFloat(document.getElementById('fSell2')?.value)||undefined;
@@ -3328,8 +3345,8 @@ async function saveAccount(){
   const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
   const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
   const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,...analysis,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,...analysis,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
   // ウォッチ銘柄からの購入登録: ステータスを購入済に更新
   if(purchasedWlId){
@@ -4112,6 +4129,7 @@ async function amApplySBIRows(rows){
       fxRate:fxRateForNew,
       note:'',
       updated:todayStr(),
+      buyDate:row.buyDate||undefined,
       memo:`[SBI自動追加 ${today}]`,
     };
     amAccounts.push(newAcc);
@@ -4270,6 +4288,7 @@ function sendToTrend(){
       price:a.price||0,
       code:a.code||'',
       broker:a.broker||undefined,
+      buyDate:a.buyDate||undefined,
       costIsTotal:(isIndex&&!hasShares&&costPrice>0)||isBalanceAcc&&costPrice>0||!!a.costIsTotal||undefined,
     };
   });
@@ -4332,13 +4351,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:Z${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:Z1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AA${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AA1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -4426,7 +4445,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:Z1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AA1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -4455,6 +4474,7 @@ async function amLoadFromSheet(){
       earningsDate:r[16]||'',
       sector:r[24]||'',
       broker:r[25]||'',
+      buyDate:r[26]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
@@ -8599,6 +8619,7 @@ function wlMarkPurchased(id){
     if(sec)gv('fSector',sec);
   }catch(e){}
   gv('fNote','ウォッチ銘柄から購入'+(s.account?`（${s.account}）`:''));
+  gv('fBuyDate',todayStr());// 取得日=今日
   if(typeof amCalcAmount==='function')try{amCalcAmount();}catch(e){}
   wlPurchaseSourceId=id;
 }
@@ -10942,7 +10963,7 @@ function pnlRender(){
     const subLabel=item.type==='unrealized'?'評価損益':
                    item.type==='realized'?('確定損益'+(item.date?' · '+item.date:'')):'損益';
     const chartLink=item.type==='unrealized'&&item.code
-      ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
+      ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.buyDate||item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
       :'';
     const editBtn=item.type==='realized'&&item.id!=null
       ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
