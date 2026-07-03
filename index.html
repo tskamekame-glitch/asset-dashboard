@@ -1517,6 +1517,22 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
 </div>
 
+<!-- 予算設定モーダル -->
+<div class="pf-modal-overlay" id="cfBudgetModal" onclick="if(event.target===this)cfCloseBudget()">
+  <div class="pf-modal" style="max-height:85dvh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="pf-modal-title">⚙ カテゴリ別予算</div>
+      <button onclick="cfCloseBudget()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin:0 0 10px;line-height:1.5">月間予算を設定すると、カテゴリ別内訳に消化率バーとペース警告が表示されます。空欄=予算なし。Sheetsで端末間同期されます。</p>
+    <div id="cf-budget-list"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-cancel" onclick="cfCloseBudget()" style="flex:1">キャンセル</button>
+      <button class="btn-accent" onclick="cfSaveBudget()" style="flex:2">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- CSV取込モーダル -->
 <div class="pf-modal-overlay" id="cfImportModal" onclick="if(event.target===this)cfCloseImport()">
   <div class="pf-modal" style="max-height:90dvh;overflow-y:auto">
@@ -8821,11 +8837,75 @@ async function cfLoadFromSheet(){
     }));
     cfData=loaded;
     cfSaveLocal();
+    await cfLoadBudgetsFromSheet();
     if(typeof cfRender==='function'&&document.getElementById('tab-cashflow')?.classList.contains('active'))cfRender();
   }catch(e){console.error('cfLoadFromSheet error',e);}
 }
 
 function cfSaveLocal(){try{localStorage.setItem(CF_KEY,JSON.stringify(cfData));}catch(e){}}
+
+// ─── カテゴリ別予算 ───
+const CF_BUDGET_KEY='cfBudgets_v1';
+let cfBudgets={};
+function cfLoadBudgets(){try{cfBudgets=JSON.parse(localStorage.getItem(CF_BUDGET_KEY)||'{}');}catch(e){cfBudgets={};}}
+function cfSaveBudgets(){
+  try{localStorage.setItem(CF_BUDGET_KEY,JSON.stringify(cfBudgets));}catch(e){}
+  cfSaveBudgetsToSheet();
+}
+async function cfSaveBudgetsToSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:'cashflow!H1',valueInputOption:'RAW',resource:{values:[[JSON.stringify(cfBudgets)]]}});
+  }catch(e){console.warn('cfSaveBudgetsToSheet err',e);}
+}
+async function cfLoadBudgetsFromSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'cashflow!H1'});
+    const raw=res.result.values?.[0]?.[0];
+    if(raw){cfBudgets=JSON.parse(raw);try{localStorage.setItem(CF_BUDGET_KEY,raw);}catch(e){}}
+  }catch(e){}
+}
+// 予算設定対象カテゴリ: モーダルの支出カテゴリ + 実データで使われている支出カテゴリ
+function cfBudgetCatList(){
+  const base=['食費','日用品','家賃','電気','水道','ガス','通信費','交通費','積立','保険','税金','税金・保険','娯楽','その他支出'];
+  const used=new Set(cfData.filter(d=>d.type==='expense').map(d=>d.cat));
+  base.forEach(c=>used.add(c));
+  used.delete('振替');
+  // baseの順序を優先し、追加分は後ろに
+  const extra=[...used].filter(c=>!base.includes(c));
+  return[...base,...extra];
+}
+function cfOpenBudget(){
+  cfLoad();cfLoadBudgets();
+  const bg=document.getElementById('cfBudgetModal');
+  const listEl=document.getElementById('cf-budget-list');
+  if(!bg||!listEl)return;
+  listEl.innerHTML=cfBudgetCatList().map(cat=>{
+    const col=CF_CAT_COLOR[cat]||'#888';
+    const v=cfBudgets[cat]||'';
+    return`<div style="display:grid;grid-template-columns:1fr 130px;gap:8px;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:${col}"></div><span style="font-size:13px">${cat}</span></div>
+      <input data-budget-cat="${cat}" type="text" inputmode="numeric" value="${v}" placeholder="未設定" style="width:100%;padding:7px 10px;font-size:13px;text-align:right;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);outline:none;font-family:inherit">
+    </div>`;
+  }).join('');
+  bg.style.display='flex';
+}
+function cfCloseBudget(){const bg=document.getElementById('cfBudgetModal');if(bg)bg.style.display='none';}
+function cfSaveBudget(){
+  const listEl=document.getElementById('cf-budget-list');
+  if(!listEl)return;
+  const next={};
+  listEl.querySelectorAll('input[data-budget-cat]').forEach(inp=>{
+    const v=parseFloat(String(inp.value).replace(/[,，\s]/g,''))||0;
+    if(v>0)next[inp.dataset.budgetCat]=v;
+  });
+  cfBudgets=next;
+  cfSaveBudgets();
+  cfCloseBudget();
+  cfRender();
+  showToast('✅ 予算を保存しました');
+}
 function cfUID(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
 function cfFmt(n){return'¥'+Math.abs(Math.round(n)).toLocaleString('ja-JP');}
 
@@ -8874,10 +8954,22 @@ function cfRender(){
   const balance=income-expense;
 
   // サマリーカード
+  // 貯蓄率と月末着地予測
+  const savingRate=income>0?(balance/income*100):null;
+  const[cfY,cfM]=cfCurrentMonth.split('-').map(Number);
+  const cfNow=new Date();
+  const isCurMonth=(cfNow.getFullYear()===cfY&&(cfNow.getMonth()+1)===cfM);
+  const daysInM=new Date(cfY,cfM,0).getDate();
+  const elapsedD=isCurMonth?Math.min(cfNow.getDate(),daysInM):daysInM;
+  const projExpense=elapsedD>0?expense/elapsedD*daysInM:expense;
+  const srColor=savingRate==null?'var(--text3)':savingRate>=20?'var(--green)':savingRate>=0?'#fbbf24':'var(--danger)';
+  const projColor=isCurMonth&&income>0&&projExpense>income?'var(--danger)':'var(--text)';
   const sg=document.getElementById('cf-summary-grid');
   sg.innerHTML=`
     <div class="metric"><div class="label">収入合計</div><div class="value up">${cfFmt(income)}</div></div>
     <div class="metric"><div class="label">支出合計</div><div class="value down">${cfFmt(expense)}</div></div>
+    <div class="metric"><div class="label">貯蓄率</div><div class="value" style="color:${srColor}">${savingRate==null?'—':savingRate.toFixed(1)+'%'}</div><div class="sub">${savingRate==null?'収入の記録なし':savingRate>=20?'良好 ✅':savingRate>=0?'もう一歩':'持ち出し ⚠️'}</div></div>
+    <div class="metric"><div class="label">${isCurMonth?'月末着地予測（支出）':'日平均支出'}</div><div class="value" style="color:${projColor}">${isCurMonth?cfFmt(projExpense):cfFmt(daysInM>0?expense/daysInM:0)}</div><div class="sub">${isCurMonth?`${elapsedD}日経過ペース${income>0&&projExpense>income?'・収入超過⚠️':''}`:`${daysInM}日間`}</div></div>
     <div class="metric" style="grid-column:1/-1;border-top:2px solid ${balance>=0?'var(--green)':'var(--danger)'}">
       <div class="label">月次収支</div>
       <div class="value" style="font-size:20px;color:${balance>=0?'var(--green)':'var(--danger)'}">${balance>=0?'＋':'－'}${cfFmt(balance)}</div>
@@ -8885,26 +8977,64 @@ function cfRender(){
       </div>
     </div>`;
 
-  // カテゴリ別サマリー（振替除外）
+  // カテゴリ別サマリー（振替除外・予算対応）
+  cfLoadBudgets();
   const cats={};
   monthReal.forEach(d=>{if(!cats[d.cat])cats[d.cat]={type:d.type,total:0};cats[d.cat].total+=d.amount;});
   const cs=document.getElementById('cf-cat-summary');
+  const budgetCats=Object.keys(cfBudgets).filter(k=>cfBudgets[k]>0);
+  const csHead=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text3);font-weight:500">カテゴリ別内訳${budgetCats.length?'（予算比）':''}</div>
+    <button onclick="cfOpenBudget()" style="font-size:11px;padding:3px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text2);cursor:pointer;font-family:inherit">⚙ 予算設定</button>
+  </div>`;
   if(Object.keys(cats).length===0){
-    cs.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">この月のカテゴリ別集計がここに表示されます</div>';
+    cs.innerHTML=csHead+'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">この月のカテゴリ別集計がここに表示されます</div>';
   }else{
     const sorted=Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
     const maxVal=sorted[0]?.[1]?.total||1;
-    cs.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:500">カテゴリ別内訳</div>'+
+    const elapsedRatio=elapsedD/daysInM;
+    // 予算合計サマリー（予算設定カテゴリのみ）
+    let budgetSummary='';
+    if(budgetCats.length){
+      const totalBudget=budgetCats.reduce((s,k)=>s+cfBudgets[k],0);
+      const totalSpent=budgetCats.reduce((s,k)=>s+(cats[k]?.type==='expense'?cats[k].total:0),0);
+      const tPct=totalBudget>0?totalSpent/totalBudget*100:0;
+      const tCol=tPct>=100?'var(--danger)':tPct>=80?'#fbbf24':'var(--green)';
+      budgetSummary=`<div style="margin-bottom:10px;padding:8px 10px;background:var(--bg2);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
+          <span style="color:var(--text2);font-weight:600">予算消化（対象${budgetCats.length}カテゴリ）</span>
+          <span style="font-weight:700;color:${tCol}">${cfFmt(totalSpent)} / ${cfFmt(totalBudget)}（${tPct.toFixed(0)}%）</span>
+        </div>
+        <div style="height:7px;background:rgba(128,128,128,0.15);border-radius:4px;overflow:hidden;position:relative">
+          <div style="width:${Math.min(tPct,100)}%;height:100%;background:${tCol};border-radius:4px;transition:width 0.4s"></div>
+          ${isCurMonth?`<div style="position:absolute;top:-1px;bottom:-1px;left:${(elapsedRatio*100).toFixed(1)}%;width:1.5px;background:var(--text3)" title="経過日数の目安"></div>`:''}
+        </div>
+      </div>`;
+    }
+    cs.innerHTML=csHead+budgetSummary+
       sorted.map(([cat,info])=>{
-        const pct=Math.round((info.total/maxVal)*100);
         const col=CF_CAT_COLOR[cat]||'#888';
         const isIn=info.type==='income';
+        const budget=(!isIn&&cfBudgets[cat]>0)?cfBudgets[cat]:null;
+        let pct,barCol=col,rightHtml,paceWarn='';
+        if(budget){
+          const bPct=info.total/budget*100;
+          pct=Math.min(bPct,100);
+          barCol=bPct>=100?'var(--danger)':bPct>=80?'#fbbf24':'var(--green)';
+          if(isCurMonth&&bPct/100>elapsedRatio+0.1&&bPct<100)paceWarn=' <span title="経過日数に対してペース超過" style="font-size:10px">⚠</span>';
+          if(bPct>=100)paceWarn=' <span title="予算超過" style="font-size:10px">🔴</span>';
+          rightHtml=`<div style="font-size:11px;font-weight:600;min-width:110px;text-align:right"><span style="color:${barCol}">－${cfFmt(info.total)}</span><span style="color:var(--text3);font-weight:400"> /${cfFmt(budget)}</span><div style="font-size:9px;color:${barCol}">${bPct.toFixed(0)}%${paceWarn}</div></div>`;
+        }else{
+          pct=Math.round((info.total/maxVal)*100);
+          rightHtml=`<div style="font-size:12px;font-weight:600;min-width:72px;text-align:right;color:${isIn?'var(--green)':'var(--text)'}">${isIn?'＋':'－'}${cfFmt(info.total)}</div>`;
+        }
         return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="width:60px;font-size:11px;color:var(--text2);text-align:right;flex-shrink:0">${cat}</div>
-          <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">
-            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;transition:width 0.4s"></div>
+          <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;position:relative">
+            <div style="width:${pct}%;height:100%;background:${budget?barCol:col};border-radius:3px;transition:width 0.4s"></div>
+            ${budget&&isCurMonth?`<div style="position:absolute;top:-1px;bottom:-1px;left:${(elapsedRatio*100).toFixed(1)}%;width:1.5px;background:var(--text3)"></div>`:''}
           </div>
-          <div style="font-size:12px;font-weight:600;min-width:72px;text-align:right;color:${isIn?'var(--green)':'var(--text)'}">${isIn?'＋':'－'}${cfFmt(info.total)}</div>
+          ${rightHtml}
         </div>`;
       }).join('');
   }
@@ -9320,7 +9450,7 @@ const CF_CAT_RULES=[
   // 保険
   {pat:/保険|insurance/i,                                         type:'expense', cat:'保険'},
   // クレジットカード引落 → 振替（Vpassで別途取込するため二重計上防止）
-  {pat:/ﾗｸﾃﾝｶ-ﾄﾞ|楽天カード|ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ|三井住友カード|ｼﾞﾔﾂｸｽ|JACCS|ジャックス|UCS|PayPayカード|ﾍﾟｲﾍﾟｲｶ-ﾄﾞ|引落.*カード|カード.*引落|振替.*カード/i, type:'transfer', cat:'振替'},
+  {pat:/ﾗｸﾃﾝｶ-ﾄﾞ|楽天カード|ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ|三井住友カード|ｼﾞﾔﾂｸｽ|JACCS|ジャックス|UCS|PayPayカード|ﾍﾟｲﾍﾟｲｶ-ﾄﾞ|引落.*カード|カード.*引落|振替.*カード|ＳＭＢＣファイナンス|SMBCファイナンス|ｴｽｴﾑﾋﾞ-ｼ-|Vpass|ﾋﾞｻﾞ.*ｶ-ﾄﾞ|ｾﾃﾞｨﾅ|セディナ|ｾｿﾞﾝ|セゾン|ｵﾘｺ|オリコ|ﾆｺｽ|ニコス|ｴﾎﾟｽ|エポス|ﾋﾞｭ-ｶ-ﾄﾞ|ビューカード|ｲｵﾝｸﾚｼﾞﾂﾄ|イオンクレジット|ｼﾞｪ-ｼ-ﾋﾞ-|ＪＣＢ|ｱﾒﾘｶﾝｴｷｽﾌﾟﾚｽ|アメックス/i, type:'transfer', cat:'振替'},
   // 税金・社会保険
   {pat:/国民健康保険|国民年金|住民税|所得税|社会保険|年金保険料/i, type:'expense', cat:'税金・保険'},
   // 娯楽・サブスク・通販（デジタルコンテンツ・配信・宅配）
@@ -9647,35 +9777,81 @@ function cfShowPreview(rows){
   const newRows=rows.filter(r=>!existKeys.has(`${r.date}|${r.amount}|${r.memo}`));
   const dupCount=rows.length-newRows.length;
 
+  // 二重計上の疑い検出: 既存の支出明細と同額かつ日付が近い（±10日）ものをマーク
+  const existExpense=cfData.filter(d=>d.type==='expense'&&!cfIsTransfer(d));
+  newRows.forEach(r=>{
+    r._origType=r.type;r._origCat=r.cat;
+    if(r.type!=='expense')return;
+    const rd=new Date(r.date).getTime();
+    const hit=existExpense.find(d=>d.amount===r.amount&&Math.abs(new Date(d.date).getTime()-rd)<=10*86400000&&d.memo!==r.memo);
+    if(hit)r._suspect=`${hit.date} ${hit.memo||hit.cat}`;
+  });
+
+  cfImportPending=newRows;// 重複除去済みを保存
+  cfRenderPreview(dupCount);
+  preview.style.display='block';
+  okBtn.style.display=newRows.length>0?'block':'none';
+}
+
+// プレビュー描画（振替トグルで再描画される）
+function cfRenderPreview(dupCount){
+  const stats=document.getElementById('cf-preview-stats');
+  const list=document.getElementById('cf-preview-list');
+  const warn=document.getElementById('cf-preview-warn');
+  const newRows=cfImportPending;
   const income=newRows.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
   const expense=newRows.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+  const tfCount=newRows.filter(r=>cfIsTransfer(r)).length;
+  const suspectCount=newRows.filter(r=>r._suspect&&!cfIsTransfer(r)).length;
 
   stats.innerHTML=`
     <div class="metric"><div class="label">新規件数</div><div class="value">${newRows.length}件</div></div>
     <div class="metric"><div class="label">収入合計</div><div class="value up">+¥${income.toLocaleString()}</div></div>
-    <div class="metric"><div class="label">支出合計</div><div class="value">¥${expense.toLocaleString()}</div></div>`;
+    <div class="metric"><div class="label">支出合計</div><div class="value">¥${expense.toLocaleString()}</div></div>
+    <div class="metric"><div class="label">振替（集計除外）</div><div class="value" style="color:var(--text3)">${tfCount}件</div></div>`;
 
-  warn.textContent=dupCount>0?`※ 重複 ${dupCount}件はスキップします`:'';
+  const warns=[];
+  if(dupCount>0)warns.push(`重複 ${dupCount}件はスキップします`);
+  if(suspectCount>0)warns.push(`⚠ 同額の既存明細がある行が${suspectCount}件あります（二重計上の可能性）。該当行の「振替」をONにすると集計から除外されます`);
+  warn.innerHTML=warns.length?'※ '+warns.join('<br>※ '):'';
 
-  list.innerHTML=newRows.slice(0,50).map(r=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:0.5px solid var(--border)">
-      <div style="width:7px;height:7px;border-radius:50%;background:${r.type==='income'?'var(--green)':'var(--amber)'};flex-shrink:0"></div>
+  list.innerHTML=newRows.slice(0,80).map((r,i)=>{
+    const isTf=cfIsTransfer(r);
+    const dotCol=isTf?'#9ca3af':(r.type==='income'?'var(--green)':'var(--amber)');
+    return`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:0.5px solid var(--border);${isTf?'opacity:0.6':''}${r._suspect&&!isTf?'background:rgba(251,191,36,0.08)':''}">
+      <div style="width:7px;height:7px;border-radius:50%;background:${dotCol};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.memo||r.cat}</div>
-        <div style="font-size:10px;color:var(--text3)">${r.date} · ${r.cat}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.date} · ${isTf?'振替':r.cat}</div>
+        ${r._suspect&&!isTf?`<div style="font-size:9px;color:#fbbf24">⚠ 同額あり: ${esc(r._suspect).slice(0,30)}</div>`:''}
       </div>
-      <div style="font-size:12px;font-weight:600;white-space:nowrap;color:${r.type==='income'?'var(--green)':'var(--text)'}">${r.type==='income'?'＋':'－'}¥${r.amount.toLocaleString()}</div>
-    </div>`).join('')+(newRows.length>50?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--text3)">他 ${newRows.length-50}件...</div>`:'');
+      <div style="font-size:12px;font-weight:600;white-space:nowrap;color:${isTf?'var(--text3)':(r.type==='income'?'var(--green)':'var(--text)')}">${isTf?'↔':(r.type==='income'?'＋':'－')}¥${r.amount.toLocaleString()}</div>
+      <label style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--text3);cursor:pointer;flex-shrink:0;user-select:none">
+        <input type="checkbox" ${isTf?'checked':''} onchange="cfTogglePreviewTransfer(${i})" style="width:14px;height:14px;cursor:pointer;accent-color:#9ca3af">振替
+      </label>
+    </div>`;
+  }).join('')+(newRows.length>80?`<div style="text-align:center;padding:8px;font-size:11px;color:var(--text3)">他 ${newRows.length-80}件...</div>`:'');
+}
 
-  cfImportPending=newRows;// 重複除去済みを保存
-  preview.style.display='block';
-  okBtn.style.display=newRows.length>0?'block':'none';
+// プレビュー行の振替ON/OFF切替
+function cfTogglePreviewTransfer(i){
+  const r=cfImportPending[i];
+  if(!r)return;
+  if(cfIsTransfer(r)){
+    r.type=(r._origType&&r._origType!=='transfer')?r._origType:'expense';
+    r.cat=(r._origCat&&r._origCat!=='振替')?r._origCat:'その他支出';
+  }else{
+    r.type='transfer';r.cat='振替';
+  }
+  cfRenderPreview(0);
 }
 
 function cfImportConfirm(){
   if(!cfImportPending.length){showToast('⚠ 取込データがありません');return;}
   cfLoad();
-  cfData.push(...cfImportPending);
+  // 内部フィールド(_origType等)を除いたクリーンなオブジェクトで登録
+  cfData.push(...cfImportPending.map(r=>({id:r.id,type:r.type,cat:r.cat,amount:r.amount,date:r.date,memo:r.memo})));
   // 日付順にソート
   cfData.sort((a,b)=>b.date.localeCompare(a.date));
   cfSave();
