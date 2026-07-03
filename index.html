@@ -774,9 +774,16 @@ input[type=number] { -moz-appearance: textfield; }
       <!-- ヒートマップ -->
       <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:600;color:var(--text2)">🟥 保有銘柄ヒートマップ</div>
-        <div id="am-hm-btns" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
-          <button onclick="amSetHeatmapMode('csv')" data-m="csv" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">前回CSV比</button>
-          <button onclick="amSetHeatmapMode('daily')" data-m="daily" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">当日騰落</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <div id="am-hm-views" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
+            <button onclick="amSetHmView('map')" data-v="map" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">ヒートマップ</button>
+            <button onclick="amSetHmView('top10')" data-v="top10" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">上位10銘柄</button>
+            <button onclick="amSetHmView('comp')" data-v="comp" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">資産構成</button>
+          </div>
+          <div id="am-hm-btns" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
+            <button onclick="amSetHeatmapMode('csv')" data-m="csv" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">前回CSV比</button>
+            <button onclick="amSetHeatmapMode('daily')" data-m="daily" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">当日騰落</button>
+          </div>
         </div>
       </div>
       <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
@@ -2144,10 +2151,35 @@ function amRender(){
 }
 // ── 保有銘柄ヒートマップ（Squarified Treemap） ──
 // モード: 'csv'=前回CSV比 / 'daily'=当日騰落（前日終値 vs 現在値）
+// ビュー: 'map'=ヒートマップ / 'top10'=上位10銘柄 / 'comp'=資産構成
 let amHeatmapMode=localStorage.getItem('amHeatmapMode')||'csv';
+let amHmView=localStorage.getItem('amHmView')||'map';
 let amDailyFetching=false;
 const AM_QUOTE_KEY='amDailyQuotes_v1';
 const AM_QUOTE_TTL=10*60*1000;// 10分キャッシュ
+
+function amSetHmView(v){
+  amHmView=v;
+  try{localStorage.setItem('amHmView',v);}catch(e){}
+  amRender();
+}
+// インデックス投信 → 連動指数ETFコードで当日騰落を近似
+function amIndexProxyCode(name){
+  const n=name||'';
+  if(/日経半導体/.test(n))return'200A';
+  if(/日経|225|Ｎ２２５|N225/i.test(n))return'1321';
+  if(/S&P\s*500|Ｓ＆Ｐ|SP500|米国株式/i.test(n))return'1655';
+  if(/NASDAQ|ナスダック/i.test(n))return'1545';
+  if(/全世界|オール・?カントリー|オルカン/.test(n))return'2559';
+  if(/TOPIX|トピックス/i.test(n))return'1306';
+  if(/インド/.test(n))return'1678';
+  if(/先進国/.test(n))return'1657';
+  if(/FANG/i.test(n))return'316A';
+  if(/中国/.test(n))return'1309';
+  if(/日本株|国内株/.test(n))return'1306';
+  if(/米国株|米株/.test(n))return'1655';
+  return null;
+}
 
 function amLoadDailyQuotes(){
   try{return JSON.parse(localStorage.getItem(AM_QUOTE_KEY)||'null');}catch(e){return null;}
@@ -2168,6 +2200,15 @@ function amUpdateHmBtns(){
     b.style.color=on?'#fff':'var(--text3)';
     b.style.fontWeight=on?'700':'400';
   });
+  document.querySelectorAll('#am-hm-views button').forEach(b=>{
+    const on=b.dataset.v===amHmView;
+    b.style.background=on?'var(--accent,#185FA5)':'transparent';
+    b.style.color=on?'#fff':'var(--text3)';
+    b.style.fontWeight=on?'700':'400';
+  });
+  // 前回比/当日トグルはヒートマップ・上位10でのみ意味を持つ
+  const modeBtns=document.getElementById('am-hm-btns');
+  if(modeBtns)modeBtns.style.display=(amHmView==='comp')?'none':'flex';
 }
 // Worker経由で前日終値と現在値を取得（4並列・キャッシュ保存）
 async function amFetchDailyQuotes(codes){
@@ -2202,41 +2243,166 @@ async function amFetchDailyQuotes(codes){
   amDailyFetching=false;
 }
 
+// 当日騰落の取得対象: 個別株/高配当は自コード、投信は自コードまたは連動ETF近似
+function amDailyTargets(accounts){
+  const EXCL=['銀行','年金','その他','預り金'];
+  const IDX=['全世界インデックス','日本インデックス','インドインデックス'];
+  const targets=[];
+  accounts.forEach(a=>{
+    if(a.sold||!a.amount||a.amount<=0||EXCL.includes(a.cat))return;
+    const code=(a.code||'').trim();
+    const okCode=/^[0-9][0-9A-Za-z]{3}$/.test(code);
+    if(a.cat==='個別株'||a.cat==='高配当'){
+      if(okCode)targets.push({a,qcode:code,approx:false});
+    }else if(IDX.includes(a.cat)){
+      if(okCode)targets.push({a,qcode:code,approx:false});
+      else{
+        const p=amIndexProxyCode(a.name);
+        if(p)targets.push({a,qcode:p,approx:true});
+      }
+    }
+  });
+  return targets;
+}
+
+// ── 上位10銘柄ビュー（保有金額ランキング・当日騰落色付き） ──
+function amRenderTop10(accounts,el,subtitleEl){
+  const INVEST=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
+  const items=accounts.filter(a=>!a.sold&&a.amount>0&&INVEST.includes(a.cat))
+    .sort((a,b)=>b.amount-a.amount).slice(0,10);
+  if(!items.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">投資銘柄がありません</p>';return;}
+  const investTotal=accounts.filter(a=>!a.sold&&a.amount>0&&INVEST.includes(a.cat)).reduce((s,a)=>s+a.amount,0);
+  const maxAmt=items[0].amount;
+  // 当日騰落（キャッシュがあれば色付け）
+  const q=amLoadDailyQuotes();
+  const pctOf=a=>{
+    if(!q||!q.quotes)return null;
+    const t=amDailyTargets([a])[0];
+    if(!t)return null;
+    const qd=q.quotes[t.qcode];
+    if(!qd||qd.err||!qd.prev||qd.prev<=0)return null;
+    return{pct:(qd.cur-qd.prev)/qd.prev*100,approx:t.approx};
+  };
+  const fm=v=>v>=1e4?(v/1e4).toFixed(1).replace(/\.0$/,'')+'万':fmt(v);
+  el.innerHTML=items.map((a,i)=>{
+    const p=pctOf(a);
+    const barCol=p==null?'var(--accent,#185FA5)':(p.pct>=0?'#1a9e6a':'#cc4a40');
+    const pctStr=p==null?'':`<span style="color:${p.pct>=0?'#1a9e6a':'#cc4a40'};font-weight:700;font-size:11px">${p.pct>=0?'+':''}${p.pct.toFixed(2)}%${p.approx?'≈':''}</span>`;
+    const share=investTotal>0?(a.amount/investTotal*100).toFixed(1):'0';
+    return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer" onclick="openEditModal(${a.id})">
+      <div style="width:16px;font-size:11px;color:var(--text3);text-align:right;flex-shrink:0">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:6px;font-size:12px">
+          <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</span>
+          ${pctStr}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+          <div style="flex:1;height:9px;background:rgba(128,128,128,0.1);border-radius:4px;overflow:hidden">
+            <div style="width:${(a.amount/maxAmt*100).toFixed(1)}%;height:100%;background:${barCol};border-radius:4px"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text2);white-space:nowrap;min-width:88px;text-align:right">¥${fm(a.amount)} <span style="color:var(--text3)">(${share}%)</span></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  if(subtitleEl){
+    const hasQ=q&&q.quotes;
+    subtitleEl.textContent=`保有金額 上位10銘柄（投資分 ¥${fmt(investTotal)}中）`+(hasQ?'・バー色=当日騰落':'・当日騰落モードで一度更新すると騰落色が付きます');
+  }
+}
+
+// ── 資産構成ビュー（SBI風ドーナツ） ──
+function amRenderComposition(accounts,el,subtitleEl){
+  const IDX=['全世界インデックス','日本インデックス','インドインデックス'];
+  const groups=[
+    {name:'日本株式',color:'#E4536B',test:a=>a.cat==='個別株'||a.cat==='高配当'},
+    {name:'米国株式',color:'#3B82C4',test:a=>a.cat==='外国株式'},
+    {name:'投資信託',color:'#C7D24A',test:a=>IDX.includes(a.cat)},
+    {name:'現金',color:'#EFB53C',test:a=>a.cat==='銀行'||a.cat==='預り金'},
+    {name:'年金',color:'#8B5CF6',test:a=>a.cat==='年金'},
+    {name:'その他',color:'#888780',test:a=>true},
+  ];
+  const live=accounts.filter(a=>!a.sold&&a.amount>0);
+  const sums=[];const used=new Set();
+  groups.forEach(g=>{
+    const hit=live.filter(a=>!used.has(a.id)&&g.test(a));
+    hit.forEach(a=>used.add(a.id));
+    const v=hit.reduce((s,a)=>s+a.amount,0);
+    if(v>0)sums.push({...g,value:v});
+  });
+  const totalV=sums.reduce((s,g)=>s+g.value,0);
+  if(!totalV){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">資産データがありません</p>';return;}
+
+  // ドーナツSVG
+  const R=62,C=2*Math.PI*R;
+  let off=0,segs='';
+  sums.forEach(g=>{
+    const len=g.value/totalV*C;
+    segs+=`<circle cx="90" cy="90" r="${R}" fill="none" stroke="${g.color}" stroke-width="26" stroke-dasharray="${Math.max(len-1.5,0.5)} ${C-Math.max(len-1.5,0.5)}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"/>`;
+    off+=len;
+  });
+  const legend=sums.map(g=>{
+    const pct=(g.value/totalV*100).toFixed(1);
+    return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+      <span style="width:9px;height:9px;border-radius:2px;background:${g.color};flex-shrink:0"></span>
+      <span style="flex:1;font-weight:600">${g.name}</span>
+      <span style="color:var(--text2);font-weight:700;min-width:52px;text-align:right">${pct}%</span>
+      <span style="color:var(--text3);min-width:100px;text-align:right">¥${fmt(g.value)}</span>
+    </div>`;
+  }).join('');
+  el.innerHTML=`
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="position:relative;width:180px;height:180px">
+        <svg viewBox="0 0 180 180" width="180" height="180">${segs}</svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+          <div style="font-size:10px;color:var(--text3)">資産総額</div>
+          <div style="font-size:16px;font-weight:800">¥${fmt(totalV)}</div>
+        </div>
+      </div>
+      <div style="width:100%;max-width:420px">${legend}</div>
+    </div>`;
+  if(subtitleEl)subtitleEl.textContent='資産構成（売却済み除く・カテゴリ別）';
+}
+
 function amRenderHeatmap(accounts,total){
   const el=document.getElementById('amHeatmap');
   if(!el)return;
   amUpdateHmBtns();
   const subtitleEl0=document.getElementById('amHeatmapSubtitle');
 
+  // ── ビュー分岐 ──
+  if(amHmView==='top10'){amRenderTop10(accounts,el,subtitleEl0);return;}
+  if(amHmView==='comp'){amRenderComposition(accounts,el,subtitleEl0);return;}
+
   const EXCL_CATS=['銀行','年金','その他','預り金'];
   let items;
 
   if(amHeatmapMode==='daily'){
-    // ── 当日騰落モード: 前日終値 vs 現在値 ──
-    const coded=accounts.filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&(a.cat==='個別株'||a.cat==='高配当')&&/^[0-9][0-9A-Za-z]{3}$/.test((a.code||'').trim()));
-    if(!coded.length){
-      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">証券コード付きの個別株・高配当銘柄がありません</p>';
+    // ── 当日騰落モード: 前日終値 vs 現在値（投信は連動指数ETFで近似） ──
+    const targets=amDailyTargets(accounts);
+    if(!targets.length){
+      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">証券コード付きの銘柄・対応する投信がありません</p>';
       return;
     }
     const q=amLoadDailyQuotes();
     const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
-    const missing=coded.filter(a=>!(fresh&&q.quotes&&q.quotes[a.code.trim()]));
+    const missing=targets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
     if(missing.length){
-      el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${coded.length}銘柄）</p>`;
+      el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
       if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色=当日騰落率（前日終値比）';
       if(!amDailyFetching){
-        amFetchDailyQuotes(coded.map(a=>a.code.trim())).then(()=>{
+        amFetchDailyQuotes([...new Set(targets.map(t=>t.qcode))]).then(()=>{
           try{amRenderHeatmap(accounts,total);}catch(e){}
         });
       }
       return;
     }
     const errNames=[];
-    items=coded.map(a=>{
-      const qd=q.quotes[a.code.trim()];
-      if(!qd||qd.err||!qd.prev||qd.prev<=0){errNames.push(a.name);return null;}
+    items=targets.map(t=>{
+      const qd=q.quotes[t.qcode];
+      if(!qd||qd.err||!qd.prev||qd.prev<=0){errNames.push(t.a.name);return null;}
       const pct=(qd.cur-qd.prev)/qd.prev*100;
-      return{name:a.name,amount:a.amount,pct,cat:a.cat,id:a.id};
+      return{name:t.approx?t.a.name+'≈':t.a.name,amount:t.a.amount,pct,cat:t.a.cat,id:t.a.id};
     }).filter(Boolean).sort((a,b)=>b.amount-a.amount);
     if(!items.length){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">⚠ 株価を取得できませんでした（当日騰落ボタンを再タップで再取得）</p>';
@@ -2244,7 +2410,7 @@ function amRenderHeatmap(accounts,total){
     }
     if(subtitleEl0){
       const d=new Date(q.ts);
-      subtitleEl0.textContent=`面積=評価額 / 色=当日騰落率（前日終値比）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄取得失敗`:'');
+      subtitleEl0.textContent=`面積=評価額 / 色=当日騰落率（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄取得失敗`:'');
     }
   }else{
     // ── 前回CSV比モード（従来） ──
