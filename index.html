@@ -2259,7 +2259,13 @@ async function amFetchDailyQuotes(codes){
 // ── 同一銘柄ロットの合算（追加購入対応） ──
 // キー: 証券コード優先、なければ「（…買付…）」サフィックスを除いた銘柄名
 function amLotKey(a){
-  const c=(a.code||'').trim();
+  // コード欄優先。空なら銘柄名の先頭のコード(例:「213A 上場インデックス…」)も拾う。大文字化・全角数字英字も正規化
+  const normCode=c=>String(c||'').trim().replace(/[０-９Ａ-Ｚａ-ｚ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).toUpperCase();
+  let c=normCode(a.code);
+  if(!/^[0-9][0-9A-Z]{3}$/.test(c)){
+    const m=normCode(a.name).match(/^([0-9][0-9A-Z]{3})[\s　]/);
+    c=m?m[1]:'';
+  }
   if(c)return'c:'+c;
   return'n:'+String(a.name||'').replace(/（[^）]*買付[^）]*）$/,'').trim();
 }
