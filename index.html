@@ -2987,13 +2987,15 @@ function amAutoCategory(){
   }
   amToggleStockFields();
 }
-function closeSheet(){document.getElementById('sheetBg').classList.remove('open')}
+let wlPurchaseSourceId=null;// ウォッチ銘柄→購入済登録の連携用
+function closeSheet(){document.getElementById('sheetBg').classList.remove('open');wlPurchaseSourceId=null;}
 async function saveAccount(){
   const name=document.getElementById('fName').value.trim();
   const cat=document.getElementById('fCat').value;
   const amount=parseFloat(document.getElementById('fAmount').value)||0;
   const note=document.getElementById('fNote').value.trim();
   if(!name){document.getElementById('fName').focus();return;}
+  const purchasedWlId=wlPurchaseSourceId;wlPurchaseSourceId=null;
   const isIndexFundSave=['全世界インデックス','日本インデックス','インドインデックス'].includes(cat);
   const code=(document.getElementById('fCode').value||'').trim().replace(/[^0-9A-Za-z.]/g,'');
   const shares=parseFloat(document.getElementById('fShares').value)||0;
@@ -3026,6 +3028,19 @@ async function saveAccount(){
   if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,...analysis,updated:todayStr()};}
   else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
+  // ウォッチ銘柄からの購入登録: ステータスを購入済に更新
+  if(purchasedWlId){
+    try{
+      const d=wlLoad();
+      const w=d.find(x=>x.id===purchasedWlId);
+      if(w&&w.status!=='購入済'){
+        w.status='購入済';
+        wlSaveData(d);
+        try{wlRender();}catch(e){}
+        showToast(`✅ 保有銘柄に追加し、「${w.name}」を購入済にしました`);
+      }
+    }catch(e){console.warn('wl purchase link err',e);}
+  }
 }
 function amMoveAccount(id,dir){
   const idx=amAccounts.findIndex(a=>a.id===id);
@@ -8229,6 +8244,7 @@ function wlRender(){
         <button class="wl-move-btn" onclick="wlMoveUp('${s.id}')" ${isFirst?'disabled':''} title="上へ">▲</button>
         <button class="wl-move-btn" onclick="wlMoveDown('${s.id}')" ${isLast?'disabled':''} title="下へ">▼</button>
         <button class="wl-move-btn" onclick="if(confirm('「${s.name}」を削除しますか？')){var d=wlLoad();wlSaveData(d.filter(function(x){return x.id!=='${s.id}';}));wlRender();}" style="color:#C0392B;border-color:#C0392B;margin-top:3px" title="削除">✕</button>
+        <button class="wl-move-btn" onclick="wlMarkPurchased('${s.id}')" style="color:${s.status==='購入済'?'var(--text3)':'#3B6D11'};border-color:${s.status==='購入済'?'var(--border2)':'#3B6D11'};margin-top:3px" title="購入済にして保有銘柄（個別株）に追加">💰</button>
       </td>
       <td><span class="wl-pri" style="color:${wlPriColor(s.priority)}">${wlPriLabel(s.priority)}</span></td>
       <td><div style="font-weight:500">${s.name}</div>${s.memo?`<div style="font-size:10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.memo)}</div>`:''}</td>
@@ -8253,6 +8269,35 @@ function wlRender(){
       <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
     </tr>`;
   }).join('');
+}
+
+// ウォッチ銘柄 → 購入済: 資産管理の追加モーダルをプリフィルして開く
+function wlMarkPurchased(id){
+  const s=wlLoad().find(x=>x.id===id);
+  if(!s)return;
+  const already=s.status==='購入済'?'（すでに購入済ステータスです）\n':'';
+  if(!confirm(`${already}「${s.name}」を保有銘柄（個別株）に追加しますか？\n次の画面で株数・取得単価を確認して保存してください。`))return;
+  openAddModal('個別株');
+  document.getElementById('sheetTitle').textContent='💰 購入済 → 個別株に追加';
+  const gv=(eid,v)=>{const el=document.getElementById(eid);if(el&&v!==undefined&&v!==null&&v!=='')el.value=v;};
+  gv('fName',s.name);
+  gv('fCode',s.code||'');
+  gv('fShares',s.shares||'');
+  gv('fPrice',s.current||'');
+  gv('fCost',s.limit||s.current||'');// 取得単価: 指値があれば指値、なければ現在値
+  // 分析フィールドをウォッチから引き継ぎ
+  gv('fSell1',s.sell1);gv('fSell2',s.sell2);gv('fSell3',s.sell3);
+  gv('fPer',s.per);gv('fPbr',s.pbr);
+  gv('fEps1',s.eps1);gv('fEps2',s.eps2);
+  gv('fEarningsDate',s.earningsDate||'');
+  // セクター: ウォッチの業種をTOPIX-17名に正規化、なければ銘柄名から推定
+  try{
+    const sec=wlMapSectorText(s.sector)||secSuggestSector(s.name);
+    if(sec)gv('fSector',sec);
+  }catch(e){}
+  gv('fNote','ウォッチ銘柄から購入'+(s.account?`（${s.account}）`:''));
+  if(typeof amCalcAmount==='function')try{amCalcAmount();}catch(e){}
+  wlPurchaseSourceId=id;
 }
 
 function wlMoveUp(id){
