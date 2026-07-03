@@ -790,6 +790,7 @@ input[type=number] { -moz-appearance: textfield; }
         </div>
       </div>
       <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
+      <div id="amHeatmapTotal" style="padding:0 16px 6px;font-size:13px"></div>
       <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
     <div id="accountSections"></div>
@@ -2387,10 +2388,11 @@ function amRenderHeatmap(accounts,total){
   const subtitleEl0=document.getElementById('amHeatmapSubtitle');
 
   // ── ビュー分岐 ──
+  const hmTotalEl=document.getElementById('amHeatmapTotal');
   // ヒートマップ/上位10はSBI証券の口座のみ対象（機関は名前/手動設定から判定）
   const sbiOnly=arr=>arr.filter(a=>{try{return trGuessBroker(a)==='SBI証券';}catch(e){return true;}});
-  if(amHmView==='top10'){amRenderTop10(sbiOnly(accounts),el,subtitleEl0);return;}
-  if(amHmView==='comp'){amRenderComposition(accounts,el,subtitleEl0);return;}
+  if(amHmView==='top10'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderTop10(sbiOnly(accounts),el,subtitleEl0);return;}
+  if(amHmView==='comp'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderComposition(accounts,el,subtitleEl0);return;}
   accounts=sbiOnly(accounts);
 
   const EXCL_CATS=['銀行','年金','その他','預り金'];
@@ -2435,6 +2437,7 @@ function amRenderHeatmap(accounts,total){
     const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
     const missing=targets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
     if(missing.length){
+      if(hmTotalEl)hmTotalEl.innerHTML='';
       el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
       if(subtitleEl0)subtitleEl0.textContent='SBI証券のみ・面積=評価額 / 色='+({daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
       if(!amDailyFetching){
@@ -2487,6 +2490,24 @@ function amRenderHeatmap(accounts,total){
     if(!items.length){
       el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">SBI CSV取込済みの銘柄がありません</p>';
       return;
+    }
+  }
+
+  // ── 選択期間の合計損益（各タイルのpctから期間開始時の評価額を逆算して集計） ──
+  if(hmTotalEl){
+    let g=0,b=0,cnt=0;
+    items.forEach(it=>{
+      if(it.pct==null||!isFinite(it.pct)||it.pct<=-99.9)return;
+      const base=it.amount/(1+it.pct/100);
+      g+=it.amount-base;b+=base;cnt++;
+    });
+    if(cnt&&b>0){
+      const tp=g/b*100;
+      const col=g>=0?'var(--green)':'var(--danger)';
+      const label={csv:'前回比',daily:'当日',m1:'月間',y1:'年間',all:'全期間'}[amHeatmapMode]||'';
+      hmTotalEl.innerHTML=`<span style="color:var(--text3);font-size:11px">${label}の合計損益（表示${cnt}銘柄）</span> <span style="color:${col};font-weight:800">${g>=0?'＋':'－'}¥${Math.round(Math.abs(g)).toLocaleString()}</span> <span style="color:${col};font-weight:600;font-size:11px">(${tp>=0?'+':''}${tp.toFixed(2)}%)</span>`;
+    }else{
+      hmTotalEl.innerHTML='';
     }
   }
 
