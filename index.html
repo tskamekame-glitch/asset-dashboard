@@ -638,6 +638,14 @@ input[type=number] { -moz-appearance: textfield; }
       </div>
     </div>
 
+    <!-- ── 決算・権利日カウントダウン（kaView風） ── -->
+    <div style="padding:0 14px 8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div id="home-earnings-card" style="background:linear-gradient(170deg,#17171a 0%,#0b0b0d 100%);border:0.5px solid rgba(255,255,255,0.09);border-radius:16px;padding:12px 12px 12px;text-align:center;min-height:132px;display:flex;flex-direction:column"></div>
+        <div id="home-rights-card" style="background:linear-gradient(170deg,#17171a 0%,#0b0b0d 100%);border:0.5px solid rgba(255,255,255,0.09);border-radius:16px;padding:12px 12px 12px;text-align:center;min-height:132px;display:flex;flex-direction:column"></div>
+      </div>
+    </div>
+
     <!-- ── 売り目標アラート ── -->
     <div id="home-sell-alert" style="display:none;padding:0 14px 8px">
       <div style="background:var(--bg);border:0.5px solid #e67e22;border-radius:14px;padding:12px 14px">
@@ -876,6 +884,58 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
   <div class="page-inner">
     <input type="file" id="csvInput2" accept=".csv" multiple style="display:none">
+
+    <!-- ═══════════ kaView風 資産推移ヒーロー ═══════════ -->
+    <div id="kvCard" style="display:none;margin:0 -4px 16px;background:linear-gradient(170deg,#17171a 0%,#0c0c0e 60%,#0a0a0c 100%);border:0.5px solid rgba(255,255,255,0.09);border-radius:20px;padding:16px 0 12px;overflow:hidden">
+
+      <!-- 資産/損益 トグル -->
+      <div style="display:flex;justify-content:center;padding:0 16px 14px">
+        <div style="display:flex;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.14);border-radius:13px;padding:4px;width:100%;max-width:360px;gap:4px">
+          <button id="kv-mode-asset" onclick="kvSetMode('asset')" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:#2fae8f;color:#fff;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;letter-spacing:0.15em;transition:background 0.15s">資産</button>
+          <button id="kv-mode-pnl" onclick="kvSetMode('pnl')" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:transparent;color:rgba(255,255,255,0.75);font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;letter-spacing:0.15em;transition:background 0.15s">損益</button>
+        </div>
+      </div>
+
+      <!-- ヒーロー数値 -->
+      <div style="text-align:center;padding:0 16px 14px">
+        <div id="kv-hero-label" style="font-size:14px;color:rgba(255,255,255,0.9);font-weight:600;margin-bottom:2px;letter-spacing:0.05em">資産総額</div>
+        <div id="kv-hero-value" style="font-size:36px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1.2;font-variant-numeric:tabular-nums">—</div>
+        <div id="kv-hero-sub" style="font-size:13px;margin-top:4px;color:rgba(255,255,255,0.7)">—</div>
+      </div>
+
+      <!-- チャートパネル -->
+      <div style="margin:0 10px;background:rgba(0,0,0,0.55);border:0.5px solid rgba(255,255,255,0.12);border-radius:14px;padding:10px 6px 8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 6px 6px">
+          <button id="kv-topix-chip" onclick="kvToggleTopix()" style="display:flex;align-items:center;gap:6px;background:#fff;border:none;border-radius:17px;padding:6px 14px 6px 8px;font-family:inherit;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
+            <span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#2fae8f;color:#fff;font-size:11px;align-items:center;justify-content:center;font-weight:700;line-height:1">⇄</span>
+            <span style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.02em">TOPIX</span>
+          </button>
+          <span id="kv-unit-label" style="font-size:10px;color:rgba(255,255,255,0.75)">(百万円)</span>
+        </div>
+        <div style="position:relative;height:300px"><canvas id="kvChart"></canvas></div>
+        <!-- スライダー飾り（kaView風・黄色ダイヤ） -->
+        <div id="kv-slider" style="position:relative;height:32px;margin:4px 14px 0">
+          <div style="position:absolute;left:0;right:0;top:15px;height:2px;background:rgba(255,255,255,0.14);border-radius:1px"></div>
+          <div id="kv-slider-dots" style="position:absolute;left:2px;right:34px;top:12px;height:8px;display:flex;justify-content:space-between;align-items:center"></div>
+          <div style="position:absolute;right:0;top:3px;width:26px;height:26px;background:#ffd93d;border-radius:6px;transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center">
+            <div style="transform:rotate(-45deg);width:13px;height:13px;background-image:radial-gradient(circle,rgba(60,50,0,0.55) 1.1px,transparent 1.4px);background-size:5px 5px;background-position:0 0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 期間セレクタ -->
+      <div style="margin:14px 10px 2px;display:flex;background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.12);border-radius:15px;padding:5px;align-items:stretch">
+        <button id="kv-p-10d" onclick="kvSetPeriod('10d')" style="flex:1;padding:8px 0;border:none;border-radius:11px;background:#2fae8f;color:#fff;font-weight:700;font-size:12px;line-height:1.3;font-family:inherit;cursor:pointer">直近<br>10回</button>
+        <div class="kv-p-div" style="width:0.5px;background:rgba(255,255,255,0.14);margin:6px 2px"></div>
+        <button id="kv-p-month" onclick="kvSetPeriod('month')" style="flex:1.3;padding:8px 0;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,0.6);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer">—年 —月</button>
+        <div class="kv-p-div" style="width:0.5px;background:rgba(255,255,255,0.14);margin:6px 2px"></div>
+        <button id="kv-p-year" onclick="kvSetPeriod('year')" style="flex:1.2;padding:8px 0;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,0.6);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer">—年</button>
+        <div class="kv-p-div" style="width:0.5px;background:rgba(255,255,255,0.14);margin:6px 2px"></div>
+        <button id="kv-p-all" onclick="kvSetPeriod('all')" style="flex:1;padding:8px 0;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,0.6);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer">任意</button>
+      </div>
+    </div>
+    <!-- ═══════════ /kaView風ヒーロー ═══════════ -->
+
     <div class="tr-summary-grid" id="trSummaryGrid" style="display:none"></div>
     <div class="filter-bar" id="filterBar" style="display:none">
       <button class="filter-btn active" data-f="all" onclick="setFilter('all')">全期間</button>
@@ -1968,65 +2028,31 @@ function refreshHome(){
     }
     if(el){
       if(live&&(live.plus>0||live.minus>0)){
-        const tot=live.plus+live.minus;
-        const pPct=tot>0?Math.round(live.plus/tot*100):0;
-        const mPct=100-pPct;
         el.style.display='block';
-        el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
-            <div style="font-size:9px;color:var(--text3)">保有 ${tot+live.flat}銘柄・${live.time}時点</div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:8px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-              <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:2px">前日比＋</div>
-              <div style="font-size:24px;font-weight:800;color:#4ade80;line-height:1">${live.plus}<span style="font-size:10px;font-weight:600"> 銘柄</span></div>
-            </div>
-            <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:8px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-              <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:2px">前日比ー</div>
-              <div style="font-size:24px;font-weight:800;color:#f87171;line-height:1">${live.minus}<span style="font-size:10px;font-weight:600"> 銘柄</span></div>
-            </div>
-          </div>
-          <div style="display:flex;height:8px;border-radius:4px;overflow:hidden">
-            <div style="width:${pPct}%;background:#4ade80"></div>
-            <div style="width:${mPct}%;background:#f87171"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px">
-            <span style="color:#4ade80">${pPct}%</span><span style="color:#f87171">${mPct}%</span>
-          </div>
-          ${live.flat>0?`<div style="text-align:right;margin-top:2px;font-size:9px;color:var(--text3)">変動なし ${live.flat}銘柄</div>`:''}
-        </div>`;
+        // 株価取得時刻から日付ラベルを生成（kaView風「7月3日」）
+        const qd2=new Date((amLoadDailyQuotes()||{}).ts||Date.now());
+        const dateLabel=`${qd2.getMonth()+1}月${qd2.getDate()}日`;
+        el.innerHTML=kvPfCard(live.plus,live.minus,live.flat||0,dateLabel,`${live.time}時点`);
       }else{
         // フォールバック: スナップショット比較（従来）
         const cmp=dailySnapCompare();
         if(cmp&&(cmp.plus>0||cmp.minus>0)){
           el.style.display='block';
-          const dateLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'前日比';
-          el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
-              <div style="font-size:9px;color:var(--text3)">${dateLabel}</div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-                <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:3px">前日比＋</div>
-                <div style="font-size:26px;font-weight:800;color:#4ade80;line-height:1">${cmp.plus}</div>
-                <div style="font-size:10px;color:rgba(74,222,128,0.7);margin-top:2px">銘柄</div>
-              </div>
-              <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-                <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:3px">前日比ー</div>
-                <div style="font-size:26px;font-weight:800;color:#f87171;line-height:1">${cmp.minus}</div>
-                <div style="font-size:10px;color:rgba(248,113,113,0.7);margin-top:2px">銘柄</div>
-              </div>
-            </div>
-            ${cmp.unchanged>0?`<div style="text-align:right;margin-top:4px;font-size:9px;color:var(--text3)">変動なし ${cmp.unchanged}銘柄</div>`:''}
-          </div>`;
+          // 日付ラベル: 最新スナップショット日を「7月3日」形式に
+          let dateLabel='前回比';
+          const dm=String(cmp.todayDate||'').match(/(\d{4})-(\d{2})-(\d{2})/);
+          if(dm)dateLabel=`${+dm[2]}月${+dm[3]}日`;
+          const subLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'';
+          el.innerHTML=kvPfCard(cmp.plus,cmp.minus,cmp.unchanged||0,dateLabel,subLabel);
         }else{
           el.style.display='none';
         }
       }
     }
   }catch(e){}
+
+  // ── 2.7 決算・権利日カウントダウン ──
+  try{homeRenderCountdown();}catch(e){}
 
   // ── 3. 評価損益（保有中・SBI掲載銘柄）＋ ベスト/ワースト ──
   try{
@@ -2725,6 +2751,7 @@ function amRenderHeatmap(accounts,total){
 
   let defsStr='';
   let bodyStr='';
+  const infoMap={};// ⑧タイルタップ詳細用
 
   rects.forEach(({node,x,y,w,h},idx)=>{
     const rx=x+GAP/2,ry=y+GAP/2,rw=Math.max(w-GAP,1),rh=Math.max(h-GAP,1);
@@ -2747,6 +2774,7 @@ function amRenderHeatmap(accounts,total){
     if(nodeGain!=null){
       gainStr=(nodeGain>=0?'＋':'－')+fmtM(Math.abs(nodeGain));
     }
+    infoMap[node.id]={name:node.name,amount:node.amount,gain:nodeGain,pct:node.pct};
 
     // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
     let dispName=node.name;
@@ -2769,7 +2797,7 @@ function amRenderHeatmap(accounts,total){
     let ty=(ry+rh/2)-totalTH/2;
 
     defsStr+=`<clipPath id="${cpId}"><rect x="${(rx+2).toFixed(1)}" y="${ry.toFixed(1)}" width="${Math.max(rw-4,0).toFixed(1)}" height="${rh.toFixed(1)}"/></clipPath>`;
-    bodyStr+=`<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="5" fill="${color}" style="cursor:pointer" onclick="openEditModal(${node.id})" onmouseenter="this.style.opacity='0.82'" onmouseleave="this.style.opacity='1'"/>`;
+    bodyStr+=`<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="5" fill="${color}" style="cursor:pointer" onclick="amHmSelectTile(${node.id})" onmouseenter="this.style.opacity='0.82'" onmouseleave="this.style.opacity='1'"/>`;
     lines.forEach(l=>{
       const ly=(ty+l.fz*0.68).toFixed(1);
       ty+=l.fz*1.35;
@@ -2777,20 +2805,65 @@ function amRenderHeatmap(accounts,total){
     });
   });
 
-  // 凡例（モードによって閾値表示を切り替え）
-  const legendItems=[
-    {c:'#0a5e3f',l:`+${T[2]}%〜`},{c:'#1a9e6a',l:`+${T[0]}〜${T[2]}%`},{c:'#3ecf97',l:`0〜+${T[0]}%`},
-    {c:'#e07068',l:`-${T[0]}〜0%`},{c:'#8b1e18',l:`〜-${T[2]}%`}];
-  const lgY=TOTAL_H+8;
-  const lgW=Math.floor(containerW/5);
-  let lgStr='';
-  legendItems.forEach((li,i)=>{
-    const lx=i*lgW;
-    lgStr+=`<rect x="${lx}" y="${lgY}" width="10" height="10" rx="2" fill="${li.c}"/>`;
-    lgStr+=`<text x="${lx+14}" y="${lgY+9}" font-size="9" fill="#888" font-family="-apple-system,sans-serif">${li.l}</text>`;
-  });
+  // ⑧ kaView風: 上部カラースケール凡例＋タイルタップで詳細バー（画像10）
+  amHmInfo=infoMap;
+  const selKeep=(amHmSelectedId!=null&&infoMap[amHmSelectedId])?amHmSelectedId:null;
+  el.innerHTML=amHmScaleHeader(T)
+    +`<svg viewBox="0 0 ${containerW} ${TOTAL_H+4}" width="100%" style="display:block"><defs>${defsStr}</defs>${bodyStr}</svg>`
+    +'<div id="am-hm-detail" style="display:none"></div>';
+  if(selKeep!=null){amHmSelectedId=null;amHmSelectTile(selKeep);}
+}
 
-  el.innerHTML=`<svg viewBox="0 0 ${containerW} ${TOTAL_H+28}" width="100%" style="display:block"><defs>${defsStr}</defs>${bodyStr}${lgStr}</svg>`;
+// ── ⑧ カラースケールヘッダー（-T2%〜+T2%・kaView画像10上部） ──
+function amHmScaleHeader(T){
+  const segs=['#8b1e18','#b03028','#cc4a40','#e07068','#3ecf97','#1a9e6a','#0f7a50','#0a5e3f'];
+  const labels=[`-${T[2]}%`,`-${T[1]}%`,`-${T[0]}%`,'0',`+${T[0]}%`,`+${T[1]}%`,`+${T[2]}%`];
+  return `<div style="display:flex;align-items:center;gap:10px;margin:2px 0 10px">
+    <div style="display:flex;align-items:center;gap:5px;background:#fff;border-radius:15px;padding:4px 11px 4px 7px;box-shadow:0 1px 3px rgba(0,0,0,0.25);flex-shrink:0">
+      <span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#2fae8f;color:#fff;font-size:8px;align-items:center;justify-content:center;font-weight:700;line-height:1">▼</span>
+      <span style="font-size:11px;font-weight:800;color:#1a1a1a">全銘柄</span>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;height:9px;border-radius:2px;overflow:hidden">${segs.map(c=>`<div style="flex:1;background:${c}"></div>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--text3);margin-top:2px;padding:0 3%">${labels.map(l=>`<span>${l}</span>`).join('')}</div>
+    </div>
+  </div>`;
+}
+
+// ── ⑧ タイルタップ → 銘柄詳細バー（画像10下部） ──
+let amHmInfo={},amHmSelectedId=null;
+function amHmSelectTile(id){
+  const el=document.getElementById('am-hm-detail');
+  if(!el)return;
+  if(amHmSelectedId===id&&el.style.display!=='none'){el.style.display='none';amHmSelectedId=null;return;}
+  const info=amHmInfo[id];
+  if(!info){el.style.display='none';amHmSelectedId=null;return;}
+  amHmSelectedId=id;
+  const gv=(info.gain!=null&&isFinite(info.gain))?info.gain:(info.pct||0);
+  const pos=gv>=0;
+  const gCol=pos?'#ff5b5b':'#57a8ff';
+  const edge=pos?'#e8483f':'#2f9ee8';
+  const modeLabel=({daily:'当日',m1:'月間',y1:'年間',all:'取得来',csv:'前回比'})[amHeatmapMode]||'期間';
+  const gainStr=(info.gain!=null&&isFinite(info.gain))?`${info.gain>=0?'＋':'－'}${Math.abs(Math.round(info.gain)).toLocaleString()}円`:'—';
+  const pctStr=(info.pct!=null&&isFinite(info.pct))?` (${info.pct>=0?'+':''}${info.pct.toFixed(2)}%)`:'';
+  el.style.display='block';
+  el.innerHTML=`<div style="margin-top:8px;background:linear-gradient(170deg,#17171a,#0c0c0e);border:0.5px solid rgba(255,255,255,0.1);border-left:3px solid ${edge};border-radius:10px;padding:10px 12px">
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:#c0392b;color:#fff;flex-shrink:0">現物</span>
+      <span style="flex:1;font-size:13px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(info.name)}</span>
+      <span style="font-size:9px;color:rgba(255,255,255,0.45);flex-shrink:0">${modeLabel}騰落</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px">
+      <div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.45);margin-bottom:1px">時価評価額</div>
+        <div style="font-size:18px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums">${Math.round(info.amount).toLocaleString()}<span style="font-size:10px;font-weight:600">円</span></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:800;color:${gCol};font-variant-numeric:tabular-nums">${gainStr}<span style="font-size:11px">${pctStr}</span></div>
+        <div onclick="event.stopPropagation();openEditModal(${id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-top:3px;text-decoration:underline">✏️ 編集</div>
+      </div>
+    </div>
+  </div>`;
 }
 // ── 口座カード1件レンダリング（保有中・売却済み共通） ──
 function amRenderCard(a){
@@ -5468,6 +5541,340 @@ function setFilter(f){
   trRenderCharts();trRenderSummary();trRenderTable();renderComment();
 }
 document.getElementById('csvInput2').addEventListener('change',e=>{Array.from(e.target.files).forEach(f=>trReadFile(f));e.target.value='';});
+
+// ═══════════════════════════════════════════════
+// kaView風 資産推移ヒーロー（資産/損益 + TOPIX比較 + 期間ピル）
+// ═══════════════════════════════════════════════
+
+// ── kaView風 ポートフォリオカード（前日比±銘柄数）HTML生成 ──
+function kvPfCard(plus,minus,flat,dateLabel,subLabel){
+  const tot=plus+minus;
+  const pPct=tot>0?Math.round(plus/tot*100):0;
+  const mPct=100-pPct;
+  const RED='#e8483f',BLUE='#2f9ee8';
+  return `<div onclick="switchTab('manager')" style="cursor:pointer;background:linear-gradient(170deg,#17171a 0%,#0c0c0e 60%,#0a0a0c 100%);border:0.5px solid rgba(255,255,255,0.09);border-radius:18px;padding:12px 14px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="border:1.5px solid rgba(255,255,255,0.9);border-radius:4px;padding:3px 10px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.05em">ポートフォリオ</div>
+      <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.9)">${dateLabel}</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.07);border-radius:8px;padding:8px 0;text-align:center;margin-bottom:14px">
+      <span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.9)">保有</span>
+      <span style="font-size:19px;font-weight:800;color:#fff;margin-left:8px">${tot+flat}</span><span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)">銘柄</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px">
+      <div style="text-align:center">
+        <div style="display:inline-block;background:${RED};border-radius:7px;padding:5px 14px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.03em">前日比＋</div>
+        <div style="margin-top:8px;line-height:1"><span style="font-size:34px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums">${plus}</span><span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)">銘柄</span></div>
+      </div>
+      <div style="text-align:center">
+        <div style="display:inline-block;background:${BLUE};border-radius:7px;padding:5px 14px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.03em">前日比ー</div>
+        <div style="margin-top:8px;line-height:1"><span style="font-size:34px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums">${minus}</span><span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)">銘柄</span></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:rgba(255,255,255,0.55);margin-bottom:4px">
+      <span>${pPct}%</span><span>${mPct}%</span>
+    </div>
+    <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,0.08)">
+      <div style="width:${pPct}%;background:${RED}"></div>
+      <div style="width:${mPct}%;background:${BLUE}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:rgba(255,255,255,0.4)">
+      <span>${flat>0?`変動なし ${flat}銘柄`:''}</span><span>${subLabel||''}</span>
+    </div>
+  </div>`;
+}
+
+// ── 決算・権利日カウントダウン（kaView風・画像1下部） ──
+function homeRenderCountdown(){
+  const eCard=document.getElementById('home-earnings-card');
+  const rCard=document.getElementById('home-rights-card');
+  if(!eCard||!rCard)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const fmtMD=d=>`${d.getMonth()+1}月${d.getDate()}日`;
+  const dayDiff=d=>Math.round((d-today)/86400000);
+  const badge=t=>`<div style="display:flex;justify-content:center"><div style="border:1.5px solid rgba(255,255,255,0.9);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:0.04em">${t}</div></div>`;
+  const cnt=n=>n===0
+    ?`<div style="font-size:13px;color:#fff">本日<span style="font-size:11px;color:rgba(255,255,255,0.6)">が最終日</span></div>`
+    :`<div style="font-size:13px;color:#fff">あと<span style="font-size:32px;font-weight:800;margin:0 3px;font-variant-numeric:tabular-nums">${n}</span>日</div>`;
+  const cntNone='<div style="font-size:13px;color:#fff">あと<span style="font-size:24px;font-weight:700;letter-spacing:3px;margin:0 3px;color:rgba(255,255,255,0.8)">−−−−</span>日</div>';
+
+  // ── 決算発表予定日（保有＋ウォッチのearningsDate・30日以内） ──
+  let ev=[];
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    accs.filter(a=>!a.sold&&a.amount>0&&a.earningsDate).forEach(a=>{
+      const nm=(typeof amLotBaseName==='function')?amLotBaseName(a.name):a.name;
+      ev.push({name:nm,date:a.earningsDate});
+    });
+  }catch(e){}
+  try{wlLoad().filter(s=>s.earningsDate).forEach(s=>ev.push({name:s.name,date:s.earningsDate}));}catch(e){}
+  const seen=new Set();
+  ev=ev.map(x=>({...x,d:new Date(String(x.date).slice(0,10)+'T00:00:00')}))
+       .filter(x=>!isNaN(x.d)&&dayDiff(x.d)>=0&&dayDiff(x.d)<=30)
+       .filter(x=>{if(seen.has(x.name))return false;seen.add(x.name);return true;})
+       .sort((a,b)=>a.d-b.d);
+  if(ev.length){
+    const first=ev[0];
+    const sameDay=ev.filter(x=>x.d.getTime()===first.d.getTime());
+    eCard.innerHTML=badge('決算発表予定日')
+      +`<div style="margin-top:10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.85)">${fmtMD(first.d)}</div>`
+      +`<div style="font-size:13px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(first.name)}${sameDay.length>1?`<span style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">　他${sameDay.length-1}銘柄</span>`:''}</div>`
+      +`<div style="margin-top:auto;padding-top:8px">${cnt(dayDiff(first.d))}</div>`;
+  }else{
+    eCard.innerHTML=badge('決算発表予定日')
+      +'<div style="margin:12px 2px 0;font-size:11px;line-height:1.7;color:rgba(255,255,255,0.55)">直近30日に決算発表日を<br>迎える銘柄なし</div>'
+      +`<div style="margin-top:auto;padding-top:8px">${cntNone}</div>`;
+  }
+
+  // ── 権利日（権利付最終日＝月末最終営業日の2営業日前・土日のみ考慮の概算） ──
+  const lastBiz=(y,m)=>{const d=new Date(y,m+1,0);while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()-1);return d;};
+  const bizPrev=d0=>{const d=new Date(d0);do{d.setDate(d.getDate()-1);}while(d.getDay()===0||d.getDay()===6);return d;};
+  const kenri=(y,m)=>bizPrev(bizPrev(lastBiz(y,m)));
+  let ky=today.getFullYear(),km=today.getMonth();
+  let kd=kenri(ky,km);
+  if(dayDiff(kd)<0){km+=1;if(km>11){km=0;ky+=1;}kd=kenri(ky,km);}
+  rCard.innerHTML=badge('権利日')
+    +`<div style="margin-top:10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.85)">${fmtMD(kd)}</div>`
+    +`<div style="font-size:11px;font-weight:600;color:#fff;line-height:1.5">${kd.getMonth()+1}月末権利の権利付最終日<span style="font-size:8px;color:rgba(255,255,255,0.45)"><br>※祝日未考慮の概算</span></div>`
+    +`<div style="margin-top:auto;padding-top:8px">${cnt(dayDiff(kd))}</div>`;
+}
+
+let kvMode='asset',kvPeriod='10d',kvShowTopix=true,kvTopixData=null,kvTopixFetching=false;
+const KV_GREEN='#35e0a1',KV_PILL='#2fae8f',KV_YELLOW='#ffd93d',KV_RED='#ff5b5b',KV_BLUE='#57a8ff';
+
+function kvSetMode(m){kvMode=m;kvRender();}
+function kvSetPeriod(p){kvPeriod=p;kvRender();}
+function kvToggleTopix(){kvShowTopix=!kvShowTopix;kvRender();}
+
+function kvSorted(){return[...snapshots].sort((a,b)=>String(a.date).localeCompare(String(b.date)));}
+function kvGetFiltered(){
+  const sorted=kvSorted();if(!sorted.length)return[];
+  if(kvPeriod==='10d')return sorted.slice(-10);
+  const last=String(sorted[sorted.length-1].date);
+  if(kvPeriod==='month')return sorted.filter(s=>String(s.date).slice(0,7)===last.slice(0,7));
+  if(kvPeriod==='year')return sorted.filter(s=>String(s.date).slice(0,4)===last.slice(0,4));
+  return sorted;
+}
+function kvShortDate(d){const m=String(d).match(/(\d{4})-(\d{2})-(\d{2})/);return m?`${+m[2]}/${+m[3]}`:String(d);}
+
+// ── TOPIX（1306 ETF）取得：Worker経由・1時間キャッシュ ──
+async function kvFetchTopix(fromDateStr){
+  const spanDays=Math.max(15,(Date.now()-new Date(fromDateStr).getTime())/86400000);
+  const range=spanDays<80?'3mo':spanDays<170?'6mo':spanDays<360?'1y':spanDays<720?'2y':'5y';
+  const KEY='kvTopix_'+range;
+  try{const c=JSON.parse(localStorage.getItem(KEY)||'null');if(c&&Date.now()-c.ts<3600000&&c.pairs&&c.pairs.length){kvTopixData=c;return;}}catch(e){}
+  if(kvTopixFetching)return;kvTopixFetching=true;
+  try{
+    const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+    const resp=await fetch(`${WORKER}?code=1306&range=${range}`);
+    if(!resp.ok)throw new Error('http '+resp.status);
+    const data=await resp.json();
+    const result=data?.chart?.result?.[0];
+    const ts=result?.timestamp||[];
+    const cl=result?.indicators?.quote?.[0]?.close||[];
+    const pairs=ts.map((t,i)=>({t:t*1000,c:cl[i]})).filter(x=>x.c!=null);
+    if(pairs.length<2)throw new Error('no data');
+    kvTopixData={ts:Date.now(),range,pairs};
+    try{localStorage.setItem(KEY,JSON.stringify(kvTopixData));}catch(e){}
+    kvRenderChart();// 取得後に再描画してTOPIX線を反映
+  }catch(e){/* TOPIX取得失敗時は資産線のみ表示 */}
+  finally{kvTopixFetching=false;}
+}
+// 指定日以前で最も近いTOPIX終値
+function kvTopixCloseOn(dateStr){
+  if(!kvTopixData||!kvTopixData.pairs)return null;
+  const target=new Date(dateStr+'T15:00:00+09:00').getTime();
+  let best=null;
+  for(const p of kvTopixData.pairs){if(p.t<=target)best=p.c;else break;}
+  return best!=null?best:(kvTopixData.pairs[0]?kvTopixData.pairs[0].c:null);
+}
+
+// ── 黄色バーティカルライン（最新点）プラグイン ──
+const kvYellowLine={id:'kvYellowLine',beforeDatasetsDraw(chart){
+  if(chart.canvas.id!=='kvChart')return;
+  const meta=chart.getDatasetMeta(0);
+  if(!meta||!meta.data||!meta.data.length)return;
+  const x=meta.data[meta.data.length-1].x;
+  const{ctx,chartArea}=chart;
+  ctx.save();ctx.strokeStyle=KV_YELLOW;ctx.lineWidth=3;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x,chartArea.top);ctx.lineTo(x,chartArea.bottom);ctx.stroke();ctx.restore();
+}};
+
+function kvRender(){
+  const card=document.getElementById('kvCard');if(!card)return;
+  const filtered=kvGetFiltered();
+  if(filtered.length<1){card.style.display='none';return;}
+  card.style.display='block';
+  kvUpdateToggleUI();
+  kvUpdatePeriodUI();
+  kvRenderHero(filtered);
+  kvRenderChart();
+  // TOPIX未取得なら非同期取得（全期間の先頭からカバー）
+  const all=kvSorted();
+  if(kvShowTopix&&all.length)kvFetchTopix(String(all[0].date));
+}
+function kvUpdateToggleUI(){
+  const a=document.getElementById('kv-mode-asset'),p=document.getElementById('kv-mode-pnl');
+  if(!a||!p)return;
+  a.style.background=kvMode==='asset'?KV_PILL:'transparent';
+  a.style.color=kvMode==='asset'?'#fff':'rgba(255,255,255,0.75)';
+  p.style.background=kvMode==='pnl'?KV_PILL:'transparent';
+  p.style.color=kvMode==='pnl'?'#fff':'rgba(255,255,255,0.75)';
+}
+function kvUpdatePeriodUI(){
+  const sorted=kvSorted();
+  const last=sorted.length?String(sorted[sorted.length-1].date):new Date().toISOString().slice(0,10);
+  const yy=last.slice(2,4),y4=last.slice(0,4),mm=+last.slice(5,7);
+  const mBtn=document.getElementById('kv-p-month'),yBtn=document.getElementById('kv-p-year');
+  if(mBtn)mBtn.innerHTML=`${yy}年 ${mm}月`;
+  if(yBtn)yBtn.textContent=`${y4}年`;
+  [['kv-p-10d','10d'],['kv-p-month','month'],['kv-p-year','year'],['kv-p-all','all']].forEach(([id,p])=>{
+    const b=document.getElementById(id);if(!b)return;
+    const on=kvPeriod===p;
+    b.style.background=on?KV_PILL:'transparent';
+    b.style.color=on?'#fff':'rgba(255,255,255,0.6)';
+    b.style.fontWeight=on?'700':'600';
+  });
+}
+function kvFmtYen(n){return Math.round(n).toLocaleString('ja-JP')+'円';}
+function kvRenderHero(filtered){
+  const label=document.getElementById('kv-hero-label');
+  const value=document.getElementById('kv-hero-value');
+  const sub=document.getElementById('kv-hero-sub');
+  const latest=filtered[filtered.length-1];
+  const prev=filtered.length>=2?filtered[filtered.length-2]:null;
+  // 直前スナップショットが1日差なら「前日比」、それ以外は「前回比」
+  let diffLabel='前回比';
+  if(prev){
+    const d1=new Date(String(prev.date)),d2=new Date(String(latest.date));
+    if(Math.round((d2-d1)/86400000)===1)diffLabel='前日比';
+  }
+  const diff=prev?latest.total-prev.total:0;
+  const pct=prev&&prev.total?diff/prev.total*100:0;
+  const col=diff>=0?KV_RED:KV_BLUE;
+  const sign=diff>=0?'+':'';
+  if(kvMode==='asset'){
+    label.textContent='資産総額';
+    value.innerHTML=`${Math.round(latest.total).toLocaleString('ja-JP')}<span style="font-size:22px">円</span>`;
+    value.style.color='#fff';value.style.fontSize='36px';
+    sub.innerHTML=prev?`${diffLabel}&nbsp;&nbsp;<span style="color:${col};font-weight:700">${sign}${Math.round(diff).toLocaleString('ja-JP')}円 (${sign}${pct.toFixed(1)}%)</span>`:'—';
+  }else{
+    label.textContent=diffLabel;
+    value.innerHTML=prev?`${sign}${Math.round(diff).toLocaleString('ja-JP')}<span style="font-size:22px">円</span>`:'—';
+    value.style.color=col;value.style.fontSize='34px';
+    sub.innerHTML=prev?`<span style="color:${col}">(${sign}${pct.toFixed(1)}%)</span>`:'';
+  }
+}
+function kvRenderChart(){
+  const canvas=document.getElementById('kvChart');if(!canvas)return;
+  const filtered=kvGetFiltered();if(!filtered.length)return;
+  trDestroyChart('kv');
+  const unitLabel=document.getElementById('kv-unit-label');
+  const gridColor='rgba(255,255,255,0.22)';
+  const tickColor='rgba(255,255,255,0.92)';
+  // スライダー飾りのドット
+  const dotsEl=document.getElementById('kv-slider-dots');
+  if(dotsEl){
+    const n=Math.max(filtered.length-1,1);
+    dotsEl.innerHTML=Array.from({length:n},()=>'<div style="width:7px;height:7px;border-radius:50%;background:rgba(140,140,140,0.85)"></div>').join('');
+  }
+
+  if(kvMode==='asset'){
+    if(unitLabel)unitLabel.textContent='(百万円)';
+    const labels=filtered.map(s=>kvShortDate(s.date));
+    const totals=filtered.map(s=>s.total);
+    const lastIdx=totals.length-1;
+    const datasets=[{
+      label:'資産総額',data:totals,
+      borderColor:KV_GREEN,borderWidth:3.5,tension:0,fill:false,order:1,
+      pointRadius:ctx=>ctx.dataIndex===lastIdx?7:4.5,
+      pointBackgroundColor:ctx=>ctx.dataIndex===lastIdx?KV_GREEN:'#fff',
+      pointBorderColor:'#fff',
+      pointBorderWidth:ctx=>ctx.dataIndex===lastIdx?3:0,
+      pointHoverRadius:8
+    }];
+    // TOPIX正規化オーバーレイ（起点の資産額に合わせる）
+    if(kvShowTopix&&kvTopixData){
+      const base=kvTopixCloseOn(String(filtered[0].date));
+      if(base){
+        const topixLine=filtered.map(s=>{
+          const c=kvTopixCloseOn(String(s.date));
+          return c?totals[0]*(c/base):null;
+        });
+        datasets.push({
+          label:'TOPIX',data:topixLine,
+          borderColor:'rgba(200,200,200,0.85)',borderDash:[5,5],borderWidth:2,
+          pointRadius:0,tension:0,fill:false,order:2,spanGaps:true
+        });
+      }
+    }
+    chartInstances['kv']=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        datalabels:{display:false},
+        tooltip:{backgroundColor:'rgba(0,0,0,0.85)',padding:10,cornerRadius:8,displayColors:false,
+          callbacks:{label:ctx=>{
+            if(ctx.datasetIndex===0)return'資産総額: '+kvFmtYen(ctx.raw);
+            const base=kvTopixCloseOn(String(filtered[0].date));
+            const c=kvTopixCloseOn(String(filtered[ctx.dataIndex].date));
+            return(base&&c)?`TOPIX: ${((c/base-1)*100>=0?'+':'')}${((c/base-1)*100).toFixed(1)}%（期間起点比）`:'TOPIX';
+          }}}
+      },
+      scales:{
+        y:{position:'right',grace:'8%',
+          ticks:{callback:v=>(v/1e6).toFixed(1),color:tickColor,font:{size:11,weight:'600'},maxTicksLimit:8,padding:6},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}},
+        x:{ticks:{color:tickColor,font:{size:11,weight:'600'},maxRotation:0,autoSkip:true,maxTicksLimit:10},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}}
+      },
+      layout:{padding:{top:6,left:4}}
+    },plugins:[ChartDataLabels,kvYellowLine]});
+  }else{
+    // ── 損益モード：スナップショット間の増減バー（赤=＋/青=−）＋ TOPIX白ドット ──
+    if(unitLabel)unitLabel.textContent='(千円)';
+    if(filtered.length<2)return;
+    const labels=[],diffs=[],topixPct=[];
+    for(let i=1;i<filtered.length;i++){
+      labels.push(kvShortDate(filtered[i].date));
+      diffs.push(filtered[i].total-filtered[i-1].total);
+      if(kvShowTopix&&kvTopixData){
+        const p=kvTopixCloseOn(String(filtered[i-1].date)),c=kvTopixCloseOn(String(filtered[i].date));
+        topixPct.push(p&&c?(c/p-1)*100:null);
+      }else topixPct.push(null);
+    }
+    const datasets=[{
+      type:'bar',label:'損益',data:diffs,order:2,
+      backgroundColor:diffs.map(d=>d>=0?'#e04b4b':'#4a90d9'),
+      borderRadius:2,barPercentage:0.55,categoryPercentage:0.8
+    }];
+    if(kvShowTopix&&kvTopixData&&topixPct.some(v=>v!=null)){
+      datasets.push({type:'line',label:'TOPIX',data:topixPct,yAxisID:'y2',order:1,
+        showLine:false,pointRadius:5.5,pointBackgroundColor:'#fff',pointBorderColor:'#fff',spanGaps:true});
+    }
+    chartInstances['kv']=new Chart(canvas,{type:'bar',data:{labels,datasets},options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        datalabels:{display:false},
+        tooltip:{backgroundColor:'rgba(0,0,0,0.85)',padding:10,cornerRadius:8,displayColors:false,
+          callbacks:{label:ctx=>ctx.dataset.label==='TOPIX'
+            ?`TOPIX: ${(ctx.raw>=0?'+':'')}${ctx.raw.toFixed(2)}%`
+            :`損益: ${(ctx.raw>=0?'+':'')}${Math.round(ctx.raw).toLocaleString('ja-JP')}円`}}
+      },
+      scales:{
+        y:{position:'right',grace:'10%',
+          ticks:{callback:v=>Math.round(v/1000),color:tickColor,font:{size:11,weight:'600'},maxTicksLimit:7,padding:6},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}},
+        y2:{display:false,grace:'20%'},
+        x:{ticks:{color:tickColor,font:{size:11,weight:'600'},maxRotation:0,autoSkip:true,maxTicksLimit:10},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}}
+      },
+      layout:{padding:{top:6,left:4}}
+    },plugins:[ChartDataLabels,kvYellowLine]});
+  }
+}
+
 function handleDrop(e){e.preventDefault();Array.from(e.dataTransfer.files).filter(f=>f.name.endsWith('.csv')).forEach(f=>trReadFile(f));}
 function trReadFile(file){const reader=new FileReader();reader.onload=ev=>trParseCSV(ev.target.result,file.name);reader.readAsText(file,'UTF-8');}
 function trParseCSV(text,filename){
@@ -5558,7 +5965,8 @@ function trRenderAll(){
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  if(hasData){kvRender();trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  else{const kc=document.getElementById('kvCard');if(kc)kc.style.display='none';}
   // FIREタブのCAGR自動反映
   if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,200);
 }
@@ -8200,31 +8608,48 @@ window.addEventListener('load', function(){
 });
 </script>
 <div class="panel" id="tab-pnl">
-  <div style="padding:12px 16px 8px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:0.5px solid var(--border)">
-    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px">📊 損益一覧</div>
-    <!-- モード切り替えタブ -->
-    <div style="display:flex;background:var(--bg2);border-radius:10px;padding:3px;gap:2px;margin-bottom:10px">
-      <button id="pnl-tab-total"  onclick="pnlSetMode('total')"  style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;transition:all 0.2s">合計損益</button>
-      <button id="pnl-tab-unrealized" onclick="pnlSetMode('unrealized')" style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);transition:all 0.2s">評価損益</button>
-      <button id="pnl-tab-realized"   onclick="pnlSetMode('realized')"   style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:var(--text2);transition:all 0.2s">確定損益</button>
+ <div style="background:linear-gradient(180deg,#131316 0%,#0b0b0d 100%);border-radius:0 0 20px 20px;padding-bottom:16px;min-height:70vh">
+  <div style="padding:12px 14px 12px;background:rgba(14,14,16,0.97);position:sticky;top:0;z-index:10;border-bottom:0.5px solid rgba(255,255,255,0.08);backdrop-filter:blur(6px)">
+    <div style="text-align:center;font-size:16px;font-weight:800;color:#fff;letter-spacing:0.12em;margin-bottom:12px">損益一覧</div>
+    <!-- 合計/評価/確定 3タブ -->
+    <div style="display:flex;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.13);border-radius:12px;padding:3px;gap:3px;margin-bottom:12px">
+      <button id="pnl-tab-total"  onclick="pnlSetMode('total')"  style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:#2fae8f;color:#fff;transition:all 0.15s">合計損益</button>
+      <button id="pnl-tab-unrealized" onclick="pnlSetMode('unrealized')" style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.65);transition:all 0.15s">評価損益</button>
+      <button id="pnl-tab-realized"   onclick="pnlSetMode('realized')"   style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.65);transition:all 0.15s">確定損益</button>
     </div>
-    <!-- 日付フィルター（確定損益モード時のみ有効） -->
-    <div id="pnl-date-row" style="display:flex;align-items:center;gap:8px;opacity:0.35;pointer-events:none">
-      <span style="font-size:12px;color:var(--text3)">期間</span>
-      <select id="pnl-y1" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
-      <select id="pnl-m1" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
-      <span style="color:var(--text3)">〜</span>
-      <select id="pnl-y2" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
-      <select id="pnl-m2" onchange="pnlRender()" style="padding:4px 8px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)"></select>
+    <!-- フィルタ行: 全銘柄チップ + 累計チェック + 期間レンジ -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:5px;background:#fff;border-radius:16px;padding:5px 12px 5px 8px;box-shadow:0 1px 3px rgba(0,0,0,0.4)">
+        <span style="display:inline-flex;width:15px;height:15px;border-radius:50%;background:#2fae8f;color:#fff;font-size:8px;align-items:center;justify-content:center;font-weight:700;line-height:1">▼</span>
+        <span style="font-size:12px;font-weight:800;color:#1a1a1a">全銘柄</span>
+      </div>
+      <div onclick="pnlToggleCum()" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+        <span id="pnl-cum-box" style="display:inline-flex;width:19px;height:19px;border-radius:4px;border:1.5px solid #2fae8f;background:#2fae8f;color:#fff;font-size:13px;font-weight:800;align-items:center;justify-content:center;line-height:1;transition:background 0.15s">✓</span>
+        <span style="font-size:12px;color:rgba(255,255,255,0.85);font-weight:600">累計</span>
+      </div>
+      <div id="pnl-date-row" style="display:flex;align-items:center;gap:6px;flex:1;justify-content:flex-end;opacity:0.35;pointer-events:none;transition:opacity 0.15s">
+        <div style="display:flex;align-items:center;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.15);border-radius:9px;padding:3px 4px">
+          <select id="pnl-y1" onchange="pnlRender()" style="padding:2px 0;font-size:12px;font-weight:600;border:none;background:transparent;color:#fff;font-family:inherit;outline:none"></select>
+          <select id="pnl-m1" onchange="pnlRender()" style="padding:2px 0;font-size:12px;font-weight:600;border:none;background:transparent;color:#fff;font-family:inherit;outline:none"></select>
+        </div>
+        <span style="color:rgba(255,255,255,0.5);font-weight:600">−</span>
+        <div style="display:flex;align-items:center;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.15);border-radius:9px;padding:3px 4px">
+          <select id="pnl-y2" onchange="pnlRender()" style="padding:2px 0;font-size:12px;font-weight:600;border:none;background:transparent;color:#fff;font-family:inherit;outline:none"></select>
+          <select id="pnl-m2" onchange="pnlRender()" style="padding:2px 0;font-size:12px;font-weight:600;border:none;background:transparent;color:#fff;font-family:inherit;outline:none"></select>
+        </div>
+      </div>
     </div>
   </div>
-  <!-- 合計金額 -->
-  <div style="padding:20px 20px 12px;text-align:left">
-    <div id="pnl-total-amt" style="font-size:36px;font-weight:800;letter-spacing:-0.5px">—</div>
-    <div id="pnl-total-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+  <!-- 合計パネル -->
+  <div style="margin:14px 12px;background:#17171a;border:0.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 26px 14px 16px;position:relative">
+    <div id="pnl-total-label" style="text-align:center;font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:0.05em">合計損益</div>
+    <div id="pnl-total-amt" style="text-align:center;font-size:34px;font-weight:800;letter-spacing:-0.5px;color:#fff;font-variant-numeric:tabular-nums;line-height:1.25">—</div>
+    <div id="pnl-total-sub" style="text-align:center;font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px"></div>
+    <span style="position:absolute;right:11px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,0.35);font-size:19px">›</span>
   </div>
   <!-- リスト -->
-  <div id="pnl-list" style="padding:0 12px 16px"></div>
+  <div id="pnl-list" style="padding:0 12px 4px"></div>
+ </div>
 </div>
 
 <div class="panel" id="tab-watchlist">
@@ -8281,6 +8706,11 @@ window.addEventListener('load', function(){
   </div>
 
   <div class="wl-summary" id="wl-summary"></div>
+  <!-- kaView風 表示切替（ファンダメンタルズ/株価チャート） -->
+  <div style="display:flex;background:var(--bg2);border-radius:10px;padding:3px;gap:3px;margin:0 0 10px;max-width:360px">
+    <button id="wl-view-fund" onclick="wlSetView('fund')" style="flex:1;padding:8px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#2fae8f;color:#fff;transition:all 0.15s">ファンダメンタルズ</button>
+    <button id="wl-view-chart" onclick="wlSetView('chart')" style="flex:1;padding:8px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text2);transition:all 0.15s">株価チャート</button>
+  </div>
   <div class="wl-tbl-wrap">
     <table class="wl-tbl">
       <thead>
@@ -8296,6 +8726,7 @@ window.addEventListener('load', function(){
       <tbody id="wl-tbody"></tbody>
     </table>
   </div>
+  <div id="wl-chart-list" style="display:none"></div>
 </div>
 
 <div class="wl-modal-bg" id="wl-modal">
@@ -8682,6 +9113,118 @@ function wlFmtEarnings(d){
 // ============================================================
 // 配当・決算カレンダー（ホーム画面）
 // ============================================================
+// ═══ kaView風 ウォッチ銘柄 株価チャートタブ（⑥・画像14） ═══
+let wlView='fund',wlChartFetching=false;
+const WL_CHART_KEY='wlChartCache_v1';
+function wlSetView(v){
+  wlView=v;
+  [['wl-view-fund','fund'],['wl-view-chart','chart']].forEach(([id,k])=>{
+    const b=document.getElementById(id);if(!b)return;
+    const on=k===v;
+    b.style.background=on?'#2fae8f':'transparent';
+    b.style.color=on?'#fff':'var(--text2)';
+  });
+  const tbl=document.querySelector('#tab-watchlist .wl-tbl-wrap');
+  if(tbl)tbl.style.display=v==='fund'?'':'none';
+  const cl=document.getElementById('wl-chart-list');
+  if(cl)cl.style.display=v==='chart'?'block':'none';
+  if(v==='chart')wlRenderCharts();
+}
+function wlChartCache(){
+  try{const c=JSON.parse(localStorage.getItem(WL_CHART_KEY)||'null');if(c&&Date.now()-c.ts<3600000&&c.q)return c;}catch(e){}
+  return{ts:0,q:{}};
+}
+async function wlFetchCharts(codes){
+  if(wlChartFetching)return;
+  wlChartFetching=true;
+  const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+  const q=wlChartCache().q;
+  const queue=[...new Set(codes)];
+  const runners=Array.from({length:4},async()=>{
+    while(queue.length){
+      const code=queue.shift();
+      try{
+        const resp=await fetch(`${WORKER}?code=${encodeURIComponent(code)}&range=3mo`);
+        if(!resp.ok)throw new Error('http');
+        const data=await resp.json();
+        const r=data?.chart?.result?.[0];
+        const ts=r?.timestamp||[];
+        const cl=r?.indicators?.quote?.[0]?.close||[];
+        let pairs=ts.map((t,i)=>[t*1000,cl[i]]).filter(x=>x[1]!=null);
+        pairs=pairs.slice(-23);// 直近1か月（約22営業日）
+        const meta=r?.meta||{};
+        if(pairs.length>=2){
+          q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1]),prev:pairs[pairs.length-2][1]};
+        }else q[code]={err:1};
+      }catch(e){q[code]={err:1};}
+    }
+  });
+  await Promise.all(runners);
+  try{localStorage.setItem(WL_CHART_KEY,JSON.stringify({ts:Date.now(),q}));}catch(e){}
+  wlChartFetching=false;
+}
+function wlSparkSVG(pairs){
+  const W=178,H=54,P=4;
+  const cs=pairs.map(p=>p[1]);
+  const min=Math.min(...cs),max=Math.max(...cs);
+  const rng=(max-min)||1;
+  const pts=cs.map((c,i)=>`${(P+i/(cs.length-1)*(W-2*P)).toFixed(1)},${(H-P-(c-min)/rng*(H-2*P)).toFixed(1)}`).join(' ');
+  const fmtN=v=>v>=10000?Math.round(v).toLocaleString():(v>=100?Math.round(v):v.toFixed(1));
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block">
+    <text x="1" y="9" font-size="8.5" fill="rgba(255,255,255,0.5)" font-family="-apple-system,sans-serif">${fmtN(max)}</text>
+    <text x="1" y="${H-1}" font-size="8.5" fill="rgba(255,255,255,0.5)" font-family="-apple-system,sans-serif">${fmtN(min)}</text>
+    <polyline points="${pts}" fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="1.6" stroke-linejoin="round"/>
+  </svg>`;
+}
+function wlRenderCharts(){
+  const el=document.getElementById('wl-chart-list');if(!el)return;
+  const items=wlLoad().filter(s=>s.code).sort((a,b)=>a.priority-b.priority);
+  if(!items.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:20px">証券コード付きの銘柄がありません</p>';return;}
+  const cache=wlChartCache();
+  const missing=items.filter(s=>!cache.q[s.code]).map(s=>s.code);
+  el.innerHTML=items.map(s=>{
+    const q=cache.q[s.code];
+    const held=s.status==='購入済';
+    let priceHtml='<div style="font-size:12px;color:rgba(255,255,255,0.4);padding:14px 0">📡 取得中…</div>';
+    let rightHtml='<div style="height:76px"></div>';
+    if(q&&q.err){
+      priceHtml='<div style="font-size:12px;color:rgba(255,255,255,0.4);padding:14px 0">取得失敗</div>';
+    }else if(q&&q.pairs&&q.pairs.length>=2){
+      const cs=q.pairs;
+      const cur=q.cur||cs[cs.length-1][1];
+      const prev=q.prev;
+      const d=prev?cur-prev:null;
+      const dp=prev?d/prev*100:null;
+      const first=cs[0][1];
+      const md=cur-first,mp=md/first*100;
+      const dc=d!=null&&d>=0?'#ff5b5b':'#57a8ff';
+      const mc=md>=0?'#ff5b5b':'#57a8ff';
+      const fmtP=v=>v>=100?Math.round(v).toLocaleString():v.toFixed(1);
+      priceHtml=`<div style="font-size:21px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.2">${fmtP(cur)}<span style="font-size:11px;font-weight:600">円</span></div>`
+        +(d!=null?`<div style="font-size:11px;font-weight:700;color:${dc};margin-top:2px">${d>=0?'＋':'－'}${Math.abs(Math.round(d)).toLocaleString()}円 (${dp>=0?'+':''}${dp.toFixed(2)}%)</div>`:'');
+      const f=t=>{const dd=new Date(t);return `${dd.getMonth()+1}/${dd.getDate()}`;};
+      const xi=[0,Math.floor(cs.length/3),Math.floor(cs.length*2/3),cs.length-1];
+      const xLbl=`<div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,0.4);padding:0 2px;margin-top:1px">${xi.map(i=>`<span>${f(cs[i][0])}</span>`).join('')}</div>`;
+      const subHtml=`<div style="text-align:center;font-size:9.5px;margin-top:2px"><span style="color:rgba(255,255,255,0.5)">直近1か月</span> <span style="color:${mc};font-weight:700">${md>=0?'＋':'－'}${Math.abs(Math.round(md)).toLocaleString()}円 (${mp>=0?'+':''}${mp.toFixed(2)}%)</span></div>`;
+      rightHtml=wlSparkSVG(cs)+xLbl+subHtml;
+    }
+    return `<div style="background:linear-gradient(170deg,#17171a,#0c0c0e);border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5)">${esc(s.code)}</span>
+        <span style="flex:1;font-size:13px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</span>
+        ${held?'<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;background:#e67e22;color:#fff;flex-shrink:0">保有</span>':''}
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="flex:0 0 36%;min-width:0">${priceHtml}</div>
+        <div style="flex:1;min-width:0">${rightHtml}</div>
+      </div>
+    </div>`;
+  }).join('');
+  if(missing.length&&!wlChartFetching){
+    wlFetchCharts(missing).then(()=>{if(wlView==='chart')wlRenderCharts();});
+  }
+}
+
 function wlRenderEarningsCalendar(){
   const cal=document.getElementById('home-earnings-cal');
   const listEl=document.getElementById('home-earnings-list');
@@ -11082,24 +11625,37 @@ window.addEventListener('load', function(){
 // 損益一覧タブ (pnl)
 // ============================================================
 let pnlMode='total'; // 'total' | 'unrealized' | 'realized'
+let pnlCumulative=true; // 累計チェック（ON=全期間、OFF=期間レンジ適用）
 
 function pnlSetMode(mode){
   pnlMode=mode;
-  // タブUIの切り替え
   ['total','unrealized','realized'].forEach(m=>{
     const btn=document.getElementById('pnl-tab-'+m);
     if(!btn)return;
     const active=m===mode;
-    btn.style.background=active?'var(--accent)':'transparent';
-    btn.style.color=active?'#fff':'var(--text2)';
+    btn.style.background=active?'#2fae8f':'transparent';
+    btn.style.color=active?'#fff':'rgba(255,255,255,0.65)';
   });
-  // 日付フィルターは確定損益のみ有効
-  const dr=document.getElementById('pnl-date-row');
-  if(dr){
-    dr.style.opacity=mode==='realized'?'1':'0.35';
-    dr.style.pointerEvents=mode==='realized'?'auto':'none';
-  }
+  pnlUpdateDateRow();
   pnlRender();
+}
+function pnlToggleCum(){
+  pnlCumulative=!pnlCumulative;
+  const box=document.getElementById('pnl-cum-box');
+  if(box){
+    box.textContent=pnlCumulative?'✓':'';
+    box.style.background=pnlCumulative?'#2fae8f':'transparent';
+  }
+  pnlUpdateDateRow();
+  pnlRender();
+}
+// 期間レンジは「累計OFF かつ 確定/合計モード」のときのみ有効
+function pnlUpdateDateRow(){
+  const dr=document.getElementById('pnl-date-row');
+  if(!dr)return;
+  const en=(pnlMode!=='unrealized')&&!pnlCumulative;
+  dr.style.opacity=en?'1':'0.35';
+  dr.style.pointerEvents=en?'auto':'none';
 }
 
 // 年月セレクタ初期化
@@ -11118,7 +11674,7 @@ function pnlInitDateSelectors(){
   ['pnl-y1','pnl-y2'].forEach((id,i)=>{
     const el=document.getElementById(id);
     if(!el)return;
-    el.innerHTML=yrs.map(y=>`<option value="${y}">${y}年</option>`).join('');
+    el.innerHTML=yrs.map(y=>`<option value="${y}">${String(y).slice(2)}年</option>`).join('');
     el.value=cy;
   });
   ['pnl-m1','pnl-m2'].forEach((id,i)=>{
@@ -11236,73 +11792,83 @@ function pnlRender(){
   const y2=parseInt(document.getElementById('pnl-y2')?.value||new Date().getFullYear());
   const m2=parseInt(document.getElementById('pnl-m2')?.value||12);
 
+  const POS='#ff5b5b',NEG='#57a8ff'; // kaView配色（陽=赤/陰=青）
+  const labelEl=document.getElementById('pnl-total-label');
   const totalEl=document.getElementById('pnl-total-amt');
   const subEl=document.getElementById('pnl-total-sub');
   const listEl=document.getElementById('pnl-list');
   if(!listEl)return;
 
+  const rangeLabel=`${String(y1).slice(2)}年${m1}月〜${String(y2).slice(2)}年${m2}月`;
   let items=[];
 
   if(pnlMode==='unrealized'){
     items=pnlCalcUnrealized();
     const total=items.reduce((s,i)=>s+i.gain,0);
-    const col=total>=0?'var(--green)':'var(--danger)';
-    totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
-    totalEl.style.color=col;
-    subEl.textContent='評価損益（保有'+items.length+'銘柄）';
+    labelEl.textContent='評価損益';
+    totalEl.textContent=(total>=0?'＋':'－')+Math.abs(Math.round(total)).toLocaleString()+'円';
+    totalEl.style.color=total>=0?POS:NEG;
+    subEl.textContent=`保有 ${items.length}銘柄・累計`;
 
   } else if(pnlMode==='realized'){
-    items=pnlCalcRealized(y1,m1,y2,m2);
+    items=pnlCumulative?pnlCalcRealized(null,null,null,null):pnlCalcRealized(y1,m1,y2,m2);
     const total=items.reduce((s,i)=>s+i.gain,0);
-    const col=total>=0?'var(--green)':'var(--danger)';
-    totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
-    totalEl.style.color=col;
-    subEl.textContent=`確定損益（${y1}年${m1}月〜${y2}年${m2}月・${items.length}件）`;
+    labelEl.textContent='確定損益';
+    totalEl.textContent=(total>=0?'＋':'－')+Math.abs(Math.round(total)).toLocaleString()+'円';
+    totalEl.style.color=total>=0?POS:NEG;
+    subEl.textContent=pnlCumulative?`全期間・${items.length}件`:`${rangeLabel}・${items.length}件`;
 
-  } else { // total — 評価損益（現在保有）＋ 確定損益（全期間の売却済み）
+  } else { // total — 評価損益（保有）＋ 確定損益
     const u=pnlCalcUnrealized();
-    const r=pnlCalcRealized(null,null,null,null); // 全期間
+    const r=pnlCumulative?pnlCalcRealized(null,null,null,null):pnlCalcRealized(y1,m1,y2,m2);
     items=[...u,...r].sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
     const uTotal=u.reduce((s,i)=>s+i.gain,0);
     const rTotal=r.reduce((s,i)=>s+i.gain,0);
     const total=uTotal+rTotal;
-    const col=total>=0?'var(--green)':'var(--danger)';
-    totalEl.textContent=(total>=0?'＋':'')+Math.round(total).toLocaleString()+'円';
-    totalEl.style.color=col;
-    subEl.textContent=`評価${(uTotal>=0?'＋':'')+Math.round(uTotal).toLocaleString()}円 ＋ 確定${(rTotal>=0?'＋':'')+Math.round(rTotal).toLocaleString()}円（累計）`;
+    labelEl.textContent='合計損益';
+    totalEl.textContent=(total>=0?'＋':'－')+Math.abs(Math.round(total)).toLocaleString()+'円';
+    totalEl.style.color=total>=0?POS:NEG;
+    subEl.textContent=`評価 ${(uTotal>=0?'＋':'－')+Math.abs(Math.round(uTotal)).toLocaleString()}円 ／ 確定 ${(rTotal>=0?'＋':'－')+Math.abs(Math.round(rTotal)).toLocaleString()}円${pnlCumulative?'（累計）':'（'+rangeLabel+'）'}`;
   }
 
-  // リスト描画
+  // リスト描画（kaView風・銘柄別ランキング）
   if(!items.length){
-    listEl.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text3);font-size:14px">データがありません</div>';
+    listEl.innerHTML='<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.4);font-size:14px">データがありません</div>';
     return;
   }
 
   listEl.innerHTML=items.map(item=>{
-    const gainCol=item.gain>=0?'var(--green)':'var(--danger)';
-    const gainStr=(item.gain>=0?'＋':'')+Math.round(item.gain).toLocaleString()+'円';
-    const pctStr=item.pct!=null?((item.pct>=0?'＋':'')+item.pct.toFixed(1)+'%'):'';
-    const subLabel=item.type==='unrealized'?'評価損益':
-                   item.type==='realized'?('確定損益'+(item.date?' · '+item.date:'')):'損益';
+    const pos=item.gain>=0;
+    const gCol=pos?'#ff5b5b':'#57a8ff';
+    const edge=pos?'#e8483f':'#2f9ee8';
+    const gainStr=(pos?'＋':'－')+Math.abs(Math.round(item.gain)).toLocaleString()+'円';
+    const pctStr=item.pct!=null?((item.pct>=0?'＋':'－')+Math.abs(item.pct).toFixed(1)+'%'):'';
+    const subLabel=item.type==='unrealized'?'累計損益':
+                   item.type==='realized'?('確定損益'+(item.date&&item.date!=='日付未設定'?' · '+item.date:'')):'損益';
+    const codeTag=item.code
+      ?`<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);flex-shrink:0">${esc(item.code)}</span>`
+      :((item.cat||'').includes('インデックス')?'<span style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.5);flex-shrink:0">投資信託</span>':'');
     const chartLink=item.type==='unrealized'&&item.code
-      ?`<span onclick="pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.buyDate||item.updated||''}')" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:6px">📊チャート</span>`
+      ?`<span onclick="event.stopPropagation();pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.buyDate||item.updated||''}')" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:6px">📊チャート</span>`
       :'';
     const editBtn=item.type==='realized'&&item.id!=null
-      ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:11px;color:var(--accent);cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
+      ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
       :'';
-    const leftBar=item.gain>=0?'#27ae60':'#e74c3c';
-    return `<div style="display:flex;align-items:stretch;background:var(--bg2);border-radius:12px;margin-bottom:8px;overflow:hidden;cursor:default">
-      <div style="width:4px;background:${leftBar};flex-shrink:0"></div>
-      <div style="flex:1;padding:12px 14px;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-          <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
-          <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${item.badgeColor}22;color:${item.badgeColor};border:1px solid ${item.badgeColor}44;flex-shrink:0">${item.badge}</span>
-        </div>
-        <div style="font-size:11px;color:var(--text3)">${esc(subLabel)}${chartLink}${editBtn}</div>
+    return `<div style="background:#17171a;border:0.5px solid rgba(255,255,255,0.08);border-left:3px solid ${edge};border-radius:10px;margin-bottom:8px;padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${codeTag}
+        <span style="flex:1;font-size:14px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
+        <span style="font-size:10px;font-weight:700;padding:2.5px 8px;border-radius:4px;background:${item.badgeColor};color:#fff;flex-shrink:0">${item.badge}</span>
       </div>
-      <div style="padding:12px 16px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0">
-        <div style="font-size:16px;font-weight:700;color:${gainCol}">${gainStr}</div>
-        ${pctStr?`<div style="font-size:11px;color:${gainCol};opacity:0.85">${pctStr}</div>`:''}
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:7px;gap:8px">
+        <div style="font-size:10px;color:rgba(255,255,255,0.45);white-space:nowrap">${esc(subLabel)}${chartLink}${editBtn}</div>
+        <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+          <div style="text-align:right;line-height:1.2">
+            <span style="font-size:17px;font-weight:800;color:${gCol};font-variant-numeric:tabular-nums">${gainStr}</span>
+            ${pctStr?`<span style="font-size:11px;color:${gCol};opacity:0.85;margin-left:5px">${pctStr}</span>`:''}
+          </div>
+          <span style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1">›</span>
+        </div>
       </div>
     </div>`;
   }).join('');
