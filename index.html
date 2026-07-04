@@ -8619,9 +8619,12 @@ window.addEventListener('load', function(){
     </div>
     <!-- フィルタ行: 全銘柄チップ + 累計チェック + 期間レンジ -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:5px;background:#fff;border-radius:16px;padding:5px 12px 5px 8px;box-shadow:0 1px 3px rgba(0,0,0,0.4)">
-        <span style="display:inline-flex;width:15px;height:15px;border-radius:50%;background:#2fae8f;color:#fff;font-size:8px;align-items:center;justify-content:center;font-weight:700;line-height:1">▼</span>
-        <span style="font-size:12px;font-weight:800;color:#1a1a1a">全銘柄</span>
+      <div style="position:relative">
+        <div onclick="pnlToggleBrokerMenu()" style="display:flex;align-items:center;gap:5px;background:#fff;border-radius:16px;padding:5px 12px 5px 8px;box-shadow:0 1px 3px rgba(0,0,0,0.4);cursor:pointer;user-select:none">
+          <span style="display:inline-flex;width:15px;height:15px;border-radius:50%;background:#2fae8f;color:#fff;font-size:8px;align-items:center;justify-content:center;font-weight:700;line-height:1">▼</span>
+          <span id="pnl-broker-label" style="font-size:12px;font-weight:800;color:#1a1a1a;white-space:nowrap">全銘柄</span>
+        </div>
+        <div id="pnl-broker-menu" style="display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:30;min-width:150px;background:#1c1c20;border:0.5px solid rgba(255,255,255,0.15);border-radius:12px;padding:5px;box-shadow:0 6px 20px rgba(0,0,0,0.55)"></div>
       </div>
       <div onclick="pnlToggleCum()" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
         <span id="pnl-cum-box" style="display:inline-flex;width:19px;height:19px;border-radius:4px;border:1.5px solid #2fae8f;background:#2fae8f;color:#fff;font-size:13px;font-weight:800;align-items:center;justify-content:center;line-height:1;transition:background 0.15s">✓</span>
@@ -11625,6 +11628,56 @@ window.addEventListener('load', function(){
 // 損益一覧タブ (pnl)
 // ============================================================
 let pnlMode='total'; // 'total' | 'unrealized' | 'realized'
+let pnlBroker='all'; // 証券会社フィルタ（'all' or 機関名）
+
+// 機関名の表記ゆれ正規化（野村證券/野村証券 等）
+function pnlNormBroker(b){return String(b||'').replace(/證/g,'証').trim();}
+// フィルタ判定: trGuessBroker（brokerフィールド優先＋名前推定）ベース
+function pnlBrokerMatch(a){
+  if(pnlBroker==='all')return true;
+  try{return pnlNormBroker(trGuessBroker(a))===pnlNormBroker(pnlBroker);}catch(e){return true;}
+}
+// 実在する機関から選択肢を動的生成してメニュー表示
+function pnlToggleBrokerMenu(){
+  const menu=document.getElementById('pnl-broker-menu');
+  if(!menu)return;
+  if(menu.style.display!=='none'){menu.style.display='none';return;}
+  // P&L対象になり得る口座から機関を収集
+  const found=new Set();
+  try{
+    JSON.parse(localStorage.getItem('assetAccounts')||'[]').forEach(a=>{
+      const b=pnlNormBroker(trGuessBroker(a));
+      if(b&&b!=='銀行'&&b!=='その他')found.add(b);
+    });
+  }catch(e){}
+  // 表示順: 主要証券会社を優先、その他は末尾
+  const ORDER=['SBI証券','PayPay証券','みずほ証券','野村証券','iDeCo・DC'];
+  const opts=['all',...ORDER.filter(b=>found.has(b)),...[...found].filter(b=>!ORDER.includes(b)).sort()];
+  menu.innerHTML=opts.map(v=>{
+    const label=v==='all'?'全銘柄':v;
+    const on=pnlBroker===v;
+    return `<div onclick="event.stopPropagation();pnlSetBroker('${v.replace(/'/g,"\\'")}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;background:${on?'rgba(47,174,143,0.18)':'transparent'}" onmouseenter="this.style.background='rgba(255,255,255,0.07)'" onmouseleave="this.style.background='${on?'rgba(47,174,143,0.18)':'transparent'}'">
+      <span style="width:14px;font-size:12px;color:#2fae8f;font-weight:800">${on?'✓':''}</span>
+      <span style="font-size:12px;font-weight:${on?'800':'600'};color:${on?'#fff':'rgba(255,255,255,0.8)'};white-space:nowrap">${label}</span>
+    </div>`;
+  }).join('');
+  menu.style.display='block';
+}
+function pnlSetBroker(v){
+  pnlBroker=v;
+  const lbl=document.getElementById('pnl-broker-label');
+  if(lbl)lbl.textContent=v==='all'?'全銘柄':v;
+  const menu=document.getElementById('pnl-broker-menu');
+  if(menu)menu.style.display='none';
+  pnlRender();
+}
+// メニュー外タップで閉じる
+document.addEventListener('click',e=>{
+  const menu=document.getElementById('pnl-broker-menu');
+  if(menu&&menu.style.display!=='none'&&!e.target.closest('#pnl-broker-menu')&&!e.target.closest('[onclick="pnlToggleBrokerMenu()"]')){
+    menu.style.display='none';
+  }
+});
 let pnlCumulative=true; // 累計チェック（ON=全期間、OFF=期間レンジ適用）
 
 function pnlSetMode(mode){
@@ -11704,6 +11757,7 @@ function pnlCalcUnrealized(){
       a.costPrice>0 &&
       (a.prevSBIAmount>0||INDEX_CATS.includes(a.cat))// インデックスはprevSBI不問
     ).forEach(a=>{
+      if(!pnlBrokerMatch(a))return;// 証券会社フィルタ
       const isStock=STOCK_CATS.includes(a.cat);
       const isForeign=FOREIGN_CATS.includes(a.cat);
       const isIndex=INDEX_CATS.includes(a.cat);
@@ -11755,7 +11809,7 @@ function pnlCalcRealized(y1,m1,y2,m2){
   const items=[];
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>a.sold&&inRange(a.soldDate)).forEach(a=>{
+    accs.filter(a=>a.sold&&inRange(a.soldDate)&&pnlBrokerMatch(a)).forEach(a=>{
       // amRenderCard（行2362）と同一のcost計算
       const costTotal=a.shares>0&&a.costPrice>0 ? a.shares*a.costPrice : (a.costPrice||0);
       const soldTotal=a.soldAmount||0;
@@ -11800,7 +11854,7 @@ function pnlRender(){
     labelEl.textContent='評価損益';
     totalEl.textContent=(total>=0?'＋':'－')+Math.abs(Math.round(total)).toLocaleString()+'円';
     totalEl.style.color=total>=0?POS:NEG;
-    subEl.textContent=`保有 ${items.length}銘柄・累計`;
+    subEl.textContent=(pnlBroker==='all'?'':pnlBroker+'・')+`保有 ${items.length}銘柄・累計`;
 
   } else if(pnlMode==='realized'){
     items=pnlCumulative?pnlCalcRealized(null,null,null,null):pnlCalcRealized(y1,m1,y2,m2);
@@ -11808,7 +11862,7 @@ function pnlRender(){
     labelEl.textContent='確定損益';
     totalEl.textContent=(total>=0?'＋':'－')+Math.abs(Math.round(total)).toLocaleString()+'円';
     totalEl.style.color=total>=0?POS:NEG;
-    subEl.textContent=pnlCumulative?`全期間・${items.length}件`:`${rangeLabel}・${items.length}件`;
+    subEl.textContent=(pnlBroker==='all'?'':pnlBroker+'・')+(pnlCumulative?`全期間・${items.length}件`:`${rangeLabel}・${items.length}件`);
 
   } else { // total — 評価損益（保有）＋ 確定損益
     const u=pnlCalcUnrealized();
@@ -11820,7 +11874,7 @@ function pnlRender(){
     labelEl.textContent='合計損益';
     totalEl.textContent=(total>=0?'＋':'－')+Math.abs(Math.round(total)).toLocaleString()+'円';
     totalEl.style.color=total>=0?POS:NEG;
-    subEl.textContent=`評価 ${(uTotal>=0?'＋':'－')+Math.abs(Math.round(uTotal)).toLocaleString()}円 ／ 確定 ${(rTotal>=0?'＋':'－')+Math.abs(Math.round(rTotal)).toLocaleString()}円${pnlCumulative?'（累計）':'（'+rangeLabel+'）'}`;
+    subEl.textContent=(pnlBroker==='all'?'':pnlBroker+'・')+`評価 ${(uTotal>=0?'＋':'－')+Math.abs(Math.round(uTotal)).toLocaleString()}円 ／ 確定 ${(rTotal>=0?'＋':'－')+Math.abs(Math.round(rTotal)).toLocaleString()}円${pnlCumulative?'（累計）':'（'+rangeLabel+'）'}`;
   }
 
   // リスト描画（kaView風・銘柄別ランキング）
