@@ -952,6 +952,13 @@ input[type=number] { -moz-appearance: textfield; }
       </div>
       <div style="position:relative;height:200px;padding:0 8px 8px"><canvas id="gainLineChart"></canvas></div>
     </div>
+    <!-- 月次損益（期間損益・kaView風） -->
+    <div class="card" id="monthlyGainCard" style="display:none;border:0.5px solid rgba(212,175,55,0.35)">
+      <div class="card-head"><h2>📊 期間損益（月次）</h2></div>
+      <div id="mgSummary" style="padding:0 16px 8px;text-align:center"></div>
+      <div class="chart-container" style="min-height:190px"><canvas id="monthlyGainChart"></canvas></div>
+      <div style="padding:0 16px 12px;font-size:10px;color:var(--text3)">各月末スナップショット時点の評価損益の増減（赤=増益・青=減益）。当月は最新スナップショットまで。</div>
+    </div>
     <!-- 機関別 運用状況 -->
     <div class="card" id="brokerCard" style="display:none">
       <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -1923,35 +1930,100 @@ function refreshHome(){
     }
   }catch(e){}
 
-  // ── 2.5 前日比±銘柄数 ──
+  // ── 2.5 ポートフォリオ前日比（当日騰落キャッシュ優先・スナップショット比フォールバック） ──
   try{
-    const cmp=dailySnapCompare();
     const el=document.getElementById('home-daily-pnl');
+    const prevEl=document.getElementById('home-prev-diff');
+    // ライブ株価ベースの前日比（ヒートマップの当日騰落キャッシュを流用・24時間まで許容）
+    let live=null;
+    try{
+      const q=(typeof amLoadDailyQuotes==='function')?amLoadDailyQuotes():null;
+      if(q&&q.quotes&&(Date.now()-q.ts)<24*3600*1000){
+        const accs2=JSON.parse(localStorage.getItem('assetAccounts')||'[]').filter(a=>!a.sold);
+        const targets=amDailyTargets(accs2);
+        let g=0,b=0,plus=0,minus=0,flat=0;
+        const seen=new Set();
+        targets.forEach(t=>{
+          const qd=q.quotes[t.qcode];
+          if(!qd||qd.err||!qd.prev||qd.prev<=0)return;
+          const pct=(qd.cur-qd.prev)/qd.prev*100;
+          const base=t.a.amount/(1+pct/100);
+          g+=t.a.amount-base;b+=base;
+          const k=amLotKey(t.a);
+          if(seen.has(k))return;
+          seen.add(k);
+          if(pct>0.0001)plus++;else if(pct<-0.0001)minus++;else flat++;
+        });
+        if(b>0){
+          const d=new Date(q.ts);
+          live={gain:g,pct:g/b*100,plus,minus,flat,time:`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+        }
+      }
+    }catch(e){}
+    // ヒーローの前日比表示（ライブ優先・kaView風に ±円(±%)）
+    if(live&&prevEl){
+      const col=live.gain>=0?'#4ade80':'#f87171';
+      prevEl.innerHTML=`前日比 <b>${live.gain>=0?'＋':'－'}${Math.round(Math.abs(live.gain)).toLocaleString()}円</b>（${live.pct>=0?'+':''}${live.pct.toFixed(1)}%）<span style="opacity:0.6;font-size:9px"> ${live.time}時点</span>`;
+      prevEl.style.color=col;
+    }
     if(el){
-      if(cmp&&(cmp.plus>0||cmp.minus>0)){
+      if(live&&(live.plus>0||live.minus>0)){
+        const tot=live.plus+live.minus;
+        const pPct=tot>0?Math.round(live.plus/tot*100):0;
+        const mPct=100-pPct;
         el.style.display='block';
-        const dateLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'前日比';
         el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
-            <div style="font-size:9px;color:var(--text3)">${dateLabel}</div>
+            <div style="font-size:9px;color:var(--text3)">保有 ${tot+live.flat}銘柄・${live.time}時点</div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-              <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:3px">前日比＋</div>
-              <div style="font-size:26px;font-weight:800;color:#4ade80;line-height:1">${cmp.plus}</div>
-              <div style="font-size:10px;color:rgba(74,222,128,0.7);margin-top:2px">銘柄</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:8px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+              <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:2px">前日比＋</div>
+              <div style="font-size:24px;font-weight:800;color:#4ade80;line-height:1">${live.plus}<span style="font-size:10px;font-weight:600"> 銘柄</span></div>
             </div>
-            <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-              <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:3px">前日比ー</div>
-              <div style="font-size:26px;font-weight:800;color:#f87171;line-height:1">${cmp.minus}</div>
-              <div style="font-size:10px;color:rgba(248,113,113,0.7);margin-top:2px">銘柄</div>
+            <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:8px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+              <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:2px">前日比ー</div>
+              <div style="font-size:24px;font-weight:800;color:#f87171;line-height:1">${live.minus}<span style="font-size:10px;font-weight:600"> 銘柄</span></div>
             </div>
           </div>
-          ${cmp.unchanged>0?`<div style="text-align:right;margin-top:4px;font-size:9px;color:var(--text3)">変動なし ${cmp.unchanged}銘柄</div>`:''}
+          <div style="display:flex;height:8px;border-radius:4px;overflow:hidden">
+            <div style="width:${pPct}%;background:#4ade80"></div>
+            <div style="width:${mPct}%;background:#f87171"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px">
+            <span style="color:#4ade80">${pPct}%</span><span style="color:#f87171">${mPct}%</span>
+          </div>
+          ${live.flat>0?`<div style="text-align:right;margin-top:2px;font-size:9px;color:var(--text3)">変動なし ${live.flat}銘柄</div>`:''}
         </div>`;
       }else{
-        el.style.display='none';
+        // フォールバック: スナップショット比較（従来）
+        const cmp=dailySnapCompare();
+        if(cmp&&(cmp.plus>0||cmp.minus>0)){
+          el.style.display='block';
+          const dateLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'前日比';
+          el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
+              <div style="font-size:9px;color:var(--text3)">${dateLabel}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+                <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:3px">前日比＋</div>
+                <div style="font-size:26px;font-weight:800;color:#4ade80;line-height:1">${cmp.plus}</div>
+                <div style="font-size:10px;color:rgba(74,222,128,0.7);margin-top:2px">銘柄</div>
+              </div>
+              <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
+                <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:3px">前日比ー</div>
+                <div style="font-size:26px;font-weight:800;color:#f87171;line-height:1">${cmp.minus}</div>
+                <div style="font-size:10px;color:rgba(248,113,113,0.7);margin-top:2px">銘柄</div>
+              </div>
+            </div>
+            ${cmp.unchanged>0?`<div style="text-align:right;margin-top:4px;font-size:9px;color:var(--text3)">変動なし ${cmp.unchanged}銘柄</div>`:''}
+          </div>`;
+        }else{
+          el.style.display='none';
+        }
       }
     }
   }catch(e){}
@@ -5872,6 +5944,7 @@ function trRenderCharts(){
   })();
   try{trRenderGainLineChart(filtered,labels,tickColor,gridColor);}catch(e){console.error('trRenderGainLineChart error:',e);}
   try{trRenderBrokerCard(filtered,labels,tickColor,gridColor);}catch(e){console.error('trRenderBrokerCard error:',e);}
+  try{trRenderMonthlyGain(filtered,tickColor,gridColor);}catch(e){console.error('trRenderMonthlyGain error:',e);}
   try{trRenderWeekly(filtered);}catch(e){console.error('trRenderWeekly error:',e);}
   try{trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   }catch(e){console.error('trRenderGainBarChart error:',e);}
@@ -5991,6 +6064,63 @@ function trCalcBrokerData(accounts){
 function trSetBrokerMode(m){
   trBrokerMode=m;
   trRenderCharts();
+}
+
+// ── 月次損益（kaView期間損益風）: 月末スナップショットの評価損益の増減 ──
+function trRenderMonthlyGain(filtered,tickColor,gridColor){
+  const card=document.getElementById('monthlyGainCard');
+  if(!card)return;
+  trDestroyChart('monthlyGain');
+  // 全スナップショットから月末値を構築（期間フィルタの先頭より前の月も基準として必要）
+  let all=[];
+  try{all=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){}
+  if(!all.length||!filtered.length){card.style.display='none';return;}
+  const byMonth={};// ym -> その月の最後のスナップショットの損益
+  const firstOfMonth={};// ym -> その月の最初のスナップショットの損益
+  all.forEach(sn=>{
+    const ym=(sn.date||'').slice(0,7);
+    if(!ym)return;
+    const g=trCalcSnapshotGain(sn);
+    if(!g)return;
+    byMonth[ym]=g.gain;// 日付順前提で上書き=月内最後
+    if(!(ym in firstOfMonth))firstOfMonth[ym]=g.gain;
+  });
+  const months=Object.keys(byMonth).sort();
+  if(!months.length){card.style.display='none';return;}
+  // 表示範囲: フィルタ内のスナップショットが属する月
+  const fMonths=[...new Set(filtered.map(sn=>(sn.date||'').slice(0,7)))].filter(m=>byMonth[m]!=null).sort();
+  const showMonths=fMonths.slice(-12);
+  if(!showMonths.length){card.style.display='none';return;}
+  const diffs=showMonths.map(ym=>{
+    const idx=months.indexOf(ym);
+    const prevYm=idx>0?months[idx-1]:null;
+    const base=prevYm!=null?byMonth[prevYm]:firstOfMonth[ym];// 前月末がなければ月内最初との差
+    return byMonth[ym]-base;
+  });
+  card.style.display='block';
+  // 期間損益サマリー（kaView風の大きな数字）
+  const totalDiff=diffs.reduce((a,b)=>a+b,0);
+  const tCol=totalDiff>=0?'#E4536B':'#3B82C4';
+  const sm=document.getElementById('mgSummary');
+  if(sm)sm.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:2px">期間損益（${showMonths[0].replace('-','/')}〜${showMonths[showMonths.length-1].replace('-','/')}）</div>
+    <div style="font-size:28px;font-weight:800;color:${tCol};letter-spacing:-0.5px">${totalDiff>=0?'＋':'－'}${Math.round(Math.abs(totalDiff)).toLocaleString()}円</div>`;
+  const labels=showMonths.map(m=>parseInt(m.slice(5))+'月');
+  chartInstances['monthlyGain']=new Chart(document.getElementById('monthlyGainChart'),{
+    type:'bar',
+    data:{labels,datasets:[{
+      data:diffs,
+      backgroundColor:diffs.map(d=>d>=0?'rgba(228,83,107,0.85)':'rgba(59,130,196,0.85)'),
+      borderRadius:4,maxBarThickness:44
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>(ctx.raw>=0?'＋':'－')+Math.round(Math.abs(ctx.raw)).toLocaleString()+'円'}}},
+      scales:{
+        x:{ticks:{color:tickColor,font:{size:10}},grid:{display:false}},
+        y:{ticks:{color:tickColor,font:{size:10},callback:v=>(v/10000).toFixed(0)+'万'},grid:{color:gridColor}}
+      }
+    }
+  });
 }
 
 function trRenderBrokerCard(filtered,labels,tickColor,gridColor){
