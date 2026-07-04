@@ -9117,8 +9117,9 @@ function wlFmtEarnings(d){
 // 配当・決算カレンダー（ホーム画面）
 // ============================================================
 // ═══ kaView風 ウォッチ銘柄 株価チャートタブ（⑥・画像14） ═══
-let wlView='fund',wlChartFetching=false;
-const WL_CHART_KEY='wlChartCache_v1';
+let wlView='fund',wlChartFetching=false,wlChartPeriod='1mo'; // '1d' | '1w' | '1mo'
+const WL_CHART_KEY='wlChartCache_v1';       // 日足（3moから直近23本）
+const WL_INTRA_KEY='wlChartCacheIntra_v1';  // 分足（1d/5m・TTL15分）
 function wlSetView(v){
   wlView=v;
   [['wl-view-fund','fund'],['wl-view-chart','chart']].forEach(([id,k])=>{
@@ -9133,37 +9134,55 @@ function wlSetView(v){
   if(cl)cl.style.display=v==='chart'?'block':'none';
   if(v==='chart')wlRenderCharts();
 }
+function wlSetChartPeriod(p){wlChartPeriod=p;wlRenderCharts();}
 function wlChartCache(){
   try{const c=JSON.parse(localStorage.getItem(WL_CHART_KEY)||'null');if(c&&Date.now()-c.ts<3600000&&c.q)return c;}catch(e){}
   return{ts:0,q:{}};
 }
-async function wlFetchCharts(codes){
+function wlIntraCache(){
+  try{const c=JSON.parse(localStorage.getItem(WL_INTRA_KEY)||'null');if(c&&Date.now()-c.ts<15*60*1000&&c.q)return c;}catch(e){}
+  return{ts:0,q:{}};
+}
+// intraday=true: 1日足（5分足）を取得。Worker/Yahooが非対応なら err:2 を記録
+async function wlFetchCharts(codes,intraday=false){
   if(wlChartFetching)return;
   wlChartFetching=true;
   const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
-  const q=wlChartCache().q;
+  const q=(intraday?wlIntraCache():wlChartCache()).q;
   const queue=[...new Set(codes)];
   const runners=Array.from({length:4},async()=>{
     while(queue.length){
       const code=queue.shift();
       try{
-        const resp=await fetch(`${WORKER}?code=${encodeURIComponent(code)}&range=3mo`);
+        const url=intraday
+          ?`${WORKER}?code=${encodeURIComponent(code)}&range=1d&interval=5m`
+          :`${WORKER}?code=${encodeURIComponent(code)}&range=3mo`;
+        const resp=await fetch(url);
         if(!resp.ok)throw new Error('http');
         const data=await resp.json();
         const r=data?.chart?.result?.[0];
         const ts=r?.timestamp||[];
         const cl=r?.indicators?.quote?.[0]?.close||[];
         let pairs=ts.map((t,i)=>[t*1000,cl[i]]).filter(x=>x[1]!=null);
-        pairs=pairs.slice(-23);// 直近1か月（約22営業日）
         const meta=r?.meta||{};
-        if(pairs.length>=2){
-          q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1]),prev:pairs[pairs.length-2][1]};
-        }else q[code]={err:1};
+        if(intraday){
+          if(pairs.length>=3){
+            q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1]),
+              prev:(meta.chartPreviousClose>0?meta.chartPreviousClose:(meta.previousClose>0?meta.previousClose:null))};
+          }else{
+            q[code]={err:2};// 分足非対応（Worker側interval未転送 等）
+          }
+        }else{
+          pairs=pairs.slice(-23);// 直近1か月（約22営業日）
+          if(pairs.length>=2){
+            q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1]),prev:pairs[pairs.length-2][1]};
+          }else q[code]={err:1};
+        }
       }catch(e){q[code]={err:1};}
     }
   });
   await Promise.all(runners);
-  try{localStorage.setItem(WL_CHART_KEY,JSON.stringify({ts:Date.now(),q}));}catch(e){}
+  try{localStorage.setItem(intraday?WL_INTRA_KEY:WL_CHART_KEY,JSON.stringify({ts:Date.now(),q}));}catch(e){}
   wlChartFetching=false;
 }
 function wlSparkSVG(pairs){
@@ -9182,20 +9201,46 @@ function wlSparkSVG(pairs){
 function wlRenderCharts(){
   const el=document.getElementById('wl-chart-list');if(!el)return;
   const items=wlLoad().filter(s=>s.code).sort((a,b)=>a.priority-b.priority);
-  if(!items.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:20px">証券コード付きの銘柄がありません</p>';return;}
-  const cache=wlChartCache();
+
+  // 期間切替ピル（1日/1週/1ヶ月）
+  const P_LABELS=[['1d','1日'],['1w','1週'],['1mo','1ヶ月']];
+  const pills=`<div style="display:flex;justify-content:flex-end;margin:0 0 10px">
+    <div style="display:flex;background:var(--bg2);border-radius:9px;padding:2.5px;gap:2px">
+      ${P_LABELS.map(([v,l])=>`<button onclick="wlSetChartPeriod('${v}')" style="padding:5px 13px;border:none;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;background:${wlChartPeriod===v?'#2fae8f':'transparent'};color:${wlChartPeriod===v?'#fff':'var(--text2)'}">${l}</button>`).join('')}
+    </div>
+  </div>`;
+
+  if(!items.length){el.innerHTML=pills+'<p style="text-align:center;color:var(--text3);font-size:13px;padding:20px">証券コード付きの銘柄がありません</p>';return;}
+
+  const intraday=wlChartPeriod==='1d';
+  const cache=intraday?wlIntraCache():wlChartCache();
+  const dailyCache=intraday?wlChartCache():cache;// 1日モードの前日比フォールバック用
   const missing=items.filter(s=>!cache.q[s.code]).map(s=>s.code);
-  el.innerHTML=items.map(s=>{
+  const periodTxt={'1d':'当日','1w':'直近1週間','1mo':'直近1か月'}[wlChartPeriod];
+  let intraFailCnt=0;
+
+  el.innerHTML=pills+items.map(s=>{
     const q=cache.q[s.code];
     const held=s.status==='購入済';
     let priceHtml='<div style="font-size:12px;color:rgba(255,255,255,0.4);padding:14px 0">📡 取得中…</div>';
     let rightHtml='<div style="height:76px"></div>';
-    if(q&&q.err){
+
+    let useQ=q,fellBack=false;
+    if(intraday&&q&&q.err===2){
+      intraFailCnt++;
+      const dq=dailyCache.q[s.code];// 分足非対応→日足1週間にフォールバック
+      if(dq&&dq.pairs){useQ={pairs:dq.pairs.slice(-6),cur:dq.cur,prev:dq.prev};fellBack=true;}
+      else useQ=null;
+    }
+
+    if(q&&q.err===1){
       priceHtml='<div style="font-size:12px;color:rgba(255,255,255,0.4);padding:14px 0">取得失敗</div>';
-    }else if(q&&q.pairs&&q.pairs.length>=2){
-      const cs=q.pairs;
-      const cur=q.cur||cs[cs.length-1][1];
-      const prev=q.prev;
+    }else if(useQ&&useQ.pairs&&useQ.pairs.length>=2){
+      // 期間に応じてスライス（1w=直近6本 / 1mo=全23本 / 1d=分足全部）
+      let cs=useQ.pairs;
+      if(!intraday&&wlChartPeriod==='1w')cs=cs.slice(-6);
+      const cur=useQ.cur||cs[cs.length-1][1];
+      const prev=useQ.prev;
       const d=prev?cur-prev:null;
       const dp=prev?d/prev*100:null;
       const first=cs[0][1];
@@ -9205,10 +9250,15 @@ function wlRenderCharts(){
       const fmtP=v=>v>=100?Math.round(v).toLocaleString():v.toFixed(1);
       priceHtml=`<div style="font-size:21px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.2">${fmtP(cur)}<span style="font-size:11px;font-weight:600">円</span></div>`
         +(d!=null?`<div style="font-size:11px;font-weight:700;color:${dc};margin-top:2px">${d>=0?'＋':'－'}${Math.abs(Math.round(d)).toLocaleString()}円 (${dp>=0?'+':''}${dp.toFixed(2)}%)</div>`:'');
-      const f=t=>{const dd=new Date(t);return `${dd.getMonth()+1}/${dd.getDate()}`;};
+      const fD=t=>{const dd=new Date(t);return `${dd.getMonth()+1}/${dd.getDate()}`;};
+      const fT=t=>{const dd=new Date(t);return `${dd.getHours()}:${String(dd.getMinutes()).padStart(2,'0')}`;};
+      const fx=(intraday&&!fellBack)?fT:fD;
       const xi=[0,Math.floor(cs.length/3),Math.floor(cs.length*2/3),cs.length-1];
-      const xLbl=`<div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,0.4);padding:0 2px;margin-top:1px">${xi.map(i=>`<span>${f(cs[i][0])}</span>`).join('')}</div>`;
-      const subHtml=`<div style="text-align:center;font-size:9.5px;margin-top:2px"><span style="color:rgba(255,255,255,0.5)">直近1か月</span> <span style="color:${mc};font-weight:700">${md>=0?'＋':'－'}${Math.abs(Math.round(md)).toLocaleString()}円 (${mp>=0?'+':''}${mp.toFixed(2)}%)</span></div>`;
+      const xLbl=`<div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,0.4);padding:0 2px;margin-top:1px">${xi.map(i=>`<span>${fx(cs[i][0])}</span>`).join('')}</div>`;
+      // 1日モード: 前日終値比（＝前日比と同義）、それ以外は期間始点比
+      const subVal=(intraday&&!fellBack&&prev)?{v:cur-prev,p:(cur-prev)/prev*100}:{v:md,p:mp};
+      const sc=subVal.v>=0?'#ff5b5b':'#57a8ff';
+      const subHtml=`<div style="text-align:center;font-size:9.5px;margin-top:2px"><span style="color:rgba(255,255,255,0.5)">${fellBack?'直近1週間(日足)':periodTxt}</span> <span style="color:${sc};font-weight:700">${subVal.v>=0?'＋':'－'}${Math.abs(Math.round(subVal.v)).toLocaleString()}円 (${subVal.p>=0?'+':''}${subVal.p.toFixed(2)}%)</span></div>`;
       rightHtml=wlSparkSVG(cs)+xLbl+subHtml;
     }
     return `<div style="background:linear-gradient(170deg,#17171a,#0c0c0e);border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 12px;margin-bottom:8px">
@@ -9222,9 +9272,18 @@ function wlRenderCharts(){
         <div style="flex:1;min-width:0">${rightHtml}</div>
       </div>
     </div>`;
-  }).join('');
+  }).join('')
+  +(intraFailCnt>0?`<p style="text-align:center;font-size:10px;color:var(--text3);padding:4px 8px 8px">※ 分足（1日足）が取得できないため日足1週間で代替表示しています。Worker側でintervalパラメータの転送対応が必要です（${intraFailCnt}銘柄）</p>`:'');
+
   if(missing.length&&!wlChartFetching){
-    wlFetchCharts(missing).then(()=>{if(wlView==='chart')wlRenderCharts();});
+    wlFetchCharts(missing,intraday).then(()=>{if(wlView==='chart')wlRenderCharts();});
+  }
+  // 1日モードでは前日比フォールバック用に日足も裏で取得
+  if(intraday){
+    const dMissing=items.filter(s=>!dailyCache.q[s.code]).map(s=>s.code);
+    if(dMissing.length&&!wlChartFetching){
+      wlFetchCharts(dMissing,false).then(()=>{if(wlView==='chart'&&wlChartPeriod==='1d')wlRenderCharts();});
+    }
   }
 }
 
