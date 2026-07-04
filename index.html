@@ -9678,7 +9678,32 @@ function cfRender(){
   }else{
     const sorted=Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
     const maxVal=sorted[0]?.[1]?.total||1;
-    const elapsedRatio=elapsedD/daysInM;
+    // ── データ進捗率: この月のデータに記載がある最終日を基準（CSV取込の遅れに対応） ──
+    const monthEntries=cfData.filter(d=>d.date&&d.date.startsWith(cfCurrentMonth));
+    let dataMaxDay=0;
+    monthEntries.forEach(d=>{const dd=parseInt(d.date.slice(8,10));if(dd>dataMaxDay)dataMaxDay=dd;});
+    if(!dataMaxDay)dataMaxDay=isCurMonth?elapsedD:daysInM;
+    const dataProgress=Math.min(dataMaxDay/daysInM,1);
+    const progPct=dataProgress*100;
+    const elapsedRatio=dataProgress;// 予算バーの目安線・ペース判定はデータ進捗基準
+    // 進捗ライン表示
+    const[,cfMm]=cfCurrentMonth.split('-');
+    let progressLine=monthEntries.length?`<div style="font-size:11px;color:var(--text2);margin-bottom:8px;padding:6px 10px;background:rgba(128,128,128,0.07);border-radius:8px">📅 データ進捗: <b>${parseInt(cfMm)}/${dataMaxDay}</b> まで記録済み（${dataMaxDay}日/${daysInM}日 = <b>${progPct.toFixed(1)}%</b>）</div>`:'';
+    // 日数進捗を上回るカテゴリのアラート
+    let alertBox='';
+    if(budgetCats.length&&dataProgress<0.999){
+      const over=budgetCats.map(k=>{
+        const spent=cats[k]?.type==='expense'?cats[k].total:0;
+        const rate=cfBudgets[k]>0?spent/cfBudgets[k]*100:0;
+        return{cat:k,rate,diff:rate-progPct};
+      }).filter(o=>o.rate>progPct).sort((a,b)=>b.diff-a.diff);
+      if(over.length){
+        alertBox=`<div style="margin-bottom:10px;padding:8px 10px;background:rgba(228,60,60,0.1);border:0.5px solid rgba(228,60,60,0.4);border-radius:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--danger);margin-bottom:4px">⚠ 予算消化が日数進捗（${progPct.toFixed(1)}%）を超えているカテゴリ</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${over.map(o=>`<span style="font-size:11px;background:rgba(228,60,60,0.12);border-radius:8px;padding:2px 8px;white-space:nowrap"><b>${o.cat}</b> ${o.rate.toFixed(0)}%<span style="color:var(--danger);font-size:10px">（+${o.diff.toFixed(0)}pt）</span></span>`).join('')}</div>
+        </div>`;
+      }
+    }
     // 予算合計サマリー（予算設定カテゴリのみ）
     let budgetSummary='';
     if(budgetCats.length){
@@ -9693,11 +9718,11 @@ function cfRender(){
         </div>
         <div style="height:7px;background:rgba(128,128,128,0.15);border-radius:4px;overflow:hidden;position:relative">
           <div style="width:${Math.min(tPct,100)}%;height:100%;background:${tCol};border-radius:4px;transition:width 0.4s"></div>
-          ${isCurMonth?`<div style="position:absolute;top:-1px;bottom:-1px;left:${(elapsedRatio*100).toFixed(1)}%;width:1.5px;background:var(--text3)" title="経過日数の目安"></div>`:''}
+          ${dataProgress<0.98?`<div style="position:absolute;top:-1px;bottom:-1px;left:${(elapsedRatio*100).toFixed(1)}%;width:1.5px;background:var(--text3)" title="データ進捗の目安"></div>`:''}
         </div>
       </div>`;
     }
-    cs.innerHTML=csHead+budgetSummary+
+    cs.innerHTML=csHead+progressLine+alertBox+budgetSummary+
       sorted.map(([cat,info])=>{
         const col=CF_CAT_COLOR[cat]||'#888';
         const isIn=info.type==='income';
@@ -9707,7 +9732,7 @@ function cfRender(){
           const bPct=info.total/budget*100;
           pct=Math.min(bPct,100);
           barCol=bPct>=100?'var(--danger)':bPct>=80?'#fbbf24':'var(--green)';
-          if(isCurMonth&&bPct/100>elapsedRatio+0.1&&bPct<100)paceWarn=' <span title="経過日数に対してペース超過" style="font-size:10px">⚠</span>';
+          if(dataProgress<0.999&&bPct/100>elapsedRatio&&bPct<100)paceWarn=' <span title="データ進捗に対してペース超過" style="font-size:10px">⚠</span>';
           if(bPct>=100)paceWarn=' <span title="予算超過" style="font-size:10px">🔴</span>';
           rightHtml=`<div style="font-size:11px;font-weight:600;min-width:110px;text-align:right"><span style="color:${barCol}">－${cfFmt(info.total)}</span><span style="color:var(--text3);font-weight:400"> /${cfFmt(budget)}</span><div style="font-size:9px;color:${barCol}">${bPct.toFixed(0)}%${paceWarn}</div></div>`;
         }else{
@@ -9718,7 +9743,7 @@ function cfRender(){
           <div style="width:60px;font-size:11px;color:var(--text2);text-align:right;flex-shrink:0">${cat}</div>
           <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;position:relative">
             <div style="width:${pct}%;height:100%;background:${budget?barCol:col};border-radius:3px;transition:width 0.4s"></div>
-            ${budget&&isCurMonth?`<div style="position:absolute;top:-1px;bottom:-1px;left:${(elapsedRatio*100).toFixed(1)}%;width:1.5px;background:var(--text3)"></div>`:''}
+            ${budget&&dataProgress<0.98?`<div style="position:absolute;top:-1px;bottom:-1px;left:${(elapsedRatio*100).toFixed(1)}%;width:1.5px;background:var(--text3)"></div>`:''}
           </div>
           ${rightHtml}
         </div>`;
@@ -10219,8 +10244,13 @@ function cfParseVpass(text){
   text=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   const lines=text.split('\n').filter(l=>l.trim());
   const rows=[];
-  for(const line of lines){
-    const cols=cfSplitCSV(line);
+  for(const rawLine of lines){
+    let line=rawLine.trim();
+    let cols=cfSplitCSV(line);
+    // 新フォーマット対応: 行全体が "..." で囲まれ1フィールド化している場合は外して再分割
+    if(cols.length===1&&/^".*"$/.test(line)){
+      cols=cfSplitCSV(line.slice(1,-1).replace(/""/g,'"'));
+    }
     if(cols.length<3)continue;
 
     const dateRaw=(cols[0]||'').replace(/"/g,'').trim();
@@ -10230,12 +10260,36 @@ function cfParseVpass(text){
     const date=`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
 
     const desc=(cols[1]||'').replace(/"/g,'').trim();
-    const amt=parseFloat((cols[2]||'').replace(/[",，\s]/g,''))||0;
+    // 金額列の自動検出: 旧形式は3列目、新形式は「ご本人/1回払い/'26/07」等を挟んで後方に数値列
+    //   → 3列目以降で最初の数値列を採用（'26/07 や '2/12 は / や ' を含むため除外される）
+    //   マイナス金額は返品・返金（収入として取込）
+    let amt=0,isRefund=false;
+    for(let i=2;i<cols.length;i++){
+      const v=(cols[i]||'').replace(/["\s]/g,'').replace(/[，,]/g,'');
+      if(/^-?\d+$/.test(v)&&parseFloat(v)!==0){
+        amt=Math.abs(parseFloat(v));
+        isRefund=parseFloat(v)<0;
+        break;
+      }
+    }
     if(!amt||!desc)continue;
 
-    // クレカ明細は全て支出
-    const{type,cat}=cfGuessCat(desc,true);
-    rows.push({id:cfUID(),type,cat,amount:amt,date,memo:desc});
+    // 分割/リボの回数表記（例: '2/12）があればメモに付与
+    //   → 毎月同一の日付・金額で明細が繰り返されるため、回数で区別して重複スキップの誤爆を防ぐ
+    let installNote='';
+    for(let i=2;i<Math.min(cols.length,6);i++){
+      const v=(cols[i]||'').replace(/["'\s]/g,'');
+      const im=v.match(/^(\d{1,2})\/(\d{1,2})$/);
+      if(im&&parseInt(im[2])>1&&parseInt(im[1])<=parseInt(im[2])){installNote=`（分割${im[1]}/${im[2]}回）`;break;}
+    }
+
+    // クレカ明細は全て支出（マイナス金額=返品は収入として登録）
+    if(isRefund){
+      rows.push({id:cfUID(),type:'income',cat:'その他収入',amount:amt,date,memo:desc+'（カード返品・返金）'});
+    }else{
+      const{type,cat}=cfGuessCat(desc,true);
+      rows.push({id:cfUID(),type,cat,amount:amt,date,memo:desc+installNote});
+    }
   }
   return rows;
 }
