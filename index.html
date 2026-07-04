@@ -11719,22 +11719,14 @@ function pnlCalcUnrealized(){
         gain=(a.price-a.costPrice)*a.shares;
         pct=(a.price-a.costPrice)/a.costPrice*100;
       } else if(isIndex&&a.amount>0&&a.costPrice>0){
-        // インデックス投信：costPrice=取得総額（shares=0の場合も対応）
-        // shares>0の場合は口数×(現在単価-取得単価)で計算
-        if(a.shares>0&&a.price>0&&!isPayPay){
-          const sh=parseFloat(a.shares);
-          const calc=sh*a.price;
-          const ratio=a.amount>0?calc/a.amount:0;
-          // 1万口単価方式
-          if(ratio>50){
-            gain=Math.round(sh*a.price/10000)-a.costPrice;
-          }else{
-            gain=a.amount-a.costPrice;
-          }
-        }else{
-          gain=a.amount-a.costPrice;
-        }
-        pct=gain/a.costPrice*100;
+        // インデックス投信：ヒートマップ/推移タブと同じ共通関数で取得総額を算出
+        // （costPriceが「1万口あたり単価」「口数単価」「取得総額」のどれでも正しく判定）
+        const cost=(typeof _calcCostTotal==='function')?_calcCostTotal(a):a.costPrice;
+        if(!cost||cost<=0)return;
+        const ratio=a.amount/cost;
+        if(ratio>50||ratio<0.02)return;// 整合性ガード（単位不整合の異常値を除外）
+        gain=a.amount-cost;
+        pct=gain/cost*100;
       } else {
         return;
       }
