@@ -876,6 +876,58 @@ input[type=number] { -moz-appearance: textfield; }
   </div>
   <div class="page-inner">
     <input type="file" id="csvInput2" accept=".csv" multiple style="display:none">
+
+    <!-- ═══════════ kaView風 資産推移ヒーロー ═══════════ -->
+    <div id="kvCard" style="display:none;margin:0 -4px 16px;background:linear-gradient(170deg,#17171a 0%,#0c0c0e 60%,#0a0a0c 100%);border:0.5px solid rgba(255,255,255,0.09);border-radius:20px;padding:16px 0 12px;overflow:hidden">
+
+      <!-- 資産/損益 トグル -->
+      <div style="display:flex;justify-content:center;padding:0 16px 14px">
+        <div style="display:flex;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.14);border-radius:13px;padding:4px;width:100%;max-width:360px;gap:4px">
+          <button id="kv-mode-asset" onclick="kvSetMode('asset')" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:#2fae8f;color:#fff;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;letter-spacing:0.15em;transition:background 0.15s">資産</button>
+          <button id="kv-mode-pnl" onclick="kvSetMode('pnl')" style="flex:1;padding:10px 0;border:none;border-radius:10px;background:transparent;color:rgba(255,255,255,0.75);font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;letter-spacing:0.15em;transition:background 0.15s">損益</button>
+        </div>
+      </div>
+
+      <!-- ヒーロー数値 -->
+      <div style="text-align:center;padding:0 16px 14px">
+        <div id="kv-hero-label" style="font-size:14px;color:rgba(255,255,255,0.9);font-weight:600;margin-bottom:2px;letter-spacing:0.05em">資産総額</div>
+        <div id="kv-hero-value" style="font-size:36px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1.2;font-variant-numeric:tabular-nums">—</div>
+        <div id="kv-hero-sub" style="font-size:13px;margin-top:4px;color:rgba(255,255,255,0.7)">—</div>
+      </div>
+
+      <!-- チャートパネル -->
+      <div style="margin:0 10px;background:rgba(0,0,0,0.55);border:0.5px solid rgba(255,255,255,0.12);border-radius:14px;padding:10px 6px 8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 6px 6px">
+          <button id="kv-topix-chip" onclick="kvToggleTopix()" style="display:flex;align-items:center;gap:6px;background:#fff;border:none;border-radius:17px;padding:6px 14px 6px 8px;font-family:inherit;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
+            <span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#2fae8f;color:#fff;font-size:11px;align-items:center;justify-content:center;font-weight:700;line-height:1">⇄</span>
+            <span style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.02em">TOPIX</span>
+          </button>
+          <span id="kv-unit-label" style="font-size:10px;color:rgba(255,255,255,0.75)">(百万円)</span>
+        </div>
+        <div style="position:relative;height:300px"><canvas id="kvChart"></canvas></div>
+        <!-- スライダー飾り（kaView風・黄色ダイヤ） -->
+        <div id="kv-slider" style="position:relative;height:32px;margin:4px 14px 0">
+          <div style="position:absolute;left:0;right:0;top:15px;height:2px;background:rgba(255,255,255,0.14);border-radius:1px"></div>
+          <div id="kv-slider-dots" style="position:absolute;left:2px;right:34px;top:12px;height:8px;display:flex;justify-content:space-between;align-items:center"></div>
+          <div style="position:absolute;right:0;top:3px;width:26px;height:26px;background:#ffd93d;border-radius:6px;transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center">
+            <div style="transform:rotate(-45deg);width:13px;height:13px;background-image:radial-gradient(circle,rgba(60,50,0,0.55) 1.1px,transparent 1.4px);background-size:5px 5px;background-position:0 0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 期間セレクタ -->
+      <div style="margin:14px 10px 2px;display:flex;background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.12);border-radius:15px;padding:5px;align-items:stretch">
+        <button id="kv-p-10d" onclick="kvSetPeriod('10d')" style="flex:1;padding:8px 0;border:none;border-radius:11px;background:#2fae8f;color:#fff;font-weight:700;font-size:12px;line-height:1.3;font-family:inherit;cursor:pointer">直近<br>10回</button>
+        <div class="kv-p-div" style="width:0.5px;background:rgba(255,255,255,0.14);margin:6px 2px"></div>
+        <button id="kv-p-month" onclick="kvSetPeriod('month')" style="flex:1.3;padding:8px 0;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,0.6);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer">—年 —月</button>
+        <div class="kv-p-div" style="width:0.5px;background:rgba(255,255,255,0.14);margin:6px 2px"></div>
+        <button id="kv-p-year" onclick="kvSetPeriod('year')" style="flex:1.2;padding:8px 0;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,0.6);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer">—年</button>
+        <div class="kv-p-div" style="width:0.5px;background:rgba(255,255,255,0.14);margin:6px 2px"></div>
+        <button id="kv-p-all" onclick="kvSetPeriod('all')" style="flex:1;padding:8px 0;border:none;border-radius:11px;background:transparent;color:rgba(255,255,255,0.6);font-weight:600;font-size:14px;font-family:inherit;cursor:pointer">任意</button>
+      </div>
+    </div>
+    <!-- ═══════════ /kaView風ヒーロー ═══════════ -->
+
     <div class="tr-summary-grid" id="trSummaryGrid" style="display:none"></div>
     <div class="filter-bar" id="filterBar" style="display:none">
       <button class="filter-btn active" data-f="all" onclick="setFilter('all')">全期間</button>
@@ -5468,6 +5520,246 @@ function setFilter(f){
   trRenderCharts();trRenderSummary();trRenderTable();renderComment();
 }
 document.getElementById('csvInput2').addEventListener('change',e=>{Array.from(e.target.files).forEach(f=>trReadFile(f));e.target.value='';});
+
+// ═══════════════════════════════════════════════
+// kaView風 資産推移ヒーロー（資産/損益 + TOPIX比較 + 期間ピル）
+// ═══════════════════════════════════════════════
+let kvMode='asset',kvPeriod='10d',kvShowTopix=true,kvTopixData=null,kvTopixFetching=false;
+const KV_GREEN='#35e0a1',KV_PILL='#2fae8f',KV_YELLOW='#ffd93d',KV_RED='#ff5b5b',KV_BLUE='#57a8ff';
+
+function kvSetMode(m){kvMode=m;kvRender();}
+function kvSetPeriod(p){kvPeriod=p;kvRender();}
+function kvToggleTopix(){kvShowTopix=!kvShowTopix;kvRender();}
+
+function kvSorted(){return[...snapshots].sort((a,b)=>String(a.date).localeCompare(String(b.date)));}
+function kvGetFiltered(){
+  const sorted=kvSorted();if(!sorted.length)return[];
+  if(kvPeriod==='10d')return sorted.slice(-10);
+  const last=String(sorted[sorted.length-1].date);
+  if(kvPeriod==='month')return sorted.filter(s=>String(s.date).slice(0,7)===last.slice(0,7));
+  if(kvPeriod==='year')return sorted.filter(s=>String(s.date).slice(0,4)===last.slice(0,4));
+  return sorted;
+}
+function kvShortDate(d){const m=String(d).match(/(\d{4})-(\d{2})-(\d{2})/);return m?`${+m[2]}/${+m[3]}`:String(d);}
+
+// ── TOPIX（1306 ETF）取得：Worker経由・1時間キャッシュ ──
+async function kvFetchTopix(fromDateStr){
+  const spanDays=Math.max(15,(Date.now()-new Date(fromDateStr).getTime())/86400000);
+  const range=spanDays<80?'3mo':spanDays<170?'6mo':spanDays<360?'1y':spanDays<720?'2y':'5y';
+  const KEY='kvTopix_'+range;
+  try{const c=JSON.parse(localStorage.getItem(KEY)||'null');if(c&&Date.now()-c.ts<3600000&&c.pairs&&c.pairs.length){kvTopixData=c;return;}}catch(e){}
+  if(kvTopixFetching)return;kvTopixFetching=true;
+  try{
+    const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+    const resp=await fetch(`${WORKER}?code=1306&range=${range}`);
+    if(!resp.ok)throw new Error('http '+resp.status);
+    const data=await resp.json();
+    const result=data?.chart?.result?.[0];
+    const ts=result?.timestamp||[];
+    const cl=result?.indicators?.quote?.[0]?.close||[];
+    const pairs=ts.map((t,i)=>({t:t*1000,c:cl[i]})).filter(x=>x.c!=null);
+    if(pairs.length<2)throw new Error('no data');
+    kvTopixData={ts:Date.now(),range,pairs};
+    try{localStorage.setItem(KEY,JSON.stringify(kvTopixData));}catch(e){}
+    kvRenderChart();// 取得後に再描画してTOPIX線を反映
+  }catch(e){/* TOPIX取得失敗時は資産線のみ表示 */}
+  finally{kvTopixFetching=false;}
+}
+// 指定日以前で最も近いTOPIX終値
+function kvTopixCloseOn(dateStr){
+  if(!kvTopixData||!kvTopixData.pairs)return null;
+  const target=new Date(dateStr+'T15:00:00+09:00').getTime();
+  let best=null;
+  for(const p of kvTopixData.pairs){if(p.t<=target)best=p.c;else break;}
+  return best!=null?best:(kvTopixData.pairs[0]?kvTopixData.pairs[0].c:null);
+}
+
+// ── 黄色バーティカルライン（最新点）プラグイン ──
+const kvYellowLine={id:'kvYellowLine',beforeDatasetsDraw(chart){
+  if(chart.canvas.id!=='kvChart')return;
+  const meta=chart.getDatasetMeta(0);
+  if(!meta||!meta.data||!meta.data.length)return;
+  const x=meta.data[meta.data.length-1].x;
+  const{ctx,chartArea}=chart;
+  ctx.save();ctx.strokeStyle=KV_YELLOW;ctx.lineWidth=3;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x,chartArea.top);ctx.lineTo(x,chartArea.bottom);ctx.stroke();ctx.restore();
+}};
+
+function kvRender(){
+  const card=document.getElementById('kvCard');if(!card)return;
+  const filtered=kvGetFiltered();
+  if(filtered.length<1){card.style.display='none';return;}
+  card.style.display='block';
+  kvUpdateToggleUI();
+  kvUpdatePeriodUI();
+  kvRenderHero(filtered);
+  kvRenderChart();
+  // TOPIX未取得なら非同期取得（全期間の先頭からカバー）
+  const all=kvSorted();
+  if(kvShowTopix&&all.length)kvFetchTopix(String(all[0].date));
+}
+function kvUpdateToggleUI(){
+  const a=document.getElementById('kv-mode-asset'),p=document.getElementById('kv-mode-pnl');
+  if(!a||!p)return;
+  a.style.background=kvMode==='asset'?KV_PILL:'transparent';
+  a.style.color=kvMode==='asset'?'#fff':'rgba(255,255,255,0.75)';
+  p.style.background=kvMode==='pnl'?KV_PILL:'transparent';
+  p.style.color=kvMode==='pnl'?'#fff':'rgba(255,255,255,0.75)';
+}
+function kvUpdatePeriodUI(){
+  const sorted=kvSorted();
+  const last=sorted.length?String(sorted[sorted.length-1].date):new Date().toISOString().slice(0,10);
+  const yy=last.slice(2,4),y4=last.slice(0,4),mm=+last.slice(5,7);
+  const mBtn=document.getElementById('kv-p-month'),yBtn=document.getElementById('kv-p-year');
+  if(mBtn)mBtn.innerHTML=`${yy}年 ${mm}月`;
+  if(yBtn)yBtn.textContent=`${y4}年`;
+  [['kv-p-10d','10d'],['kv-p-month','month'],['kv-p-year','year'],['kv-p-all','all']].forEach(([id,p])=>{
+    const b=document.getElementById(id);if(!b)return;
+    const on=kvPeriod===p;
+    b.style.background=on?KV_PILL:'transparent';
+    b.style.color=on?'#fff':'rgba(255,255,255,0.6)';
+    b.style.fontWeight=on?'700':'600';
+  });
+}
+function kvFmtYen(n){return Math.round(n).toLocaleString('ja-JP')+'円';}
+function kvRenderHero(filtered){
+  const label=document.getElementById('kv-hero-label');
+  const value=document.getElementById('kv-hero-value');
+  const sub=document.getElementById('kv-hero-sub');
+  const latest=filtered[filtered.length-1];
+  const prev=filtered.length>=2?filtered[filtered.length-2]:null;
+  // 直前スナップショットが1日差なら「前日比」、それ以外は「前回比」
+  let diffLabel='前回比';
+  if(prev){
+    const d1=new Date(String(prev.date)),d2=new Date(String(latest.date));
+    if(Math.round((d2-d1)/86400000)===1)diffLabel='前日比';
+  }
+  const diff=prev?latest.total-prev.total:0;
+  const pct=prev&&prev.total?diff/prev.total*100:0;
+  const col=diff>=0?KV_RED:KV_BLUE;
+  const sign=diff>=0?'+':'';
+  if(kvMode==='asset'){
+    label.textContent='資産総額';
+    value.innerHTML=`${Math.round(latest.total).toLocaleString('ja-JP')}<span style="font-size:22px">円</span>`;
+    value.style.color='#fff';value.style.fontSize='36px';
+    sub.innerHTML=prev?`${diffLabel}&nbsp;&nbsp;<span style="color:${col};font-weight:700">${sign}${Math.round(diff).toLocaleString('ja-JP')}円 (${sign}${pct.toFixed(1)}%)</span>`:'—';
+  }else{
+    label.textContent=diffLabel;
+    value.innerHTML=prev?`${sign}${Math.round(diff).toLocaleString('ja-JP')}<span style="font-size:22px">円</span>`:'—';
+    value.style.color=col;value.style.fontSize='34px';
+    sub.innerHTML=prev?`<span style="color:${col}">(${sign}${pct.toFixed(1)}%)</span>`:'';
+  }
+}
+function kvRenderChart(){
+  const canvas=document.getElementById('kvChart');if(!canvas)return;
+  const filtered=kvGetFiltered();if(!filtered.length)return;
+  trDestroyChart('kv');
+  const unitLabel=document.getElementById('kv-unit-label');
+  const gridColor='rgba(255,255,255,0.22)';
+  const tickColor='rgba(255,255,255,0.92)';
+  // スライダー飾りのドット
+  const dotsEl=document.getElementById('kv-slider-dots');
+  if(dotsEl){
+    const n=Math.max(filtered.length-1,1);
+    dotsEl.innerHTML=Array.from({length:n},()=>'<div style="width:7px;height:7px;border-radius:50%;background:rgba(140,140,140,0.85)"></div>').join('');
+  }
+
+  if(kvMode==='asset'){
+    if(unitLabel)unitLabel.textContent='(百万円)';
+    const labels=filtered.map(s=>kvShortDate(s.date));
+    const totals=filtered.map(s=>s.total);
+    const lastIdx=totals.length-1;
+    const datasets=[{
+      label:'資産総額',data:totals,
+      borderColor:KV_GREEN,borderWidth:3.5,tension:0,fill:false,order:1,
+      pointRadius:ctx=>ctx.dataIndex===lastIdx?7:4.5,
+      pointBackgroundColor:ctx=>ctx.dataIndex===lastIdx?KV_GREEN:'#fff',
+      pointBorderColor:'#fff',
+      pointBorderWidth:ctx=>ctx.dataIndex===lastIdx?3:0,
+      pointHoverRadius:8
+    }];
+    // TOPIX正規化オーバーレイ（起点の資産額に合わせる）
+    if(kvShowTopix&&kvTopixData){
+      const base=kvTopixCloseOn(String(filtered[0].date));
+      if(base){
+        const topixLine=filtered.map(s=>{
+          const c=kvTopixCloseOn(String(s.date));
+          return c?totals[0]*(c/base):null;
+        });
+        datasets.push({
+          label:'TOPIX',data:topixLine,
+          borderColor:'rgba(200,200,200,0.85)',borderDash:[5,5],borderWidth:2,
+          pointRadius:0,tension:0,fill:false,order:2,spanGaps:true
+        });
+      }
+    }
+    chartInstances['kv']=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        datalabels:{display:false},
+        tooltip:{backgroundColor:'rgba(0,0,0,0.85)',padding:10,cornerRadius:8,displayColors:false,
+          callbacks:{label:ctx=>{
+            if(ctx.datasetIndex===0)return'資産総額: '+kvFmtYen(ctx.raw);
+            const base=kvTopixCloseOn(String(filtered[0].date));
+            const c=kvTopixCloseOn(String(filtered[ctx.dataIndex].date));
+            return(base&&c)?`TOPIX: ${((c/base-1)*100>=0?'+':'')}${((c/base-1)*100).toFixed(1)}%（期間起点比）`:'TOPIX';
+          }}}
+      },
+      scales:{
+        y:{position:'right',grace:'8%',
+          ticks:{callback:v=>(v/1e6).toFixed(1),color:tickColor,font:{size:11,weight:'600'},maxTicksLimit:8,padding:6},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}},
+        x:{ticks:{color:tickColor,font:{size:11,weight:'600'},maxRotation:0,autoSkip:true,maxTicksLimit:10},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}}
+      },
+      layout:{padding:{top:6,left:4}}
+    },plugins:[ChartDataLabels,kvYellowLine]});
+  }else{
+    // ── 損益モード：スナップショット間の増減バー（赤=＋/青=−）＋ TOPIX白ドット ──
+    if(unitLabel)unitLabel.textContent='(千円)';
+    if(filtered.length<2)return;
+    const labels=[],diffs=[],topixPct=[];
+    for(let i=1;i<filtered.length;i++){
+      labels.push(kvShortDate(filtered[i].date));
+      diffs.push(filtered[i].total-filtered[i-1].total);
+      if(kvShowTopix&&kvTopixData){
+        const p=kvTopixCloseOn(String(filtered[i-1].date)),c=kvTopixCloseOn(String(filtered[i].date));
+        topixPct.push(p&&c?(c/p-1)*100:null);
+      }else topixPct.push(null);
+    }
+    const datasets=[{
+      type:'bar',label:'損益',data:diffs,order:2,
+      backgroundColor:diffs.map(d=>d>=0?'#e04b4b':'#4a90d9'),
+      borderRadius:2,barPercentage:0.55,categoryPercentage:0.8
+    }];
+    if(kvShowTopix&&kvTopixData&&topixPct.some(v=>v!=null)){
+      datasets.push({type:'line',label:'TOPIX',data:topixPct,yAxisID:'y2',order:1,
+        showLine:false,pointRadius:5.5,pointBackgroundColor:'#fff',pointBorderColor:'#fff',spanGaps:true});
+    }
+    chartInstances['kv']=new Chart(canvas,{type:'bar',data:{labels,datasets},options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        datalabels:{display:false},
+        tooltip:{backgroundColor:'rgba(0,0,0,0.85)',padding:10,cornerRadius:8,displayColors:false,
+          callbacks:{label:ctx=>ctx.dataset.label==='TOPIX'
+            ?`TOPIX: ${(ctx.raw>=0?'+':'')}${ctx.raw.toFixed(2)}%`
+            :`損益: ${(ctx.raw>=0?'+':'')}${Math.round(ctx.raw).toLocaleString('ja-JP')}円`}}
+      },
+      scales:{
+        y:{position:'right',grace:'10%',
+          ticks:{callback:v=>Math.round(v/1000),color:tickColor,font:{size:11,weight:'600'},maxTicksLimit:7,padding:6},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}},
+        y2:{display:false,grace:'20%'},
+        x:{ticks:{color:tickColor,font:{size:11,weight:'600'},maxRotation:0,autoSkip:true,maxTicksLimit:10},
+          grid:{color:gridColor,lineWidth:1},border:{display:false}}
+      },
+      layout:{padding:{top:6,left:4}}
+    },plugins:[ChartDataLabels,kvYellowLine]});
+  }
+}
+
 function handleDrop(e){e.preventDefault();Array.from(e.dataTransfer.files).filter(f=>f.name.endsWith('.csv')).forEach(f=>trReadFile(f));}
 function trReadFile(file){const reader=new FileReader();reader.onload=ev=>trParseCSV(ev.target.result,file.name);reader.readAsText(file,'UTF-8');}
 function trParseCSV(text,filename){
@@ -5558,7 +5850,8 @@ function trRenderAll(){
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  if(hasData){kvRender();trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  else{const kc=document.getElementById('kvCard');if(kc)kc.style.display='none';}
   // FIREタブのCAGR自動反映
   if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,200);
 }
