@@ -2020,59 +2020,22 @@ function refreshHome(){
     }
     if(el){
       if(live&&(live.plus>0||live.minus>0)){
-        const tot=live.plus+live.minus;
-        const pPct=tot>0?Math.round(live.plus/tot*100):0;
-        const mPct=100-pPct;
         el.style.display='block';
-        el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
-            <div style="font-size:9px;color:var(--text3)">保有 ${tot+live.flat}銘柄・${live.time}時点</div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:8px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-              <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:2px">前日比＋</div>
-              <div style="font-size:24px;font-weight:800;color:#4ade80;line-height:1">${live.plus}<span style="font-size:10px;font-weight:600"> 銘柄</span></div>
-            </div>
-            <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:8px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-              <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:2px">前日比ー</div>
-              <div style="font-size:24px;font-weight:800;color:#f87171;line-height:1">${live.minus}<span style="font-size:10px;font-weight:600"> 銘柄</span></div>
-            </div>
-          </div>
-          <div style="display:flex;height:8px;border-radius:4px;overflow:hidden">
-            <div style="width:${pPct}%;background:#4ade80"></div>
-            <div style="width:${mPct}%;background:#f87171"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px">
-            <span style="color:#4ade80">${pPct}%</span><span style="color:#f87171">${mPct}%</span>
-          </div>
-          ${live.flat>0?`<div style="text-align:right;margin-top:2px;font-size:9px;color:var(--text3)">変動なし ${live.flat}銘柄</div>`:''}
-        </div>`;
+        // 株価取得時刻から日付ラベルを生成（kaView風「7月3日」）
+        const qd2=new Date((amLoadDailyQuotes()||{}).ts||Date.now());
+        const dateLabel=`${qd2.getMonth()+1}月${qd2.getDate()}日`;
+        el.innerHTML=kvPfCard(live.plus,live.minus,live.flat||0,dateLabel,`${live.time}時点`);
       }else{
         // フォールバック: スナップショット比較（従来）
         const cmp=dailySnapCompare();
         if(cmp&&(cmp.plus>0||cmp.minus>0)){
           el.style.display='block';
-          const dateLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'前日比';
-          el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:12px 14px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div style="font-size:11px;color:var(--text3);font-weight:600">ポートフォリオ 前日比</div>
-              <div style="font-size:9px;color:var(--text3)">${dateLabel}</div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div style="background:rgba(34,197,94,0.12);border:0.5px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-                <div style="font-size:9px;color:#4ade80;font-weight:600;margin-bottom:3px">前日比＋</div>
-                <div style="font-size:26px;font-weight:800;color:#4ade80;line-height:1">${cmp.plus}</div>
-                <div style="font-size:10px;color:rgba(74,222,128,0.7);margin-top:2px">銘柄</div>
-              </div>
-              <div style="background:rgba(239,68,68,0.12);border:0.5px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-                <div style="font-size:9px;color:#f87171;font-weight:600;margin-bottom:3px">前日比ー</div>
-                <div style="font-size:26px;font-weight:800;color:#f87171;line-height:1">${cmp.minus}</div>
-                <div style="font-size:10px;color:rgba(248,113,113,0.7);margin-top:2px">銘柄</div>
-              </div>
-            </div>
-            ${cmp.unchanged>0?`<div style="text-align:right;margin-top:4px;font-size:9px;color:var(--text3)">変動なし ${cmp.unchanged}銘柄</div>`:''}
-          </div>`;
+          // 日付ラベル: 最新スナップショット日を「7月3日」形式に
+          let dateLabel='前回比';
+          const dm=String(cmp.todayDate||'').match(/(\d{4})-(\d{2})-(\d{2})/);
+          if(dm)dateLabel=`${+dm[2]}月${+dm[3]}日`;
+          const subLabel=cmp.prevDate?`${cmp.prevDate} → ${cmp.todayDate}`:'';
+          el.innerHTML=kvPfCard(cmp.plus,cmp.minus,cmp.unchanged||0,dateLabel,subLabel);
         }else{
           el.style.display='none';
         }
@@ -5524,6 +5487,45 @@ document.getElementById('csvInput2').addEventListener('change',e=>{Array.from(e.
 // ═══════════════════════════════════════════════
 // kaView風 資産推移ヒーロー（資産/損益 + TOPIX比較 + 期間ピル）
 // ═══════════════════════════════════════════════
+
+// ── kaView風 ポートフォリオカード（前日比±銘柄数）HTML生成 ──
+function kvPfCard(plus,minus,flat,dateLabel,subLabel){
+  const tot=plus+minus;
+  const pPct=tot>0?Math.round(plus/tot*100):0;
+  const mPct=100-pPct;
+  const RED='#e8483f',BLUE='#2f9ee8';
+  return `<div onclick="switchTab('manager')" style="cursor:pointer;background:linear-gradient(170deg,#17171a 0%,#0c0c0e 60%,#0a0a0c 100%);border:0.5px solid rgba(255,255,255,0.09);border-radius:18px;padding:12px 14px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="border:1.5px solid rgba(255,255,255,0.9);border-radius:4px;padding:3px 10px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.05em">ポートフォリオ</div>
+      <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.9)">${dateLabel}</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.07);border-radius:8px;padding:8px 0;text-align:center;margin-bottom:14px">
+      <span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.9)">保有</span>
+      <span style="font-size:19px;font-weight:800;color:#fff;margin-left:8px">${tot+flat}</span><span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)">銘柄</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px">
+      <div style="text-align:center">
+        <div style="display:inline-block;background:${RED};border-radius:7px;padding:5px 14px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.03em">前日比＋</div>
+        <div style="margin-top:8px;line-height:1"><span style="font-size:34px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums">${plus}</span><span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)">銘柄</span></div>
+      </div>
+      <div style="text-align:center">
+        <div style="display:inline-block;background:${BLUE};border-radius:7px;padding:5px 14px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.03em">前日比ー</div>
+        <div style="margin-top:8px;line-height:1"><span style="font-size:34px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums">${minus}</span><span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)">銘柄</span></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:rgba(255,255,255,0.55);margin-bottom:4px">
+      <span>${pPct}%</span><span>${mPct}%</span>
+    </div>
+    <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,0.08)">
+      <div style="width:${pPct}%;background:${RED}"></div>
+      <div style="width:${mPct}%;background:${BLUE}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:rgba(255,255,255,0.4)">
+      <span>${flat>0?`変動なし ${flat}銘柄`:''}</span><span>${subLabel||''}</span>
+    </div>
+  </div>`;
+}
+
 let kvMode='asset',kvPeriod='10d',kvShowTopix=true,kvTopixData=null,kvTopixFetching=false;
 const KV_GREEN='#35e0a1',KV_PILL='#2fae8f',KV_YELLOW='#ffd93d',KV_RED='#ff5b5b',KV_BLUE='#57a8ff';
 
