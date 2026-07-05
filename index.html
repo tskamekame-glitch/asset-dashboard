@@ -11845,7 +11845,7 @@ function pnlCalcUnrealized(){
       }
       if(!isFinite(gain)||!isFinite(pct))return;
       items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,
-        code:a.code||'',costPrice:a.costPrice||0,updated:a.updated||'',
+        code:a.code||'',costPrice:a.costPrice||0,updated:a.updated||'',buyDate:a.buyDate||'',
         badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
     });
   }catch(e){}
@@ -11954,7 +11954,7 @@ function pnlRender(){
       ?`<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);flex-shrink:0">${esc(item.code)}</span>`
       :((item.cat||'').includes('インデックス')?'<span style="font-size:9px;font-weight:600;color:rgba(255,255,255,0.5);flex-shrink:0">投資信託</span>':'');
     const chartLink=item.type==='unrealized'&&item.code
-      ?`<span onclick="event.stopPropagation();pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.buyDate||item.updated||''}')" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:6px">📊チャート</span>`
+      ?`<span onclick="event.stopPropagation();pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.buyDate||''}')" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:6px">📊チャート</span>`
       :'';
     const editBtn=item.type==='realized'&&item.id!=null
       ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
@@ -12085,16 +12085,33 @@ async function pnlFetchChart(code, name, costPrice, buyDate, period){
     const chartColor=isGain?'#22c55e':'#ef4444';
     const bgColor=isGain?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)';
 
+    // 取得日の解決: buyDate引数 → ロット名の「（YYYY-MM-DD買付）」サフィックスから抽出
+    let resolvedBuy=buyDate;
+    if(!resolvedBuy||isNaN(new Date(resolvedBuy).getTime())){
+      const m=(name||'').match(/（(\d{4}[-/]\d{1,2}[-/]\d{1,2})買付/);
+      resolvedBuy=m?m[1].replace(/\//g,'-'):'';
+    }
+
     // 購入日縦線インデックス
     let buyIdx=-1;
-    if(buyDate&&startMs===null){
-      const buyMs=new Date(buyDate).getTime();
-      let minDiff=Infinity;
-      pairs.forEach((p,i)=>{
-        const diff=Math.abs(p.t-buyMs);
-        if(diff<minDiff){minDiff=diff;buyIdx=i;}
-      });
-      if(minDiff>7*86400000) buyIdx=-1;
+    if(period==='buy'&&startMs){
+      buyIdx=0; // 購入日〜モードでは左端＝取得日
+    }else if(resolvedBuy){
+      const buyMs=new Date(resolvedBuy).getTime();
+      if(!isNaN(buyMs)){
+        let minDiff=Infinity;
+        pairs.forEach((p,i)=>{
+          const diff=Math.abs(p.t-buyMs);
+          if(diff<minDiff){minDiff=diff;buyIdx=i;}
+        });
+        if(minDiff>7*86400000) buyIdx=-1; // 表示期間より前の取得は線を出さない
+      }
+    }
+    // バッジ表示用「買 M/D」
+    let buyLabel='買';
+    if(buyIdx>=0){
+      const bd2=new Date(period==='buy'&&startMs?startMs:new Date(resolvedBuy).getTime());
+      if(!isNaN(bd2.getTime()))buyLabel=`買 ${bd2.getMonth()+1}/${bd2.getDate()}`;
     }
 
     areaEl.innerHTML='<canvas id="pnl-stock-chart" style="width:100%;height:240px"></canvas>';
@@ -12111,13 +12128,15 @@ async function pnlFetchChart(code, name, costPrice, buyDate, period){
         c.save();
         c.beginPath();c.strokeStyle='rgba(251,191,36,0.85)';c.lineWidth=1.5;c.setLineDash([4,3]);
         c.moveTo(x,ca.top);c.lineTo(x,ca.bottom);c.stroke();
-        c.setLineDash([]);c.fillStyle='rgba(251,191,36,0.9)';
-        const lw=26,lh=16,lx=Math.min(x-lw/2,ca.right-lw);
+        c.setLineDash([]);c.fillStyle='rgba(251,191,36,0.92)';
+        c.font='bold 10px sans-serif';
+        const lw=Math.max(26,c.measureText(buyLabel).width+12),lh=16;
+        const lx=Math.max(ca.left,Math.min(x-lw/2,ca.right-lw));
         c.beginPath();
         c.roundRect?c.roundRect(lx,ca.top-1,lw,lh,4):c.rect(lx,ca.top-1,lw,lh);
-        c.fill();c.fillStyle='#fff';c.font='bold 10px sans-serif';
+        c.fill();c.fillStyle='#3a2c00';
         c.textAlign='center';c.textBaseline='middle';
-        c.fillText('買',x,ca.top+lh/2-1);c.restore();
+        c.fillText(buyLabel,lx+lw/2,ca.top+lh/2-1);c.restore();
       }
     };
 
