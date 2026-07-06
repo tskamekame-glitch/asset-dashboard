@@ -5613,15 +5613,19 @@ function homeRenderCountdown(){
        .filter(x=>!isNaN(x.d)&&dayDiff(x.d)>=0&&dayDiff(x.d)<=30)
        .filter(x=>{if(seen.has(x.name))return false;seen.add(x.name);return true;})
        .sort((a,b)=>a.d-b.d);
-  if(ev.length){
-    const first=ev[0];
-    const sameDay=ev.filter(x=>x.d.getTime()===first.d.getTime());
-    // 最寄り日以外の直近予定も最大2件表示（会社名＋日付）
-    const more=ev.filter(x=>x.d.getTime()!==first.d.getTime()).slice(0,2);
+  // 当月の決算予定を優先表示（なければ30日以内の直近を表示）
+  const curMonth=ev.filter(x=>x.d.getFullYear()===today.getFullYear()&&x.d.getMonth()===today.getMonth());
+  const list=curMonth.length?curMonth:ev;
+  if(list.length){
+    const first=list[0];
+    const shown=list.slice(0,4);// 企業名＋決算日を最大4件リスト
+    const rest=list.length-shown.length;
+    const rows=shown.map((x,i)=>i===0
+      ?`<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.85)">${fmtMD(x.d)}</span>　<span style="font-size:13px;font-weight:700;color:#fff">${esc(x.name)}</span></div>`
+      :`<div style="font-size:10px;color:rgba(255,255,255,0.6);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtMD(x.d)}　${esc(x.name)}</div>`
+    ).join('');
     eCard.innerHTML=badge('決算発表予定日')
-      +`<div style="margin-top:10px;font-size:12px;font-weight:600;color:rgba(255,255,255,0.85)">${fmtMD(first.d)}</div>`
-      +`<div style="font-size:13px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(first.name)}${sameDay.length>1?`<span style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">　他${sameDay.length-1}銘柄</span>`:''}</div>`
-      +(more.length?`<div style="margin-top:3px">${more.map(x=>`<div style="font-size:9.5px;color:rgba(255,255,255,0.55);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x.d.getMonth()+1}/${x.d.getDate()} ${esc(x.name)}</div>`).join('')}</div>`:'')
+      +`<div style="margin-top:9px;display:flex;flex-direction:column;gap:2.5px;text-align:left;padding:0 2px">${rows}${rest>0?`<div style="font-size:9px;color:rgba(255,255,255,0.45)">他${rest}銘柄</div>`:''}</div>`
       +`<div style="margin-top:auto;padding-top:8px">${cnt(dayDiff(first.d))}</div>`;
   }else{
     eCard.innerHTML=badge('決算発表予定日')
