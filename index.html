@@ -40,8 +40,25 @@
    BASE RESET & VARIABLES
 ============================================================ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-/* ── KabuDash Prime 風ダークテーマ（常時ダーク）── */
 :root{
+  --bg:#ffffff;--bg2:#f5f5f3;--bg3:#eeecea;
+  --text:#1a1a18;--text2:#6b6b68;--text3:#9b9b97;
+  --border:rgba(0,0,0,0.10);--border2:rgba(0,0,0,0.18);
+  --accent:#185fa5;--danger:#c0392b;--green:#0f6e56;--amber:#ba7517;
+  --red:#c0392b;--purple:#7c3aed;--surface:#ffffff;--surface2:#f5f5f3;
+  --radius:10px;--radius-lg:14px;
+  --nav-h:56px;--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#000000;
+    --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
+    --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.16);
+    --red:#f87171;--purple:#a78bfa;--surface:#1c1c1e;--surface2:#2c2c2e;
+  }
+}
+/* ── KabuDash Prime 風ダークテーマ（ホーム／資産管理／推移タブのみ）── */
+body.theme-dark{
   --bg:#1a191f;--bg2:#211f27;--bg3:#0c0b0e;
   --text:#f2f0f5;--text2:#a9a5b3;--text3:#6f6b7a;
   --border:#2c2a33;--border2:#3a3844;
@@ -50,10 +67,7 @@
   --danger:#ff5560;--green:#3ecf8e;--amber:#d9b453;
   --red:#ff5560;--purple:#a78bfa;
   --surface:#1a191f;--surface2:#211f27;
-  --radius:12px;--radius-lg:14px;
-  --nav-h:56px;--safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
   color-scheme:dark;
-  font-synthesis-weight:none;
 }
 html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif;background:var(--bg3);color:var(--text);-webkit-font-smoothing:antialiased}
 
@@ -560,84 +574,50 @@ input[type=number] { -moz-appearance: textfield; }
 .wl-empty{text-align:center;padding:2rem;color:var(--text2);font-size:13px}
 
 /* ============================================================
-   KabuDash Prime テーマ OVERRIDES（黒基調 + ティール/ゴールド）
+   KabuDash Prime テーマ OVERRIDES（ホーム／資産管理／推移タブのみ・黒基調+ティール/ゴールド）
 ============================================================ */
-/* ダマスク風の淡い装飾背景 */
-body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;background:
+body.theme-dark::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;background:
   radial-gradient(60% 40% at 85% 8%, rgba(201,165,66,.10), transparent 60%),
   radial-gradient(50% 35% at 10% 30%, rgba(201,165,66,.06), transparent 60%),
   radial-gradient(45% 30% at 90% 75%, rgba(47,191,157,.05), transparent 60%);}
-::selection{background:var(--accent);color:#04241c}
+body.theme-dark ::selection{background:var(--accent);color:#04241c}
 
 /* アクセントボタンはティール地 + 濃色文字（kabudash流） */
-.btn-accent,.btn-save,.btn-primary,.todo-add-btn,.inline-save,.wl-mbtn-p,
-.filter-btn.active,.jp-period-btn.active,.jp-action-btn.primary,
-#fire-scope .tab.active,#fire-scope .calc-btn,.fab{
+body.theme-dark .btn-accent,body.theme-dark .btn-save,body.theme-dark .btn-primary,
+body.theme-dark .filter-btn.active,body.theme-dark .fab{
   background:linear-gradient(150deg,var(--accent-d),var(--accent));color:#04241c!important;font-weight:800;border-color:var(--accent)}
-.fab{box-shadow:0 4px 16px rgba(47,191,157,0.35)}
-.pbf{background:linear-gradient(90deg,var(--accent-d),var(--accent))}
+body.theme-dark .fab{box-shadow:0 4px 16px rgba(47,191,157,0.35)}
 
-/* 下部ナビ：半透明ダーク + ぼかし */
-.bottom-nav{background:rgba(18,17,22,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid var(--border)}
-.nav-btn{font-weight:700}
-.nav-btn.active{color:var(--accent)}
+/* 下部ナビ：どのタブでも常時表示されるため、テーマに合わせて切替 */
+body.theme-dark .bottom-nav{background:rgba(18,17,22,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid var(--border)}
+body.theme-dark .nav-btn.active{color:var(--accent)}
 
 /* 資産総額ヒーローカード：ダークカード + ティール→ゴールドの上部ライン */
-.home-total,.total-card{background:linear-gradient(160deg,#211f27,#141318);border:1px solid var(--border);color:var(--text);position:relative;overflow:hidden}
-.home-total::before,.total-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--gold))}
-.home-total .ht-label,.total-card .label{color:var(--text2);opacity:1}
-.home-total .ht-sub,.total-card .sub{color:var(--text3);opacity:1}
-.home-total .ht-value,.total-card .value{letter-spacing:-0.01em}
+body.theme-dark .home-total,body.theme-dark .total-card{background:linear-gradient(160deg,#211f27,#141318);border:1px solid var(--border);color:var(--text);position:relative;overflow:hidden}
+body.theme-dark .home-total::before,body.theme-dark .total-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--gold))}
+body.theme-dark .home-total .ht-label,body.theme-dark .total-card .label{color:var(--text2);opacity:1}
+body.theme-dark .home-total .ht-sub,body.theme-dark .total-card .sub{color:var(--text3);opacity:1}
+body.theme-dark .home-total .ht-value,body.theme-dark .total-card .value{letter-spacing:-0.01em}
 
-/* バッジ・リマインダー類をダーク配色に */
-.home-card .hc-badge{background:rgba(47,191,157,0.12);color:var(--accent)}
-.reminder-banner{background:rgba(201,165,66,0.10);border-color:rgba(201,165,66,0.35)}
-.reminder-title{color:var(--gold2)}
-.reminder-text{color:#cbb26a}
-.p-high{background:rgba(255,85,96,0.15);color:#ff8089}
-.p-mid{background:rgba(201,165,66,0.15);color:var(--gold2)}
-.p-low{background:rgba(62,207,142,0.15);color:var(--green)}
-.due-badge.overdue{color:#ff8089}
-.due-badge.soon{color:var(--gold2)}
-.wl-b-done{background:rgba(62,207,142,.15);color:#7fe0b4}
-.wl-b-order{background:rgba(74,163,255,.15);color:#8ec5ff}
-.wl-b-wait{background:rgba(201,165,66,.15);color:var(--gold2)}
-.wl-b-plan{background:rgba(255,255,255,.07);color:var(--text2)}
-.wl-b-nisa{background:linear-gradient(135deg,rgba(138,109,29,.35),rgba(201,165,66,.25));color:var(--gold2)}
-.wl-b-toku{background:rgba(255,255,255,.07);color:var(--text2)}
-.jp-badge-nisa{background:rgba(201,165,66,0.15);color:var(--gold2)}
-.sb-nisa{background:rgba(201,165,66,0.15);color:var(--gold2)}
-.si-dot.nisa{background:var(--gold)}
-.si-text.nisa{color:var(--gold2)}
-.s-card.c-nisa::before{background:var(--gold)}
-.fill-nisa{background:var(--gold)}
-.invest-card.status-nisa::after{background:var(--gold)}
+/* バッジ・リマインダー類（資産管理タブの残高更新お知らせ）*/
+body.theme-dark .home-card .hc-badge{background:rgba(47,191,157,0.12);color:var(--accent)}
+body.theme-dark .reminder-banner{background:rgba(201,165,66,0.10);border-color:rgba(201,165,66,0.35)}
+body.theme-dark .reminder-title{color:var(--gold2)}
+body.theme-dark .reminder-text{color:#cbb26a}
 
-/* 総合カードの上部ラインをティール→ゴールドに */
-.s-card.c-total::before,.jp-sum-card.c-total::before{background:linear-gradient(90deg,var(--accent),var(--gold))}
+/* トースト（全タブ共通の通知）*/
+body.theme-dark .toast-el{background:#000;border:1px solid var(--accent);color:var(--text)}
 
-/* 削除系ボタン */
-.btn-del{background:rgba(255,85,96,0.12);color:#ff8089}
-.btn-danger,.btn-danger-pf{background:rgba(255,85,96,0.12);border-color:rgba(255,85,96,0.3);color:#ff8089}
-.wl-mbtn-d{color:#ff8089;border-color:rgba(255,85,96,0.35)}
-.wl-mbtn-d:active{background:rgba(255,85,96,0.12)}
-
-/* トースト：黒 + ティール枠 */
-.toast-el{background:#000;border:1px solid var(--accent);color:var(--text)}
-
-/* PFタブのアクティブをティールに */
-.pf-tab.active{background:var(--accent);color:#04241c;box-shadow:none;font-weight:800}
-
-/* シート/モーダルはやや明るいカード地 */
-.sheet,.confirm-sheet,.pf-modal,.item-modal,.cat-modal,.wl-modal{background:var(--bg2)}
-.sheet-bg,.pf-modal-overlay,.item-modal-bg,.cat-modal-bg,.wl-modal-bg{background:rgba(0,0,0,0.66)}
+/* シート（資産管理の編集モーダル）*/
+body.theme-dark .sheet,body.theme-dark .confirm-sheet{background:var(--bg2)}
+body.theme-dark .sheet-bg{background:rgba(0,0,0,0.66)}
 
 /* 数値はタブラー */
-.acct-amount,.metric .value,.s-amount,.jp-sc-val,.main-amount{font-feature-settings:"tnum"}
+body.theme-dark .acct-amount,body.theme-dark .metric .value,body.theme-dark .main-amount{font-feature-settings:"tnum"}
 </style>
 </style>
 </head>
-<body>
+<body class="theme-dark">
 
 <!-- ============================================================
      BOTTOM NAVIGATION
@@ -2022,6 +2002,7 @@ function switchTab(tab){
   currentTab=tab;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='tab-'+tab));
+  document.body.classList.toggle('theme-dark',['home','manager','trend'].includes(tab));
   if(tab==='fire'&&typeof fireAutoLink==='function')setTimeout(fireAutoLink,100);
   const fab=document.getElementById('fab');
   fab.classList.toggle('hidden',tab!=='manager');
@@ -7958,10 +7939,7 @@ function drawChart1(canvasId,ages,bals,color,zeroAge,fillColor,maxValOverride){
   var cw=w-pad.left-pad.right;
   var ch=h-pad.top-pad.bottom;
   var maxBal=maxValOverride||Math.max.apply(null,bals.filter(function(v){return v>0;}))||1;
-  var isDark=true;
-  var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
-  var textCol=isDark?'#888':'#666';
-  function xp(i){return pad.left+(i/Math.max(ages.length-1,1))*cw;}
+  var isDark=false;
   function yp(v){return pad.top+ch-(Math.max(0,v)/maxBal)*ch;}
   // グリッド
   for(var g=0;g<=2;g++){
@@ -8023,7 +8001,7 @@ function drawChart3(canvasId,ages,series,zeroAge){
   var cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
   function px(i){return pad.l+i/( ages.length-1)*cw;}
   function py(v){return pad.t+ch-(v-mn)/(mx-mn)*ch;}
-  var isDark=true;
+  var isDark=false;
   var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
   var textCol=isDark?'#888':'#666';
   ctx.clearRect(0,0,W,H);
