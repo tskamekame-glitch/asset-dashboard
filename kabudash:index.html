@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KabuDash Prime — 資産ダッシュボード</title>
+<style>
+:root{
+  --bg:#0c0b0e; --bg2:#141317; --card:#1a191f; --card2:#211f27; --line:#2c2a33;
+  --tx:#f2f0f5; --tx2:#a9a5b3; --tx3:#6f6b7a;
+  --teal:#2fbf9d; --teal-d:#1d8f76; --gold:#c9a542; --gold2:#e8cf7a;
+  --up:#ff5560; --dn:#4aa3ff;           /* 日本式: 上昇=赤 / 下落=青 */
+  --hup:#2e9e5b; --hdn:#d9484f;         /* ヒートマップ: 上昇=緑 / 下落=赤 */
+  --radius:14px;
+  font-synthesis-weight:none;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{font-size:16px}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  background:var(--bg); color:var(--tx); min-height:100vh;
+}
+/* ダマスク風の淡い装飾背景 */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background:
+   radial-gradient(60% 40% at 85% 8%, rgba(201,165,66,.10), transparent 60%),
+   radial-gradient(50% 35% at 10% 30%, rgba(201,165,66,.06), transparent 60%),
+   radial-gradient(45% 30% at 90% 75%, rgba(47,191,157,.05), transparent 60%);
+}
+#app{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:0 12px calc(86px + env(safe-area-inset-bottom));}
+@media(min-width:760px){ body{background:#070609} #app{box-shadow:0 0 80px rgba(0,0,0,.7);background:var(--bg);min-height:100vh} }
+
+/* ===== ヘッダー ===== */
+header{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg) 75%,transparent);
+  display:flex;align-items:center;gap:10px;padding:14px 2px 10px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:1.22rem;letter-spacing:.02em}
+.logo .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--teal),#7fe0c8);
+  display:grid;place-items:center;color:#062a22;font-size:.9rem;font-weight:900}
+.badge-prime{background:linear-gradient(135deg,#8a6d1d,var(--gold));color:#1a1405;font-size:.68rem;font-weight:800;
+  padding:2px 8px;border-radius:6px;letter-spacing:.05em}
+header .sp{flex:1}
+.hbtn{background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:10px;
+  padding:7px 12px;font-size:.8rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer}
+.hbtn.teal{background:var(--teal);border-color:var(--teal);color:#04241c}
+.hbtn:active{transform:scale(.96)}
+.dot-red{width:8px;height:8px;border-radius:50%;background:#ff4444;position:absolute;top:-2px;right:-2px}
+.rel{position:relative}
+
+/* ===== 日付バー ===== */
+.datebar{display:flex;align-items:center;gap:10px;font-size:.8rem;color:var(--tx2);padding:2px 2px 10px}
+.datebar .dchip{border:1px solid var(--line);border-radius:9px;padding:5px 12px;font-weight:800;color:var(--tx);
+  font-size:.95rem;background:var(--card);display:flex;gap:7px;align-items:center}
+.datebar .sp{flex:1}
+.datebar u{text-underline-offset:3px}
+
+/* ===== カード共通 ===== */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;position:relative;overflow:hidden;margin-bottom:10px}
+.card.flat{margin-bottom:0}
+.tag{display:inline-block;border:1px solid var(--tx);border-radius:5px;padding:2px 9px;font-size:.75rem;font-weight:800;background:#000}
+.tag.gold{border-color:var(--gold);color:var(--gold2)}
+.mini{font-size:.72rem;color:var(--tx2)}
+.up{color:var(--up)} .dn{color:var(--dn)} .flatc{color:var(--tx2)}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.corner{position:absolute;top:10px;right:12px;font-size:.72rem;color:var(--tx2)}
+.prime-corner{position:absolute;top:0;right:0;background:linear-gradient(135deg,#8a6d1d,var(--gold));color:#1a1405;
+  font-size:.62rem;font-weight:800;padding:3px 10px;border-radius:0 var(--radius) 0 10px}
+
+/* 資産総額カード */
+.asset-big{font-size:2.15rem;font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:6px 0 2px}
+.asset-big small{font-size:1.1rem;font-weight:700}
+.spark{position:absolute;inset:auto 0 0 0;height:74px;opacity:.55;pointer-events:none}
+
+/* BEST/WORST */
+.bw{padding:0;display:flex;flex-direction:column}
+.bw>div{padding:12px 14px;flex:1}
+.bw .b{background:linear-gradient(135deg,#2c8a5c,#39b374)}
+.bw .w{background:linear-gradient(135deg,#c2444b,#a13238)}
+.bw .nm{font-size:.82rem;font-weight:800;line-height:1.25}
+.bw .pc{font-size:1.55rem;font-weight:800;margin-top:2px}
+.bw .lbl{position:absolute;font-weight:900;font-size:1.5rem;opacity:.22;letter-spacing:.1em;right:10px}
+
+/* ポートフォリオ小カード */
+.pfmini .cnt{display:flex;justify-content:space-around;text-align:center;margin:10px 0 8px}
+.pfmini .cnt b{font-size:1.7rem;font-weight:800}
+.pill{border-radius:7px;padding:2px 10px;font-size:.72rem;font-weight:800;color:#fff}
+.pill.r{background:var(--up)} .pill.b{background:var(--dn)}
+.ratio{height:8px;border-radius:5px;overflow:hidden;display:flex;background:var(--dn)}
+.ratio i{background:var(--up);height:100%}
+.rlbl{display:flex;justify-content:space-between;font-size:.72rem;color:var(--tx2);margin-top:4px}
+
+/* 月初来損益 */
+.mtd-big{font-size:1.9rem;font-weight:800;text-align:right;margin:8px 0 10px}
+.kv{display:flex;justify-content:space-between;font-size:.82rem;padding:2px 0}
+.kv span:first-child{color:var(--tx2)}
+
+/* リスト行 */
+.rowitem{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.rowitem .grow{flex:1;min-width:0}
+.chev{color:var(--tx3);font-size:1.05rem}
+
+/* ウォッチタイル */
+.wtiles{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px}
+.wt{border-radius:7px;padding:5px 5px 6px;font-size:.62rem;line-height:1.25;font-weight:700;min-height:56px;
+  position:relative;overflow:hidden;color:#eafff4;cursor:default}
+.wt .cd{opacity:.85;font-size:.58rem}
+.wt.g{background:linear-gradient(160deg,#2c8a5c,#237449)}
+.wt.r{background:linear-gradient(160deg,#a33d43,#7e2e33)}
+.wt.n{background:#3a3844;color:#d9d6e2}
+.wt .hold{position:absolute;top:0;right:0;background:var(--gold);color:#1a1405;font-size:.52rem;font-weight:900;padding:1px 4px;border-radius:0 0 0 5px}
+
+/* NISAカード */
+.nisa-wrap{display:flex;gap:12px;align-items:center}
+.nisa-num{font-size:1.7rem;font-weight:800}
+.donut-mini{width:118px;height:118px;flex:none}
+
+/* ===== サブタブ(ページ内) ===== */
+.subtabs{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:4px;margin:4px 0 12px}
+.subtabs button{flex:1;background:none;border:0;color:var(--tx2);font-weight:800;font-size:.86rem;padding:9px 0;border-radius:9px;cursor:pointer}
+.subtabs button.on{background:var(--teal);color:#04241c}
+.seg{display:flex;gap:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.seg button{background:none;border:0;color:var(--tx2);font-weight:800;font-size:.95rem;padding:10px 4px;cursor:pointer;border-bottom:3px solid transparent}
+.seg button.on{color:var(--tx);border-color:var(--teal)}
+
+/* チャート */
+.chartbox{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 6px 4px;margin-bottom:10px}
+.center-big{text-align:center;margin:4px 0 12px}
+.center-big .v{font-size:2rem;font-weight:800}
+.center-big .s{font-size:.82rem;color:var(--tx2);margin-top:2px}
+svg text{font-family:inherit}
+
+/* 損益一覧 */
+.pl-row{display:flex;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:7px;gap:8px}
+.pl-row .nm{flex:1;min-width:0}
+.pl-row .nm b{font-size:.86rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-row .nm span{font-size:.68rem;color:var(--tx2)}
+.pl-row .v{font-weight:800;font-size:.95rem}
+.holdchip{background:var(--gold);color:#1a1405;font-size:.6rem;font-weight:900;padding:2px 5px;border-radius:4px;flex:none}
+
+/* ポートフォリオ保有カード */
+.pos{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.pos .top{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.pos .kind{font-size:.6rem;font-weight:900;padding:2px 6px;border-radius:4px;background:var(--up);color:#fff;flex:none}
+.pos .kind.nisa{background:var(--gold);color:#1a1405}
+.pos .kind.fund{background:#7c5cd6}
+.pos .nm{font-weight:800;font-size:.86rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pos .body{display:flex;justify-content:space-between;align-items:flex-end}
+.pos .l .px{font-size:1.25rem;font-weight:800}
+.pos .l .chg{font-size:.75rem;font-weight:700}
+.pos .r{text-align:right}
+.pos .r .ev{font-size:1.05rem;font-weight:800}
+.pos .r .pl{font-size:.78rem;font-weight:700}
+.pos .foot{display:flex;justify-content:space-between;color:var(--tx3);font-size:.68rem;margin-top:6px}
+
+/* ヒートマップ */
+.legend{display:flex;align-items:center;gap:4px;font-size:.66rem;color:var(--tx2);margin:8px 0}
+.legend i{width:26px;height:10px;border-radius:2px;display:inline-block}
+.hmwrap{border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.hm-cell text{pointer-events:none}
+
+/* 資産構成 */
+.comp-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 14px;margin-bottom:7px;font-weight:700}
+.comp-row .sw{width:12px;height:12px;border-radius:3px;flex:none}
+.comp-row .pct{width:64px;text-align:right;font-weight:800}
+.comp-row .val{flex:1;text-align:right;color:var(--tx2);font-size:.86rem}
+
+/* ===== 下部ナビ ===== */
+nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:520px;z-index:30;
+  background:linear-gradient(transparent,rgba(8,7,10,.92) 30%);padding:14px 10px calc(10px + env(safe-area-inset-bottom));
+  display:flex;gap:6px}
+nav button{flex:1;background:rgba(26,25,31,.92);border:1px solid var(--line);border-radius:13px;color:var(--tx2);
+  padding:9px 0 7px;font-size:.6rem;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;backdrop-filter:blur(8px)}
+nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{background:linear-gradient(150deg,var(--teal-d),var(--teal));border-color:var(--teal);color:#04241c}
+
+/* ===== モーダル ===== */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:50;display:none;align-items:flex-end;justify-content:center}
+.modal.show{display:flex}
+.sheet{background:var(--card2);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:520px;
+  padding:18px 16px calc(20px + env(safe-area-inset-bottom));max-height:82vh;overflow:auto}
+.sheet h3{font-size:1rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.field{margin-bottom:12px}
+.field label{font-size:.74rem;color:var(--tx2);display:block;margin-bottom:5px;font-weight:700}
+.field input{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:11px 12px;font-size:1rem;font-variant-numeric:tabular-nums}
+.btnrow{display:flex;gap:8px;margin-top:8px}
+.btn{flex:1;border:0;border-radius:11px;padding:13px;font-size:.9rem;font-weight:800;cursor:pointer}
+.btn.p{background:var(--teal);color:#04241c}
+.btn.s{background:var(--bg2);color:var(--tx);border:1px solid var(--line)}
+.note{font-size:.7rem;color:var(--tx3);line-height:1.6;margin-top:10px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:110px;background:#000;border:1px solid var(--teal);
+  color:var(--tx);padding:10px 18px;border-radius:12px;font-size:.82rem;font-weight:700;z-index:60;display:none;max-width:88%}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid #04241c;border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.page{display:none}.page.on{display:block}
+h2.sec{font-size:.92rem;margin:14px 2px 8px;display:flex;align-items:center;gap:8px}
+.filelabel input{display:none}
+::selection{background:var(--teal);color:#04241c}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo"><span class="mark">K</span>KabuDash <span class="badge-prime">Prime</span></div>
+    <div class="sp"></div>
+    <label class="hbtn filelabel rel" title="SBIのCSVを読み込み">📄 CSV<input type="file" id="csvInput" accept=".csv,text/csv"></label>
+    <button class="hbtn teal rel" id="btnRefresh">⟳ 更新<span class="dot-red" id="refreshDot"></span></button>
+    <button class="hbtn" id="btnSettings" style="padding:7px 10px">⚙︎</button>
+  </header>
+
+  <div class="datebar">
+    <span class="dchip">📊 <span id="todayLabel">—</span></span>
+    <span id="acctLabel">集計完了 1 / 1 口座</span>
+    <span class="sp"></span>
+    <span>最終更新時刻<br><u id="lastUpdate" style="font-weight:800;color:var(--tx)">—</u></span>
+  </div>
+
+  <div id="pg-dashboard" class="page on"></div>
+  <div id="pg-assets" class="page"></div>
+  <div id="pg-portfolio" class="page"></div>
+  <div id="pg-heatmap" class="page"></div>
+  <div id="pg-watch" class="page"></div>
+
+  <nav id="mainNav">
+    <button data-pg="dashboard" class="on"><svg viewBox="0 0 24 24"><path d="M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>ダッシュボード</button>
+    <button data-pg="assets"><svg viewBox="0 0 24 24"><path d="M3 20h18M4 16l4-6 4 3 5-8 3 4"/><circle cx="8" cy="10" r="1.4"/><circle cx="12" cy="13" r="1.4"/><circle cx="17" cy="5" r="1.4"/></svg>資産／損益</button>
+    <button data-pg="portfolio"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.5 5.5"/></svg>ポートフォリオ</button>
+    <button data-pg="heatmap"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="12" rx="1.5"/><rect x="13" y="3" width="8" height="6" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="17" width="8" height="4" rx="1.5"/></svg>ヒートマップ</button>
+    <button data-pg="watch"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h7M7 13h10"/></svg>ウォッチ銘柄</button>
+  </nav>
+
+  <div class="modal" id="settingsModal">
+    <div class="sheet">
+      <h3>⚙︎ 設定</h3>
+      <div class="field"><label>現金・預り金(円) — CSVに含まれない分</label><input type="number" id="inCash"></div>
+      <div class="field"><label>米国株など その他資産(円)</label><input type="number" id="inUS"></div>
+      <div class="btnrow"><button class="btn p" id="saveSettings">保存して再計算</button></div>
+      <div class="btnrow">
+        <button class="btn s" id="btnExport">データ書き出し(JSON)</button>
+        <label class="btn s filelabel" style="text-align:center">読み込み<input type="file" id="jsonInput" accept=".json"></label>
+      </div>
+      <p class="note">・「CSV」ボタンからSBI証券のポートフォリオCSV(Shift-JIS)を読み込むと保有・損益が更新され、当日の資産推移に記録されます。<br>
+      ・「⟳更新」はAI(Web検索)で保有・ウォッチ銘柄の最新株価を取得します(Claude内で開いている場合に動作)。<br>
+      ・ブラウザ単体で使う場合はJSON書き出し/読み込みでデータを持ち運べます。</p>
+      <div class="btnrow"><button class="btn s" id="closeSettings">閉じる</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+/* ====== ここからアプリ本体(データ・ロジック・描画) ====== */
+"use strict";
+/* ============ シードデータ (SBI CSV 2026/07/03時点より) ============ */
+const NAME_MAP = {"4063":"信越化学工業","5016":"ＪＸ金属","6758":"ソニーグループ","408A":"ｉシェアーズ ベストＡＩ","9104":"商船三井","5803":"フジクラ","213A":"上場インデックスファンド日経半導体株","3433":"トーカロ","285A":"キオクシアホールディングス","6590":"芝浦メカトロニクス","9984":"ソフトバンクグループ","3563":"ＦＯＯＤ ＆ ＬＩＦＥ ＣＯＭＰＡＮＩＥＳ","2413":"エムスリー","8136":"サンリオ","6315":"ＴＯＷＡ","6323":"ローツェ","485A":"パワーエックス","6367":"ダイキン工業","4186":"東京応化工業","7630":"壱番屋","1969":"高砂熱学工業","8473":"ＳＢＩホールディングス"};
+
+const SEED = {
+  asof: "2026-07-03",
+  lastUpdate: "2026-07-03 15:00",
+  cash: 2703010, other: 159787,
+  nisaCost: 2400015,
+  positions: [
+    // 株式(特定) kind:'tok'
+    {code:"4063",name:"信越化学工業",kind:"tok",qty:100,cost:6700,p:6958,c:-66,pc:-0.94},
+    {code:"5016",name:"ＪＸ金属",kind:"tok",qty:300,cost:4030,p:4085,c:37,pc:0.91},
+    {code:"6758",name:"ソニーグループ",kind:"tok",qty:100,cost:3350,p:3380,c:50,pc:1.50},
+    {code:"408A",name:"ｉシェアーズ ベストＡＩ",kind:"tok",qty:1790,cost:333,p:323.2,c:-6,pc:-1.82},
+    {code:"9104",name:"商船三井",kind:"tok",qty:100,cost:5600,p:5193,c:72,pc:1.41},
+    {code:"5803",name:"フジクラ",kind:"tok",qty:100,cost:4600,p:5358,c:-10,pc:-0.19},
+    {code:"213A",name:"上場インデックスファンド日経半導体株",kind:"tok",qty:3540,cost:572,p:526.3,c:22.3,pc:4.42},
+    {code:"3433",name:"トーカロ",kind:"tok",qty:300,cost:3350,p:3305,c:30,pc:0.92},
+    {code:"285A",name:"キオクシアホールディングス",kind:"tok",qty:10,cost:106000,p:83300,c:7040,pc:9.23},
+    {code:"6590",name:"芝浦メカトロニクス",kind:"tok",qty:100,cost:4100,p:5980,c:580,pc:10.74},
+    {code:"9984",name:"ソフトバンクグループ",kind:"tok",qty:100,cost:6081,p:6169,c:-26,pc:-0.42},
+    // 株式(NISA) kind:'nisa'
+    {code:"3563",name:"ＦＯＯＤ ＆ ＬＩＦＥ ＣＯＭＰＡＮＩＥＳ",kind:"nisa",qty:200,cost:4970,p:4643,c:-85,pc:-1.80},
+    {code:"2413",name:"エムスリー",kind:"nisa",qty:500,cost:1620,p:1860.5,c:7.5,pc:0.40},
+    {code:"8136",name:"サンリオ",kind:"nisa",qty:100,cost:918,p:1087.5,c:-24.5,pc:-2.20},
+    // 投資信託(特定) kind:'fund'  qty=口数 / p=基準価額(1万口)
+    {code:"F1",name:"ｅＭＡＸＩＳ Ｓｌｉｍ 国内株式(日経平均)",kind:"fund",qty:1092830,cost:32942,p:34021,c:-862,pc:-2.47},
+    {code:"F2",name:"ｅＭＡＸＩＳ Ｓｌｉｍ 米国株式(Ｓ＆Ｐ５００)",kind:"fund",qty:422249,cost:43496,p:44732,c:-116,pc:-0.26},
+    {code:"F3",name:"ＳＭＴ 米国株式モメンタムファンド",kind:"fund",qty:614251,cost:16280,p:15798,c:-592,pc:-3.61},
+    {code:"F4",name:"ＳＭＴ 日本株式モメンタムファンド",kind:"fund",qty:659935,cost:15154,p:14979,c:-897,pc:-5.65},
+    {code:"F5",name:"ＳＭＴ 中国株式モメンタムファンド",kind:"fund",qty:610166,cost:16389,p:16925,c:-230,pc:-1.34},
+    // 投資信託(NISA成長) kind:'fund_nisa'
+    {code:"F6",name:"ｉＦｒｅｅＮＥＸＴ ＦＡＮＧ＋インデックス",kind:"fund_nisa",qty:54465,cost:91803,p:93722,c:1031,pc:1.11},
+    {code:"F5N",name:"ＳＭＴ 中国株式モメンタムファンド",kind:"fund_nisa",qty:2569,cost:16388,p:16925,c:-230,pc:-1.34}
+  ],
+  history: [
+    {d:"2026-06-22",v:22845000},{d:"2026-06-23",v:22248000},{d:"2026-06-24",v:23021000},
+    {d:"2026-06-25",v:22752000},{d:"2026-06-26",v:21948000},{d:"2026-06-29",v:22862452},
+    {d:"2026-06-30",v:23052452},{d:"2026-07-01",v:23122000},{d:"2026-07-02",v:22536754},
+    {d:"2026-07-03",v:22738965}
+  ],
+  realized: [
+    {d:"2026-07-02",name:"9984 ソフトバンクグループ",v:11900},
+    {d:"2026-06-27",name:"ｉＴｒｕｓｔインド株式",v:64730},
+    {d:"2026-06-20",name:"ｉＦｒｅｅＮＥＸＴ ＦＡＮＧ＋インデックス",v:54813},
+    {d:"2026-06-13",name:"ｅＭＡＸＩＳ Ｓｌｉｍ 米国株式(Ｓ＆Ｐ５００)",v:36611},
+    {d:"2026-05-22",name:"武田薬品工業",v:6000},
+    {d:"2026-05-15",name:"ＳＲＥホールディングス",v:6900}
+  ],
+  watch: [ // 非保有のウォッチ銘柄
+    {code:"6315",name:"ＴＯＷＡ",p:3335,c:65,pc:1.98},
+    {code:"6323",name:"ローツェ",p:4940,c:239,pc:5.08},
+    {code:"485A",name:"パワーエックス",p:null,c:null,pc:null},
+    {code:"6367",name:"ダイキン工業",p:null,c:null,pc:null},
+    {code:"4186",name:"東京応化工業",p:null,c:null,pc:null},
+    {code:"7630",name:"壱番屋",p:null,c:null,pc:null},
+    {code:"1969",name:"高砂熱学工業",p:null,c:null,pc:null},
+    {code:"8473",name:"ＳＢＩホールディングス",p:null,c:null,pc:null}
+  ],
+  events: [{d:"2026-07-06",name:"上場インデックスファンド日経半導体株",code:"213A",type:"配当・権利日"}],
+  news: [{d:"2026-07-03 11:30",code:"6758",name:"ソニーグループ",title:"自己株式の取得状況に関するお知らせ(会社法第…)"}]
+};
+
+let S = JSON.parse(JSON.stringify(SEED)); // 現在の状態
+let curPage = "dashboard";
+let assetTab = "asset";      // 資産/損益ページ: asset | pl | pllist
+let plListTab = "total";     // 合計/評価/確定
+let hmTab = "map";           // map | top10 | comp
+
+/* ============ ユーティリティ ============ */
+const $ = s=>document.querySelector(s);
+const yen = n=>Math.round(n).toLocaleString("ja-JP");
+const sgn = n=>(n>0?"+":"")+yen(n);
+const sgnF = (n,d=2)=>(n>0?"+":"")+n.toFixed(d);
+const cls = n=>n>0?"up":(n<0?"dn":"flatc");
+const esc = s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const evalOf = p=>p.kind.startsWith("fund") ? p.qty*p.p/10000 : p.qty*p.p;
+const costOf = p=>p.kind.startsWith("fund") ? p.qty*p.cost/10000 : p.qty*p.cost;
+const plOf   = p=>evalOf(p)-costOf(p);
+const dayOf  = p=>p.kind.startsWith("fund") ? p.qty*(p.c||0)/10000 : p.qty*(p.c||0);
+const isFund = p=>p.kind.startsWith("fund");
+const kindLabel = p=>({tok:"現物",nisa:"NISA",fund:"投信",fund_nisa:"投信N"})[p.kind];
+const shortName = n=>n.replace(/ｅＭＡＸＩＳ Ｓｌｉｍ /,"eMAXIS Slim ").replace(/ホールディングス/,"ＨＤ");
+
+function totals(){
+  const sec = S.positions.reduce((a,p)=>a+evalOf(p),0);
+  const total = sec + (S.cash||0) + (S.other||0);
+  const day = S.positions.reduce((a,p)=>a+dayOf(p),0);
+  const pl  = S.positions.reduce((a,p)=>a+plOf(p),0);
+  return {sec,total,day,pl};
+}
+function nisaTotals(){
+  const ps = S.positions.filter(p=>p.kind==="nisa"||p.kind==="fund_nisa");
+  const ev = ps.reduce((a,p)=>a+evalOf(p),0);
+  return {ev, pl: ev-(S.nisaCost||ps.reduce((a,p)=>a+costOf(p),0))};
+}
+function mtd(){ // 月初来損益
+  const last = S.history[S.history.length-1];
+  if(!last) return {total:0,fixed:0,evalPl:0,range:""};
+  const m = last.d.slice(0,7);
+  const prev = [...S.history].reverse().find(h=>h.d.slice(0,7)!==m);
+  const base = prev?prev.v:S.history[0].v;
+  const total = last.v-base;
+  const fixed = S.realized.filter(r=>r.d.slice(0,7)===m).reduce((a,r)=>a+r.v,0);
+  const first = S.history.find(h=>h.d.slice(0,7)===m);
+  return {total, fixed, evalPl: total-fixed,
+    range:(first?`${+m.slice(5)}月${+first.d.slice(8)}日〜${+last.d.slice(8)}日`:"")};
+}
+function bestWorst(){
+  const arr = S.positions.filter(p=>p.pc!=null);
+  if(!arr.length) return null;
+  const b=[...arr].sort((x,y)=>y.pc-x.pc)[0], w=[...arr].sort((x,y)=>x.pc-y.pc)[0];
+  return {b,w};
+}
+
+/* ============ 永続化 (Claude artifact環境のみ) ============ */
+const KEY="kabudash:v1";
+async function saveState(){
+  try{ if(window.storage) await window.storage.set(KEY, JSON.stringify(S)); }catch(e){}
+}
+async function loadState(){
+  try{ if(window.storage){ const r=await window.storage.get(KEY); if(r&&r.value){S=JSON.parse(r.value);} } }catch(e){}
+}
+
+/* ============ SBI ポートフォリオCSV パーサー ============ */
+function parseCsvLine(line){
+  const out=[]; let cur="",q=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];
+    if(ch==='"'){q=!q;continue}
+    if(ch===","&&!q){out.push(cur);cur="";continue}
+    cur+=ch;}
+  out.push(cur); return out;
+}
+function toNum(s){ if(s==null) return null; const n=parseFloat(String(s).replace(/[+,]/g,"")); return isNaN(n)?null:n; }
+function parseSbiCsv(text){
+  const lines = text.split(/\r?\n|\u0085/).map(l=>l.trim()).filter(l=>l);
+  let section=null; const raw=[];
+  for(const line of lines){
+    const f=parseCsvLine(line);
+    const h=f[0]||"";
+    if(/^株式（現物\/特定/.test(h)){section="tok";continue}
+    if(/^株式（現物\/NISA/.test(h)){section="nisa";continue}
+    if(/^投資信託（金額\/特定/.test(h)){section="fund";continue}
+    if(/^投資信託（金額\/NISA/.test(h)){section="fund_nisa";continue}
+    if(/合計/.test(h)){section=null;continue}
+    if(!section) continue;
+    if(h==="銘柄（コード）"||h==="ファンド名"||h==="評価額") continue;
+    if(f.length<11) continue;
+    const qty=toNum(f[2]); if(qty==null) continue;
+    raw.push({section, name:h, qty, cost:toNum(f[4]), p:toNum(f[5]), c:toNum(f[6]), pc:toNum(f[7])});
+  }
+  if(!raw.length) throw new Error("SBIポートフォリオ形式の行が見つかりません");
+  // 同一銘柄(複数買付)を集約
+  const map=new Map();
+  for(const r of raw){
+    let code=null,name=r.name;
+    const m=r.name.match(/^([0-9A-Z]{4,5})\s+(.+)$/);
+    if(m){code=m[1];name=NAME_MAP[code]||m[2];}
+    const key=r.section+"|"+(code||name);
+    if(map.has(key)){const e=map.get(key); e.qty+=r.qty;}
+    else map.set(key,{code:code||("F_"+name.slice(0,8)),name,kind:r.section,qty:r.qty,cost:r.cost,p:r.p,c:r.c,pc:r.pc});
+  }
+  return [...map.values()];
+}
+function applyCsv(text){
+  const ps=parseSbiCsv(text);
+  S.positions=ps;
+  const now=new Date();
+  S.asof=now.toISOString().slice(0,10);
+  S.lastUpdate=fmtNow();
+  pushHistoryToday();
+  saveState(); renderAll();
+  toast(`CSVを読み込みました(${ps.length}銘柄)`);
+}
+function pushHistoryToday(){
+  const t=totals();
+  const d=new Date().toISOString().slice(0,10);
+  const last=S.history[S.history.length-1];
+  if(last&&last.d===d) last.v=t.total;
+  else{S.history.push({d,v:t.total}); if(S.history.length>60)S.history.shift();}
+}
+function fmtNow(){const n=new Date();const z=x=>String(x).padStart(2,"0");
+  return `${n.getFullYear()}-${z(n.getMonth()+1)}-${z(n.getDate())} ${z(n.getHours())}:${z(n.getMinutes())}`;}
+
+/* ============ AI 株価更新 (Anthropic API + Web検索) ============ */
+async function aiRefresh(){
+  const btn=$("#btnRefresh");
+  btn.innerHTML='<span class="spin"></span> 取得中';btn.disabled=true;
+  try{
+    const stocks=[...new Set([...S.positions.filter(p=>!isFund(p)).map(p=>p.code+" "+p.name),
+                              ...S.watch.map(w=>w.code+" "+w.name)])];
+    const funds=[...new Set(S.positions.filter(isFund).map(p=>p.name))];
+    const prompt=`東京証券取引所の以下の銘柄について、直近の株価(終値または現在値、円)、前日比(円)、前日比(%)をWeb検索で調べ、JSONのみで返してください。説明文・マークダウンは不要です。
+銘柄: ${stocks.join(" / ")}
+また以下の投資信託の最新基準価額(1万口あたり円)と前日比も同様に: ${funds.join(" / ")}
+出力形式(値が不明な項目はnull):
+{"stocks":{"6758":{"p":3380,"c":50,"pc":1.5},...},"funds":{"ファンド名":{"p":34021,"c":-862,"pc":-2.47},...}}`;
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,
+        messages:[{role:"user",content:prompt}],
+        tools:[{type:"web_search_20250305",name:"web_search"}]})});
+    if(!res.ok) throw new Error("API "+res.status);
+    const data=await res.json();
+    const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+    const jm=txt.match(/\{[\s\S]*\}/); if(!jm) throw new Error("価格データを解析できません");
+    const j=JSON.parse(jm[0]); let n=0;
+    for(const p of S.positions){
+      const src=isFund(p)?(j.funds&&(j.funds[p.name]||j.funds[p.name.replace(/\s/g,"")])):(j.stocks&&j.stocks[p.code]);
+      if(src&&src.p!=null){p.p=src.p;p.c=src.c;p.pc=src.pc;n++;}
+    }
+    for(const w of S.watch){const src=j.stocks&&j.stocks[w.code];
+      if(src&&src.p!=null){w.p=src.p;w.c=src.c;w.pc=src.pc;n++;}}
+    S.lastUpdate=fmtNow(); pushHistoryToday(); saveState(); renderAll();
+    toast(n?`${n}銘柄の株価を更新しました`:"更新できる価格がありませんでした");
+  }catch(e){
+    toast("株価更新に失敗: "+e.message+"(Claude内で開くと動作します。CSV再読込でも更新できます)");
+  }finally{btn.innerHTML='⟳ 更新<span class="dot-red" id="refreshDot"></span>';btn.disabled=false;}
+}
+
+/* ============ SVGチャート ============ */
+function svgSpark(hist,w=360,h=74){
+  if(hist.length<2) return "";
+  const vs=hist.map(h=>h.v),mn=Math.min(...vs),mx=Math.max(...vs),rg=mx-mn||1;
+  const pts=vs.map((v,i)=>[8+i*(w-16)/(vs.length-1), h-8-(v-mn)/rg*(h-18)]);
+  const path=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <path d="${path}" fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+}
+function svgLine(hist){
+  const w=470,h=330,pl=14,pr=56,pt=16,pb=34;
+  const vs=hist.map(x=>x.v);
+  let mn=Math.min(...vs),mx=Math.max(...vs);const pad=(mx-mn)*0.12||1;mn-=pad;mx+=pad;
+  const X=i=>pl+i*(w-pl-pr)/Math.max(1,vs.length-1);
+  const Y=v=>pt+(1-(v-mn)/(mx-mn))*(h-pt-pb);
+  // Yグリッド(0.2百万円刻み目安)
+  let g="",step=2e5;while((mx-mn)/step>7)step*=2;
+  for(let v=Math.ceil(mn/step)*step;v<=mx;v+=step){
+    g+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#39363f" stroke-width="1"/>
+        <text x="${w-pr+6}" y="${Y(v)+4}" fill="var(--tx2)" font-size="11">${(v/1e6).toFixed(1)}</text>`;
+  }
+  let vg="",xl="";
+  hist.forEach((p,i)=>{vg+=`<line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${h-pb}" stroke="#2b2933" stroke-width="1"/>`;
+    xl+=`<text x="${X(i)}" y="${h-12}" fill="var(--tx2)" font-size="10.5" text-anchor="middle">${+p.d.slice(5,7)}/${+p.d.slice(8)}</text>`;});
+  const path=vs.map((v,i)=>(i?"L":"M")+X(i).toFixed(1)+","+Y(v).toFixed(1)).join(" ");
+  let dots="";vs.forEach((v,i)=>{const last=i===vs.length-1;
+    dots+=`<circle cx="${X(i)}" cy="${Y(v)}" r="${last?7:5}" fill="${last?"var(--teal)":"#fff"}" ${last?'stroke="#fff" stroke-width="2.5"':""}/>`;});
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%">
+    <text x="${w-pr+4}" y="12" fill="var(--tx2)" font-size="10">(百万円)</text>
+    ${vg}${g}
+    <line x1="${w-pr}" x2="${w-pr}" y1="${pt}" y2="${h-pb}" stroke="var(--gold)" stroke-width="3"/>
+    <path d="${path}" fill="none" stroke="#4be3b7" stroke-width="3.5" stroke-linejoin="round"/>
+    ${dots}${xl}</svg>`;
+}
+function svgBars(hist){
+  const w=470,h=310,pl=14,pr=52,pt=16,pb=34;
+  const diffs=hist.slice(1).map((p,i)=>({d:p.d,v:p.v-hist[i].v}));
+  if(!diffs.length)return "";
+  const mx=Math.max(...diffs.map(d=>Math.abs(d.v)))||1;
+  const Y0=pt+(h-pt-pb)/2, sc=(h-pt-pb)/2/mx*0.92;
+  const bw=(w-pl-pr)/diffs.length*0.42;
+  let g="",bars="",xl="";
+  let step=3e5;while(mx/step>2.4)step*=2;
+  for(let v=-Math.floor(mx/step)*step;v<=mx;v+=step){const y=Y0-v*sc;
+    g+=`<line x1="${pl}" x2="${w-pr}" y1="${y}" y2="${y}" stroke="#2b2933"/>
+        <text x="${w-pr+6}" y="${y+4}" fill="var(--tx2)" font-size="11">${v/1000}</text>`;}
+  diffs.forEach((d,i)=>{const x=pl+(i+.5)*(w-pl-pr)/diffs.length;
+    const hgt=Math.abs(d.v)*sc;
+    bars+=`<rect x="${x-bw/2}" y="${d.v>=0?Y0-hgt:Y0}" width="${bw}" height="${Math.max(2,hgt)}" rx="2" fill="${d.v>=0?"#e0555c":"#3d8fe0"}"/>`;
+    xl+=`<text x="${x}" y="${h-12}" fill="var(--tx2)" font-size="10.5" text-anchor="middle">${+d.d.slice(8)}</text>`;});
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%">
+    <text x="${w-pr+2}" y="12" fill="var(--tx2)" font-size="10">(千円)</text>
+    ${g}<line x1="${pl}" x2="${w-pr}" y1="${Y0}" y2="${Y0}" stroke="#77747f" stroke-width="1.5"/>
+    ${bars}${xl}</svg>`;
+}
+function svgDonut(items,size=190,inner=0.62,centerHtml=""){
+  const cx=size/2,cy=size/2,r=size/2-6,ri=r*inner;
+  const tot=items.reduce((a,x)=>a+x.v,0)||1;let a0=-Math.PI/2,paths="";
+  for(const it of items){const a1=a0+it.v/tot*2*Math.PI;
+    const large=(a1-a0)>Math.PI?1:0;
+    const p=(a,rr)=>[cx+rr*Math.cos(a),cy+rr*Math.sin(a)];
+    const[x0,y0]=p(a0,r),[x1,y1]=p(a1,r),[x2,y2]=p(a1,ri),[x3,y3]=p(a0,ri);
+    paths+=`<path d="M${x0},${y0} A${r},${r} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${ri},${ri} 0 ${large} 0 ${x3},${y3} Z" fill="${it.col}"/>`;
+    a0=a1;}
+  return `<svg viewBox="0 0 ${size} ${size}" style="width:100%;height:100%">${paths}</svg>`;
+}
+/* squarified treemap */
+function treemap(items,W,H){
+  const tot=items.reduce((a,x)=>a+x.v,0);
+  const scaled=items.map(x=>({...x,a:x.v/tot*W*H})).sort((a,b)=>b.a-a.a);
+  const rects=[];let x=0,y=0,w=W,h=H,row=[];
+  const worst=(row,len)=>{const s=row.reduce((a,r)=>a+r.a,0);
+    return Math.max(...row.map(r=>Math.max(len*len*r.a/(s*s), s*s/(len*len*r.a))));};
+  const layout=()=>{const s=row.reduce((a,r)=>a+r.a,0);
+    if(w>=h){const rw=s/h;let yy=y;
+      for(const r of row){const rh=r.a/rw;rects.push({...r,x,y:yy,w:rw,h:rh});yy+=rh;}
+      x+=rw;w-=rw;
+    }else{const rh=s/w;let xx=x;
+      for(const r of row){const rw=r.a/rh;rects.push({...r,x:xx,y,w:rw,h:rh});xx+=rw;}
+      y+=rh;h-=rh;}
+    row=[];};
+  for(const it of scaled){
+    const len=Math.min(w,h);
+    if(row.length&&worst([...row,it],len)>worst(row,len)) layout();
+    row.push(it);
+  }
+  if(row.length)layout();
+  return rects;
+}
+function heatColor(pc){
+  if(pc==null)return "#3a3844";
+  const t=Math.max(-1,Math.min(1,pc/6));
+  if(t>=0){const k=t;return `rgb(${Math.round(58-14*k)},${Math.round(120+50*k)},${Math.round(84+8*k)})`;}
+  const k=-t;return `rgb(${Math.round(140+80*k)},${Math.round(70-8*k)},${Math.round(74-6*k)})`;
+}
+
+/* ============ 描画: ダッシュボード ============ */
+function rDashboard(){
+  const t=totals(),bw=bestWorst(),m=mtd(),nt=nisaTotals();
+  const up=S.positions.filter(p=>p.pc>0).length,dn=S.positions.filter(p=>p.pc<0).length;
+  const dayPct=t.total?(t.day/(t.total-t.day)*100):0;
+  const ev=S.events[0];
+  const days=ev?Math.max(0,Math.round((new Date(ev.d)-new Date(new Date().toDateString()))/864e5)):null;
+  const nisaItems=[{v:Math.max(1,nt.ev),col:"var(--gold)"},{v:Math.max(1,(S.nisaCost||0)*0.02),col:"#3b6b8f"}];
+  $("#pg-dashboard").innerHTML=`
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="card flat" style="padding-bottom:60px">
+      <span class="tag">資産総額</span>
+      <div class="asset-big num">${yen(t.total)}<small>円</small></div>
+      <div style="display:flex;gap:8px;font-size:.8rem"><span class="mini" style="align-self:center">前日比</span>
+        <b class="num ${cls(t.day)}">${sgn(t.day)}円 (${sgnF(dayPct,1)}%)</b></div>
+      ${svgSpark(S.history.slice(-8))}
+    </div>
+    ${bw?`<div class="card flat bw">
+      <div class="b"><span class="lbl" style="top:8px">BEST</span><div class="nm">${esc(shortName(bw.b.name))}</div><div class="pc num">${sgnF(bw.b.pc)}%</div></div>
+      <div class="w"><span class="lbl" style="bottom:8px">WORST</span><div class="nm">${esc(shortName(bw.w.name))}</div><div class="pc num">${sgnF(bw.w.pc)}%</div></div>
+    </div>`:'<div class="card flat"></div>'}
+  </div>
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="card flat">
+      <span class="tag">月初来損益</span><span class="corner">${m.range}</span>
+      <div class="mtd-big num ${cls(m.total)}" style="color:${m.total<0?'var(--dn)':'var(--up)'}">${sgn(m.total)}<small style="font-size:1rem">円</small></div>
+      <div class="kv"><span>評価損益</span><b class="num ${cls(m.evalPl)}">${sgn(m.evalPl)}円</b></div>
+      <div class="kv"><span>確定損益</span><b class="num ${cls(m.fixed)}">${sgn(m.fixed)}円</b></div>
+    </div>
+    <div class="card flat pfmini">
+      <span class="tag">ポートフォリオ</span><span class="corner">${S.asof.slice(5).replace("-","/")}</span>
+      <div style="text-align:center;margin-top:8px;font-size:.85rem">保有 <b style="font-size:1.3rem">${S.positions.length}</b> 銘柄</div>
+      <div class="cnt">
+        <div><span class="pill r">前日比＋</span><br><b class="num">${up}</b><span class="mini">銘柄</span></div>
+        <div><span class="pill b">前日比−</span><br><b class="num">${dn}</b><span class="mini">銘柄</span></div>
+      </div>
+      <div class="ratio"><i style="width:${up+dn?up/(up+dn)*100:50}%"></i></div>
+      <div class="rlbl"><span>${up+dn?Math.round(up/(up+dn)*100):0}%</span><span>${up+dn?Math.round(dn/(up+dn)*100):0}%</span></div>
+    </div>
+  </div>
+  <div class="card nisa-wrap">
+    <div style="flex:1">
+      <span class="tag gold">NISA</span>
+      <div class="mini" style="margin-top:8px">NISA運用金額</div>
+      <div class="nisa-num num">${yen(nt.ev)}円</div>
+      <div class="kv"><span>買付金額</span><b class="num">${yen(S.nisaCost||0)}円</b></div>
+      <div class="kv"><span>損益額</span><b class="num ${cls(nt.pl)}">${sgn(nt.pl)}円</b></div>
+    </div>
+    <div class="donut-mini">${svgDonut(nisaItems,120)}</div>
+  </div>
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="card flat"><span class="prime-corner">Prime</span>
+      <span class="tag">決算発表予定日</span>
+      <div style="text-align:center;color:var(--tx2);font-size:.82rem;margin:18px 0 6px">直近30日に決算発表日を<br>迎える銘柄なし</div>
+      <div style="text-align:center;font-size:1.2rem;font-weight:800">あと ─── 日</div>
+    </div>
+    <div class="card flat"><span class="prime-corner">Prime</span>
+      <span class="tag">権利日</span>
+      ${ev?`<div style="font-size:.78rem;margin-top:10px">${ev.d.slice(5).replace("-","/").replace(/^0/,"")}<br><b>${esc(ev.name)}</b></div>
+      <div style="text-align:center;font-size:1.05rem;margin-top:6px">あと <b style="font-size:1.9rem" class="num">${days}</b> 日</div>`
+      :'<div class="mini" style="margin-top:16px;text-align:center">予定なし</div>'}
+    </div>
+  </div>
+  ${S.news.map(n=>`<div class="rowitem"><span style="font-size:1.2rem">📄</span>
+    <div class="grow"><b style="font-size:.82rem">${n.code} ${esc(n.name)}</b>
+    <div class="mini" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.title)}</div></div>
+    <span class="mini">${n.d.slice(5)}</span></div>`).join("")}
+  <h2 class="sec">📋 ウォッチ銘柄 <span class="mini">${S.positions.filter(p=>!isFund(p)).length+S.watch.length} / 50 銘柄</span></h2>
+  <div class="card"><div class="wtiles">${watchTiles()}</div></div>`;
+}
+function watchTiles(){
+  const held=S.positions.filter(p=>!isFund(p)).map(p=>({code:p.code,name:p.name,pc:p.pc,hold:1}));
+  const all=[...held,...S.watch.map(w=>({...w,hold:0}))];
+  return all.map(x=>{
+    const c=x.pc==null?"n":(x.pc>=0?"g":"r");
+    return `<div class="wt ${c}">${x.hold?'<span class="hold">保</span>':""}<span class="cd">${x.code}</span><br>${esc(x.name.slice(0,6))}</div>`;
+  }).join("");
+}
+
+/* ============ 描画: 資産／損益 ============ */
+function rAssets(){
+  const t=totals(),hist=S.history.slice(-10);
+  const seg=`<div class="seg">
+    <button class="${assetTab!=="pllist"?"on":""}" onclick="assetTab='asset';rAssets()">資産推移</button>
+    <button class="${assetTab==="pllist"?"on":""}" onclick="assetTab='pllist';rAssets()">損益一覧</button></div>`;
+  if(assetTab==="pllist"){$("#pg-assets").innerHTML=seg+rPlList();return;}
+  const sub=`<div class="subtabs">
+    <button class="${assetTab==="asset"?"on":""}" onclick="assetTab='asset';rAssets()">資産</button>
+    <button class="${assetTab==="pl"?"on":""}" onclick="assetTab='pl';rAssets()">損益</button></div>`;
+  const dayPct=t.total?(t.day/(t.total-t.day)*100):0;
+  const head=assetTab==="asset"
+   ?`<div class="center-big"><div class="s">資産総額</div><div class="v num">${yen(t.total)}円</div>
+     <div class="s">前日比 <b class="num ${cls(t.day)}">${sgn(t.day)}円 (${sgnF(dayPct,1)}%)</b></div></div>`
+   :`<div class="center-big"><div class="s">前日比</div><div class="v num ${cls(t.day)}">${sgn(t.day)}円</div>
+     <div class="s num ${cls(t.day)}">(${sgnF(dayPct,1)}%)</div></div>`;
+  $("#pg-assets").innerHTML=seg+sub+head+
+   `<div class="chartbox">${assetTab==="asset"?svgLine(hist):svgBars(hist)}</div>
+    <div class="card" style="display:flex;gap:8px;justify-content:space-between;color:var(--tx2);font-size:.82rem;font-weight:700">
+      <span style="background:var(--teal);color:#04241c;border-radius:8px;padding:6px 10px">直近10日</span>
+      <span style="align-self:center">${S.asof.slice(0,7).replace("-","年")}月</span>
+      <span style="align-self:center">${S.asof.slice(0,4)}年</span><span style="align-self:center">任意</span></div>`;
+}
+function rPlList(){
+  const evalPl=S.positions.map(p=>({name:(p.code&&!isFund(p)?p.code+" ":"投資信託 ")+p.name,v:plOf(p),hold:1,sub:"累計損益"}));
+  const fixed=S.realized.map(r=>({name:r.name,v:r.v,hold:0,sub:"期間損益"}));
+  const merged=(()=>{const m=new Map();
+    for(const e of [...evalPl,...fixed]){const k=e.name.replace(/^\S+\s/,"");
+      if(m.has(k)){const x=m.get(k);x.v+=e.v;x.hold=x.hold||e.hold;}
+      else m.set(k,{name:e.name,v:e.v,hold:e.hold,sub:"累計損益"});}
+    return [...m.values()];})();
+  const src=plListTab==="total"?merged:plListTab==="eval"?evalPl:fixed;
+  const tot=src.reduce((a,x)=>a+x.v,0);
+  const rows=[...src].sort((a,b)=>b.v-a.v).map(x=>`<div class="pl-row">
+    <div class="nm"><b>${esc(x.name)}</b><span>${x.sub}</span></div>
+    ${x.hold?'<span class="holdchip">保有</span>':""}
+    <span class="v num ${cls(x.v)}">${sgn(x.v)}円</span><span class="chev">›</span></div>`).join("");
+  return `<div class="subtabs">
+    <button class="${plListTab==="total"?"on":""}" onclick="plListTab='total';rAssets()">合計損益</button>
+    <button class="${plListTab==="eval"?"on":""}" onclick="plListTab='eval';rAssets()">評価損益</button>
+    <button class="${plListTab==="fixed"?"on":""}" onclick="plListTab='fixed';rAssets()">確定損益</button></div>
+   <div class="center-big"><div class="s">${{total:"合計損益",eval:"評価損益",fixed:"確定損益"}[plListTab]} (26年5月〜7月)</div>
+   <div class="v num ${cls(tot)}">${sgn(tot)}円</div></div>${rows}`;
+}
+
+/* ============ 描画: ポートフォリオ ============ */
+function rPortfolio(){
+  const t=totals();
+  const rows=[...S.positions].sort((a,b)=>evalOf(b)-evalOf(a)).map(p=>{
+    const ev=evalOf(p),pl=plOf(p),plPct=costOf(p)?pl/costOf(p)*100:0,day=dayOf(p);
+    return `<div class="pos">
+      <div class="top"><span class="kind ${p.kind==="nisa"||p.kind==="fund_nisa"?"nisa":isFund(p)?"fund":""}">${kindLabel(p)}</span>
+        <span class="nm">${isFund(p)?"":p.code+" "}${esc(p.name)}</span>
+        <span class="mini num ${cls(day)}">前日比${sgn(day)}</span></div>
+      <div class="body">
+        <div class="l"><div class="px num">${p.p?p.p.toLocaleString():"—"}<small style="font-size:.7rem">円</small></div>
+          <div class="chg num ${cls(p.c)}">${p.c!=null?sgn(p.c)+"円 ("+sgnF(p.pc)+"%)":""}</div></div>
+        <div class="r"><div class="mini">時価評価額</div><div class="ev num">${yen(ev)}円</div>
+          <div class="pl num ${cls(pl)}">${sgn(pl)}円 (${sgnF(plPct)}%)</div></div></div>
+      <div class="foot"><span>保有${isFund(p)?"口数":"株数"} ${p.qty.toLocaleString()}</span><span>取得単価 ${p.cost.toLocaleString()}</span></div>
+    </div>`;}).join("");
+  $("#pg-portfolio").innerHTML=`
+    <div class="center-big" style="margin-top:6px"><div class="s">運用総額(有価証券)</div>
+      <div class="v num">${yen(t.sec)}円</div>
+      <div class="s num ${cls(t.pl)}">含み損益 ${sgn(t.pl)}円 (${sgnF(t.sec-t.pl?t.pl/(t.sec-t.pl)*100:0)}%)</div></div>
+    <div class="subtabs"><button class="on">評価額順</button></div>${rows}`;
+}
+
+/* ============ 描画: ヒートマップ ============ */
+function rHeatmap(){
+  const sub=`<div class="subtabs">
+    <button class="${hmTab==="map"?"on":""}" onclick="hmTab='map';rHeatmap()">保有株式</button>
+    <button class="${hmTab==="top10"?"on":""}" onclick="hmTab='top10';rHeatmap()">上位10銘柄</button>
+    <button class="${hmTab==="comp"?"on":""}" onclick="hmTab='comp';rHeatmap()">資産構成</button></div>`;
+  let body="";
+  if(hmTab==="map"){
+    const W=470,H=470;
+    const rects=treemap(S.positions.map(p=>({v:evalOf(p),pc:p.pc,name:p.name})),W,H);
+    const cells=rects.map(r=>{
+      const fs=Math.max(8.5,Math.min(15,r.w/8,r.h/3.2));
+      const nm=esc(shortName(r.name)).slice(0,14);
+      const showTxt=r.w>44&&r.h>30;
+      return `<g class="hm-cell"><rect x="${r.x}" y="${r.y}" width="${Math.max(0,r.w-2)}" height="${Math.max(0,r.h-2)}" fill="${heatColor(r.pc)}" rx="3"/>
+        ${showTxt?`<text x="${r.x+r.w/2}" y="${r.y+r.h/2-4}" fill="#fff" font-size="${fs}" font-weight="700" text-anchor="middle">${nm}</text>
+        <text x="${r.x+r.w/2}" y="${r.y+r.h/2+fs+2}" fill="#fff" font-size="${fs*1.05}" font-weight="800" text-anchor="middle">${r.pc!=null?sgnF(r.pc)+"%":""}</text>`:""}</g>`;
+    }).join("");
+    body=`<div class="legend">全銘柄 <span style="flex:1"></span>-3% <i style="background:#dc4a4f"></i><i style="background:#a8555c"></i><i style="background:#3a3844"></i><i style="background:#3f9a5e"></i><i style="background:#2ca868"></i> +3%</div>
+      <div class="hmwrap"><svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">${cells}</svg></div>`;
+  }else if(hmTab==="top10"){
+    const top=[...S.positions].sort((a,b)=>evalOf(b)-evalOf(a)).slice(0,10);
+    const mx=evalOf(top[0])||1;const W=470,H=340,pb=120;
+    const bars=top.map((p,i)=>{const bw=W/10*0.55,x=(i+.5)*W/10;
+      const h=(evalOf(p)/mx)*(H-pb-20);
+      return `<rect x="${x-bw/2}" y="${H-pb-h}" width="${bw}" height="${h}" rx="2" fill="#e0555c"/>
+        <text x="${x}" y="${H-pb+8}" fill="var(--tx2)" font-size="9.5" text-anchor="end" transform="rotate(-55 ${x} ${H-pb+8})">${esc(shortName(p.name)).slice(0,9)}</text>`;}).join("");
+    body=`<div class="legend"><i style="background:#e0555c"></i>現物買い(評価額)</div>
+      <div class="chartbox"><svg viewBox="0 0 ${W} ${H}" style="width:100%">${bars}</svg></div>`;
+  }else{
+    const t=totals();
+    const jp=S.positions.filter(p=>!isFund(p)).reduce((a,p)=>a+evalOf(p),0);
+    const fd=S.positions.filter(isFund).reduce((a,p)=>a+evalOf(p),0);
+    const items=[
+      {name:"日本株",v:jp,col:"#e2527e"},{name:"米国株",v:S.other||0,col:"#4aa3ff"},
+      {name:"投資信託",v:fd,col:"#b7d24a"},{name:"現金",v:S.cash||0,col:"#f0a53c"}];
+    const rows=items.map(x=>`<div class="comp-row"><span class="sw" style="background:${x.col}"></span>
+      <span style="flex:1">${x.name}</span><span class="pct num">${(x.v/t.total*100).toFixed(1)}%</span>
+      <span class="val num">${yen(x.v)}円</span></div>`).join("");
+    body=`<div class="center-big"><div class="s">資産総額</div><div class="v num">${yen(t.total)}円</div></div>
+      <div style="max-width:230px;margin:0 auto 14px">${svgDonut(items,200)}</div>${rows}`;
+  }
+  $("#pg-heatmap").innerHTML=sub+body;
+}
+
+/* ============ 描画: ウォッチ銘柄 ============ */
+function rWatch(){
+  const held=S.positions.filter(p=>!isFund(p)).map(p=>({code:p.code,name:p.name,p:p.p,c:p.c,pc:p.pc,hold:1}));
+  const all=[...S.watch.map(w=>({...w,hold:0})),...held];
+  const rows=all.map(x=>`<div class="rowitem">
+    <div class="grow"><span class="mini">${x.code}</span> <b style="font-size:.86rem">${esc(x.name)}</b>
+      <div style="margin-top:3px"><b class="num" style="font-size:1.15rem">${x.p!=null?x.p.toLocaleString():"—"}円</b>
+      <span class="num ${cls(x.c||0)}" style="font-size:.76rem;font-weight:700"> ${x.c!=null?sgn(x.c)+"円 ("+sgnF(x.pc)+"%)":"未取得(⟳更新で取得)"}</span></div></div>
+    ${x.hold?'<span class="holdchip">保有</span>':""}<span class="chev">›</span></div>`).join("");
+  $("#pg-watch").innerHTML=`<h2 class="sec">📋 ウォッチ銘柄 <span class="mini">${all.length} / 50</span></h2>
+    <div class="card"><div class="wtiles">${watchTiles()}</div></div>${rows}`;
+}
+
+/* ============ 全体制御 ============ */
+function renderAll(){
+  const n=new Date();
+  $("#todayLabel").textContent=`${n.getMonth()+1}月${n.getDate()}日`;
+  $("#lastUpdate").textContent=S.lastUpdate||"—";
+  ({dashboard:rDashboard,assets:rAssets,portfolio:rPortfolio,heatmap:rHeatmap,watch:rWatch})[curPage]();
+}
+function showPage(pg){
+  curPage=pg;
+  document.querySelectorAll(".page").forEach(e=>e.classList.remove("on"));
+  $("#pg-"+pg).classList.add("on");
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.pg===pg));
+  renderAll(); window.scrollTo(0,0);
+}
+let toastTimer=null;
+function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block";
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display="none",4200);}
+
+/* イベント */
+document.getElementById("mainNav").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(b)showPage(b.dataset.pg);});
+$("#btnRefresh").addEventListener("click",aiRefresh);
+$("#btnSettings").addEventListener("click",()=>{
+  $("#inCash").value=S.cash||0;$("#inUS").value=S.other||0;
+  $("#settingsModal").classList.add("show");});
+$("#closeSettings").addEventListener("click",()=>$("#settingsModal").classList.remove("show"));
+$("#settingsModal").addEventListener("click",e=>{if(e.target.id==="settingsModal")e.target.classList.remove("show");});
+$("#saveSettings").addEventListener("click",()=>{
+  S.cash=toNum($("#inCash").value)||0;S.other=toNum($("#inUS").value)||0;
+  pushHistoryToday();saveState();renderAll();
+  $("#settingsModal").classList.remove("show");toast("設定を保存しました");});
+$("#csvInput").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const buf=await f.arrayBuffer();
+    let text;
+    try{text=new TextDecoder("shift-jis",{fatal:true}).decode(buf);}
+    catch(_){text=new TextDecoder("utf-8").decode(buf);}
+    if(!/銘柄（コード）|ファンド名/.test(text)) text=new TextDecoder("utf-8").decode(buf);
+    applyCsv(text);
+  }catch(err){toast("CSV読み込みエラー: "+err.message);}
+  e.target.value="";});
+$("#btnExport").addEventListener("click",()=>{
+  const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="kabudash-data.json";a.click();URL.revokeObjectURL(a.href);});
+$("#jsonInput").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{S=JSON.parse(await f.text());saveState();renderAll();toast("データを読み込みました");}
+  catch(err){toast("JSON読み込みエラー");}e.target.value="";});
+
+/* 起動 */
+(async()=>{await loadState();renderAll();})();
+
+</script>
+</body>
+</html>
