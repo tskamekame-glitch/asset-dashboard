@@ -2876,7 +2876,7 @@ function amRenderCard(a){
   const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const isPayPay=PAYPAY_PAT.test(a.name)||PAYPAY_PAT.test(a.note||'');
   const isUnitBased=isStock||isForeignStock||(isIndexFund&&!isPayPay);
-  const NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
+  const NON_SBI_PAT=AM_NON_SBI_PAT;
   const isNonSBI=NON_SBI_PAT.test(a.name)||NON_SBI_PAT.test(a.note||'');
   const isSBIAuto=(isIndexFund||hasSBICode)&&!isNonSBI;
   const needsManual=!isSBIAuto;
@@ -3443,6 +3443,8 @@ function openAddModal(defaultCat){
   setTimeout(()=>document.getElementById('fName').focus(),300);
 }
 function openAddModalCat(cat){openAddModal(cat)}
+// SBI CSV取込のマッチング対象外とする「非SBI管理」口座の判定パターン（他証券会社・DC年金・iDeCo等）
+const AM_NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
 const AM_NAME_TO_CAT_RULES=[
   {pat:/SBG|ソフトバンクグループ|9984/,           cat:'個別株'},
   {pat:/SBKK|みずほストック|野村持ち株.*SBKK|9434/,cat:'高配当'},
@@ -4107,6 +4109,10 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
     }
     // SBI行にコードなし（投信等）→ 以降のルールで判定
   }
+  // 野村・みずほ・DC年金・iDeCo等、他社/確定拠出で手動管理している口座は、
+  // SBI CSV側の銘柄名と語句（TOPIX・日経等）が偶然一致してもマッチ対象にしない
+  // （銘柄コード完全一致の場合は誤爆しないため対象外＝上のコード判定を通過後にここへ来る）
+  if(AM_NON_SBI_PAT.test(p))return 0;
   // ===== ファンド固有ルール（最優先）=====
   // SBI銘柄ごとに must/not キーワードで正確に対応するAM口座を特定
   const FUND_RULES=[
