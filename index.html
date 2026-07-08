@@ -3489,9 +3489,10 @@ function openEditModal(id){
   amEditId=id;
   document.getElementById('sheetTitle').textContent='口座を編集';
   document.getElementById('fName').value=a.name;
-  // 口座名から正しいカテゴリを推定して上書き（常に最新ルールを適用）
+  // 口座名から正しいカテゴリを推定して上書き（ただし既に有効なカテゴリが手動設定済みならそれを尊重する）
+  // ※ 旧カテゴリ形式（AM_OLD_CAT_MAP対象の移行残り）の場合のみ名前から自動推定する
   const guessed=amGuessCat(a.name);
-  const correctCat=guessed||(AM_OLD_CAT_MAP[a.cat]||a.cat);
+  const correctCat=AM_VALID_CATS.includes(a.cat) ? a.cat : (guessed||AM_OLD_CAT_MAP[a.cat]||a.cat);
   const finalCat=AM_VALID_CATS.includes(correctCat)?correctCat:'その他';
   document.getElementById('fCat').value=finalCat;
   document.getElementById('fAmount').value=a.amount;
@@ -4621,9 +4622,10 @@ async function slLoadFromSheet(){
 function useOffline(){
   amIsOnline=false;localStorage.setItem('assetGoogleMode','offline');
   amLoadFromLocal();
-  // 必ず全口座のカテゴリを口座名ベースで再判定して保存
+  // カテゴリが旧形式・無効な場合のみ口座名ベースで再判定して保存（手動設定済みの有効カテゴリは尊重）
   let fixed=false;
   amAccounts.forEach(a=>{
+    if(AM_VALID_CATS.includes(a.cat))return;// 既に有効なカテゴリ（手動選択含む）はそのまま
     const byName=amGuessCat(a.name);
     const correct=byName||(AM_OLD_CAT_MAP[a.cat]||a.cat);
     const validCat=AM_VALID_CATS.includes(correct)?correct:'その他';
@@ -5049,10 +5051,11 @@ function pfRenderDonutCharts(){
   let amRaw=[];
   try{amRaw=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){}
 
-  // グラフ集計前に口座名ベースで強制再分類
+  // グラフ集計前に、旧形式・無効なカテゴリのみ口座名ベースで補正（手動設定済みの有効カテゴリは尊重）
   if(amRaw.length>0){
     let _fixed=false;
     amRaw.forEach(a=>{
+      if(AM_VALID_CATS.includes(a.cat))return;// 既に有効なカテゴリ（手動選択含む）はそのまま
       const _byName=amGuessCat(a.name);
       if(_byName&&a.cat!==_byName){a.cat=_byName;_fixed=true;}
       else if(!_byName&&typeof AM_OLD_CAT_MAP!=='undefined'&&AM_OLD_CAT_MAP[a.cat]){a.cat=AM_OLD_CAT_MAP[a.cat];_fixed=true;}
@@ -7722,7 +7725,8 @@ function todoRender(){
     let changed=false;
     accs.forEach(a=>{
       const before=a.cat;
-      // 口座名で判定できるものは必ず上書き
+      if(AM_VALID_CATS.includes(a.cat))return;// 既に有効なカテゴリ（手動選択含む）はそのまま
+      // 口座名で判定できるものは旧形式・無効カテゴリのみ上書き
       const byName=amGuessCat(a.name);
       if(byName){
         if(a.cat!==byName){a.cat=byName;changed=true;}
@@ -7745,7 +7749,8 @@ function todoRender(){
     if(!accs.length)return;
     let changed=false;
     accs.forEach(function(a){
-      // 口座名で判定できるものは必ず正しいカテゴリに
+      if(AM_VALID_CATS.includes(a.cat))return;// 既に有効なカテゴリ（手動選択含む）はそのまま
+      // 口座名で判定できるものは旧形式・無効カテゴリのみ正しいカテゴリに
       const byName=amGuessCat(a.name);
       if(byName){
         if(a.cat!==byName){a.cat=byName;changed=true;}
