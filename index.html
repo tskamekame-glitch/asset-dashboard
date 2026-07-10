@@ -5595,6 +5595,26 @@ function kvPfCard(plus,minus,flat,dateLabel,subLabel){
   </div>`;
 }
 
+// 資産管理の決算発表日は自由記述（例:7/31, 7月31日, 8月上旬, 2025-07-31）のため柔軟にパースする
+function parseFlexibleEarningsDate(raw){
+  if(!raw)return null;
+  const s=String(raw).trim();
+  const today=new Date();today.setHours(0,0,0,0);
+  let y=null,m=null,d=null,mt;
+  if((mt=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))){y=+mt[1];m=+mt[2]-1;d=+mt[3];}
+  else if((mt=s.match(/^(\d{1,2})\/(\d{1,2})/))){m=+mt[1]-1;d=+mt[2];}
+  else if((mt=s.match(/(\d{1,2})月(\d{1,2})日/))){m=+mt[1]-1;d=+mt[2];}
+  else if((mt=s.match(/(\d{1,2})月(上旬|中旬|下旬)/))){m=+mt[1]-1;d=({上旬:5,中旬:15,下旬:25})[mt[2]];}
+  else return null;
+  if(y===null){
+    y=today.getFullYear();
+    const cand=new Date(y,m,d);cand.setHours(0,0,0,0);
+    // 180日以上前の日付になる場合は来年の日付とみなす
+    if((today-cand)/86400000>180)y+=1;
+  }
+  const dt=new Date(y,m,d);dt.setHours(0,0,0,0);
+  return isNaN(dt.getTime())?null:dt;
+}
 // ── 決算・権利日カウントダウン（kaView風・画像1下部） ──
 function homeRenderCountdown(){
   const eCard=document.getElementById('home-earnings-card');
@@ -5620,8 +5640,8 @@ function homeRenderCountdown(){
   }catch(e){}
   try{wlLoad().filter(s=>s.earningsDate).forEach(s=>ev.push({name:s.name,date:s.earningsDate}));}catch(e){}
   const seen=new Set();
-  ev=ev.map(x=>({...x,d:new Date(String(x.date).slice(0,10)+'T00:00:00')}))
-       .filter(x=>!isNaN(x.d)&&dayDiff(x.d)>=0&&dayDiff(x.d)<=30)
+  ev=ev.map(x=>({...x,d:parseFlexibleEarningsDate(x.date)}))
+       .filter(x=>x.d&&!isNaN(x.d.getTime())&&dayDiff(x.d)>=0&&dayDiff(x.d)<=30)
        .filter(x=>{if(seen.has(x.name))return false;seen.add(x.name);return true;})
        .sort((a,b)=>a.d-b.d);
   // 当月の決算予定を優先表示（なければ30日以内の直近を表示）
