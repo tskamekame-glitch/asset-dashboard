@@ -1147,14 +1147,14 @@ input[type=number] { -moz-appearance: textfield; }
     </div>
     <div>
       <div class="form-group"><label class="form-label">銘柄名 *</label><input class="form-input" id="sl-f-name" placeholder="例: SBG 9984、スシロー 3563"></div>
-      <div class="form-group"><label class="form-label">カテゴリ</label><select class="form-input" id="sl-f-cat"><option value="個別株">個別株</option><option value="高配当">高配当</option><option value="全世界インデックス">全世界インデックス</option><option value="日本インデックス">日本インデックス</option><option value="インドインデックス">インドインデックス</option><option value="その他">その他</option></select></div>
+      <div class="form-group"><label class="form-label">カテゴリ</label><select class="form-input" id="sl-f-cat"><option value="個別株">個別株</option><option value="高配当">高配当</option><option value="全世界インデックス">全世界インデックス</option><option value="日本インデックス">日本インデックス</option><option value="インドインデックス">インドインデックス</option><option value="FX">FX（ドル円）</option><option value="その他">その他</option></select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group"><label class="form-label">株数（口数）</label><input class="form-input" id="sl-f-shares" type="number" placeholder="100" oninput="slCalc()"></div>
         <div class="form-group"><label class="form-label">売却単価（円）</label><input class="form-input" id="sl-f-sell-price" type="number" placeholder="10000" oninput="slCalc()"></div>
         <div class="form-group"><label class="form-label">取得単価（円）</label><input class="form-input" id="sl-f-buy-price" type="number" placeholder="8000" oninput="slCalc()"></div>
         <div class="form-group"><label class="form-label">売却日</label><input class="form-input" id="sl-f-date" type="date"></div>
       </div>
-      <div class="form-group"><label class="form-label">口座区分</label><select class="form-input" id="sl-f-account"><option value="NISA">NISA（非課税）</option><option value="特定">特定口座（20.315%課税）</option><option value="一般">一般口座（20.315%課税）</option></select></div>
+      <div class="form-group"><label class="form-label">口座区分</label><select class="form-input" id="sl-f-account"><option value="NISA">NISA（非課税）</option><option value="特定">特定口座（20.315%課税）</option><option value="一般">一般口座（20.315%課税）</option><option value="FX口座">FX口座（申告分離・源泉徴収なし）</option></select></div>
       <div id="sl-calc-box" style="background:var(--bg2,#f5f5f5);border-radius:10px;padding:12px 14px;margin-top:4px;display:none">
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:500">自動計算プレビュー</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
@@ -3243,11 +3243,12 @@ function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
     if(isDup)return;
 
     const NISA_PAT=/NISA|ニーサ/i;
-    const account=NISA_PAT.test(a.note||'')?'NISA':'特定口座';
+    const isFX=a.cat==='FX';
+    const account=isFX?'FX口座':(NISA_PAT.test(a.note||'')?'NISA':'特定口座');
     const isNISA=account==='NISA';
 
     // カテゴリ変換
-    const catMap={'個別株':'個別株','高配当':'高配当','外国株式':'個別株',
+    const catMap={'個別株':'個別株','高配当':'高配当','外国株式':'個別株','FX':'FX',
       '全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス',
       'インドインデックス':'インドインデックス'};
     const cat=catMap[a.cat]||'その他';
@@ -3269,7 +3270,8 @@ function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
       gain=cost!==null?sellTotal-cost:null;
     }
 
-    const tax=isNISA?0:(gain!==null&&gain>0?Math.round(gain*0.20315):0);
+    // FX口座は源泉徴収なし（申告分離課税・確定申告で納税）→ 徴収済み税額は0で記録
+    const tax=(isNISA||isFX)?0:(gain!==null&&gain>0?Math.round(gain*0.20315):0);
     const net=sellTotal-tax;
 
     const entry={
@@ -8643,10 +8645,11 @@ function slSaveEntry(){
   const buyPrice=parseFloat(document.getElementById('sl-f-buy-price').value)||0;
   const account=document.getElementById('sl-f-account').value;
   const isNISA=account==='NISA';
+  const isFXAcct=/^FX/.test(account);// FX口座: 源泉徴収なし（申告分離）
   const sellTotal=shares*sellPrice;
   const cost=shares*buyPrice;
   const gain=buyPrice>0?sellTotal-cost:null;
-  const tax=isNISA?0:(gain!==null&&gain>0?gain*0.20315:0);
+  const tax=(isNISA||isFXAcct)?0:(gain!==null&&gain>0?gain*0.20315:0);
   const net=sellTotal-tax;
   const entry={
     id:slEditingId||slUID(),
@@ -8718,10 +8721,14 @@ function slRenderTaxSummary(){
   slData.forEach(d=>{
     const y=(d.date||'').slice(0,4);
     if(!y)return;
-    if(!byYear[y])byYear[y]={gainSum:0,taxPaid:0,sellTotal:0,count:0,nisaGain:0,nisaCount:0};
+    if(!byYear[y])byYear[y]={gainSum:0,taxPaid:0,sellTotal:0,count:0,nisaGain:0,nisaCount:0,fxGain:0,fxCount:0};
     if(d.account==='NISA'){
       byYear[y].nisaGain+=(d.gain||0);
       byYear[y].nisaCount++;
+    }else if(/^FX/.test(d.account||'')||d.cat==='FX'){
+      // FX: 申告分離課税（先物取引に係る雑所得等）。株式と損益通算不可のため別集計
+      byYear[y].fxGain+=(d.gain||0);
+      byYear[y].fxCount++;
     }else{
       byYear[y].gainSum+=(d.gain||0);
       byYear[y].taxPaid+=(d.tax||0);
@@ -8761,6 +8768,10 @@ function slRenderTaxSummary(){
             ?`💡 確定申告で損益通算すると ${slFmt(diff)} 程度が還付される可能性があります`
             :`⚠ 損益通算後の税額が源泉徴収額を上回っています（不足分の申告が必要な場合があります）`}
         </div>`:''}
+        ${d.fxCount>0?`<div style="font-size:11px;margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border)">
+          <span style="color:var(--text2);font-weight:600">💱 FX口座（申告分離・株式と損益通算不可）：</span>${d.fxCount}件 損益<span style="font-weight:700;color:${d.fxGain>=0?'var(--green)':'var(--danger)'}">${slFmtSign(Math.round(d.fxGain))}</span>
+          ${d.fxGain>0?`<span style="color:var(--text3)">　想定税額 ${slFmt(Math.round(d.fxGain*TAX_RATE))}（源泉徴収なし・要確定申告）</span>`:d.fxGain<0?`<span style="color:var(--text3)">　損失は翌年以降3年間繰越控除可（要申告）</span>`:''}
+        </div>`:''}
         ${d.nisaCount>0?`<div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border)">NISA口座（非課税）：${d.nisaCount}件 損益${slFmtSign(Math.round(d.nisaGain))}</div>`:''}
       </div>`;
     }).join('');
@@ -8788,6 +8799,18 @@ function slRenderTaxSummary(){
 }
 
 function slRender(){
+  // 移行: 旧バージョンで「その他/特定口座」として同期されたFX記録をFX扱いに更新
+  try{
+    let migrated=false;
+    slData.forEach(d=>{
+      if(d.amSynced&&/SBI FX/.test(d.memo||'')&&d.cat!=='FX'){
+        d.cat='FX';d.account='FX口座';
+        if(d.tax){d.tax=0;d.net=(d.sellTotal||0);}
+        migrated=true;
+      }
+    });
+    if(migrated)slSaveData();
+  }catch(e){}
   const list=document.getElementById('sl-list');
   const empty=document.getElementById('sl-empty');
   const summary=document.getElementById('sl-summary');
@@ -8831,7 +8854,7 @@ function slRender(){
     ${d.sellPrice?`<div><div style="font-size:10px;color:var(--text3)">売却単価</div><div style="font-size:12px">¥${d.sellPrice.toLocaleString()}</div></div>`:''}
     ${d.buyPrice?`<div><div style="font-size:10px;color:var(--text3)">取得単価</div><div style="font-size:12px">¥${d.buyPrice.toLocaleString()}</div></div>`:''}
     ${d.gain!==null?`<div><div style="font-size:10px;color:var(--text3)">税引前損益</div><div style="font-size:12px;font-weight:600;color:${gainColor}">${slFmtSign(d.gain)}</div></div>`:''}
-    <div><div style="font-size:10px;color:var(--text3)">税金</div><div style="font-size:12px">${isNISA?'¥0（非課税）':slFmt(d.tax||0)}</div></div>
+    <div><div style="font-size:10px;color:var(--text3)">税金</div><div style="font-size:12px">${isNISA?'¥0（非課税）':/^FX/.test(d.account||'')?'申告時課税':slFmt(d.tax||0)}</div></div>
     <div><div style="font-size:10px;color:var(--text3)">税引後手取り</div><div style="font-size:13px;font-weight:700">${slFmt(d.net||0)}</div></div>
   </div>
   ${d.memo?`<div class="card-memo">${d.memo}</div>`:''}
