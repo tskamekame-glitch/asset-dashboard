@@ -12166,6 +12166,8 @@ function pnlCalcRealized(y1,m1,y2,m2){
       items.push({
         id:a.id, name:a.name, cat:a.cat, gain, pct,
         soldTotal, costTotal,
+        shares:a.shares||0, costUnit:a.costPrice||0, soldUnit:a.soldPrice||0,
+        buyDate:a.buyDate||'', soldDate:a.soldDate||'', isIndex,
         date:a.soldDate||'日付未設定',
         badge:'売却', badgeColor:'#8e44ad', type:'realized'
       });
@@ -12175,6 +12177,55 @@ function pnlCalcRealized(y1,m1,y2,m2){
   return items;
 }
 
+// ── 確定損益カードの詳細（購入/売却の内訳）──
+function pnlToggleRealizedDetail(id){
+  const el=document.getElementById('pnl-rd-'+id);
+  const ch=document.getElementById('pnl-rc-'+id);
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(ch)ch.style.transform=open?'rotate(0deg)':'rotate(90deg)';
+}
+function pnlRealizedDetailHtml(item){
+  const yen=n=>'¥'+Math.round(n).toLocaleString();
+  const unit=v=>(v%1!==0)?v.toLocaleString(undefined,{maximumFractionDigits:4}):v.toLocaleString();
+  const isFX=item.cat==='FX';
+  const rows=[];
+  if(item.isIndex){
+    // インデックス投信: 総額ベース（costPriceは取得総額として保存済み）
+    if(item.shares>0)rows.push(['口数',item.shares.toLocaleString()+'口']);
+    rows.push(['取得総額',yen(item.costTotal)]);
+    rows.push(['売却総額',yen(item.soldTotal)]);
+  }else if(isFX){
+    rows.push(['数量','$'+item.shares.toLocaleString()]);
+    if(item.costUnit>0)rows.push(['取得レート',unit(item.costUnit)+'円/USD']);
+    rows.push(['取得総額',yen(item.costTotal)]);
+    if(item.soldUnit>0)rows.push(['売却レート',unit(item.soldUnit)+'円/USD']);
+    rows.push(['売却総額',yen(item.soldTotal)+'<span style="font-size:9px;opacity:0.7">（スワップ・手数料込）</span>']);
+  }else{
+    if(item.shares>0)rows.push(['株数',item.shares.toLocaleString()+'株']);
+    if(item.costUnit>0)rows.push(['取得単価',unit(item.costUnit)+'円']);
+    rows.push(['取得総額',yen(item.costTotal)]);
+    if(item.soldUnit>0)rows.push(['売却単価',unit(item.soldUnit)+'円']);
+    rows.push(['売却総額',yen(item.soldTotal)]);
+  }
+  // 保有期間
+  let period='';
+  if(item.buyDate&&item.soldDate){
+    const d1=new Date(item.buyDate),d2=new Date(item.soldDate);
+    const days=Math.round((d2-d1)/86400000);
+    if(isFinite(days)&&days>=0)period=item.buyDate+' → '+item.soldDate+'（'+days+'日間）';
+  }else if(item.soldDate){period='売却日 '+item.soldDate;}
+  const pos=item.gain>=0;
+  const gCol=pos?'#ff5b5b':'#57a8ff';
+  rows.push(['確定損益','<span style="font-weight:800;color:'+gCol+'">'+(pos?'＋':'－')+Math.abs(Math.round(item.gain)).toLocaleString()+'円'+(item.pct!=null?'（'+(item.pct>=0?'＋':'－')+Math.abs(item.pct).toFixed(1)+'%）':'')+'</span>']);
+  return `<div style="margin-top:9px;padding-top:9px;border-top:0.5px solid rgba(255,255,255,0.08)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px">
+      ${rows.map(r=>`<div><div style="font-size:9px;color:rgba(255,255,255,0.4)">${r[0]}</div><div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.85);font-variant-numeric:tabular-nums">${r[1]}</div></div>`).join('')}
+    </div>
+    ${period?`<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:7px">📅 ${period}</div>`:''}
+  </div>`;
+}
 function pnlRender(){
   // セレクタ初期化（初回のみ）
   const y1el=document.getElementById('pnl-y1');
@@ -12247,7 +12298,13 @@ function pnlRender(){
     const editBtn=item.type==='realized'&&item.id!=null
       ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
       :'';
-    return `<div style="background:#17171a;border:0.5px solid rgba(255,255,255,0.08);border-left:3px solid ${edge};border-radius:10px;margin-bottom:8px;padding:10px 12px">
+    const isRealized=item.type==='realized'&&item.id!=null;
+    const detailHtml=isRealized?`<div id="pnl-rd-${item.id}" style="display:none">${pnlRealizedDetailHtml(item)}</div>`:'';
+    const clickAttr=isRealized?` onclick="pnlToggleRealizedDetail(${item.id})"`:'';
+    const chevron=isRealized
+      ?`<span id="pnl-rc-${item.id}" style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1;transition:transform 0.15s;display:inline-block">›</span>`
+      :`<span style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1">›</span>`;
+    return `<div${clickAttr} style="background:#17171a;border:0.5px solid rgba(255,255,255,0.08);border-left:3px solid ${edge};border-radius:10px;margin-bottom:8px;padding:10px 12px${isRealized?';cursor:pointer':''}">
       <div style="display:flex;align-items:center;gap:8px">
         ${codeTag}
         <span style="flex:1;font-size:14px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>
@@ -12260,9 +12317,10 @@ function pnlRender(){
             <span style="font-size:17px;font-weight:800;color:${gCol};font-variant-numeric:tabular-nums">${gainStr}</span>
             ${pctStr?`<span style="font-size:11px;color:${gCol};opacity:0.85;margin-left:5px">${pctStr}</span>`:''}
           </div>
-          <span style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1">›</span>
+          ${chevron}
         </div>
       </div>
+      ${detailHtml}
     </div>`;
   }).join('');
 }
