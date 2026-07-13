@@ -2220,6 +2220,12 @@ function amRenderReminder(){
   el.innerHTML=stale.length?`<div class="reminder-banner"><span class="reminder-icon">🔔</span><div><div class="reminder-title">残高の更新をお忘れなく！</div><div class="reminder-text">${stale.map(a=>a.name+'（'+daysSince(a.updated)+'日未更新）').join('<br>')}</div></div></div>`:'';
 }
 function amRender(){
+  // 移行: 旧コードで売却済みFXロットに残っていた評価額をゼロ化（CSV書き出し・Sheetsに残さない）
+  try{
+    let fxMig=false;
+    amAccounts.forEach(a=>{if(a.cat==='FX'&&a.sold&&a.amount){a.amount=0;fxMig=true;}});
+    if(fxMig){try{amSaveToLocal();}catch(e){}setTimeout(()=>{try{amSaveToSheet();}catch(e){}},0);}
+  }catch(e){}
   // FXロットがあればドル円レートを自動更新（15分キャッシュ・非同期）
   try{setTimeout(()=>fxLotRefresh(false),0);}catch(e){}
   // 売却済みと保有中を分離
@@ -3888,6 +3894,7 @@ async function fxApplyHistoryRows(rows){
           try{amSyncSoldToSlData(soldLot,soldAmount,r.price,soldDate,false);}catch(e){}
         }else{
           lot.sold=true;lot.soldDate=soldDate;lot.soldPrice=r.price;lot.soldAmount=soldAmount;
+          lot.amount=0;// 売却済みロットは評価額を残さない（手動売却と同じ挙動）
           if((lot.note||'').indexOf('建玉:'+r.tama)<0)lot.note=(lot.note||'')+tamaTag;
           if(extraNote)lot.note=(lot.note||'')+extraNote;
           lot.updated=todayStr();
@@ -3925,7 +3932,8 @@ function fxLotApply(rate,save){
   let changed=false;
   amAccounts.forEach(a=>{
     if(a.cat!=='FX'||a.sold)return;
-    if(a.price!==r){a.price=r;a.amount=Math.round((a.shares||0)*r);a.updated=todayStr();changed=true;}
+    const amt=Math.round((a.shares||0)*r);
+    if(a.price!==r||a.amount!==amt){a.price=r;a.amount=amt;a.updated=todayStr();changed=true;}
   });
   if(!changed)return;
   try{amRender();}catch(e){}
