@@ -8991,12 +8991,12 @@ window.addEventListener('load', function(){
     <table class="wl-tbl">
       <thead>
         <tr>
-          <th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>セクター</th><th>株数</th>
+          <th>操作</th><th>順番</th><th>優先</th><th>銘柄</th><th>コード</th><th>セクター</th><th>株数</th>
           <th>指値</th><th>現在値</th><th>乖離率</th><th>合計</th>
           <th>売値①堅実</th><th>売値②本命</th><th>売値③強気</th>
           <th>目標株価</th><th>上昇余地</th>
           <th>理論PER</th><th>理論PBR</th>
-          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th><th>操作</th>
+          <th>売却益(税後)</th><th>決算日</th><th>口座</th><th>状況</th>
         </tr>
       </thead>
       <tbody id="wl-tbody"></tbody>
@@ -9666,6 +9666,7 @@ function wlRender(){
       :`<span style="color:#A32D2D;font-weight:500">${wlFmt(gainNet)}</span>`;
     const isFirst=idx===0;const isLast=idx===data.length-1;
     return `<tr>
+      <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
       <td style="white-space:nowrap">
         <button class="wl-move-btn" onclick="wlMoveUp('${s.id}')" ${isFirst?'disabled':''} title="上へ">▲</button>
         <button class="wl-move-btn" onclick="wlMoveDown('${s.id}')" ${isLast?'disabled':''} title="下へ">▼</button>
@@ -9692,7 +9693,6 @@ function wlRender(){
       <td style="font-size:11px;white-space:nowrap">${s.earningsDate?wlFmtEarnings(s.earningsDate):'—'}</td>
       <td>${wlAcctBadge(s.account)}</td>
       <td>${wlStatusBadge(s.status)}</td>
-      <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
     </tr>`;
   }).join('');
 }
