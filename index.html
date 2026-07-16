@@ -529,7 +529,16 @@ input[type=number] { -moz-appearance: textfield; }
 .wl-tbl tr:last-child td{border-bottom:none}
 .wl-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;padding:2px 7px;border-radius:999px}
 .wl-b-done{background:#EAF3DE;color:#27500A}
-.wl-b-order{background:#E6F1FB;color:#0C447C}
+.wl-b-order{background:#185FA5;color:#fff;font-weight:600;box-shadow:0 0 0 2px rgba(24,95,165,0.18)}
+.wl-b-order::before{content:'';width:6px;height:6px;border-radius:50%;background:#8FCBFF;flex-shrink:0;animation:wlOrderPulse 1.4s ease-in-out infinite}
+@keyframes wlOrderPulse{0%,100%{opacity:1}50%{opacity:0.25}}
+tr.wl-row-order td{background:rgba(24,95,165,0.07)}
+tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
+@media(prefers-color-scheme:dark){
+  .wl-b-order{background:#1E6FBF;box-shadow:0 0 0 2px rgba(90,170,255,0.22)}
+  tr.wl-row-order td{background:rgba(90,170,255,0.10)}
+  tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #5AAAFF}
+}
 .wl-b-wait{background:#FAEEDA;color:#633806}
 .wl-b-plan{background:#F1EFE8;color:#444441}
 .wl-b-nisa{background:#EEEDFE;color:#3C3489}
@@ -9665,7 +9674,7 @@ function wlRender(){
       ?`<span style="color:#3B6D11;font-weight:500">+${wlFmt(gainNet)}</span><div style="font-size:10px;color:var(--text2)">${s.account.includes('NISA')?'非課税':'税後'}</div>`
       :`<span style="color:#A32D2D;font-weight:500">${wlFmt(gainNet)}</span>`;
     const isFirst=idx===0;const isLast=idx===data.length-1;
-    return `<tr>
+    return `<tr${s.status==='指値注文中'?' class="wl-row-order"':''}>
       <td><button class="wl-edit-btn" onclick="wlOpenEdit('${s.id}')">編集</button></td>
       <td style="white-space:nowrap">
         <button class="wl-move-btn" onclick="wlMoveUp('${s.id}')" ${isFirst?'disabled':''} title="上へ">▲</button>
