@@ -566,6 +566,20 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 .wl-mbtn-d{color:#c0392b;border-color:#f7c1c1}
 .wl-mbtn-d:active{background:#fcebeb}
 .wl-empty{text-align:center;padding:2rem;color:var(--text2);font-size:13px}
+
+/* ── 積立管理タブ ── */
+.ts-broker-head{display:flex;align-items:center;gap:8px;margin:18px 0 8px}
+.ts-broker-head:first-child{margin-top:0}
+.ts-card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.ts-badge{display:inline-flex;align-items:center;white-space:nowrap;font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px}
+.ts-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center}
+.ts-modal{background:var(--bg);border-radius:14px;border:0.5px solid var(--border);padding:1.25rem;width:min(420px,92vw);max-height:90vh;overflow-y:auto}
+.ts-modal h3{font-size:14px;font-weight:500;margin-bottom:14px}
+.ts-frow{margin-bottom:10px}
+.ts-frow label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px}
+.ts-frow input,.ts-frow select{width:100%;padding:7px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
+.ts-fg2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ts-hint-btn{margin-top:5px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--accent);font-size:11px;cursor:pointer;font-family:inherit}
 </style>
 </style>
 </head>
@@ -583,6 +597,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
   <button class="nav-btn" data-tab="fire" onclick="switchTab('fire')"><span class="ni">🔥</span>FIRE</button>
   <button class="nav-btn" data-tab="cashflow" onclick="switchTab('cashflow')"><span class="ni">💸</span>収支</button>
+  <button class="nav-btn" data-tab="tsumitate" onclick="switchTab('tsumitate')"><span class="ni">🌱</span>積立</button>
   <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>ウォッチ銘柄</button>
   <button class="nav-btn" data-tab="returns" onclick="switchTab('returns')"><span class="ni">📅</span>収益レポート</button>
 </nav>
@@ -8889,7 +8904,72 @@ window.addEventListener('load', function(){
   }, 500);
 });
 </script>
+<div class="panel" id="tab-tsumitate">
+  <div class="wl-top">
+    <span class="wl-title">🌱 積立管理</span>
+    <div style="display:flex;gap:6px">
+      <button class="wl-add-btn" onclick="tsSyncFromSheet()" style="font-size:12px;padding:5px 10px">↓ 読込</button>
+      <button class="wl-add-btn" onclick="tsSyncToSheet(true)" style="font-size:12px;padding:5px 10px">↑ 保存</button>
+      <span id="ts-sync-status" style="font-size:11px;color:var(--text3);min-width:16px"></span>
+      <button class="wl-add-btn" onclick="tsOpenAdd()">＋ 追加</button>
+    </div>
+  </div>
+  <p class="wl-note">SBI証券・PayPay証券・楽天証券で積立中のインデックスファンドを管理します。累計投資額・評価額は各証券アプリを確認して入力してください（自動取得はできません）。</p>
+
+  <div class="wl-summary" id="ts-summary"></div>
+  <div id="ts-broker-sections"></div>
+</div>
+
+<div class="ts-modal-bg" id="ts-modal-bg">
+  <div class="ts-modal">
+    <h3 id="ts-modal-title">積立ファンドを追加</h3>
+    <div class="ts-frow">
+      <label>証券会社</label>
+      <select id="ts-broker">
+        <option value="SBI証券">SBI証券</option>
+        <option value="PayPay証券">PayPay証券</option>
+        <option value="楽天証券">楽天証券</option>
+        <option value="その他">その他</option>
+      </select>
+    </div>
+    <div class="ts-frow">
+      <label>ファンド名</label>
+      <input type="text" id="ts-name" placeholder="例: eMAXIS Slim全世界株式(オール・カントリー)">
+    </div>
+    <div class="ts-frow">
+      <label>カテゴリ</label>
+      <select id="ts-cat">
+        <option value="全世界インデックス">🌍 全世界インデックス</option>
+        <option value="日本インデックス">🗾 日本インデックス</option>
+        <option value="インドインデックス">🇮🇳 インドインデックス</option>
+        <option value="米国株式インデックス">🇺🇸 米国株式インデックス</option>
+        <option value="その他インデックス">📊 その他インデックス</option>
+      </select>
+    </div>
+    <div class="ts-fg2">
+      <div class="ts-frow"><label>積立金額（円/月）</label><input type="number" id="ts-monthly" inputmode="numeric" placeholder="例: 30000"></div>
+      <div class="ts-frow"><label>積立開始日</label><input type="date" id="ts-start"></div>
+    </div>
+    <div class="ts-frow">
+      <label>累計投資額（円）</label>
+      <input type="number" id="ts-total" inputmode="numeric" placeholder="例: 360000">
+      <button type="button" class="ts-hint-btn" onclick="tsAutoCalcTotal()">📆 開始日×積立額から自動計算</button>
+    </div>
+    <div class="ts-frow"><label>評価額（円）</label><input type="number" id="ts-value" inputmode="numeric" placeholder="例: 385000"></div>
+    <div class="ts-frow">
+      <label>参照指数コード（任意・東証ETFコード4桁）</label>
+      <input type="text" id="ts-code" inputmode="numeric" maxlength="6" placeholder="例: 1306（TOPIX）">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">入力するとその指数のチャートを表示します（ファンド自体の基準価額ではなく参考指数）</div>
+    </div>
+    <div class="ts-frow"><label>メモ（任意）</label><input type="text" id="ts-memo" placeholder="例: NISAつみたて枠"></div>
+    <div class="ts-mbtns">
+      <button class="wl-mbtn" onclick="tsCloseModal()">キャンセル</button>
+      <button class="wl-mbtn wl-mbtn-p" onclick="tsSave()">保存</button>
+    </div>
+  </div>
+</div>
 <div class="panel" id="tab-pnl">
+
  <div style="background:linear-gradient(180deg,#131316 0%,#0b0b0d 100%);border-radius:0 0 20px 20px;padding-bottom:16px;min-height:70vh">
   <div style="padding:12px 14px 12px;background:rgba(14,14,16,0.97);position:sticky;top:0;z-index:10;border-bottom:0.5px solid rgba(255,255,255,0.08);backdrop-filter:blur(6px)">
     <div style="text-align:center;font-size:16px;font-weight:800;color:#fff;letter-spacing:0.12em;margin-bottom:12px">損益一覧</div>
@@ -9012,10 +9092,6 @@ window.addEventListener('load', function(){
     </table>
   </div>
   <div id="wl-chart-list" style="display:none"></div>
-  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:10px">
-    <button class="wl-add-btn" onclick="wlSyncToSheet(true)" style="font-size:12px;padding:5px 10px">↑ 保存</button>
-    <button class="wl-add-btn" onclick="wlOpenAdd()">＋ 追加</button>
-  </div>
 </div>
 
 <div class="wl-modal-bg" id="wl-modal">
@@ -10494,13 +10570,357 @@ function secOnTabOpen(){
   }
 }
 
+// ============================================================
+// 積立管理タブ（SBI証券・PayPay証券・楽天証券のインデックス積立）
+// ============================================================
+const TS_KEY='tsumitateFunds_v1';
+const TS_CHART_KEY='tsumitateChart_v1';
+const TS_BROKERS=['SBI証券','PayPay証券','楽天証券','その他'];
+const TS_CAT_EMOJI={'全世界インデックス':'🌍','日本インデックス':'🗾','インドインデックス':'🇮🇳','米国株式インデックス':'🇺🇸','その他インデックス':'📊'};
+const TS_SHEET_COLS=['id','broker','name','category','monthlyAmount','startDate','totalInvested','currentValue','code','memo','updated'];
+const TS_NUM_COLS=new Set(['monthlyAmount','totalInvested','currentValue']);
+let tsEditId=null;
+let tsChartFetching=false;
+
+function tsUID(){return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function tsLoad(){try{return JSON.parse(localStorage.getItem(TS_KEY)||'[]');}catch(e){return [];}}
+function tsSaveData(d){
+  try{localStorage.setItem(TS_KEY,JSON.stringify(d));}catch(e){console.error('[ts] localStorage error:',e);}
+  if(tsHasToken()&&!tsSaveData._loading){
+    clearTimeout(tsSaveData._timer);
+    tsSaveData._timer=setTimeout(async()=>{
+      tsSaveData._timer=null;
+      const syncEl=document.getElementById('ts-sync-status');
+      if(syncEl)syncEl.textContent='⏳';
+      try{
+        await tsSyncToSheet();
+        if(syncEl)syncEl.textContent='✓';
+        setTimeout(()=>{if(syncEl&&syncEl.textContent==='✓')syncEl.textContent='';},3000);
+      }catch(e){
+        console.warn('[ts] auto-sync failed:',e);
+        if(syncEl)syncEl.textContent='⚠';
+      }
+    },1000);
+  }
+}
+tsSaveData._loading=false;
+tsSaveData._timer=null;
+
+function tsFmt(n){return (n===null||n===undefined||n===''||isNaN(n))?'—':Math.round(n).toLocaleString()+'円';}
+
+function tsMonthsElapsed(startDate){
+  if(!startDate)return 0;
+  const s=new Date(startDate+'T00:00:00');
+  const n=new Date();
+  let m=(n.getFullYear()-s.getFullYear())*12+(n.getMonth()-s.getMonth());
+  if(n.getDate()<s.getDate())m--;
+  return Math.max(0,m+1);// 開始月を1ヶ月目として含める
+}
+
+function tsOpenAdd(){
+  tsEditId=null;
+  document.getElementById('ts-modal-title').textContent='積立ファンドを追加';
+  document.getElementById('ts-broker').value='SBI証券';
+  document.getElementById('ts-name').value='';
+  document.getElementById('ts-cat').value='全世界インデックス';
+  document.getElementById('ts-monthly').value='';
+  document.getElementById('ts-start').value=todayStr();
+  document.getElementById('ts-total').value='';
+  document.getElementById('ts-value').value='';
+  document.getElementById('ts-code').value='';
+  document.getElementById('ts-memo').value='';
+  document.getElementById('ts-modal-bg').style.display='flex';
+}
+function tsOpenEdit(id){
+  const f=tsLoad().find(x=>x.id===id);if(!f)return;
+  tsEditId=id;
+  document.getElementById('ts-modal-title').textContent='積立ファンドを編集';
+  document.getElementById('ts-broker').value=f.broker||'SBI証券';
+  document.getElementById('ts-name').value=f.name||'';
+  document.getElementById('ts-cat').value=f.category||'全世界インデックス';
+  document.getElementById('ts-monthly').value=f.monthlyAmount||'';
+  document.getElementById('ts-start').value=f.startDate||'';
+  document.getElementById('ts-total').value=f.totalInvested||'';
+  document.getElementById('ts-value').value=f.currentValue||'';
+  document.getElementById('ts-code').value=f.code||'';
+  document.getElementById('ts-memo').value=f.memo||'';
+  document.getElementById('ts-modal-bg').style.display='flex';
+}
+function tsCloseModal(){
+  document.getElementById('ts-modal-bg').style.display='none';
+  tsEditId=null;
+}
+function tsAutoCalcTotal(){
+  const start=document.getElementById('ts-start').value;
+  const monthly=parseFloat(document.getElementById('ts-monthly').value)||0;
+  if(!start||!monthly){showToast('⚠ 開始日と積立金額を先に入力してください');return;}
+  const months=tsMonthsElapsed(start);
+  document.getElementById('ts-total').value=months*monthly;
+  showToast(`📆 ${months}ヶ月分として自動計算しました（ボーナス増額等があれば手動で調整してください）`);
+}
+async function tsSave(){
+  const broker=document.getElementById('ts-broker').value;
+  const name=document.getElementById('ts-name').value.trim();
+  const category=document.getElementById('ts-cat').value;
+  const monthlyAmount=parseFloat(document.getElementById('ts-monthly').value)||0;
+  const startDate=document.getElementById('ts-start').value;
+  const totalInvested=parseFloat(document.getElementById('ts-total').value)||0;
+  const currentValue=parseFloat(document.getElementById('ts-value').value)||0;
+  const code=document.getElementById('ts-code').value.trim();
+  const memo=document.getElementById('ts-memo').value.trim();
+  if(!name){showToast('⚠ ファンド名を入力してください');return;}
+  const data=tsLoad();
+  if(tsEditId){
+    const f=data.find(x=>x.id===tsEditId);
+    if(f)Object.assign(f,{broker,name,category,monthlyAmount,startDate,totalInvested,currentValue,code,memo,updated:todayStr()});
+  }else{
+    data.push({id:tsUID(),broker,name,category,monthlyAmount,startDate,totalInvested,currentValue,code,memo,updated:todayStr()});
+  }
+  tsSaveData(data);
+  tsCloseModal();
+  tsRender();
+  showToast('✅ 保存しました');
+}
+function tsDelete(id){
+  const f=tsLoad().find(x=>x.id===id);if(!f)return;
+  if(!confirm(`「${f.name}」を削除しますか？`))return;
+  tsSaveData(tsLoad().filter(x=>x.id!==id));
+  tsRender();
+  showToast('🗑 削除しました');
+}
+
+function tsChartCache(){
+  try{const c=JSON.parse(localStorage.getItem(TS_CHART_KEY)||'null');if(c&&Date.now()-c.ts<3600000&&c.q)return c;}catch(e){}
+  return{ts:0,q:{}};
+}
+async function tsFetchCharts(codes){
+  if(tsChartFetching||!codes.length)return;
+  tsChartFetching=true;
+  const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+  const cache=tsChartCache();
+  const q=cache.q;
+  const queue=[...new Set(codes)];
+  const runners=Array.from({length:4},async()=>{
+    while(queue.length){
+      const code=queue.shift();
+      try{
+        const resp=await fetch(`${WORKER}?code=${encodeURIComponent(code)}&range=1mo`);
+        if(!resp.ok)throw new Error('http');
+        const data=await resp.json();
+        const r=data?.chart?.result?.[0];
+        const ts=r?.timestamp||[];
+        const cl=r?.indicators?.quote?.[0]?.close||[];
+        const pairs=ts.map((t,i)=>[t*1000,cl[i]]).filter(x=>x[1]!=null);
+        const meta=r?.meta||{};
+        if(pairs.length>=2){
+          q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1])};
+        }else q[code]={err:1};
+      }catch(e){q[code]={err:1};}
+    }
+  });
+  await Promise.all(runners);
+  try{localStorage.setItem(TS_CHART_KEY,JSON.stringify({ts:Date.now(),q}));}catch(e){}
+  tsChartFetching=false;
+}
+
+function tsCardHTML(f,cache){
+  const totalInvested=f.totalInvested||0,currentValue=f.currentValue||0;
+  const gain=currentValue-totalInvested;
+  const pct=totalInvested>0?gain/totalInvested*100:null;
+  const gainCol=gain>=0?'var(--green)':'var(--danger)';
+  const gainStr=(totalInvested>0||currentValue>0)
+    ?`<span style="color:${gainCol};font-weight:700">${gain>=0?'+':''}${tsFmt(gain)}</span>${pct!=null?`<span style="font-size:11px;color:${gainCol}"> (${gain>=0?'+':''}${pct.toFixed(1)}%)</span>`:''}`
+    :'<span style="color:var(--text3)">—</span>';
+  const catEmoji=TS_CAT_EMOJI[f.category]||'📊';
+
+  let chartHtml='';
+  if(f.code){
+    const q=cache.q[f.code];
+    if(q&&q.err){
+      chartHtml=`<div style="font-size:11px;color:var(--text3);padding:8px 0">参照指数(${esc(f.code)})の取得に失敗しました</div>`;
+    }else if(q&&q.pairs&&q.pairs.length>=2){
+      const cur=q.cur||q.pairs[q.pairs.length-1][1];
+      const first=q.pairs[0][1];
+      const md=cur-first,mp=first?md/first*100:0;
+      const mc=md>=0?'var(--danger)':'var(--accent)';
+      chartHtml=`<div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
+        <div style="flex:0 0 30%;font-size:10px;color:var(--text3)">参照指数 ${esc(f.code)}<br><span style="color:${mc};font-weight:700;font-size:12px">${md>=0?'+':''}${mp.toFixed(1)}%</span><br><span style="font-size:9px">（直近1ヶ月）</span></div>
+        <div style="flex:1;min-width:0;background:linear-gradient(170deg,#17171a,#0c0c0e);border-radius:8px;padding:4px 6px">${wlSparkSVG(q.pairs)}</div>
+      </div>`;
+    }else{
+      chartHtml=`<div style="font-size:11px;color:var(--text3);padding:8px 0">📡 参照指数チャート取得中…</div>`;
+    }
+  }
+
+  return `<div class="ts-card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:13px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+      <span class="ts-badge" style="background:rgba(128,128,128,0.14);color:var(--text2)">${catEmoji} ${esc(f.category)}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text2);margin-bottom:8px">
+      <div>積立額 <b style="color:var(--text)">${tsFmt(f.monthlyAmount)}/月</b></div>
+      <div>開始日 <b style="color:var(--text)">${f.startDate||'—'}</b></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;background:var(--bg2);border-radius:8px;padding:8px 4px">
+      <div><div style="font-size:9px;color:var(--text3)">累計投資額</div><div style="font-size:12px;font-weight:600">${tsFmt(totalInvested)}</div></div>
+      <div><div style="font-size:9px;color:var(--text3)">評価額</div><div style="font-size:12px;font-weight:600">${tsFmt(currentValue)}</div></div>
+      <div><div style="font-size:9px;color:var(--text3)">評価損益</div><div style="font-size:12px">${gainStr}</div></div>
+    </div>
+    ${chartHtml}
+    ${f.memo?`<div style="font-size:10px;color:var(--text3);margin-top:6px">${esc(f.memo)}</div>`:''}
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button class="wl-edit-btn" onclick="tsOpenEdit('${f.id}')">編集</button>
+      <button class="wl-edit-btn" onclick="tsDelete('${f.id}')" style="color:#C0392B;border-color:#C0392B">削除</button>
+    </div>
+  </div>`;
+}
+
+function tsRender(){
+  const data=tsLoad();
+  const cache=tsChartCache();
+  let totalMonthly=0,totalInvested=0,totalValue=0;
+  data.forEach(f=>{totalMonthly+=f.monthlyAmount||0;totalInvested+=f.totalInvested||0;totalValue+=f.currentValue||0;});
+  const gain=totalValue-totalInvested;
+  const gainPct=totalInvested>0?gain/totalInvested*100:0;
+  const gainCol=gain>=0?'var(--green)':'var(--danger)';
+  const summaryEl=document.getElementById('ts-summary');
+  if(summaryEl)summaryEl.innerHTML=`
+    <div class="wl-sc"><div class="sl">積立中</div><div class="sv">${data.length}件</div></div>
+    <div class="wl-sc"><div class="sl">月間積立額</div><div class="sv" style="font-size:12px">${tsFmt(totalMonthly)}</div></div>
+    <div class="wl-sc"><div class="sl">累計投資額</div><div class="sv" style="font-size:12px">${tsFmt(totalInvested)}</div></div>
+    <div class="wl-sc"><div class="sl">評価損益</div><div class="sv" style="font-size:12px;color:${gainCol}">${gain>=0?'+':''}${tsFmt(gain)}${totalInvested>0?` (${gain>=0?'+':''}${gainPct.toFixed(1)}%)`:''}</div></div>
+  `;
+
+  const el=document.getElementById('ts-broker-sections');
+  if(!el)return;
+  if(!data.length){el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:24px">積立ファンドが登録されていません。「＋ 追加」から登録してください。</p>';return;}
+
+  const brokers=[...new Set([...TS_BROKERS,...data.map(f=>f.broker||'その他')])];
+  el.innerHTML=brokers.map(broker=>{
+    const items=data.filter(f=>(f.broker||'その他')===broker);
+    if(!items.length)return'';
+    const bMonthly=items.reduce((s,f)=>s+(f.monthlyAmount||0),0);
+    const bInvested=items.reduce((s,f)=>s+(f.totalInvested||0),0);
+    const bValue=items.reduce((s,f)=>s+(f.currentValue||0),0);
+    const bGain=bValue-bInvested;
+    const bPct=bInvested>0?bGain/bInvested*100:0;
+    const bCol=bGain>=0?'var(--green)':'var(--danger)';
+    return `<div class="ts-broker-head">
+        <span style="font-size:14px;font-weight:700">🏦 ${esc(broker)}</span>
+        <span style="font-size:11px;color:var(--text2)">${items.length}件・月${tsFmt(bMonthly)}</span>
+        <span style="font-size:11px;font-weight:600;color:${bCol};margin-left:auto">${bGain>=0?'+':''}${tsFmt(bGain)}${bInvested>0?` (${bGain>=0?'+':''}${bPct.toFixed(1)}%)`:''}</span>
+      </div>`
+      + items.map(f=>tsCardHTML(f,cache)).join('');
+  }).join('');
+
+  const codes=[...new Set(data.filter(f=>f.code).map(f=>f.code))];
+  const missing=codes.filter(c=>!cache.q[c]);
+  if(missing.length&&!tsChartFetching){
+    tsFetchCharts(missing).then(()=>tsRender());
+  }
+}
+
+// ── Google Sheets同期 ──
+function tsHasToken(){
+  if(typeof amIsOnline!=='undefined'&&amIsOnline&&amSpreadsheetId)return true;
+  try{const t=gapi&&gapi.client&&gapi.client.getToken();return !!(t&&t.access_token);}
+  catch(e){return false;}
+}
+async function tsGetSheetId(){
+  if(amSpreadsheetId)return amSpreadsheetId;
+  try{
+    const res=await gapi.client.request({path:'https://www.googleapis.com/drive/v3/files',params:{q:`name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,fields:'files(id,name)'}});
+    if(res.result.files&&res.result.files.length>0){amSpreadsheetId=res.result.files[0].id;return amSpreadsheetId;}
+  }catch(e){console.warn('ts find sheet err',e);}
+  return null;
+}
+async function tsEnsureSheet(sid){
+  try{
+    const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:sid});
+    const has=meta.result.sheets.some(s=>s.properties.title==='tsumitate');
+    if(!has)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:sid,resource:{requests:[{addSheet:{properties:{title:'tsumitate'}}}]}});
+  }catch(e){console.warn('ts sheet ensure err',e);}
+}
+async function tsSyncToSheet(manual=false){
+  if(!tsHasToken()){
+    if(manual)showToast('⚠ 資産管理タブでGoogleサインインしてください');
+    return;
+  }
+  const syncEl=document.getElementById('ts-sync-status');
+  if(syncEl)syncEl.textContent='⏳';
+  try{
+    const sid=await tsGetSheetId();
+    if(!sid){showToast('⚠ スプレッドシートが見つかりません');return;}
+    await tsEnsureSheet(sid);
+    const data=tsLoad();
+    const vals=[TS_SHEET_COLS,...data.map(f=>TS_SHEET_COLS.map(k=>(f[k]===null||f[k]===undefined)?'':f[k]))];
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:sid,range:`tsumitate!A1:K${vals.length+5}`,valueInputOption:'RAW',resource:{values:vals}});
+    if(data.length+1<300)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:sid,range:`tsumitate!A${data.length+2}:K1000`});
+    if(syncEl)syncEl.textContent='✓';
+    if(manual)showToast('✅ 保存しました');
+  }catch(e){
+    console.warn('ts sync err',e);
+    if(syncEl)syncEl.textContent='⚠';
+    if(manual)showToast('⚠ 保存失敗');
+  }
+}
+async function tsSyncFromSheet(silent=false){
+  if(!tsHasToken()){if(!silent)showToast('⚠ 資産管理タブでGoogleサインインしてください');return;}
+  if(tsSaveData._timer){
+    clearTimeout(tsSaveData._timer);
+    tsSaveData._timer=null;
+    try{await tsSyncToSheet();}catch(e){}
+  }
+  const syncEl=document.getElementById('ts-sync-status');
+  if(!silent)showToast('↓ 読み込み中...');
+  else if(syncEl)syncEl.textContent='⏳';
+  try{
+    const sid=await tsGetSheetId();
+    if(!sid){if(!silent)showToast('⚠ まずMacで↑保存してください');else if(syncEl)syncEl.textContent='';return;}
+    await tsEnsureSheet(sid);
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:sid,range:'tsumitate!A1:K1000'});
+    const rows=res.result.values||[];
+    if(rows.length<2){if(!silent)showToast('⚠ Sheetsにデータがありません。まずMacで↑保存してください');else if(syncEl)syncEl.textContent='';return;}
+    const cols=rows[0].filter(h=>TS_SHEET_COLS.includes(h));
+    const data=rows.slice(1).map(r=>{
+      const o={};
+      cols.forEach((k,i)=>{
+        const v=r[i];
+        o[k]=TS_NUM_COLS.has(k)?(parseFloat(v)||0):(v||'');
+      });
+      if(!o.id)o.id=tsUID();
+      return o;
+    }).filter(x=>x.name);
+    tsSaveData._loading=true;
+    tsSaveData(data);
+    tsSaveData._loading=false;
+    tsRender();
+    if(!silent)showToast(`✅ ${data.length}件を読み込みました`);
+    else if(syncEl){syncEl.textContent='✓';setTimeout(()=>{if(syncEl.textContent==='✓')syncEl.textContent='';},2500);}
+  }catch(e){
+    console.warn('ts load err',e);
+    if(!silent)showToast('⚠ 読み込み失敗');
+    else if(syncEl)syncEl.textContent='';
+  }
+}
+let tsLastAutoSync=0;
+function tsAutoSync(force=false){
+  if(!tsHasToken())return;
+  const now=Date.now();
+  if(!force&&now-tsLastAutoSync<60000)return;
+  tsLastAutoSync=now;
+  tsSyncFromSheet(true);
+}
+
 const _origSwitch=window.switchTab;
 window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
   if(t==='watchlist'){wlRender();secOnTabOpen();wlAutoSync();/* Sheetsから自動読込（60秒スロットル）。手動↓読込も引き続き可 */}
   if(t==='cashflow'){cfRender();}
+  if(t==='tsumitate'){tsRender();tsAutoSync();}
 };
 wlRender();
+tsRender();
 // キャッシュがあれば初期表示 + 編集モーダルのセクター選択肢を投入
 (function(){
   const sel=document.getElementById('fSector');
