@@ -12520,6 +12520,42 @@ function pnlInitDateSelectors(){
 
 // 評価損益を計算（amAccountsから）
 // amRenderCardと同じロジックで損益計算、prevSBIAmount>0の銘柄のみ表示
+// 銘柄コード解決: a.codeが未入力の場合に他データソースから証券コードを推測する
+// 1) assetAccounts内の同名（買付ロット違い等）の他口座 2) ウォッチ銘柄リスト 3) 主要銘柄の固定マップ
+const PNL_CODE_FALLBACK={
+  '任天堂':'7974','武田薬品':'4502','武田薬品工業':'4502','ソニーグループ':'6758','ソニー':'6758',
+  '商船三井':'9104','エネオス':'5020','信越化学工業':'4063','信越化学':'4063','JX金属':'5016',
+  '川崎重工業':'7012','川崎重工':'7012','日産自動車':'7201','SBKK':'9434','SBG':'9984','SBG(ソフトバンクグループ)':'9984',
+  'ソフトバンクグループ':'9984','エムスリー':'2413','INPEX':'1605','スシロー':'3563',
+};
+function pnlBaseName(name){
+  return String(name||'').replace(/（[^）]*買付[^）]*）$/,'').replace(/\s*買付\d*$/,'').replace(/\s+\d+$/,'').trim();
+}
+function pnlResolveCode(name){
+  if(!name)return'';
+  const base=pnlBaseName(name);
+  if(!base)return'';
+  try{
+    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    for(const a of accs){
+      if(!a.code)continue;
+      const aBase=pnlBaseName(a.name);
+      if(aBase&&(aBase===base||aBase.includes(base)||base.includes(aBase)))return a.code;
+    }
+  }catch(e){}
+  try{
+    const wl=(typeof wlLoad==='function')?wlLoad():[];
+    for(const w of wl){
+      if(!w.code)continue;
+      const wBase=pnlBaseName(w.name);
+      if(wBase&&(wBase===base||wBase.includes(base)||base.includes(wBase)))return w.code;
+    }
+  }catch(e){}
+  for(const key in PNL_CODE_FALLBACK){
+    if(base===key||base.includes(key)||key.includes(base))return PNL_CODE_FALLBACK[key];
+  }
+  return'';
+}
 function pnlCalcUnrealized(){
   const EXCL=['銀行','年金','その他','預り金'];
   const PAYPAY_PAT=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
@@ -12566,7 +12602,7 @@ function pnlCalcUnrealized(){
       }
       if(!isFinite(gain)||!isFinite(pct))return;
       items.push({name:a.name,cat:a.cat,gain,pct,amount:a.amount,
-        code:a.code||'',costPrice:a.costPrice||0,updated:a.updated||'',buyDate:a.buyDate||'',
+        code:a.code||(isIndex?'':pnlResolveCode(a.name)),costPrice:a.costPrice||0,updated:a.updated||'',buyDate:a.buyDate||'',
         badge:'保有',badgeColor:'#e67e22',id:a.id,type:'unrealized'});
     });
   }catch(e){}
@@ -12604,7 +12640,7 @@ function pnlCalcRealized(y1,m1,y2,m2){
         shares:a.shares||0, costUnit:a.costPrice||0, soldUnit:a.soldPrice||0,
         buyDate:a.buyDate||'', soldDate:a.soldDate||'', isIndex,
         date:a.soldDate||'日付未設定',
-        code:a.code||'', costPrice:isIndex?0:(a.costPrice||0),
+        code:a.code||(isIndex?'':pnlResolveCode(a.name)), costPrice:isIndex?0:(a.costPrice||0),
         badge:'売却', badgeColor:'#8e44ad', type:'realized'
       });
     });
