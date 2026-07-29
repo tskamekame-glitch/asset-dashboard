@@ -2942,6 +2942,12 @@ function amRenderCard(a){
     return'';
   })();
 
+  // 📊 株価チャートボタン用のコード解決（損益タブと同じpnlOpenChartを利用）
+  const chartableCat=isStock||isForeignStock||isIndexFund;
+  const chartCode=chartableCat?(a.code||(typeof pnlResolveCode==='function'?pnlResolveCode(a.name):'')):'';
+  const chartBtn=(chartCode&&!a.sold)?`<button class="icon-btn" onclick="pnlOpenChart('${chartCode}','${esc(a.name)}',${a.costPrice||0},'${a.buyDate||''}')" style="color:#35e0a1;border-color:#35e0a1;white-space:nowrap">📊 チャート</button>`:'';
+  const soldChartBtn=(chartCode&&a.sold)?`<button class="icon-btn" onclick="pnlOpenChart('${chartCode}','${esc(a.name)}',${a.costPrice||0},'${a.buyDate||''}','${a.soldDate||''}')" style="color:#35e0a1;border-color:#35e0a1;white-space:nowrap">📊 チャート</button>`:'';
+
   // 売却済みカードは簡略表示
   if(a.sold){
     // インデックス投信: costPriceは売却時に取得総額として保存済み(shares倍しない)
@@ -2969,6 +2975,7 @@ function amRenderCard(a){
             +'<span style="font-size:11px;margin-left:4px">('+gSign+confirmedPct.toFixed(1)+'%)</span></span></div>':'')
         +'</div>'
         +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+          +soldChartBtn
           +'<button class="icon-btn" onclick="amReviveSold('+a.id+')" style="font-size:11px;padding:4px 8px;color:var(--accent);border-color:var(--accent)">↩ 保有中に戻す</button>'
           +'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')" style="font-size:11px;padding:4px 8px">削除</button>'
         +'</div>'
@@ -3060,6 +3067,7 @@ function amRenderCard(a){
           })():'')
           +staleHtml
           +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
+          +chartBtn
           +sellBtn
           +'<div style="display:flex;gap:3px;margin-bottom:2px">'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',-1)" title="上に移動" style="padding:4px 7px;font-size:12px">▲</button>'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',1)" title="下に移動" style="padding:4px 7px;font-size:12px">▼</button>'+'</div>'+'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
         +'</div>'
