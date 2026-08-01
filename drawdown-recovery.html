@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>回復曲線 — 損失と複利のシミュレーター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0f1216;
+    --panel: #171b21;
+    --panel-2: #1d232b;
+    --line: #2a313b;
+    --ink: #e7e6e1;
+    --ink-dim: #9aa3ad;
+    --loss: #e2564c;
+    --loss-dim: #7a3530;
+    --gain: #35c98a;
+    --gain-dim: #1f5c45;
+    --amber: #e8b23d;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Zen Kaku Gothic New', sans-serif;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    padding: 28px 20px 60px;
+    min-height: 100vh;
+  }
+  .wrap{ max-width: 980px; margin: 0 auto; }
+
+  .eyebrow{
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--amber);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  h1{
+    font-size: clamp(26px, 5vw, 38px);
+    font-weight: 900;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .sub{
+    color: var(--ink-dim);
+    font-size: 14px;
+    line-height: 1.7;
+    margin: 0 0 28px;
+    max-width: 60ch;
+  }
+  .sub b{ color: var(--ink); font-weight: 500; }
+
+  .principal-row{
+    display:flex; align-items:center; justify-content: space-between;
+    gap: 16px; margin-bottom: 22px;
+    padding: 14px 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    flex-wrap: wrap;
+  }
+  .principal-row label{
+    font-size: 12px; color: var(--ink-dim); letter-spacing: 0.05em;
+  }
+  .principal-input{
+    display:flex; align-items:baseline; gap:6px;
+  }
+  .principal-input span{ font-family: var(--mono); color: var(--ink-dim); font-size: 15px; }
+  .principal-input input{
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    text-align: right;
+    width: 160px;
+    padding: 4px 2px;
+    outline: none;
+  }
+  .principal-input input:focus{ border-bottom-color: var(--amber); }
+
+  .grid{
+    display: grid;
+    grid-template-columns: 1fr 1.55fr;
+    gap: 18px;
+  }
+  @media (max-width: 800px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h2{
+    font-size: 13px;
+    color: var(--ink-dim);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    margin: 0 0 18px;
+  }
+
+  /* slider card */
+  .drawdown-value{
+    font-family: var(--mono);
+    font-size: 46px;
+    font-weight: 700;
+    color: var(--loss);
+    line-height: 1;
+    margin-bottom: 18px;
+  }
+  input[type=range]{
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(to right, var(--loss) 0%, var(--loss) var(--pct,0%), var(--line) var(--pct,0%), var(--line) 100%);
+    outline: none;
+    margin: 8px 0 6px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--loss);
+    border: 3px solid #0f1216;
+    box-shadow: 0 0 0 1px var(--loss);
+    cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--loss);
+    border: 3px solid #0f1216;
+    box-shadow: 0 0 0 1px var(--loss);
+    cursor: pointer;
+  }
+  .scale-labels{
+    display:flex; justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-bottom: 22px;
+  }
+
+  .num-input-row{
+    display:flex; align-items:center; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .num-input-row label{ font-size: 12px; color: var(--ink-dim); flex: 1; }
+  .num-input-row .field{
+    display:flex; align-items:center;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .num-input-row input{
+    background: transparent; border: none; color: var(--ink);
+    font-family: var(--mono); font-size: 15px; width: 54px; text-align: right; outline: none;
+  }
+  .num-input-row .field span{ color: var(--ink-dim); font-family: var(--mono); font-size: 13px; margin-left: 2px; }
+
+  .quick-btns{ display:flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .quick-btns button{
+    flex: 1;
+    min-width: 60px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 9px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .quick-btns button:hover{ border-color: var(--loss); color: var(--loss); }
+
+  .formula-note{
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.7;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+  .formula-note code{
+    font-family: var(--mono);
+    color: var(--amber);
+    font-size: 12px;
+  }
+
+  /* stat cards */
+  .stats-row{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 560px){
+    .stats-row{ grid-template-columns: 1fr; }
+  }
+  .stat{
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat .label{ font-size: 11px; color: var(--ink-dim); margin-bottom: 8px; }
+  .stat .value{ font-family: var(--mono); font-size: 24px; font-weight: 700; }
+  .stat .value.loss{ color: var(--loss); }
+  .stat .value.gain{ color: var(--gain); }
+  .stat .sub2{ font-size: 11px; color: var(--ink-dim); margin-top: 4px; }
+
+  /* curve */
+  .curve-card{ margin-bottom: 18px; }
+  svg{ display:block; width: 100%; height: auto; }
+  .axis-text{ font-family: var(--mono); font-size: 10px; fill: var(--ink-dim); }
+  .grid-line{ stroke: var(--line); stroke-width: 1; }
+  .curve-path{ fill: none; stroke: var(--loss); stroke-width: 2.5; }
+  .curve-fill{ fill: url(#curveGrad); opacity: 0.5; }
+  .marker-dot{ fill: var(--amber); stroke: var(--bg); stroke-width: 2; }
+  .legend{ display:flex; gap: 18px; margin-top: 10px; font-size: 11px; color: var(--ink-dim); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+  /* bars */
+  .bars-card{ }
+  .bars{ display:flex; align-items:flex-end; justify-content: space-around; height: 160px; gap: 20px; margin-bottom: 14px; }
+  .bar-col{ display:flex; flex-direction:column; align-items:center; flex:1; height:100%; justify-content:flex-end; }
+  .bar-col .bar{ width: 100%; max-width: 60px; border-radius: 6px 6px 0 0; transition: height .2s ease; min-height: 2px; }
+  .bar-col .bar.principal{ background: linear-gradient(180deg, #4a5568, #2d3541); }
+  .bar-col .bar.after{ background: linear-gradient(180deg, var(--loss), var(--loss-dim)); }
+  .bar-col .bar.recovered{ background: linear-gradient(180deg, var(--gain), var(--gain-dim)); }
+  .bar-col .bar-value{ font-family: var(--mono); font-size: 13px; margin-top: 8px; color: var(--ink); }
+  .bar-col .bar-label{ font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+
+  /* examples + notes */
+  .two-col{ display:grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 700px){ .two-col{ grid-template-columns: 1fr; } }
+  .note-card h3{
+    font-size: 13px; margin: 0 0 10px;
+    display:flex; align-items:center; gap: 8px;
+  }
+  .note-card h3::before{
+    content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--amber);
+  }
+  .note-card p{ font-size: 13px; line-height: 1.8; color: var(--ink-dim); margin: 0 0 10px; }
+  .note-card .mini-stats{ display:flex; gap: 20px; }
+  .note-card .mini-stats div{ font-size: 11px; color: var(--ink-dim); }
+  .note-card .mini-stats b{ display:block; font-family: var(--mono); font-size: 16px; color: var(--ink); font-weight: 700; margin-top: 4px; }
+
+  .examples-card table{ width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  .examples-card th{ text-align:left; color: var(--ink-dim); font-weight: 400; font-size: 11px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .examples-card td{ padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .examples-card tr:last-child td{ border-bottom: none; }
+  .examples-card .arrow{ color: var(--ink-dim); padding: 0 8px; }
+  .examples-card .req{ color: var(--gain); font-weight: 700; }
+  .examples-card .loss-cell{ color: var(--loss); font-weight: 700; }
+  .examples-card tr{ cursor: pointer; }
+  .examples-card tr:hover td{ color: var(--amber); }
+
+  footer{ text-align:center; color: var(--ink-dim); font-size: 11px; margin-top: 30px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Drawdown / Recovery Curve</div>
+  <h1>複利と損失回復</h1>
+  <p class="sub">
+    損失は非対称です。<b>-50%</b> の下落を取り戻すには <b>+100%</b> の上昇が要ります。
+    下のスライダーで下落率を動かし、元本に戻るまでの距離を確認してください。
+  </p>
+
+  <div class="principal-row">
+    <label>元本（円）</label>
+    <div class="principal-input">
+      <span>¥</span>
+      <input type="text" id="principalInput" value="10000" inputmode="numeric">
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- left: controls -->
+    <div class="card">
+      <h2>下落率</h2>
+      <div class="drawdown-value" id="drawdownDisplay">-0%</div>
+      <input type="range" id="drawdownSlider" min="0" max="90" step="0.1" value="0">
+      <div class="scale-labels"><span>0%</span><span>30%</span><span>60%</span><span>90%</span></div>
+
+      <div class="num-input-row">
+        <label>数値で入力</label>
+        <div class="field">
+          <input type="number" id="drawdownNumInput" min="0" max="90" value="0">
+          <span>%</span>
+        </div>
+      </div>
+
+      <div class="quick-btns">
+        <button data-val="10">-10%</button>
+        <button data-val="30">-30%</button>
+        <button data-val="50">-50%</button>
+        <button data-val="70">-70%</button>
+      </div>
+
+      <div class="formula-note">
+        必要上昇率 = 下落率 ÷ 残った割合<br>
+        <code id="formulaLine">0 ÷ 100 = 0.0%</code>
+      </div>
+    </div>
+
+    <!-- right: stats + curve + bars -->
+    <div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="label">下落後の資産</div>
+          <div class="value" id="afterValue">¥10,000</div>
+          <div class="sub2" id="afterPct">元本の 100.0% が残る</div>
+        </div>
+        <div class="stat">
+          <div class="label">元本回復に必要</div>
+          <div class="value gain" id="requiredPct">+0.0%</div>
+          <div class="sub2" id="requiredYen">必要利益 ¥0</div>
+        </div>
+        <div class="stat">
+          <div class="label">同じ%だけ反発した場合</div>
+          <div class="value" id="bounceValue">¥10,000</div>
+          <div class="sub2" id="bounceGap">元本と同額</div>
+        </div>
+      </div>
+
+      <div class="card curve-card">
+        <h2>下落率と回復率の曲線</h2>
+        <svg id="curveSvg" viewBox="0 0 640 300" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#e2564c" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#e2564c" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <g id="gridLines"></g>
+          <path id="curvePath" class="curve-path" d=""/>
+          <path id="curveFillPath" class="curve-fill" d=""/>
+          <circle id="markerDot" class="marker-dot" r="5" cx="60" cy="260"/>
+          <g id="axisLabels"></g>
+        </svg>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--loss)"></span>必要な上昇率</span>
+          <span><span class="dot" style="background:var(--amber)"></span>現在の位置</span>
+        </div>
+      </div>
+
+      <div class="card bars-card">
+        <h2>資産100からの動き</h2>
+        <div class="bars">
+          <div class="bar-col">
+            <div class="bar principal" id="barPrincipal" style="height:100%"></div>
+            <div class="bar-value">100.0</div>
+            <div class="bar-label">元本</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar after" id="barAfter" style="height:100%"></div>
+            <div class="bar-value" id="barAfterValue">100.0</div>
+            <div class="bar-label">下落後</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar recovered" id="barRecovered" style="height:100%"></div>
+            <div class="bar-value" id="barRecoveredValue">100.0</div>
+            <div class="bar-label">同%反発後</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-top: 18px;">
+    <div class="card note-card">
+      <h3>損切りの意味</h3>
+      <p>損失が浅いうちに止めれば、取り戻すための上昇幅も小さく済みます。下落を放置するほど、必要な回復率は直線ではなく加速度的に増えていきます。</p>
+      <div class="mini-stats">
+        <div>現在の必要上昇率<b id="noteRequired">+0.0%</b></div>
+        <div>元本までの不足額<b id="noteShortfall">¥0</b></div>
+      </div>
+    </div>
+    <div class="card note-card">
+      <h3>退場しない戦略</h3>
+      <p>資金が残っていれば、次の判断ができます。全額を失えば選択肢もゼロになります。退場しないこと自体が、回復のための最初の条件です。</p>
+      <div class="mini-stats">
+        <div>残存資産の割合<b id="noteRemaining">100.0%</b></div>
+        <div>下落後の資産<b id="noteAfterYen">¥10,000</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card examples-card">
+    <h2>代表例（クリックで反映）</h2>
+    <table>
+      <thead><tr><th>下落率</th><th></th><th>必要な回復率</th></tr></thead>
+      <tbody id="examplesBody"></tbody>
+    </table>
+  </div>
+
+  <footer>drawdown-recovery · offline tool · 数値はすべてブラウザ内で計算されます</footer>
+</div>
+
+<script>
+(function(){
+  const slider = document.getElementById('drawdownSlider');
+  const numInput = document.getElementById('drawdownNumInput');
+  const principalInput = document.getElementById('principalInput');
+  const drawdownDisplay = document.getElementById('drawdownDisplay');
+  const formulaLine = document.getElementById('formulaLine');
+
+  const afterValue = document.getElementById('afterValue');
+  const afterPct = document.getElementById('afterPct');
+  const requiredPct = document.getElementById('requiredPct');
+  const requiredYen = document.getElementById('requiredYen');
+  const bounceValue = document.getElementById('bounceValue');
+  const bounceGap = document.getElementById('bounceGap');
+
+  const barAfter = document.getElementById('barAfter');
+  const barAfterValue = document.getElementById('barAfterValue');
+  const barRecovered = document.getElementById('barRecovered');
+  const barRecoveredValue = document.getElementById('barRecoveredValue');
+
+  const noteRequired = document.getElementById('noteRequired');
+  const noteShortfall = document.getElementById('noteShortfall');
+  const noteRemaining = document.getElementById('noteRemaining');
+  const noteAfterYen = document.getElementById('noteAfterYen');
+
+  const curvePath = document.getElementById('curvePath');
+  const curveFillPath = document.getElementById('curveFillPath');
+  const markerDot = document.getElementById('markerDot');
+  const gridLinesG = document.getElementById('gridLines');
+  const axisLabelsG = document.getElementById('axisLabels');
+
+  const STORAGE_KEY = 'drawdown_recovery_v1';
+
+  function yen(n){
+    return '¥' + Math.round(n).toLocaleString('ja-JP');
+  }
+
+  function getPrincipal(){
+    const raw = principalInput.value.replace(/[^0-9.]/g, '');
+    const v = parseFloat(raw);
+    return isNaN(v) || v <= 0 ? 10000 : v;
+  }
+
+  // ---- curve geometry ----
+  const svgW = 640, svgH = 300;
+  const padL = 50, padR = 20, padT = 20, padB = 34;
+  const plotW = svgW - padL - padR;
+  const plotH = svgH - padT - padB;
+  const maxDrawdown = 90;
+  const maxRequired = 900; // at 90% drawdown, required = 900%
+
+  function xForDD(dd){ return padL + (dd / maxDrawdown) * plotW; }
+  function yForReq(req){
+    const clamped = Math.min(req, maxRequired);
+    return padT + plotH - (clamped / maxRequired) * plotH;
+  }
+
+  function requiredRecovery(ddPct){
+    const remaining = 100 - ddPct;
+    if (remaining <= 0) return maxRequired;
+    return (ddPct / remaining) * 100;
+  }
+
+  function buildStaticCurveParts(){
+    // grid lines
+    gridLinesG.innerHTML = '';
+    const yTicks = [0, 300, 600, 900];
+    yTicks.forEach(v => {
+      const y = yForReq(v);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', padL); line.setAttribute('x2', svgW - padR);
+      line.setAttribute('y1', y); line.setAttribute('y2', y);
+      line.setAttribute('class','grid-line');
+      gridLinesG.appendChild(line);
+    });
+
+    axisLabelsG.innerHTML = '';
+    yTicks.forEach(v => {
+      const y = yForReq(v);
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', padL - 8); t.setAttribute('y', y + 3);
+      t.setAttribute('text-anchor','end');
+      t.setAttribute('class','axis-text');
+      t.textContent = v + '%';
+      axisLabelsG.appendChild(t);
+    });
+    const xTicks = [0, 30, 60, 90];
+    xTicks.forEach(v => {
+      const x = xForDD(v);
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', x); t.setAttribute('y', svgH - padB + 18);
+      t.setAttribute('text-anchor','middle');
+      t.setAttribute('class','axis-text');
+      t.textContent = v + '%';
+      axisLabelsG.appendChild(t);
+    });
+
+    // curve path (static, doesn't depend on current value)
+    let d = '';
+    let fillD = '';
+    const steps = 90;
+    for (let i = 0; i <= steps; i++){
+      const dd = (i/steps) * maxDrawdown;
+      const req = requiredRecovery(dd);
+      const x = xForDD(dd);
+      const y = yForReq(req);
+      if (i === 0){ d += `M ${x} ${y}`; fillD += `M ${x} ${padT+plotH} L ${x} ${y}`; }
+      else { d += ` L ${x} ${y}`; fillD += ` L ${x} ${y}`; }
+    }
+    fillD += ` L ${xForDD(maxDrawdown)} ${padT+plotH} Z`;
+    curvePath.setAttribute('d', d);
+    curveFillPath.setAttribute('d', fillD);
+  }
+
+  function updateMarker(ddPct){
+    const req = requiredRecovery(ddPct);
+    markerDot.setAttribute('cx', xForDD(ddPct));
+    markerDot.setAttribute('cy', yForReq(req));
+  }
+
+  // ---- examples table ----
+  const examples = [10, 30, 50, 70];
+  const examplesBody = document.getElementById('examplesBody');
+  examples.forEach(dd => {
+    const req = requiredRecovery(dd);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="loss-cell">-${dd}%</td><td class="arrow">→</td><td class="req">+${req.toFixed(1)}%</td>`;
+    tr.addEventListener('click', () => setDrawdown(dd));
+    examplesBody.appendChild(tr);
+  });
+
+  // ---- main update ----
+  function setDrawdown(ddPct){
+    ddPct = Math.max(0, Math.min(90, ddPct));
+    slider.value = ddPct;
+    numInput.value = Math.round(ddPct * 10) / 10;
+    slider.style.setProperty('--pct', (ddPct/90*100) + '%');
+    render();
+    saveState();
+  }
+
+  function render(){
+    const ddPct = parseFloat(slider.value) || 0;
+    const principal = getPrincipal();
+    const remaining = 100 - ddPct;
+    const req = requiredRecovery(ddPct);
+
+    const afterAmt = principal * (remaining / 100);
+    const requiredGainYen = principal - afterAmt;
+    const bounceAmt = afterAmt * (1 + ddPct/100);
+    const bounceGapYen = principal - bounceAmt;
+
+    drawdownDisplay.textContent = '-' + ddPct.toFixed(1).replace(/\.0$/, '') + '%';
+    formulaLine.textContent = `${ddPct.toFixed(1)} ÷ ${remaining.toFixed(1)} = ${req.toFixed(1)}%`;
+
+    afterValue.textContent = yen(afterAmt);
+    afterPct.textContent = `元本の ${remaining.toFixed(1)}% が残る`;
+
+    requiredPct.textContent = `+${req.toFixed(1)}%`;
+    requiredYen.textContent = `必要利益 ${yen(requiredGainYen)}`;
+
+    bounceValue.textContent = yen(bounceAmt);
+    if (ddPct === 0){
+      bounceGap.textContent = '元本と同額';
+    } else {
+      bounceGap.textContent = `元本まで あと ${yen(bounceGapYen)} 不足`;
+    }
+
+    // bars: scale relative to principal=100
+    const afterPctOf100 = remaining;
+    const bouncePctOf100 = (bounceAmt / principal) * 100;
+    barAfter.style.height = Math.max(afterPctOf100, 1) + '%';
+    barAfterValue.textContent = afterPctOf100.toFixed(1);
+    barRecovered.style.height = Math.max(bouncePctOf100, 1) + '%';
+    barRecoveredValue.textContent = bouncePctOf100.toFixed(1);
+
+    noteRequired.textContent = `+${req.toFixed(1)}%`;
+    noteShortfall.textContent = yen(requiredGainYen);
+    noteRemaining.textContent = remaining.toFixed(1) + '%';
+    noteAfterYen.textContent = yen(afterAmt);
+
+    updateMarker(ddPct);
+  }
+
+  function saveState(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        principal: getPrincipal(),
+        drawdown: parseFloat(slider.value) || 0
+      }));
+    }catch(e){}
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.principal) principalInput.value = s.principal;
+      if (typeof s.drawdown === 'number'){
+        slider.value = s.drawdown;
+        numInput.value = s.drawdown;
+        slider.style.setProperty('--pct', (s.drawdown/90*100) + '%');
+      }
+    }catch(e){}
+  }
+
+  // ---- events ----
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    numInput.value = Math.round(v*10)/10;
+    slider.style.setProperty('--pct', (v/90*100) + '%');
+    render();
+  });
+  slider.addEventListener('change', saveState);
+
+  numInput.addEventListener('input', () => {
+    let v = parseFloat(numInput.value);
+    if (isNaN(v)) v = 0;
+    v = Math.max(0, Math.min(90, v));
+    setDrawdown(v);
+  });
+
+  principalInput.addEventListener('input', () => { render(); });
+  principalInput.addEventListener('blur', () => {
+    principalInput.value = Math.round(getPrincipal());
+    render();
+    saveState();
+  });
+
+  document.querySelectorAll('.quick-btns button').forEach(btn => {
+    btn.addEventListener('click', () => setDrawdown(parseFloat(btn.dataset.val)));
+  });
+
+  // ---- init ----
+  buildStaticCurveParts();
+  loadState();
+  render();
+})();
+</script>
+</body>
+</html>
