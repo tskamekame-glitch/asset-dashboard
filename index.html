@@ -789,6 +789,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
       <button class="btn-sm" style="color:#e6931a;border-color:#e6931a;font-weight:600" onclick="document.getElementById('amSBIInput').click()">📥 SBI読込</button>
+      <button class="btn-sm" onclick="amFetchAllForeignQuotes()" style="color:#2980b9;border-color:#2980b9;font-weight:600" title="保有中の外国株式（ティッカー登録済み）の株価とドル円レートを一括取得">🌐 外国株更新</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
       <button class="btn-sm" onclick="amFixFundUnits()" style="color:#e24b4a;border-color:#e24b4a" title="投資信託の数量(口数)を万口単位に補正">🔧 投信数量修正</button>
@@ -1741,6 +1742,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
           <span style="color:var(--text3);font-size:13px">=</span>
           <span id="fCalcResult" style="font-size:13px;font-weight:600;color:var(--green);min-width:60px"></span>
         </div>
+        <button type="button" id="fFetchQuoteBtn" onclick="amFetchQuoteIntoModal()" style="display:none;margin-top:8px;padding:8px 12px;border:1px solid #2980b9;border-radius:var(--radius);background:var(--bg2);color:#2980b9;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🌐 ティッカーから株価・為替を自動取得</button>
       </div>
       <div class="field" id="fFxRow" style="display:none">
         <label>為替レート <span style="font-size:11px;color:var(--text3);font-weight:400">（USD/JPY）</span></label>
@@ -3051,6 +3053,7 @@ function amRenderCard(a){
           +'<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">'
             +stockInputs
             +'<button onclick="'+onSave+'" style="'+updateBtnStyle+'">'+updateBtnLabel+'</button>'
+            +(isForeignStock&&a.code?'<button onclick="amFetchForeignQuote('+a.id+')" id="il-fetchbtn-'+a.id+'" style="padding:6px 12px;background:#2980b9;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">🌐 自動取得</button>':'')
           +'</div>'
           +costInput
         +'</div>'
@@ -3692,6 +3695,8 @@ function amToggleStockFields(){
   if(cf)cf.style.display=(isStock||isForeignStock)?'block':'none';
   if(costF)costF.style.display=(isStock||isForeignStock||isFX)?'block':'none';// 株・FXのみ取得単価欄
   if(idxF)idxF.style.display=showIndexFields?'block':'none';// インデックス専用
+  const fetchBtn=document.getElementById('fFetchQuoteBtn');
+  if(fetchBtn)fetchBtn.style.display=isForeignStock?'inline-block':'none';
   if(costLabel)costLabel.textContent=isFX?'取得レート（円/USD）':isStock?'取得株価（円/株）':isForeignStock?'取得株価（USD/株）':'取得価格（円・総額）';
   if(sfLabel)sfLabel.textContent=isFX?'FX 自動計算（USD×レート→円）':isStock?'株式自動計算':isForeignStock?'外国株 自動計算（USD×為替→円）':'投資信託 自動計算';
   if(sharesEl)sharesEl.placeholder=isFX?'購入USD額':isStock||isForeignStock?'株数':'数量';
@@ -3787,6 +3792,90 @@ function amFetchFxRate(){
   if(fxEl)fxEl.value=n;
   amCalcAmount();
   showToast(`✓ 為替レート: ${n}円/USD に設定しました`);
+}
+
+// ── 外国株式: ティッカーをキーに現在株価・ドル円レートをWorker経由で自動取得 ──
+// Yahoo Financeの米国ティッカー（AAPL等）とJPY=X（ドル円）はどちらもこのWorkerで取得可能
+async function amFetchQuote(code){
+  const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+  const resp=await fetch(`${WORKER}?code=${encodeURIComponent(code)}&range=5d`);
+  if(!resp.ok)throw new Error('株価取得に失敗しました（HTTP '+resp.status+'）');
+  const data=await resp.json();
+  const result=data?.chart?.result?.[0];
+  const meta=result?.meta||{};
+  const ts=result?.timestamp||[];
+  const closes=result?.indicators?.quote?.[0]?.close||[];
+  const pairs=ts.map((t,i)=>({t:t*1000,c:closes[i]})).filter(x=>x.c!=null);
+  const cur=(meta.regularMarketPrice>0)?meta.regularMarketPrice:(pairs.length?pairs[pairs.length-1].c:null);
+  if(!cur||!isFinite(cur))throw new Error(code+'の株価データが取得できませんでした');
+  return cur;
+}
+// 保有カード上の「🌐 自動取得」ボタン：1銘柄分の株価＋ドル円レートを取得して即反映
+async function amFetchForeignQuote(id){
+  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  if(!a.code){showToast('⚠️ ティッカーコードを入力してください');return;}
+  const btn=document.getElementById('il-fetchbtn-'+id);
+  if(btn){btn.disabled=true;btn.textContent='📡 取得中...';}
+  try{
+    const [price,fxRate]=await Promise.all([amFetchQuote(a.code),amFetchQuote('JPY=X')]);
+    a.price=Math.round(price*100)/100;
+    a.fxRate=Math.round(fxRate*10000)/10000;
+    amSetFxRate(a.fxRate);
+    if(a.shares>0)a.amount=Math.round(a.shares*a.price*a.fxRate);
+    a.updated=todayStr();
+    amRender();await amSaveToSheet();refreshHome();
+    showToast(`✅ ${a.name}: $${a.price} ／ ${a.fxRate}円`,3000);
+  }catch(e){
+    showToast('⚠️ '+e.message,3500);
+    if(btn){btn.disabled=false;btn.textContent='🌐 自動取得';}
+  }
+}
+// エクスポートバーの「🌐 外国株更新」：保有中の外国株式を一括で自動取得
+async function amFetchAllForeignQuotes(){
+  const targets=amAccounts.filter(a=>a.cat==='外国株式'&&!a.sold&&a.code);
+  if(!targets.length){showToast('⚠️ ティッカー登録済みの外国株式がありません');return;}
+  showToast('📡 '+targets.length+'銘柄の株価・為替レートを取得中...',3000);
+  try{
+    const fxRate=await amFetchQuote('JPY=X');
+    const fxRounded=Math.round(fxRate*10000)/10000;
+    amSetFxRate(fxRounded);
+    let updated=0;const failed=[];
+    for(const a of targets){
+      try{
+        const price=await amFetchQuote(a.code);
+        a.price=Math.round(price*100)/100;
+        a.fxRate=fxRounded;
+        if(a.shares>0)a.amount=Math.round(a.shares*a.price*fxRounded);
+        a.updated=todayStr();
+        updated++;
+      }catch(e){failed.push(a.name);}
+    }
+    amRender();await amSaveToSheet();refreshHome();
+    showToast(`✅ ${updated}件更新（為替 ${fxRounded}円/USD）`+(failed.length?` ⚠️失敗: ${failed.join('・')}`:''),5000);
+  }catch(e){
+    showToast('⚠️ 為替レート取得に失敗しました: '+e.message,4000);
+  }
+}
+// 口座追加/編集モーダル内の「🌐 ティッカーから株価・為替を自動取得」ボタン
+async function amFetchQuoteIntoModal(){
+  const code=(document.getElementById('fCode')?.value||'').trim();
+  if(!code){showToast('⚠️ 先にティッカーコードを入力してください');return;}
+  const btn=document.getElementById('fFetchQuoteBtn');
+  if(btn){btn.disabled=true;btn.textContent='📡 取得中...';}
+  try{
+    const [price,fxRate]=await Promise.all([amFetchQuote(code),amFetchQuote('JPY=X')]);
+    const priceEl=document.getElementById('fPrice');
+    const fxEl=document.getElementById('fFxRate');
+    if(priceEl)priceEl.value=Math.round(price*100)/100;
+    if(fxEl)fxEl.value=Math.round(fxRate*10000)/10000;
+    amSetFxRate(Math.round(fxRate*10000)/10000);
+    amCalcAmount();
+    showToast(`✅ 株価 $${Math.round(price*100)/100} ／ 為替 ${Math.round(fxRate*10000)/10000}円`,3000);
+  }catch(e){
+    showToast('⚠️ '+e.message,3500);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🌐 ティッカーから株価・為替を自動取得';}
+  }
 }
 let amFxRateCache=0;
 // ── FXロット: ドル円レート自動取得（JPY=X・Worker経由・15分キャッシュ）──
