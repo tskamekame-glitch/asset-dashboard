@@ -1787,7 +1787,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
       <div class="field"><label>セクター（TOPIX-17・任意）</label><select id="fSector" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定 —</option></select></div>
-      <div class="field"><label>金融機関（未設定なら名前から自動判定）</label><select id="fBroker" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 自動判定 —</option><option>SBI証券</option><option>PayPay証券</option><option>野村證券</option><option>みずほ証券</option><option>iDeCo・DC</option><option>銀行</option><option>その他</option></select></div>
+      <div class="field"><label>金融機関（未設定なら名前から自動判定）</label><select id="fBroker" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 自動判定 —</option><option>SBI証券</option><option>moomoo証券</option><option>PayPay証券</option><option>野村證券</option><option>みずほ証券</option><option>iDeCo・DC</option><option>銀行</option><option>その他</option></select></div>
       <div class="field"><label>取得日（任意・全期間表示や保有期間に使用）</label><input type="date" id="fBuyDate" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"></div>
 
       <!-- 📊 分析フィールド（個別株・高配当・外国株のみ） -->
@@ -2497,7 +2497,7 @@ function amRenderTop10(accounts,el,subtitleEl){
   if(subtitleEl){
     const hasQ=q&&q.quotes;
     const lb={daily:'当日騰落',m1:'月間騰落',y1:'年間騰落'}[amHeatmapMode]||'当日騰落';
-    subtitleEl.textContent=`SBI証券のみ・保有金額 上位10銘柄（投資分 ¥${fmt(investTotal)}中）`+(hasQ?`・バー色=${lb}`:'・期間モードで一度更新すると騰落色が付きます');
+    subtitleEl.textContent=`保有金額 上位10銘柄（投資分 ¥${fmt(investTotal)}中）`+(hasQ?`・バー色=${lb}`:'・期間モードで一度更新すると騰落色が付きます');
   }
 }
 
@@ -2564,11 +2564,9 @@ function amRenderHeatmap(accounts,total){
 
   // ── ビュー分岐 ──
   const hmTotalEl=document.getElementById('amHeatmapTotal');
-  // ヒートマップ/上位10はSBI証券の口座のみ対象（機関は名前/手動設定から判定）
-  const sbiOnly=arr=>arr.filter(a=>{try{return trGuessBroker(a)==='SBI証券';}catch(e){return true;}});
-  if(amHmView==='top10'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderTop10(sbiOnly(accounts),el,subtitleEl0);return;}
+  // ヒートマップ/上位10/資産構成は全証券会社の口座を対象（機関は名前/手動設定から判定・表示のみに利用）
+  if(amHmView==='top10'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderTop10(accounts,el,subtitleEl0);return;}
   if(amHmView==='comp'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderComposition(accounts,el,subtitleEl0);return;}
-  accounts=sbiOnly(accounts);
 
   const EXCL_CATS=['銀行','年金','その他','預り金'];
   let items;
@@ -2587,7 +2585,7 @@ function amRenderHeatmap(accounts,total){
           left=`最古の取得日 ${y}${d.getMonth()+1}/${d.getDate()}`;
         }
       }
-      subtitleEl0.textContent=`SBI証券のみ・色=取得来の含み損益率【${left} → ${todayS}】`;
+      subtitleEl0.textContent=`色=取得来の含み損益率【${left} → ${todayS}】`;
     }
     const ALL_INV=['個別株','高配当','外国株式','FX','全世界インデックス','日本インデックス','インドインデックス'];
     const entries=accounts.filter(a=>!a.sold&&a.amount>0&&ALL_INV.includes(a.cat)).map(a=>{
@@ -2620,7 +2618,7 @@ function amRenderHeatmap(accounts,total){
     if(missing.length){
       if(hmTotalEl)hmTotalEl.innerHTML='';
       el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
-      if(subtitleEl0)subtitleEl0.textContent='SBI証券のみ・面積=評価額 / 色='+({daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
+      if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色='+({daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
       if(!amDailyFetching){
         amFetchDailyQuotes([...new Set(targets.map(t=>t.qcode))]).then(()=>{
           try{amRenderHeatmap(accounts,total);}catch(e){}
@@ -2657,7 +2655,7 @@ function amRenderHeatmap(accounts,total){
           break;
         }
       }
-      subtitleEl0.textContent=`SBI証券のみ・色=${modeLabel}${rangeStr?`【${rangeStr}】`:''}（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄対象外`:'');
+      subtitleEl0.textContent=`色=${modeLabel}${rangeStr?`【${rangeStr}】`:''}（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄対象外`:'');
     }
   }else{
     // ── 前回CSV比モード（従来） ──
@@ -2773,7 +2771,7 @@ function amRenderHeatmap(accounts,total){
 
   // サブタイトル動的更新（当日モードはアイテム生成時に設定済み）
   const subtitleEl=document.getElementById('amHeatmapSubtitle');
-  if(subtitleEl&&amHeatmapMode==='csv') subtitleEl.textContent='SBI証券のみ・色='+(hasPrevData?'前回CSV比変動率【前回SBI CSV取込時 → 現在】':'含み損益率（前回データなし）');
+  if(subtitleEl&&amHeatmapMode==='csv') subtitleEl.textContent='色='+(hasPrevData?'前回CSV比変動率【前回CSV取込時 → 現在】':'含み損益率（前回データなし）');
 
   // SVG描画
   const fmtM=v=>{
@@ -3489,7 +3487,7 @@ function openAddModal(defaultCat){
 }
 function openAddModalCat(cat){openAddModal(cat)}
 // SBI CSV取込のマッチング対象外とする「非SBI管理」口座の判定パターン（他証券会社・DC年金・iDeCo等）
-const AM_NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス/;
+const AM_NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス|moomoo|ムームー/i;
 const AM_NAME_TO_CAT_RULES=[
   {pat:/SBG|ソフトバンクグループ|9984/,           cat:'個別株'},
   {pat:/SBKK|みずほストック|野村持ち株.*SBKK|9434/,cat:'高配当'},
@@ -6702,8 +6700,8 @@ function trCalcSnapshotGain(s,useCurrentAccounts,catFilter){
 // ============================================================
 // 機関別（証券会社別）運用状況
 // ============================================================
-const TR_BROKERS=['SBI証券','PayPay証券','野村證券','みずほ証券','iDeCo・DC'];
-const TR_BROKER_COLORS={'SBI証券':'#185FA5','PayPay証券':'#E4002B','野村證券':'#0F6E56','みずほ証券':'#EF9F27','iDeCo・DC':'#8B5CF6'};
+const TR_BROKERS=['SBI証券','moomoo証券','PayPay証券','野村證券','みずほ証券','iDeCo・DC'];
+const TR_BROKER_COLORS={'SBI証券':'#185FA5','moomoo証券':'#FF6A13','PayPay証券':'#E4002B','野村證券':'#0F6E56','みずほ証券':'#EF9F27','iDeCo・DC':'#8B5CF6'};
 let trBrokerMode='eval';
 
 // 口座→金融機関の判定: 手動設定(broker) > 名前パターン > カテゴリ
@@ -6713,6 +6711,7 @@ function trGuessBroker(a){
   if(/iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|企業年金|確定給付/i.test(n))return'iDeCo・DC';
   if(/PayPay銀行|ペイペイ銀行/i.test(n))return'銀行';
   if(/PayPay|ペイペイ|paypay/i.test(n))return'PayPay証券';
+  if(/moomoo|ムームー/i.test(n))return'moomoo証券';
   if(/野村/.test(n))return'野村證券';
   if(/みずほ/.test(n))return'みずほ証券';
   if(/ゆうちょ|三井住友|三菱|UFJ|りそな|ＳＭＢＣ|SMBC/i.test(n))return'銀行';
