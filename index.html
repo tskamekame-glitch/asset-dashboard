@@ -2242,7 +2242,7 @@ function amShowMain(){
 function daysSince(ds){return Math.floor((new Date()-new Date(ds))/(864e5))}
 function amRenderReminder(){
   const el=document.getElementById('reminderBanner');if(!el)return;
-  const stale=amAccounts.filter(a=>daysSince(a.updated)>=30);
+  const stale=amAccounts.filter(a=>!a.sold&&daysSince(a.updated)>=30);
   el.innerHTML=stale.length?`<div class="reminder-banner"><span class="reminder-icon">🔔</span><div><div class="reminder-title">残高の更新をお忘れなく！</div><div class="reminder-text">${stale.map(a=>a.name+'（'+daysSince(a.updated)+'日未更新）').join('<br>')}</div></div></div>`:'';
 }
 function amRender(){
@@ -4228,7 +4228,10 @@ function amParseSBICSV(text){
     const code=codeMatch?codeMatch[1].replace(/[^0-9A-Za-z]/g,''):'';
 
     const acctSuffix=sectionToAccount(currentSection);
-    const buyDate=(cols[1]||'').replace(/"/g,'').trim();
+    // 投資信託の買付日は「----/--/--」のようなプレースホルダーで返ることがあるため、
+    // 実際の日付形式（YYYY/MM/DD等）でなければ「日付なし」として扱う（口座名の異常サフィックス化を防止）
+    let buyDate=(cols[1]||'').replace(/"/g,'').trim();
+    if(!/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(buyDate))buyDate='';
 
     rows.push({
       nameRaw,
@@ -4547,6 +4550,8 @@ async function amApplySBIRows(rows){
         usedAccIdx.add(accIdx);
         const acc=amAccounts[accIdx];
         const oldVal=acc.amount||0;
+        // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
+        acc.updated=todayStr();
         // li===0 のみ合算値を反映、他の既存口座は変更しない
         if(li>0)return;
         if(oldVal>0)acc.prevSBIAmount=oldVal;
@@ -4579,6 +4584,8 @@ async function amApplySBIRows(rows){
         const oldVal=acc.amount||0;
         const newVal=row.evalAmt;
         const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+        // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
+        acc.updated=todayStr();
         if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
 
         if(oldVal>0)acc.prevSBIAmount=oldVal;
@@ -4615,6 +4622,8 @@ async function amApplySBIRows(rows){
     const oldVal=acc.amount||0;
     const newVal=row.evalAmt;
     const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+    // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
+    acc.updated=todayStr();
     if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
 
     acc.amount=newVal;
