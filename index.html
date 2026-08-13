@@ -2694,6 +2694,41 @@ function amRenderHeatmap(accounts,total){
 
   const hasPrevData=true;
 
+  // ── 極小銘柄を「その他」タイルにまとめ、右下等に判読不能な極細タイルが発生するのを防ぐ ──
+  // (先にコンテナサイズ・総面積を仮計算し、面積が最小しきい値未満になる銘柄を1つに統合する)
+  if(items&&items.length>3){
+    const preContainerW=Math.max((el.clientWidth||el.offsetWidth||340)-2,100);
+    const preN=items.length;
+    const preTotalH=Math.round(preContainerW*(preN<=4?0.55:preN<=8?0.75:preN<=14?1.0:preN<=20?1.2:1.4));
+    const preTotalArea=preContainerW*preTotalH;
+    const preTotalAmt=items.reduce((s,i)=>s+i.amount,0);
+    const MIN_TILE_AREA=2200;// これを下回る面積のタイルはラベルはおろか形も判読できないため統合対象
+    const minFraction=preTotalAmt>0?MIN_TILE_AREA/preTotalArea:0;
+    if(minFraction>0){
+      const bigItems=items.filter(i=>i.amount/preTotalAmt>=minFraction);
+      const smallItems=items.filter(i=>i.amount/preTotalAmt<minFraction);
+      // 統合後もタイルが1枚以上残る場合のみ実施（全銘柄が極小の場合はそのまま表示）
+      if(smallItems.length>1&&bigItems.length>0){
+        const smallAmt=smallItems.reduce((s,i)=>s+i.amount,0);
+        let smallGain=0,smallBase=0,hasGain=false;
+        smallItems.forEach(i=>{
+          if(i.gain!=null&&isFinite(i.gain)&&i.base>0){smallGain+=i.gain;smallBase+=i.base;hasGain=true;}
+        });
+        const fallbackPct=smallAmt>0?smallItems.reduce((s,i)=>s+(i.pct||0)*i.amount,0)/smallAmt:0;
+        items=[...bigItems,{
+          name:`その他（${smallItems.length}銘柄）`,
+          amount:smallAmt,
+          pct:hasGain&&smallBase>0?(smallGain/smallBase*100):fallbackPct,
+          gain:hasGain?smallGain:null,
+          base:hasGain?smallBase:0,
+          id:smallItems[0].id,
+          lots:smallItems.reduce((s,i)=>s+(i.lots||1),0),
+          isBundle:true
+        }];
+      }
+    }
+  }
+
   // 色: モードに応じたしきい値（日次±3% / 月間±10% / 年間・全期間±30%）
   const T=(amHeatmapMode==='m1')?[2,5,10]:(amHeatmapMode==='y1'||amHeatmapMode==='all')?[5,15,30]:[0.5,1.5,3];
   const pctToColor=pct=>{
@@ -2808,7 +2843,7 @@ function amRenderHeatmap(accounts,total){
     if(nodeGain!=null){
       gainStr=(nodeGain>=0?'＋':'－')+fmtM(Math.abs(nodeGain));
     }
-    infoMap[node.id]={name:node.name,amount:node.amount,gain:nodeGain,pct:node.pct};
+    infoMap[node.id]={name:node.name,amount:node.amount,gain:nodeGain,pct:node.pct,isBundle:!!node.isBundle};
 
     // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
     let dispName=node.name;
@@ -2894,7 +2929,7 @@ function amHmSelectTile(id){
       </div>
       <div style="text-align:right">
         <div style="font-size:15px;font-weight:800;color:${gCol};font-variant-numeric:tabular-nums">${gainStr}<span style="font-size:11px">${pctStr}</span></div>
-        <div onclick="event.stopPropagation();openEditModal(${id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-top:3px;text-decoration:underline">✏️ 編集</div>
+        ${info.isBundle?'':`<div onclick="event.stopPropagation();openEditModal(${id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-top:3px;text-decoration:underline">✏️ 編集</div>`}
       </div>
     </div>
   </div>`;
