@@ -2572,6 +2572,16 @@ function amRenderComposition(accounts,el,subtitleEl){
   if(subtitleEl)subtitleEl.textContent='資産構成（売却済み除く・カテゴリ別）';
 }
 
+// 国内株式・外国株式・合算の3区分（保有銘柄ヒートマップ専用）
+const AM_HM_DOMESTIC_CATS=['個別株','高配当'];
+const AM_HM_FOREIGN_CATS=['外国株式'];
+const AM_HM_STOCK_CATS=[...AM_HM_DOMESTIC_CATS,...AM_HM_FOREIGN_CATS];
+const AM_HM_SECTIONS=[
+  {key:'domestic',title:'🇯🇵 国内株式',cats:AM_HM_DOMESTIC_CATS},
+  {key:'foreign',title:'🌍 外国株式',cats:AM_HM_FOREIGN_CATS},
+  {key:'combined',title:'🔗 国内＋外国 合算',cats:AM_HM_STOCK_CATS},
+];
+
 function amRenderHeatmap(accounts,total){
   const el=document.getElementById('amHeatmap');
   if(!el)return;
@@ -2584,15 +2594,15 @@ function amRenderHeatmap(accounts,total){
   if(amHmView==='top10'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderTop10(accounts,el,subtitleEl0);return;}
   if(amHmView==='comp'){if(hmTotalEl)hmTotalEl.innerHTML='';amRenderComposition(accounts,el,subtitleEl0);return;}
 
-  const EXCL_CATS=['銀行','年金','その他','預り金'];
-  let items;
+  // ── ヒートマップビュー：国内株式・外国株式・合算の3セクションを縦に並べて表示 ──
+  if(hmTotalEl)hmTotalEl.innerHTML='';
+  const stockAccounts=accounts.filter(a=>AM_HM_STOCK_CATS.includes(a.cat));
 
   if(amHeatmapMode==='all'){
-    // ── 全期間モード: 取得来の含み損益率（取得価格 vs 現在評価額・株価取得不要） ──
     if(subtitleEl0){
       const now=new Date();
       const todayS=`${now.getMonth()+1}/${now.getDate()}`;
-      const dates=accounts.filter(a=>!a.sold&&a.amount>0&&a.buyDate).map(a=>a.buyDate).sort();
+      const dates=stockAccounts.filter(a=>!a.sold&&a.amount>0&&a.buyDate).map(a=>a.buyDate).sort();
       let left='各銘柄の取得時';
       if(dates.length){
         const d=new Date(dates[0]);
@@ -2601,38 +2611,19 @@ function amRenderHeatmap(accounts,total){
           left=`最古の取得日 ${y}${d.getMonth()+1}/${d.getDate()}`;
         }
       }
-      subtitleEl0.textContent=`色=取得来の含み損益率【${left} → ${todayS}】`;
-    }
-    const ALL_INV=['個別株','高配当','外国株式','FX','全世界インデックス','日本インデックス','インドインデックス'];
-    const entries=accounts.filter(a=>!a.sold&&a.amount>0&&ALL_INV.includes(a.cat)).map(a=>{
-      const cost=(typeof _calcCostTotal==='function')?_calcCostTotal(a):0;
-      let gain=null,base=0;
-      if(cost&&cost>0){
-        const ratio=a.amount/cost;
-        if(ratio<=50&&ratio>=0.02){gain=a.amount-cost;base=cost;}// 整合性ガード
-      }
-      return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain,base,id:a.id};
-    });
-    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
-    if(!items.length){
-      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">取得価格データのある銘柄がありません</p>';
-      return;
-    }
-    if(subtitleEl0&&items.some(i=>i.name.endsWith('†'))){
-      subtitleEl0.textContent+='　†=取得価格未設定のロットを含む（評価額のみ合算・編集で取得単価を入力すると損益に反映）';
+      subtitleEl0.textContent=`色=取得来の含み損益率【${left} → ${todayS}】・個別株/高配当/外国株式が対象`;
     }
   }else if(AM_QUOTE_MODES.includes(amHeatmapMode)){
-    // ── 当日/月間/年間モード: 株価取得ベース（投信は連動指数ETFで近似） ──
-    const targets=amDailyTargets(accounts);
+    // ── 当日/月間/年間モード: 株価取得ベース（3セクション分の必要銘柄コードを一括で確認・取得）──
+    const targets=amDailyTargets(stockAccounts);
     if(!targets.length){
-      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">証券コード付きの銘柄・対応する投信がありません</p>';
+      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">証券コード付きの株式銘柄がありません</p>';
       return;
     }
     const q=amLoadDailyQuotes();
     const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
     const missing=targets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
     if(missing.length){
-      if(hmTotalEl)hmTotalEl.innerHTML='';
       el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
       if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色='+({daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
       if(!amDailyFetching){
@@ -2642,25 +2633,9 @@ function amRenderHeatmap(accounts,total){
       }
       return;
     }
-    const errNames=[];
-    const baseKey={daily:'prev',m1:'m1',y1:'y1'}[amHeatmapMode];
-    const entries=targets.map(t=>{
-      const qd=q.quotes[t.qcode];
-      const bp=qd&&!qd.err?qd[baseKey]:null;
-      if(!bp||bp<=0){errNames.push(t.a.name);return null;}
-      const pct=(qd.cur-bp)/bp*100;
-      const startVal=t.a.amount/(1+pct/100);
-      return{key:amLotKey(t.a),name:amLotBaseName(t.a.name)+(t.approx?'≈':''),amount:t.a.amount,gain:t.a.amount-startVal,base:startVal,id:t.a.id};
-    }).filter(Boolean);
-    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
-    if(!items.length){
-      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">⚠ 株価を取得できませんでした（当日騰落ボタンを再タップで再取得）</p>';
-      return;
-    }
     if(subtitleEl0){
       const d=new Date(q.ts);
       const modeLabel={daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode];
-      // 期間の日付範囲: 有効な最初の銘柄の基準日→最新日（日本株は全銘柄ほぼ共通）
       const baseTKey={daily:'prevT',m1:'m1T',y1:'y1T'}[amHeatmapMode];
       let rangeStr='';
       for(const t of targets){
@@ -2671,57 +2646,82 @@ function amRenderHeatmap(accounts,total){
           break;
         }
       }
-      subtitleEl0.textContent=`色=${modeLabel}${rangeStr?`【${rangeStr}】`:''}（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`+(errNames.length?` ⚠${errNames.length}銘柄対象外`:'');
+      subtitleEl0.textContent=`色=${modeLabel}${rangeStr?`【${rangeStr}】`:''}（≈は連動指数で近似）・${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}取得`;
     }
   }else{
-    // ── 前回CSV比モード（従来） ──
-    // prevSBIAmount（前回CSV取込金額）がある銘柄のみ表示（SBI未掲載銘柄は除外）
-    const entries=accounts
-      .filter(a=>a.amount>0&&!EXCL_CATS.includes(a.cat)&&a.prevSBIAmount>0)
+    // ── 前回CSV比モード ──
+    if(subtitleEl0)subtitleEl0.textContent='色=前回CSV比変動率【前回CSV取込時 → 現在】・個別株/高配当/外国株式が対象';
+  }
+
+  // 色: モードに応じたしきい値（日次±3% / 月間±10% / 年間・全期間±30%）
+  const T=(amHeatmapMode==='m1')?[2,5,10]:(amHeatmapMode==='y1'||amHeatmapMode==='all')?[5,15,30]:[0.5,1.5,3];
+  const containerW=Math.max((el.clientWidth||el.offsetWidth||340)-2,100);
+
+  let html=amHmScaleHeader(T);
+  AM_HM_SECTIONS.forEach(sec=>{
+    const secAccounts=accounts.filter(a=>sec.cats.includes(a.cat));
+    const items=amBuildHeatmapItems(secAccounts);
+    html+=amRenderHeatmapSectionHtml(sec,items,T,containerW);
+  });
+  el.innerHTML=html;
+
+  // 各セクションで選択中だったタイルの詳細パネルを復元
+  AM_HM_SECTIONS.forEach(sec=>{
+    const sel=amHmSelectedIdBySection[sec.key];
+    const info=amHmInfoBySection[sec.key];
+    if(sel!=null&&info&&info[sel]){
+      amHmSelectedIdBySection[sec.key]=null;
+      amHmSelectTile(sel,sec.key);
+    }
+  });
+}
+
+// 口座リストからヒートマップ用items配列を構築（amHeatmapModeに応じて分岐）
+function amBuildHeatmapItems(accounts){
+  let items;
+  if(amHeatmapMode==='all'){
+    const entries=accounts.filter(a=>!a.sold&&a.amount>0).map(a=>{
+      const cost=(typeof _calcCostTotal==='function')?_calcCostTotal(a):0;
+      let gain=null,base=0;
+      if(cost&&cost>0){
+        const ratio=a.amount/cost;
+        if(ratio<=50&&ratio>=0.02){gain=a.amount-cost;base=cost;}// 整合性ガード
+      }
+      return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain,base,id:a.id};
+    });
+    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
+  }else if(AM_QUOTE_MODES.includes(amHeatmapMode)){
+    const targets=amDailyTargets(accounts);
+    const q=amLoadDailyQuotes();
+    if(!q||!q.quotes)return[];
+    const baseKey={daily:'prev',m1:'m1',y1:'y1'}[amHeatmapMode];
+    const entries=targets.map(t=>{
+      const qd=q.quotes[t.qcode];
+      const bp=qd&&!qd.err?qd[baseKey]:null;
+      if(!bp||bp<=0)return null;
+      const pct=(qd.cur-bp)/bp*100;
+      const startVal=t.a.amount/(1+pct/100);
+      return{key:amLotKey(t.a),name:amLotBaseName(t.a.name)+(t.approx?'≈':''),amount:t.a.amount,gain:t.a.amount-startVal,base:startVal,id:t.a.id};
+    }).filter(Boolean);
+    items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
+  }else{
+    const entries=accounts.filter(a=>a.amount>0&&a.prevSBIAmount>0)
       .map(a=>({key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-a.prevSBIAmount,base:a.prevSBIAmount,id:a.id}));
     items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
-
-    if(!items.length){
-      el.innerHTML='<p style="text-align:center;color:var(--text3);font-size:13px;padding:12px">SBI CSV取込済みの銘柄がありません</p>';
-      return;
-    }
   }
 
-  // ── 選択期間の合計損益（各タイルのpctから期間開始時の評価額を逆算して集計） ──
-  if(hmTotalEl){
-    let g=0,b=0,cnt=0;
-    items.forEach(it=>{
-      if(it.gain!=null&&isFinite(it.gain)&&it.base>0){g+=it.gain;b+=it.base;cnt++;return;}
-      if(it.pct==null||!isFinite(it.pct)||it.pct<=-99.9)return;
-      const base=it.amount/(1+it.pct/100);
-      g+=it.amount-base;b+=base;cnt++;
-    });
-    if(cnt&&b>0){
-      const tp=g/b*100;
-      const col=g>=0?'var(--green)':'var(--danger)';
-      const label={csv:'前回比',daily:'当日',m1:'月間',y1:'年間',all:'全期間'}[amHeatmapMode]||'';
-      hmTotalEl.innerHTML=`<span style="color:var(--text3);font-size:11px">${label}の合計損益（表示${cnt}銘柄）</span> <span style="color:${col};font-weight:800">${g>=0?'＋':'－'}¥${Math.round(Math.abs(g)).toLocaleString()}</span> <span style="color:${col};font-weight:600;font-size:11px">(${tp>=0?'+':''}${tp.toFixed(2)}%)</span>`;
-    }else{
-      hmTotalEl.innerHTML='';
-    }
-  }
-
-  const hasPrevData=true;
-
-  // ── 極小銘柄を「その他」タイルにまとめ、右下等に判読不能な極細タイルが発生するのを防ぐ ──
-  // (先にコンテナサイズ・総面積を仮計算し、面積が最小しきい値未満になる銘柄を1つに統合する)
+  // ── 極小銘柄を「その他」タイルにまとめ、判読不能な極細タイルが発生するのを防ぐ ──
   if(items&&items.length>3){
-    const preContainerW=Math.max((el.clientWidth||el.offsetWidth||340)-2,100);
+    const preContainerW=340;
     const preN=items.length;
     const preTotalH=Math.round(preContainerW*(preN<=4?0.55:preN<=8?0.75:preN<=14?1.0:preN<=20?1.2:1.4));
     const preTotalArea=preContainerW*preTotalH;
     const preTotalAmt=items.reduce((s,i)=>s+i.amount,0);
-    const MIN_TILE_AREA=2200;// これを下回る面積のタイルはラベルはおろか形も判読できないため統合対象
+    const MIN_TILE_AREA=2200;
     const minFraction=preTotalAmt>0?MIN_TILE_AREA/preTotalArea:0;
     if(minFraction>0){
       const bigItems=items.filter(i=>i.amount/preTotalAmt>=minFraction);
       const smallItems=items.filter(i=>i.amount/preTotalAmt<minFraction);
-      // 統合後もタイルが1枚以上残る場合のみ実施（全銘柄が極小の場合はそのまま表示）
       if(smallItems.length>1&&bigItems.length>0){
         const smallAmt=smallItems.reduce((s,i)=>s+i.amount,0);
         let smallGain=0,smallBase=0,hasGain=false;
@@ -2742,9 +2742,16 @@ function amRenderHeatmap(accounts,total){
       }
     }
   }
+  return items||[];
+}
 
-  // 色: モードに応じたしきい値（日次±3% / 月間±10% / 年間・全期間±30%）
-  const T=(amHeatmapMode==='m1')?[2,5,10]:(amHeatmapMode==='y1'||amHeatmapMode==='all')?[5,15,30]:[0.5,1.5,3];
+// 1セクション分（国内株式／外国株式／合算のいずれか）のヒートマップHTMLを生成
+function amRenderHeatmapSectionHtml(sec,items,T,containerW){
+  const sectionHead=`<div style="font-size:13px;font-weight:700;color:var(--text2);margin:${sec.key==='domestic'?'0':'16px'} 0 4px">${sec.title}</div>`;
+  if(!items||!items.length){
+    return sectionHead+'<p style="text-align:center;color:var(--text3);font-size:12px;padding:10px 0 16px">該当する銘柄がありません</p>';
+  }
+
   const pctToColor=pct=>{
     if(pct>=T[2])return'#0a5e3f';
     if(pct>=T[1])return'#0f7a50';
@@ -2756,15 +2763,30 @@ function amRenderHeatmap(accounts,total){
     return'#8b1e18';
   };
 
-  // ── Squarified Treemap（面積＝評価額・評価額降順で左上から配置）──
+  // 合計損益ライン
+  let totalLineHtml='';
+  {
+    let g=0,b=0,cnt=0;
+    items.forEach(it=>{
+      if(it.gain!=null&&isFinite(it.gain)&&it.base>0){g+=it.gain;b+=it.base;cnt++;return;}
+      if(it.pct==null||!isFinite(it.pct)||it.pct<=-99.9)return;
+      const base=it.amount/(1+it.pct/100);
+      g+=it.amount-base;b+=base;cnt++;
+    });
+    if(cnt&&b>0){
+      const tp=g/b*100;
+      const col=g>=0?'var(--green)':'var(--danger)';
+      totalLineHtml=`<div style="font-size:12px;margin-bottom:6px"><span style="color:var(--text3)">合計損益（${cnt}銘柄）</span> <span style="color:${col};font-weight:800">${g>=0?'＋':'－'}¥${Math.round(Math.abs(g)).toLocaleString()}</span> <span style="color:${col};font-weight:600;font-size:11px">(${tp>=0?'+':''}${tp.toFixed(2)}%)</span></div>`;
+    }
+  }
+
+  // ── Squarified Treemap ──
   const GAP=2;
-  const containerW=Math.max((el.clientWidth||el.offsetWidth||340)-2,100);
   const n=items.length;
   const TOTAL_H=Math.round(containerW*(n<=4?0.55:n<=8?0.75:n<=14?1.0:n<=20?1.2:1.4));
   const totalAmt=items.reduce((s,i)=>s+i.amount,0);
   const totalArea=(containerW-GAP)*(TOTAL_H-GAP);
   const normed=items.map(i=>({...i,area:i.amount/totalAmt*totalArea}));
-
   const rects=[];
 
   function worstRatio(row,w){
@@ -2781,17 +2803,14 @@ function amRenderHeatmap(accounts,total){
     return worst;
   }
 
-  // 左上から右→下の順序で配置（評価額降順を維持）
   function squarify(nodes,x,y,w,h){
     if(!nodes.length||w<1||h<1)return;
     if(nodes.length===1){
       rects.push({node:nodes[0],x,y,w:Math.max(w,1),h:Math.max(h,1)});
       return;
     }
-    // 常に横長なら縦方向スライス、縦長なら横方向スライス
     const isHoriz=w>=h;
     const shortSide=Math.min(w,h);
-
     let row=[],rest=[...nodes];
     while(rest.length){
       const candidate=[...row,rest[0]];
@@ -2799,7 +2818,6 @@ function amRenderHeatmap(accounts,total){
         row.push(rest.shift());
       }else{break;}
     }
-
     const rowArea=row.reduce((a,n)=>a+n.area,0);
     const sliceLen=shortSide>0?rowArea/shortSide:0;
     let offset=0;
@@ -2817,14 +2835,8 @@ function amRenderHeatmap(accounts,total){
       else        squarify(rest,x,y+sliceLen,w,h-sliceLen);
     }
   }
-
   squarify(normed,0,0,containerW,TOTAL_H);
 
-  // サブタイトル動的更新（当日モードはアイテム生成時に設定済み）
-  const subtitleEl=document.getElementById('amHeatmapSubtitle');
-  if(subtitleEl&&amHeatmapMode==='csv') subtitleEl.textContent='色='+(hasPrevData?'前回CSV比変動率【前回CSV取込時 → 現在】':'含み損益率（前回データなし）');
-
-  // SVG描画
   const fmtM=v=>{
     if(v>=1e8)return(v/1e4).toFixed(0)+'万';
     if(v>=1e4)return(v/1e4).toFixed(1)+'万';
@@ -2834,7 +2846,7 @@ function amRenderHeatmap(accounts,total){
 
   let defsStr='';
   let bodyStr='';
-  const infoMap={};// ⑧タイルタップ詳細用
+  const infoMap={};
 
   rects.forEach(({node,x,y,w,h},idx)=>{
     const rx=x+GAP/2,ry=y+GAP/2,rw=Math.max(w-GAP,1),rh=Math.max(h-GAP,1);
@@ -2842,15 +2854,13 @@ function amRenderHeatmap(accounts,total){
     const sign=node.pct>=0?'+':'';
     const pctStr=sign+node.pct.toFixed(2)+'%';
     const area=rw*rh;
-    const cpId='cp'+idx;
+    const cpId='cp_'+sec.key+'_'+idx;
 
-    // フォントサイズ：タイルの短辺に合わせてスケール
     const shortSideTile=Math.min(rw,rh);
     const nameFz=Math.min(Math.max(shortSideTile*0.18,8),15);
     const pctFz =Math.min(Math.max(shortSideTile*0.16,7),13);
     const amtFz =Math.min(Math.max(shortSideTile*0.12,6),10);
 
-    // 損益額: 合算済みのgainを優先、なければ騰落率から逆算
     let gainStr='';
     const nodeGain=(node.gain!=null&&isFinite(node.gain))?node.gain
       :(node.pct!=null&&isFinite(node.pct)&&node.pct>-99.9)?node.amount-node.amount/(1+node.pct/100):null;
@@ -2859,7 +2869,6 @@ function amRenderHeatmap(accounts,total){
     }
     infoMap[node.id]={name:node.name,amount:node.amount,gain:nodeGain,pct:node.pct,isBundle:!!node.isBundle};
 
-    // 名称を幅に応じて短縮（日本語1文字≒fz幅として概算）
     let dispName=node.name;
     const maxChars=Math.max(Math.floor(rw/(nameFz*0.9)),2);
     if(dispName.length>maxChars) dispName=dispName.slice(0,maxChars);
@@ -2880,7 +2889,7 @@ function amRenderHeatmap(accounts,total){
     let ty=(ry+rh/2)-totalTH/2;
 
     defsStr+=`<clipPath id="${cpId}"><rect x="${(rx+2).toFixed(1)}" y="${ry.toFixed(1)}" width="${Math.max(rw-4,0).toFixed(1)}" height="${rh.toFixed(1)}"/></clipPath>`;
-    bodyStr+=`<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="5" fill="${color}" style="cursor:pointer" onclick="amHmSelectTile(${node.id})" onmouseenter="this.style.opacity='0.82'" onmouseleave="this.style.opacity='1'"/>`;
+    bodyStr+=`<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="5" fill="${color}" style="cursor:pointer" onclick="amHmSelectTile(${node.id},'${sec.key}')" onmouseenter="this.style.opacity='0.82'" onmouseleave="this.style.opacity='1'"/>`;
     lines.forEach(l=>{
       const ly=(ty+l.fz*0.68).toFixed(1);
       ty+=l.fz*1.35;
@@ -2888,13 +2897,11 @@ function amRenderHeatmap(accounts,total){
     });
   });
 
-  // ⑧ kaView風: 上部カラースケール凡例＋タイルタップで詳細バー（画像10）
-  amHmInfo=infoMap;
-  const selKeep=(amHmSelectedId!=null&&infoMap[amHmSelectedId])?amHmSelectedId:null;
-  el.innerHTML=amHmScaleHeader(T)
+  amHmInfoBySection[sec.key]=infoMap;
+
+  return sectionHead+totalLineHtml
     +`<svg viewBox="0 0 ${containerW} ${TOTAL_H+4}" width="100%" style="display:block"><defs>${defsStr}</defs>${bodyStr}</svg>`
-    +'<div id="am-hm-detail" style="display:none"></div>';
-  if(selKeep!=null){amHmSelectedId=null;amHmSelectTile(selKeep);}
+    +`<div id="am-hm-detail_${sec.key}" style="display:none"></div>`;
 }
 
 // ── ⑧ カラースケールヘッダー（-T2%〜+T2%・kaView画像10上部） ──
@@ -2913,15 +2920,16 @@ function amHmScaleHeader(T){
   </div>`;
 }
 
-// ── ⑧ タイルタップ → 銘柄詳細バー（画像10下部） ──
-let amHmInfo={},amHmSelectedId=null;
-function amHmSelectTile(id){
-  const el=document.getElementById('am-hm-detail');
+// ── ⑧ タイルタップ → 銘柄詳細バー（セクションごとに独立した状態を保持）──
+let amHmInfoBySection={domestic:{},foreign:{},combined:{}};
+let amHmSelectedIdBySection={domestic:null,foreign:null,combined:null};
+function amHmSelectTile(id,sectionKey){
+  const el=document.getElementById('am-hm-detail_'+sectionKey);
   if(!el)return;
-  if(amHmSelectedId===id&&el.style.display!=='none'){el.style.display='none';amHmSelectedId=null;return;}
-  const info=amHmInfo[id];
-  if(!info){el.style.display='none';amHmSelectedId=null;return;}
-  amHmSelectedId=id;
+  if(amHmSelectedIdBySection[sectionKey]===id&&el.style.display!=='none'){el.style.display='none';amHmSelectedIdBySection[sectionKey]=null;return;}
+  const info=(amHmInfoBySection[sectionKey]||{})[id];
+  if(!info){el.style.display='none';amHmSelectedIdBySection[sectionKey]=null;return;}
+  amHmSelectedIdBySection[sectionKey]=id;
   const gv=(info.gain!=null&&isFinite(info.gain))?info.gain:(info.pct||0);
   const pos=gv>=0;
   const gCol=pos?'#ff5b5b':'#57a8ff';
