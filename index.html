@@ -2371,7 +2371,20 @@ async function amFetchDailyQuotes(codes){
         const meta=result?.meta||{};
         if(pairs.length>=2){
           const cur=(meta.regularMarketPrice&&meta.regularMarketPrice>0)?meta.regularMarketPrice:pairs[pairs.length-1].c;
-          const prev=pairs[pairs.length-2].c;
+          // 前日終値の決定: 配列末尾＝当日バーとは限らない（Yahoo側の更新タイミング次第で
+          // 当日分がまだ追加されていないことがあり、その場合 pairs[length-2] は「一昨日」になってしまう）。
+          // 1) meta.previousClose / chartPreviousClose があれば最優先（Yahooが明示する「前日終値」そのもの）
+          // 2) 無ければ、配列末尾バーの日付が「今日」と一致するかで pairs[length-2]/[length-1] を切り替える
+          const metaPrevClose=meta.previousClose||meta.chartPreviousClose;
+          let prev;
+          if(metaPrevClose>0){
+            prev=metaPrevClose;
+          }else{
+            const lastBarDate=new Date(pairs[pairs.length-1].t);
+            const now=new Date();
+            const lastIsToday=lastBarDate.getFullYear()===now.getFullYear()&&lastBarDate.getMonth()===now.getMonth()&&lastBarDate.getDate()===now.getDate();
+            prev=lastIsToday?pairs[pairs.length-2].c:pairs[pairs.length-1].c;
+          }
           // 約1ヶ月前・約1年前に最も近い終値
           const near=days=>{const tg=Date.now()-days*86400000;let best=null,bd=Infinity;for(const p of pairs){const d=Math.abs(p.t-tg);if(d<bd){bd=d;best=p;}}return best;};
           const m1p=near(30);
@@ -9687,7 +9700,17 @@ async function wlFetchCharts(codes,intraday=false){
         }else{
           pairs=pairs.slice(-23);// 直近1か月（約22営業日）
           if(pairs.length>=2){
-            q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1]),prev:pairs[pairs.length-2][1]};
+            const metaPrevClose=meta.chartPreviousClose||meta.previousClose;
+            let prevC;
+            if(metaPrevClose>0){
+              prevC=metaPrevClose;
+            }else{
+              const lastBarDate=new Date(pairs[pairs.length-1][0]);
+              const now=new Date();
+              const lastIsToday=lastBarDate.getFullYear()===now.getFullYear()&&lastBarDate.getMonth()===now.getMonth()&&lastBarDate.getDate()===now.getDate();
+              prevC=lastIsToday?pairs[pairs.length-2][1]:pairs[pairs.length-1][1];
+            }
+            q[code]={pairs,cur:(meta.regularMarketPrice>0?meta.regularMarketPrice:pairs[pairs.length-1][1]),prev:prevC};
           }else q[code]={err:1};
         }
       }catch(e){q[code]={err:1};}
