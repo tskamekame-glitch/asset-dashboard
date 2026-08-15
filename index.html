@@ -2447,8 +2447,9 @@ function amDailyTargets(accounts){
   accounts.forEach(a=>{
     if(a.sold||!a.amount||a.amount<=0||EXCL.includes(a.cat))return;
     const code=(a.code||'').trim();
-    const okCode=/^[0-9][0-9A-Za-z]{3}$/.test(code);
-    if(a.cat==='個別株'||a.cat==='高配当'){
+    // 日本株コード（数字始まり4桁、213A等の混在含む）または米国ティッカー（英字のみ1〜5文字）の両方を許容
+    const okCode=/^[0-9][0-9A-Za-z]{3}$/.test(code)||/^[A-Za-z]{1,5}$/.test(code);
+    if(a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式'){
       if(okCode)targets.push({a,qcode:code,approx:false});
     }else if(IDX.includes(a.cat)){
       if(okCode)targets.push({a,qcode:code,approx:false});
@@ -2661,7 +2662,7 @@ function amRenderHeatmap(accounts,total){
   AM_HM_SECTIONS.forEach(sec=>{
     const secAccounts=accounts.filter(a=>sec.cats.includes(a.cat));
     const items=amBuildHeatmapItems(secAccounts);
-    html+=amRenderHeatmapSectionHtml(sec,items,T,containerW);
+    html+=amRenderHeatmapSectionHtml(sec,items,T,containerW,secAccounts);
   });
   el.innerHTML=html;
 
@@ -2705,8 +2706,25 @@ function amBuildHeatmapItems(accounts){
     }).filter(Boolean);
     items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
   }else{
-    const entries=accounts.filter(a=>a.amount>0&&a.prevSBIAmount>0)
-      .map(a=>({key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-a.prevSBIAmount,base:a.prevSBIAmount,id:a.id}));
+    // 前回比モード：SBI CSV由来のprevSBIAmountで比較。
+    // moomoo証券等SBI CSVを経由しない銘柄（prevSBIAmount未設定）は、
+    // 株価キャッシュ（当日/月間/年間モードで取得済みの前日終値）があればそちらで代替する。
+    const q=amLoadDailyQuotes();
+    const entries=accounts.filter(a=>a.amount>0).map(a=>{
+      if(a.prevSBIAmount>0){
+        return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-a.prevSBIAmount,base:a.prevSBIAmount,id:a.id};
+      }
+      const code=(a.code||'').trim();
+      if(code&&q&&q.quotes){
+        const qd=q.quotes[code];
+        if(qd&&!qd.err&&qd.prev>0){
+          const pct=(qd.cur-qd.prev)/qd.prev*100;
+          const startVal=a.amount/(1+pct/100);
+          return{key:amLotKey(a),name:amLotBaseName(a.name)+'≈',amount:a.amount,gain:a.amount-startVal,base:startVal,id:a.id};
+        }
+      }
+      return null;
+    }).filter(Boolean);
     items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
   }
 
@@ -2746,10 +2764,24 @@ function amBuildHeatmapItems(accounts){
 }
 
 // 1セクション分（国内株式／外国株式／合算のいずれか）のヒートマップHTMLを生成
-function amRenderHeatmapSectionHtml(sec,items,T,containerW){
+function amRenderHeatmapSectionHtml(sec,items,T,containerW,secAccounts){
   const sectionHead=`<div style="font-size:13px;font-weight:700;color:var(--text2);margin:${sec.key==='domestic'?'0':'16px'} 0 4px">${sec.title}</div>`;
   if(!items||!items.length){
-    return sectionHead+'<p style="text-align:center;color:var(--text3);font-size:12px;padding:10px 0 16px">該当する銘柄がありません</p>';
+    let msg='該当する銘柄がありません';
+    if(secAccounts&&secAccounts.length>0){
+      // 保有はあるのに表示できない＝データ不足。原因をモード別に案内する
+      if(amHeatmapMode==='all'){
+        msg='保有はありますが、取得単価が未入力のため含み損益を計算できません（口座編集で取得単価を入力してください）';
+      }else if(AM_QUOTE_MODES.includes(amHeatmapMode)){
+        const noCode=secAccounts.some(a=>!(a.code||'').trim());
+        msg=noCode
+          ?'保有はありますが、証券コード（ティッカー）が未入力の銘柄があります（口座編集で入力してください）'
+          :'株価データを取得できていません。「🌐 外国株更新」等で株価を取得してから再度お試しください';
+      }else{
+        msg='保有はありますが、前回比較データがありません。「当日」モードで一度株価を取得するか、口座編集で前回評価額を入力してください';
+      }
+    }
+    return sectionHead+`<p style="text-align:center;color:var(--text3);font-size:12px;padding:10px 0 16px;line-height:1.6">${msg}</p>`;
   }
 
   const pctToColor=pct=>{
