@@ -2651,7 +2651,26 @@ function amRenderHeatmap(accounts,total){
     }
   }else{
     // ── 前回CSV比モード ──
-    if(subtitleEl0)subtitleEl0.textContent='色=前回CSV比変動率【前回CSV取込時 → 現在】・個別株/高配当/外国株式が対象';
+    // prevSBIAmount（SBI CSV由来）を持たない銘柄（moomoo購入分等）は、株価キャッシュで前日比を代用する。
+    // キャッシュが無ければ、当日モードと同様にここで自動取得してから再描画する。
+    const noPrevAccounts=stockAccounts.filter(a=>!a.sold&&a.amount>0&&!(a.prevSBIAmount>0));
+    const fallbackTargets=amDailyTargets(noPrevAccounts);
+    if(fallbackTargets.length){
+      const q=amLoadDailyQuotes();
+      const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
+      const missing=fallbackTargets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
+      if(missing.length){
+        el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 前回比較データの無い銘柄の株価を取得中...（${missing.length}銘柄）</p>`;
+        if(subtitleEl0)subtitleEl0.textContent='色=前回CSV比変動率【前回CSV取込時 → 現在】・個別株/高配当/外国株式が対象';
+        if(!amDailyFetching){
+          amFetchDailyQuotes([...new Set(fallbackTargets.map(t=>t.qcode))]).then(()=>{
+            try{amRenderHeatmap(accounts,total);}catch(e){}
+          });
+        }
+        return;
+      }
+    }
+    if(subtitleEl0)subtitleEl0.textContent='色=前回CSV比変動率【前回CSV取込時 → 現在】・個別株/高配当/外国株式が対象（≈は前日終値比で代用）';
   }
 
   // 色: モードに応じたしきい値（日次±3% / 月間±10% / 年間・全期間±30%）
@@ -2778,7 +2797,7 @@ function amRenderHeatmapSectionHtml(sec,items,T,containerW,secAccounts){
           ?'保有はありますが、証券コード（ティッカー）が未入力の銘柄があります（口座編集で入力してください）'
           :'株価データを取得できていません。「🌐 外国株更新」等で株価を取得してから再度お試しください';
       }else{
-        msg='保有はありますが、前回比較データがありません。「当日」モードで一度株価を取得するか、口座編集で前回評価額を入力してください';
+        msg='保有はありますが、株価の自動取得に失敗しました。証券コード（ティッカー）が口座編集で正しく入力されているかご確認のうえ、再度お試しください';
       }
     }
     return sectionHead+`<p style="text-align:center;color:var(--text3);font-size:12px;padding:10px 0 16px;line-height:1.6">${msg}</p>`;
