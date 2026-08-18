@@ -1097,6 +1097,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div class="card" id="indexCard" style="display:none"><div class="card-head"><h2>🌍 インデックス 推移</h2></div><div class="chart-container"><canvas id="indexChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
     <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div><div id="donutLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
+    <div class="card" id="donutCcyCard" style="display:none"><div class="card-head"><h2>🌐 外国株式 通貨別内訳</h2></div><div class="chart-container"><canvas id="donutCcyChart"></canvas></div><div id="donutCcyLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
     <!-- 銘柄別保有円グラフ（4種） -->
     <div class="card" id="donutStockCard" style="display:none">
       <div class="card-head"><h2>📈 個別株 銘柄別保有</h2></div>
@@ -6757,6 +6758,54 @@ function trRenderCharts(){
         +`<span style="color:var(--text3)">${pct}%</span>`
         +`</div>`;
     }).join('');
+  }
+  // ── 🌐 外国株式 通貨別内訳donut（保有中の外国株式をpriceCcyで集計。現在の保有ベース・履歴データ不要）──
+  trDestroyChart('donutCcy');
+  {
+    const donutCcyCardEl=document.getElementById('donutCcyCard');
+    const ccyMap={};
+    (typeof amAccounts!=='undefined'?amAccounts:[]).forEach(a=>{
+      if(a.cat!=='外国株式'||a.sold||!(a.amount>0))return;
+      const ccy=(a.priceCcy||'USD').toUpperCase();// 未取得の口座はUSD扱い（暫定）
+      ccyMap[ccy]=(ccyMap[ccy]||0)+a.amount;
+    });
+    const ccyEntries=Object.entries(ccyMap).sort((a,b)=>b[1]-a[1]);
+    if(!ccyEntries.length||ccyEntries.length<2){
+      // 外国株式が無い、または通貨が1種類のみの場合は内訳の意味が薄いため非表示
+      if(donutCcyCardEl)donutCcyCardEl.style.display='none';
+    }else{
+      if(donutCcyCardEl)donutCcyCardEl.style.display='';
+      const CCY_COLORS={USD:'#2980b9',KRW:'#E24B4A',EUR:'#8B5CF6',JPY:'#0F6E56',GBP:'#EF9F27',CNY:'#D4537E'};
+      const CCY_PALETTE=['#2980b9','#E24B4A','#8B5CF6','#0F6E56','#EF9F27','#D4537E','#888780'];
+      const ccyTotal=ccyEntries.reduce((s,[,v])=>s+v,0);
+      const ccyTextColor=isDark?'#e5e5ea':'#1c1c1e';
+      const donutCcyCenterPlugin={id:'donutCcyCenter',afterDraw(chart){
+        const{ctx,chartArea:{top,bottom,left,right}}=chart;
+        const total=chart.config.options.plugins.donutCcyCenter?.total;
+        const color=chart.config.options.plugins.donutCcyCenter?.color||'#333';
+        if(!total)return;
+        const cx=(left+right)/2,cy=(top+bottom)/2;
+        ctx.save();
+        ctx.font='bold 13px sans-serif';ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(Math.round(total/10000).toLocaleString()+'万円',cx,cy-9);
+        ctx.font='10px sans-serif';ctx.fillStyle=color+'99';
+        ctx.fillText('外国株式評価額',cx,cy+10);
+        ctx.restore();
+      }};
+      chartInstances['donutCcy']=new Chart(document.getElementById('donutCcyChart'),{type:'doughnut',data:{labels:ccyEntries.map(([c])=>c),datasets:[{data:ccyEntries.map(([,v])=>v),backgroundColor:ccyEntries.map(([c],i)=>CCY_COLORS[c]||CCY_PALETTE[i%CCY_PALETTE.length]),borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,plugins:{donutCcyCenter:{total:ccyTotal,color:ccyTextColor},legend:{display:false},tooltip:{enabled:true,callbacks:{label:ctx=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(ctx.raw/t*100).toFixed(1);return ctx.label+': '+trFmt(ctx.raw)+' ('+p+'%)';}},backgroundColor:'rgba(0,0,0,0.75)',padding:10,cornerRadius:8,displayColors:true},datalabels:{color:'#fff',font:{size:11,weight:'600'},textShadowBlur:3,textShadowColor:'rgba(0,0,0,0.5)',formatter:(v,ctx)=>{const t=ctx.dataset.data.reduce((a,b)=>a+b,0);const p=(v/t*100).toFixed(1);const label=ctx.chart.data.labels[ctx.dataIndex];return[label,p+'%'];},align:'center',anchor:'center'}},cutout:'60%'},plugins:[ChartDataLabels,donutCcyCenterPlugin]});
+      const donutCcyLegendEl=document.getElementById('donutCcyLegend');
+      if(donutCcyLegendEl){
+        donutCcyLegendEl.innerHTML=ccyEntries.map(([ccy,val],i)=>{
+          const pct=ccyTotal>0?(val/ccyTotal*100).toFixed(1):'0.0';
+          const col=CCY_COLORS[ccy]||CCY_PALETTE[i%CCY_PALETTE.length];
+          return`<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);">`
+            +`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span>`
+            +`<span style="font-weight:600">${ccy}</span>`
+            +`<span style="color:var(--text3)">${pct}%（${fmtOku(val)}）</span>`
+            +`</div>`;
+        }).join('');
+      }
+    }
   }
   // ── 銘柄別保有円グラフ（5種）──
   (function renderBrandDonuts(){
