@@ -1088,6 +1088,21 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     </div>
     <div class="card" id="compareCard" style="display:none"><div class="card-head"><h2>📊 日本株・外国株・高配当 比較推移</h2></div><div class="chart-container"><canvas id="compareChart"></canvas></div></div>
     <div class="card" id="ratioCard" style="display:none"><div class="card-head"><h2>⚖️ 国内・外国 株式比率推移</h2></div><div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">個別株＋高配当（国内）と外国株式の構成比（％）の推移。評価額の増減ではなく配分そのものの変化を見る指標です</div><div class="chart-container"><canvas id="ratioChart"></canvas></div></div>
+    <div class="card" id="targetCard" style="display:none">
+      <div class="card-head"><h2>🎯 目標配分（国内・外国）</h2></div>
+      <div style="padding:0 16px 12px;font-size:11px;color:var(--text3)">外国株式の目標比率を設定すると、実績とのギャップと目安の買付額を計算します</div>
+      <div id="targetBody" style="padding:0 16px 16px"></div>
+    </div>
+    <div class="card" id="bubbleCard" style="display:none">
+      <div class="card-head"><h2>🔍 保有比率×騰落率（見直し優先度）</h2></div>
+      <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">横軸＝株式全体に占める保有比率、縦軸＝取得来の騰落率、円の大きさ＝評価額。右下（大きく持っていて下がっている）ほど見直しの優先度が高い銘柄です</div>
+      <div style="display:flex;gap:10px;padding:0 16px 4px;font-size:10px;color:var(--text2)">
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E24B4A;margin-right:3px"></span>個別株</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8B5CF6;margin-right:3px"></span>高配当</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2980b9;margin-right:3px"></span>外国株式</span>
+      </div>
+      <div class="chart-container" style="min-height:280px"><canvas id="bubbleChart"></canvas></div>
+    </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 日本株推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="foreignStockCard" style="display:none"><div class="card-head"><h2>🌍 外国株式 推移</h2></div><div class="chart-container"><canvas id="foreignStockChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
@@ -6515,7 +6530,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','compareCard','ratioCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','compareCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -6888,7 +6903,19 @@ function trRenderCharts(){
       const rawCount=raw.length;
 
       const sumEl=document.getElementById(summaryId);
-      if(sumEl)sumEl.textContent='合計 '+trFmt(total)+' / '+mergedCount+'銘柄'+(rawCount>mergedCount?' ('+rawCount+'口座)':'');
+      if(sumEl){
+        let html=esc('合計 '+trFmt(total)+' / '+mergedCount+'銘柄'+(rawCount>mergedCount?' ('+rawCount+'口座)':''));
+        // ── 集中リスク警告：1銘柄でカテゴリ内50%超を占める場合はバッジ表示 ──
+        const CONCENTRATION_THRESHOLD=50;
+        if(entries.length>1&&total>0){
+          const[topName,topVal]=entries[0];
+          const topPct=topVal/total*100;
+          if(topPct>=CONCENTRATION_THRESHOLD){
+            html+=` <span style="display:inline-block;margin-top:4px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(192,57,43,0.12);color:#C0392B">⚠️ ${esc(topName)}が${topPct.toFixed(1)}%を占めています（集中リスク）</span>`;
+          }
+        }
+        sumEl.innerHTML=html;
+      }
 
       // グラフ高さを銘柄数に応じて調整
       const legendRows=Math.ceil(mergedCount/2);
@@ -6967,6 +6994,8 @@ function trRenderCharts(){
   try{trRenderPriceAlert(filtered);}catch(e){console.error('trRenderPriceAlert error:',e);}
   try{trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderCompareChart error:',e);}
   try{trRenderRatioChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderRatioChart error:',e);}
+  try{trRenderTargetCard();}catch(e){console.error('trRenderTargetCard error:',e);}
+  try{trRenderBubbleChart(tickColor,gridColor,isDark);}catch(e){console.error('trRenderBubbleChart error:',e);}
   try{trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat1 error:',e);}
   try{trRenderCategoryChart('外国株式','foreignStockChart','foreignStockCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat_foreign error:',e);}
   try{trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat2 error:',e);}
@@ -8074,6 +8103,124 @@ function trRenderRatioChart(filtered,labels,tickColor,gridColor,isDark){
       x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
     },
     layout:{padding:{top:8,right:8}}
+  },plugins:[ChartDataLabels]});
+}
+// ── 目標配分（外国株式の目標比率）の保存・取得・表示 ──
+function trGetTargetForeignPct(){
+  const v=parseFloat(localStorage.getItem('tr_target_foreign_pct'));
+  return(isFinite(v)&&v>=0&&v<=100)?v:30;// デフォルト30%
+}
+function trSaveTargetPct(){
+  const el=document.getElementById('targetPctInput');
+  if(!el)return;
+  const v=parseFloat(el.value);
+  if(!isFinite(v)||v<0||v>100){showToast('⚠️ 0〜100の数値を入力してください');return;}
+  localStorage.setItem('tr_target_foreign_pct',String(v));
+  showToast('✓ 目標配分を保存しました');
+  try{trRenderTargetCard();}catch(e){}
+}
+function trRenderTargetCard(){
+  const card=document.getElementById('targetCard');
+  const body=document.getElementById('targetBody');
+  if(!body)return;
+  const DOM_CATS=['個別株','高配当'];
+  const accounts=(typeof amAccounts!=='undefined'?amAccounts:[]).filter(a=>!a.sold&&(a.amount||0)>0);
+  const domestic=accounts.filter(a=>DOM_CATS.includes(a.cat)).reduce((s,a)=>s+a.amount,0);
+  const foreign=accounts.filter(a=>a.cat==='外国株式').reduce((s,a)=>s+a.amount,0);
+  const total=domestic+foreign;
+  if(total<=0){if(card)card.style.display='none';return;}
+  if(card)card.style.display='block';
+  const targetPct=trGetTargetForeignPct();
+  const actualPct=foreign/total*100;
+  const gap=actualPct-targetPct;
+  const T=targetPct/100;
+  let suggestion='';
+  if(T>0&&T<1){
+    const x=(T*total-foreign)/(1-T);
+    if(x>1000){
+      suggestion=`外国株式をあと約 <b>${fmt(Math.round(x))}</b> 買い増すと、目標の${targetPct}%に到達します。`;
+    }else if(x<-1000){
+      suggestion=`既に目標比率を超えています（目標に戻すには外国株式を約${fmt(Math.round(-x))}減らすか、国内株式を買い増す必要があります）。`;
+    }else{
+      suggestion='ほぼ目標通りの配分です。';
+    }
+  }else if(T===0){
+    suggestion=foreign>0?'目標は国内100%ですが、外国株式を保有しています。':'目標通り国内のみの配分です。';
+  }
+  const gapAbs=Math.abs(gap);
+  const gapColor=gapAbs<3?'var(--green)':(gap<0?'#2980b9':'#C0392B');
+  body.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--text2)">外国株式 目標比率</label>
+      <input type="number" id="targetPctInput" value="${targetPct}" min="0" max="100" step="1" inputmode="numeric" style="width:70px;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit">
+      <span style="font-size:12px;color:var(--text3)">%</span>
+      <button onclick="trSaveTargetPct()" style="padding:6px 14px;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">保存</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+      <span>実績: <b style="color:var(--text)">${actualPct.toFixed(1)}%</b></span><span>目標: <b style="color:var(--text)">${targetPct}%</b></span>
+    </div>
+    <div style="position:relative;height:12px;background:rgba(128,128,128,0.15);border-radius:6px;overflow:hidden;margin-bottom:8px">
+      <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(actualPct,100)}%;background:#2980b9;border-radius:6px;transition:width 0.3s"></div>
+      <div style="position:absolute;left:${Math.min(Math.max(targetPct,0),100)}%;top:-3px;height:18px;width:2px;background:#333;transform:translateX(-1px)"></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:${gapColor};margin-bottom:10px">${gap>=0?'+':''}${gap.toFixed(1)}pt（${gapAbs<3?'ほぼ目標通り':(gap>=0?'目標超過':'目標未達')}）</div>
+    ${suggestion?`<div style="font-size:12px;color:var(--text2);line-height:1.6;padding:9px 11px;background:rgba(41,128,185,0.08);border-radius:8px">${suggestion}</div>`:''}
+  `;
+}
+// ── 保有比率×取得来騰落率のバブルチャート（見直し優先度の可視化）──
+function trRenderBubbleChart(tickColor,gridColor,isDark){
+  const card=document.getElementById('bubbleCard');
+  const STOCK_CATS=['個別株','高配当','外国株式'];
+  const CAT_COLORS={'個別株':'#E24B4A','高配当':'#8B5CF6','外国株式':'#2980b9'};
+  const stripLotSuffix=name=>String(name||'')
+    .replace(/（\d{4}\/\d{2}\/\d{2}買付[^）]*）/g,'')
+    .replace(/\s*買付\d*$/,'')
+    .replace(/\s+\d+$/,'')
+    .trim();
+  const raw=(typeof amAccounts!=='undefined'?amAccounts:[]).filter(a=>!a.sold&&STOCK_CATS.includes(a.cat)&&(a.amount||0)>0);
+  if(!raw.length){if(card)card.style.display='none';return;}
+  const merged={};
+  raw.forEach(a=>{
+    const key=a.cat+'|'+stripLotSuffix(a.name);
+    if(!merged[key])merged[key]={name:stripLotSuffix(a.name),amount:0,cost:0,cat:a.cat,hasCost:false};
+    const m=merged[key];
+    m.amount+=a.amount;
+    const cost=(typeof _calcCostTotal==='function')?_calcCostTotal(a):0;
+    if(cost>0){m.cost+=cost;m.hasCost=true;}
+  });
+  const totalStock=Object.values(merged).reduce((s,m)=>s+m.amount,0);
+  const points=Object.values(merged).filter(m=>m.hasCost&&m.cost>0&&totalStock>0).map(m=>{
+    const pct=(m.amount-m.cost)/m.cost*100;
+    const ratio=m.amount/totalStock*100;
+    return{x:Math.round(ratio*10)/10,y:Math.round(pct*10)/10,r:Math.max(Math.sqrt(m.amount/10000)*0.9,4),name:m.name,amount:m.amount,cat:m.cat};
+  });
+  if(!points.length){if(card)card.style.display='none';return;}
+  if(card)card.style.display='block';
+  trDestroyChart('bubbleChart');
+  chartInstances['bubbleChart']=new Chart(document.getElementById('bubbleChart'),{type:'bubble',data:{datasets:[{
+    label:'保有銘柄',
+    data:points,
+    backgroundColor:points.map(p=>(CAT_COLORS[p.cat]||'#888780')+'99'),
+    borderColor:points.map(p=>CAT_COLORS[p.cat]||'#888780'),
+    borderWidth:1.5
+  }]},options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>{const p=ctx.raw;return[p.name,'保有比率: '+p.x+'%','取得来騰落率: '+(p.y>=0?'+':'')+p.y+'%','評価額: '+trFmt(p.amount)];}}},
+      datalabels:{
+        display:ctx=>{const d=ctx.dataset.data[ctx.dataIndex];return d&&d.r>9;},
+        color:isDark?'#e5e5ea':'#333',
+        font:{size:9,weight:'600'},
+        formatter:v=>v.name.length>6?v.name.slice(0,5)+'…':v.name,
+        align:'top',offset:4
+      }
+    },
+    scales:{
+      x:{title:{display:true,text:'保有比率（％）',color:tickColor,font:{size:10}},ticks:{color:tickColor,font:{size:10},callback:v=>v+'%'},grid:{color:gridColor}},
+      y:{title:{display:true,text:'取得来 騰落率（％）',color:tickColor,font:{size:10}},ticks:{color:tickColor,font:{size:10},callback:v=>v+'%'},grid:{color:gridColor}}
+    },
+    layout:{padding:{top:16,right:16,bottom:4,left:4}}
   },plugins:[ChartDataLabels]});
 }
 // 日本株（個別株）・外国株式・高配当の3カテゴリを1つの折れ線グラフに重ねて比較表示
