@@ -2254,6 +2254,8 @@ function amRender(){
   }catch(e){}
   // FXロットがあればドル円レートを自動更新（15分キャッシュ・非同期）
   try{setTimeout(()=>fxLotRefresh(false),0);}catch(e){}
+  // 外国株式があればティッカーをキーに株価・為替レートを自動更新（15分キャッシュ・非同期・ボタン操作不要）
+  try{setTimeout(()=>amAutoFetchForeignQuotesIfStale(),0);}catch(e){}
   // 売却済みと保有中を分離
   const activeAccounts=amAccounts.filter(a=>!a.sold);
   const soldAccounts=amAccounts.filter(a=>a.sold);
@@ -3958,10 +3960,49 @@ async function amFetchAllForeignQuotes(){
         updated++;
       }catch(e){failed.push(a.name);}
     }
+    localStorage.setItem('amForeignQuoteAutoCache',JSON.stringify({ts:Date.now()}));
     amRender();await amSaveToSheet();refreshHome();
     showToast(`✅ ${updated}件更新（為替 ${fxRounded}円/USD）`+(failed.length?` ⚠️失敗: ${failed.join('・')}`:''),5000);
   }catch(e){
     showToast('⚠️ 為替レート取得に失敗しました: '+e.message,4000);
+  }
+}
+let amForeignQuoteAutoFetching=false;
+// 資産管理タブを開く／更新するたびに呼ばれる。15分以内に取得済みなら何もしない（fxLotRefreshと同じキャッシュ方式）。
+// ボタン操作なしで、外国株式の株価・為替レートをバックグラウンドで静かに最新化する。
+async function amAutoFetchForeignQuotesIfStale(){
+  const targets=amAccounts.filter(a=>a.cat==='外国株式'&&!a.sold&&(a.code||'').trim());
+  if(!targets.length)return;
+  let cache=null;try{cache=JSON.parse(localStorage.getItem('amForeignQuoteAutoCache')||'null');}catch(e){}
+  if(cache&&Date.now()-cache.ts<15*60*1000)return;
+  if(amForeignQuoteAutoFetching)return;
+  amForeignQuoteAutoFetching=true;
+  // 連続呼び出しを防ぐため、取得開始時点でキャッシュ時刻を先に更新
+  try{localStorage.setItem('amForeignQuoteAutoCache',JSON.stringify({ts:Date.now()}));}catch(e){}
+  try{
+    const fxRate=await amFetchQuote('JPY=X');
+    const fxRounded=Math.round(fxRate*10000)/10000;
+    amSetFxRate(fxRounded);
+    let updated=0;
+    for(const a of targets){
+      try{
+        const price=await amFetchQuote(a.code);
+        a.price=Math.round(price*100)/100;
+        a.fxRate=fxRounded;
+        if(a.shares>0)a.amount=Math.round(a.shares*a.price*fxRounded);
+        a.updated=todayStr();
+        updated++;
+      }catch(e){/* 個別銘柄の失敗は無視して続行（手動の🌐外国株更新ボタンで詳細確認可） */}
+    }
+    if(updated>0){
+      amRender();
+      try{await amSaveToSheet();}catch(e){}
+      try{refreshHome();}catch(e){}
+    }
+  }catch(e){
+    // バックグラウンド取得の失敗は画面に出さず静かに無視
+  }finally{
+    amForeignQuoteAutoFetching=false;
   }
 }
 // 口座追加/編集モーダル内の「🌐 ティッカーから株価・為替を自動取得」ボタン
