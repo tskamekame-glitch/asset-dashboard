@@ -1092,7 +1092,8 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <!-- 詳細一覧 -->
       <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
-    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
+    <div class="card" id="compareCard" style="display:none"><div class="card-head"><h2>📊 日本株・外国株・高配当 比較推移</h2></div><div class="chart-container"><canvas id="compareChart"></canvas></div></div>
+    <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 日本株推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="foreignStockCard" style="display:none"><div class="card-head"><h2>🌍 外国株式 推移</h2></div><div class="chart-container"><canvas id="foreignStockChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
     <div class="card" id="indexCard" style="display:none"><div class="card-head"><h2>🌍 インデックス 推移</h2></div><div class="chart-container"><canvas id="indexChart"></canvas></div></div>
@@ -6508,7 +6509,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','compareCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -6958,6 +6959,7 @@ function trRenderCharts(){
   try{trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   }catch(e){console.error('trRenderGainBarChart error:',e);}
   try{trRenderPriceAlert(filtered);}catch(e){console.error('trRenderPriceAlert error:',e);}
+  try{trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderCompareChart error:',e);}
   try{trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat1 error:',e);}
   try{trRenderCategoryChart('外国株式','foreignStockChart','foreignStockCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat_foreign error:',e);}
   try{trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat2 error:',e);}
@@ -8030,6 +8032,44 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
       +renderDetail([...indexItems,...soldIndexItems],'🌍 インデックス・投信（含み＋確定）')
       +renderDetail(otherItems,'その他');
   }
+}
+// 日本株（個別株）・外国株式・高配当の3カテゴリを1つの折れ線グラフに重ねて比較表示
+function trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark){
+  const card=document.getElementById('compareCard');
+  const CATS=[
+    {key:'個別株',label:'日本株',color:'#E24B4A'},
+    {key:'外国株式',label:'外国株',color:'#2980b9'},
+    {key:'高配当',label:'高配当株',color:'#8B5CF6'}
+  ];
+  const hasAny=filtered.some(s=>s.cats&&CATS.some(c=>s.cats[c.key]>0));
+  if(!hasAny){if(card)card.style.display='none';return;}
+  if(card)card.style.display='block';
+  const datasets=CATS.map(c=>({
+    label:c.label,
+    data:filtered.map(s=>(s.cats&&s.cats[c.key])||0),
+    borderColor:c.color,
+    backgroundColor:c.color+'18',
+    borderWidth:2,
+    pointRadius:2,
+    pointBackgroundColor:c.color,
+    fill:false,
+    tension:0.3
+  }));
+  trDestroyChart('compareChart');
+  const canvas=document.getElementById('compareChart');
+  chartInstances['compareChart']=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},
+      datalabels:{display:false}
+    },
+    scales:{
+      y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
+      x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
+    },
+    layout:{padding:{top:8,right:8}}
+  },plugins:[ChartDataLabels]});
 }
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
   // 個別株グラフから完全除外する口座名（PayPay系投信など）
