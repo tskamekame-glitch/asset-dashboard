@@ -1008,12 +1008,6 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <!-- グラフ -->
       <div class="chart-container" style="min-height:280px"><canvas id="simChart"></canvas></div>
     </div>
-    <!-- 週次収支 -->
-    <div class="card" id="weeklyCard" style="display:none">
-      <div class="card-head"><h2>📅 週次収支</h2></div>
-      <div style="padding:0 16px 8px;font-size:11px;color:var(--text3)">CSVアップロードデータから週ごとの資産増減を自動集計します</div>
-      <div id="weeklyContent" style="padding:0 8px 12px"></div>
-    </div>
     <!-- 投資結果（損益）推移 -->
     <div class="card" id="gainLineCard" style="display:none">
       <div class="card-head"><h2>📈 投資結果（損益）推移</h2></div>
@@ -1093,6 +1087,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
     <div class="card" id="compareCard" style="display:none"><div class="card-head"><h2>📊 日本株・外国株・高配当 比較推移</h2></div><div class="chart-container"><canvas id="compareChart"></canvas></div></div>
+    <div class="card" id="ratioCard" style="display:none"><div class="card-head"><h2>⚖️ 国内・外国 株式比率推移</h2></div><div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">個別株＋高配当（国内）と外国株式の構成比（％）の推移。評価額の増減ではなく配分そのものの変化を見る指標です</div><div class="chart-container"><canvas id="ratioChart"></canvas></div></div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 日本株推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="foreignStockCard" style="display:none"><div class="card-head"><h2>🌍 外国株式 推移</h2></div><div class="chart-container"><canvas id="foreignStockChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
@@ -1132,7 +1127,18 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div class="chart-container" style="min-height:240px"><canvas id="donutIndiaChart"></canvas></div>
     </div>
     <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+    <!-- ── ここから下：投資判断ではなく記録・家計の確認用（データ管理） ── -->
+    <div style="display:flex;align-items:center;gap:8px;margin:20px 0 8px;padding:0 4px">
+      <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.05em">📁 データ管理・記録</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
     <div class="card" id="commentCard" style="display:none"><div class="card-head"><h2>📝 前月比コメント</h2></div><div id="commentBody" style="padding:12px 16px 16px;font-size:13px;line-height:1.8;color:var(--text2)"></div></div>
+    <!-- 週次収支 -->
+    <div class="card" id="weeklyCard" style="display:none">
+      <div class="card-head"><h2>📅 週次収支</h2></div>
+      <div style="padding:0 16px 8px;font-size:11px;color:var(--text3)">CSVアップロードデータから週ごとの資産増減を自動集計します</div>
+      <div id="weeklyContent" style="padding:0 8px 12px"></div>
+    </div>
     <div style="display:none;margin-bottom:12px" id="exportBar">
       <button class="btn-accent" style="width:100%;border-radius:10px;padding:12px" onclick="exportAllCSV()">↓ 全期間データをCSVで書き出し（バックアップ）</button>
     </div>
@@ -6509,7 +6515,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','compareCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','compareCard','ratioCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -6960,6 +6966,7 @@ function trRenderCharts(){
   }catch(e){console.error('trRenderGainBarChart error:',e);}
   try{trRenderPriceAlert(filtered);}catch(e){console.error('trRenderPriceAlert error:',e);}
   try{trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderCompareChart error:',e);}
+  try{trRenderRatioChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderRatioChart error:',e);}
   try{trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat1 error:',e);}
   try{trRenderCategoryChart('外国株式','foreignStockChart','foreignStockCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat_foreign error:',e);}
   try{trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat2 error:',e);}
@@ -8032,6 +8039,42 @@ function trRenderGainBarChart(filtered,tickColor,gridColor,isDark){
       +renderDetail([...indexItems,...soldIndexItems],'🌍 インデックス・投信（含み＋確定）')
       +renderDetail(otherItems,'その他');
   }
+}
+// 国内株式（個別株＋高配当）と外国株式の構成比（％）の推移。
+// 評価額そのままの比較（trRenderCompareChart）だと株価変動と配分変更の効果が混ざってしまうため、
+// 「意図した配分シフトがどれだけ進んでいるか」を見るための％ベースの指標として別途用意する。
+function trRenderRatioChart(filtered,labels,tickColor,gridColor,isDark){
+  const card=document.getElementById('ratioCard');
+  const rows=filtered.map(s=>{
+    const domestic=((s.cats&&s.cats['個別株'])||0)+((s.cats&&s.cats['高配当'])||0);
+    const foreign=(s.cats&&s.cats['外国株式'])||0;
+    const total=domestic+foreign;
+    if(total<=0)return null;
+    return{domesticPct:domestic/total*100,foreignPct:foreign/total*100};
+  });
+  const hasAny=rows.some(r=>r!=null);
+  if(!hasAny){if(card)card.style.display='none';return;}
+  if(card)card.style.display='block';
+  const domesticData=rows.map(r=>r?Math.round(r.domesticPct*10)/10:null);
+  const foreignData=rows.map(r=>r?Math.round(r.foreignPct*10)/10:null);
+  trDestroyChart('ratioChart');
+  const canvas=document.getElementById('ratioChart');
+  chartInstances['ratioChart']=new Chart(canvas,{type:'line',data:{labels,datasets:[
+    {label:'国内株式（個別株＋高配当）',data:domesticData,borderColor:'#E24B4A',backgroundColor:'#E24B4A18',borderWidth:2,pointRadius:2,pointBackgroundColor:'#E24B4A',fill:false,tension:0.3,spanGaps:true},
+    {label:'外国株式',data:foreignData,borderColor:'#2980b9',backgroundColor:'#2980b918',borderWidth:2,pointRadius:2,pointBackgroundColor:'#2980b9',fill:false,tension:0.3,spanGaps:true}
+  ]},options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+(ctx.raw==null?'—':ctx.raw+'%')}},
+      datalabels:{display:false}
+    },
+    scales:{
+      y:{min:0,max:100,ticks:{callback:v=>v+'%',color:tickColor,font:{size:10}},grid:{color:gridColor}},
+      x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
+    },
+    layout:{padding:{top:8,right:8}}
+  },plugins:[ChartDataLabels]});
 }
 // 日本株（個別株）・外国株式・高配当の3カテゴリを1つの折れ線グラフに重ねて比較表示
 function trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark){
