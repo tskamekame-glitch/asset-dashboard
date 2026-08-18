@@ -968,6 +968,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="filter-btn" data-f="6m" onclick="setFilter('6m')">6ヶ月</button>
       <button class="filter-btn" data-f="3m" onclick="setFilter('3m')">3ヶ月</button>
     </div>
+    <!-- ══════════ ① 全体像 ══════════ -->
     <!-- 総資産推移グラフ（短期確認用） -->
     <div class="card" id="lineCard" style="display:none">
       <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -982,6 +983,17 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       </div>
       <div class="chart-container"><canvas id="lineChart"></canvas></div>
     </div>
+    <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div><div id="donutLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
+    <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+
+    <!-- ══════════ ② 配分・方針判断 ══════════ -->
+    <div class="card" id="ratioCard" style="display:none"><div class="card-head"><h2>⚖️ 国内・外国 株式比率推移</h2></div><div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">個別株＋高配当（国内）と外国株式の構成比（％）の推移。評価額の増減ではなく配分そのものの変化を見る指標です</div><div class="chart-container"><canvas id="ratioChart"></canvas></div></div>
+    <div class="card" id="targetCard" style="display:none">
+      <div class="card-head"><h2>🎯 目標配分（国内・外国）</h2></div>
+      <div style="padding:0 16px 12px;font-size:11px;color:var(--text3)">外国株式の目標比率を設定すると、実績とのギャップと目安の買付額を計算します</div>
+      <div id="targetBody" style="padding:0 16px 16px"></div>
+    </div>
+    <div class="card" id="donutCcyCard" style="display:none"><div class="card-head"><h2>🌐 外国株式 通貨別内訳</h2></div><div class="chart-container"><canvas id="donutCcyChart"></canvas></div><div id="donutCcyLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
     <!-- 総資産シミュレーション -->
     <div class="card" id="simCard" style="display:none">
       <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -1008,49 +1020,48 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <!-- グラフ -->
       <div class="chart-container" style="min-height:280px"><canvas id="simChart"></canvas></div>
     </div>
-    <!-- 投資結果（損益）推移 -->
-    <div class="card" id="gainLineCard" style="display:none">
-      <div class="card-head"><h2>📈 投資結果（損益）推移</h2></div>
-      <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainLineSummary"></div>
-      <!-- 株グラフ -->
-      <div style="padding:0 0 4px;border-bottom:0.5px solid var(--border)">
-        <div style="padding:4px 16px 2px;font-size:12px;font-weight:700;color:var(--text2)">📈 個別株・高配当</div>
-        <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="gainLineStockSummary"></div>
-        <div style="position:relative;height:160px;padding:0 8px"><canvas id="gainLineStockChart"></canvas></div>
+
+    <!-- ══════════ ③ 個別銘柄の評価 ══════════ -->
+    <div class="card" id="bubbleCard" style="display:none">
+      <div class="card-head"><h2>🔍 保有比率×騰落率（見直し優先度）</h2></div>
+      <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">横軸＝株式全体に占める保有比率、縦軸＝取得来の騰落率、円の大きさ＝評価額。右下（大きく持っていて下がっている）ほど見直しの優先度が高い銘柄です</div>
+      <div style="display:flex;gap:10px;padding:0 16px 4px;font-size:10px;color:var(--text2)">
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E24B4A;margin-right:3px"></span>個別株</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8B5CF6;margin-right:3px"></span>高配当</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2980b9;margin-right:3px"></span>外国株式</span>
       </div>
-      <!-- インデックスグラフ -->
-      <div style="padding:0 0 4px;border-bottom:0.5px solid var(--border)">
-        <div style="padding:4px 16px 2px;font-size:12px;font-weight:700;color:var(--text2)">🌍 インデックス</div>
-        <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="gainLineIndexSummary"></div>
-        <div style="position:relative;height:160px;padding:0 8px"><canvas id="gainLineIndexChart"></canvas></div>
-      </div>
-      <!-- 合算グラフ -->
-      <div style="padding:4px 16px 2px">
-        <div style="font-size:12px;font-weight:700;color:var(--text2)">💰 合算（株＋インデックス）</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px" id="gainLineCombinedSummary"></div>
-      </div>
-      <div style="position:relative;height:200px;padding:0 8px 8px"><canvas id="gainLineChart"></canvas></div>
+      <div class="chart-container" style="min-height:280px"><canvas id="bubbleChart"></canvas></div>
     </div>
-    <!-- 月次損益（期間損益・kaView風） -->
-    <div class="card" id="monthlyGainCard" style="display:none;border:0.5px solid rgba(212,175,55,0.35)">
-      <div class="card-head"><h2>📊 期間損益（月次）</h2></div>
-      <div id="mgSummary" style="padding:0 16px 8px;text-align:center"></div>
-      <div class="chart-container" style="min-height:190px"><canvas id="monthlyGainChart"></canvas></div>
-      <div style="padding:0 16px 12px;font-size:10px;color:var(--text3)">各月末スナップショット時点の評価損益の増減（赤=増益・青=減益）。当月は最新スナップショットまで。</div>
+    <!-- 銘柄別保有円グラフ（6種） -->
+    <div class="card" id="donutStockCard" style="display:none">
+      <div class="card-head"><h2>📈 個別株 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutStockSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutStockChart"></canvas></div>
     </div>
-    <!-- 機関別 運用状況 -->
-    <div class="card" id="brokerCard" style="display:none">
-      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <h2>🏦 機関別 運用状況</h2>
-        <div id="broker-mode-btns" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
-          <button onclick="trSetBrokerMode('eval')" data-m="eval" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">評価額</button>
-          <button onclick="trSetBrokerMode('gain')" data-m="gain" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">損益額</button>
-          <button onclick="trSetBrokerMode('pct')" data-m="pct" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">損益率</button>
-        </div>
-      </div>
-      <div style="padding:0 16px 8px" id="brokerSummary"></div>
-      <div class="chart-container" style="min-height:220px"><canvas id="brokerChart"></canvas></div>
-      <div style="padding:0 16px 12px;font-size:10px;color:var(--text3)">機関は口座名から自動判定（編集モーダルで手動指定可）。損益は個別株・高配当・外国株式・インデックスのみで、損益推移と同じ除外リストを適用。</div>
+    <div class="card" id="donutForeignCard" style="display:none">
+      <div class="card-head"><h2>🌍 外国株式 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutForeignSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutForeignChart"></canvas></div>
+    </div>
+    <div class="card" id="donutDivCard" style="display:none">
+      <div class="card-head"><h2>💎 高配当株 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutDivSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutDivChart"></canvas></div>
+    </div>
+    <div class="card" id="donutGlobalCard" style="display:none">
+      <div class="card-head"><h2>🌍 全世界インデックス 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutGlobalSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutGlobalChart"></canvas></div>
+    </div>
+    <div class="card" id="donutJpCard" style="display:none">
+      <div class="card-head"><h2>🗾 日本インデックス 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutJpSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutJpChart"></canvas></div>
+    </div>
+    <div class="card" id="donutIndiaCard" style="display:none">
+      <div class="card-head"><h2>🇮🇳 インドインデックス 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutIndiaSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutIndiaChart"></canvas></div>
     </div>
     <!-- 銘柄変動アラート -->
     <div class="card" id="priceAlertCard" style="display:none;padding:0">
@@ -1086,62 +1097,61 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <!-- 詳細一覧 -->
       <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
-    <div class="card" id="compareCard" style="display:none"><div class="card-head"><h2>📊 日本株・外国株・高配当 比較推移</h2></div><div class="chart-container"><canvas id="compareChart"></canvas></div></div>
-    <div class="card" id="ratioCard" style="display:none"><div class="card-head"><h2>⚖️ 国内・外国 株式比率推移</h2></div><div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">個別株＋高配当（国内）と外国株式の構成比（％）の推移。評価額の増減ではなく配分そのものの変化を見る指標です</div><div class="chart-container"><canvas id="ratioChart"></canvas></div></div>
-    <div class="card" id="targetCard" style="display:none">
-      <div class="card-head"><h2>🎯 目標配分（国内・外国）</h2></div>
-      <div style="padding:0 16px 12px;font-size:11px;color:var(--text3)">外国株式の目標比率を設定すると、実績とのギャップと目安の買付額を計算します</div>
-      <div id="targetBody" style="padding:0 16px 16px"></div>
-    </div>
-    <div class="card" id="bubbleCard" style="display:none">
-      <div class="card-head"><h2>🔍 保有比率×騰落率（見直し優先度）</h2></div>
-      <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)">横軸＝株式全体に占める保有比率、縦軸＝取得来の騰落率、円の大きさ＝評価額。右下（大きく持っていて下がっている）ほど見直しの優先度が高い銘柄です</div>
-      <div style="display:flex;gap:10px;padding:0 16px 4px;font-size:10px;color:var(--text2)">
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E24B4A;margin-right:3px"></span>個別株</span>
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8B5CF6;margin-right:3px"></span>高配当</span>
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2980b9;margin-right:3px"></span>外国株式</span>
+
+    <!-- ══════════ ④ 損益の詳細推移 ══════════ -->
+    <!-- 投資結果（損益）推移 -->
+    <div class="card" id="gainLineCard" style="display:none">
+      <div class="card-head"><h2>📈 投資結果（損益）推移</h2></div>
+      <div style="padding:0 16px 8px;font-size:12px;color:var(--text3)" id="gainLineSummary"></div>
+      <!-- 株グラフ -->
+      <div style="padding:0 0 4px;border-bottom:0.5px solid var(--border)">
+        <div style="padding:4px 16px 2px;font-size:12px;font-weight:700;color:var(--text2)">📈 個別株・高配当</div>
+        <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="gainLineStockSummary"></div>
+        <div style="position:relative;height:160px;padding:0 8px"><canvas id="gainLineStockChart"></canvas></div>
       </div>
-      <div class="chart-container" style="min-height:280px"><canvas id="bubbleChart"></canvas></div>
+      <!-- インデックスグラフ -->
+      <div style="padding:0 0 4px;border-bottom:0.5px solid var(--border)">
+        <div style="padding:4px 16px 2px;font-size:12px;font-weight:700;color:var(--text2)">🌍 インデックス</div>
+        <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="gainLineIndexSummary"></div>
+        <div style="position:relative;height:160px;padding:0 8px"><canvas id="gainLineIndexChart"></canvas></div>
+      </div>
+      <!-- 合算グラフ -->
+      <div style="padding:4px 16px 2px">
+        <div style="font-size:12px;font-weight:700;color:var(--text2)">💰 合算（株＋インデックス）</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px" id="gainLineCombinedSummary"></div>
+      </div>
+      <div style="position:relative;height:200px;padding:0 8px 8px"><canvas id="gainLineChart"></canvas></div>
     </div>
+    <!-- 月次損益（期間損益・kaView風） -->
+    <div class="card" id="monthlyGainCard" style="display:none;border:0.5px solid rgba(212,175,55,0.35)">
+      <div class="card-head"><h2>📊 期間損益（月次）</h2></div>
+      <div id="mgSummary" style="padding:0 16px 8px;text-align:center"></div>
+      <div class="chart-container" style="min-height:190px"><canvas id="monthlyGainChart"></canvas></div>
+      <div style="padding:0 16px 12px;font-size:10px;color:var(--text3)">各月末スナップショット時点の評価損益の増減（赤=増益・青=減益）。当月は最新スナップショットまで。</div>
+    </div>
+
+    <!-- ══════════ ⑤ カテゴリ別の時系列詳細 ══════════ -->
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 日本株推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
     <div class="card" id="foreignStockCard" style="display:none"><div class="card-head"><h2>🌍 外国株式 推移</h2></div><div class="chart-container"><canvas id="foreignStockChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
     <div class="card" id="indexCard" style="display:none"><div class="card-head"><h2>🌍 インデックス 推移</h2></div><div class="chart-container"><canvas id="indexChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
-    <div class="card" id="donutCard" style="display:none"><div class="card-head"><h2>最新の内訳</h2></div><div class="chart-container"><canvas id="donutChart"></canvas></div><div id="donutLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
-    <div class="card" id="donutCcyCard" style="display:none"><div class="card-head"><h2>🌐 外国株式 通貨別内訳</h2></div><div class="chart-container"><canvas id="donutCcyChart"></canvas></div><div id="donutCcyLegend" style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 14px;justify-content:center"></div></div>
-    <!-- 銘柄別保有円グラフ（4種） -->
-    <div class="card" id="donutStockCard" style="display:none">
-      <div class="card-head"><h2>📈 個別株 銘柄別保有</h2></div>
-      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutStockSummary"></div>
-      <div class="chart-container" style="min-height:240px"><canvas id="donutStockChart"></canvas></div>
+
+    <!-- ══════════ ⑥ 運用状況 ══════════ -->
+    <!-- 機関別 運用状況 -->
+    <div class="card" id="brokerCard" style="display:none">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h2>🏦 機関別 運用状況</h2>
+        <div id="broker-mode-btns" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
+          <button onclick="trSetBrokerMode('eval')" data-m="eval" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">評価額</button>
+          <button onclick="trSetBrokerMode('gain')" data-m="gain" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">損益額</button>
+          <button onclick="trSetBrokerMode('pct')" data-m="pct" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">損益率</button>
+        </div>
+      </div>
+      <div style="padding:0 16px 8px" id="brokerSummary"></div>
+      <div class="chart-container" style="min-height:220px"><canvas id="brokerChart"></canvas></div>
+      <div style="padding:0 16px 12px;font-size:10px;color:var(--text3)">機関は口座名から自動判定（編集モーダルで手動指定可）。損益は個別株・高配当・外国株式・インデックスのみで、損益推移と同じ除外リストを適用。</div>
     </div>
-    <div class="card" id="donutForeignCard" style="display:none">
-      <div class="card-head"><h2>🌍 外国株式 銘柄別保有</h2></div>
-      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutForeignSummary"></div>
-      <div class="chart-container" style="min-height:240px"><canvas id="donutForeignChart"></canvas></div>
-    </div>
-    <div class="card" id="donutDivCard" style="display:none">
-      <div class="card-head"><h2>💎 高配当株 銘柄別保有</h2></div>
-      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutDivSummary"></div>
-      <div class="chart-container" style="min-height:240px"><canvas id="donutDivChart"></canvas></div>
-    </div>
-    <div class="card" id="donutGlobalCard" style="display:none">
-      <div class="card-head"><h2>🌍 全世界インデックス 銘柄別保有</h2></div>
-      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutGlobalSummary"></div>
-      <div class="chart-container" style="min-height:240px"><canvas id="donutGlobalChart"></canvas></div>
-    </div>
-    <div class="card" id="donutJpCard" style="display:none">
-      <div class="card-head"><h2>🗾 日本インデックス 銘柄別保有</h2></div>
-      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutJpSummary"></div>
-      <div class="chart-container" style="min-height:240px"><canvas id="donutJpChart"></canvas></div>
-    </div>
-    <div class="card" id="donutIndiaCard" style="display:none">
-      <div class="card-head"><h2>🇮🇳 インドインデックス 銘柄別保有</h2></div>
-      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutIndiaSummary"></div>
-      <div class="chart-container" style="min-height:240px"><canvas id="donutIndiaChart"></canvas></div>
-    </div>
-    <div class="card" id="barCard" style="display:none"><div class="card-head"><h2>カテゴリ別推移</h2></div><div class="chart-container"><canvas id="barChart"></canvas></div></div>
     <!-- ── ここから下：投資判断ではなく記録・家計の確認用（データ管理） ── -->
     <div style="display:flex;align-items:center;gap:8px;margin:20px 0 8px;padding:0 4px">
       <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.05em">📁 データ管理・記録</span>
@@ -6530,7 +6540,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','compareCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -6992,7 +7002,6 @@ function trRenderCharts(){
   try{trRenderGainBarChart(filtered,tickColor,gridColor,isDark);
   }catch(e){console.error('trRenderGainBarChart error:',e);}
   try{trRenderPriceAlert(filtered);}catch(e){console.error('trRenderPriceAlert error:',e);}
-  try{trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderCompareChart error:',e);}
   try{trRenderRatioChart(filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('trRenderRatioChart error:',e);}
   try{trRenderTargetCard();}catch(e){console.error('trRenderTargetCard error:',e);}
   try{trRenderBubbleChart(tickColor,gridColor,isDark);}catch(e){console.error('trRenderBubbleChart error:',e);}
@@ -8224,43 +8233,6 @@ function trRenderBubbleChart(tickColor,gridColor,isDark){
   },plugins:[ChartDataLabels]});
 }
 // 日本株（個別株）・外国株式・高配当の3カテゴリを1つの折れ線グラフに重ねて比較表示
-function trRenderCompareChart(filtered,labels,tickColor,gridColor,isDark){
-  const card=document.getElementById('compareCard');
-  const CATS=[
-    {key:'個別株',label:'日本株',color:'#E24B4A'},
-    {key:'外国株式',label:'外国株',color:'#2980b9'},
-    {key:'高配当',label:'高配当株',color:'#8B5CF6'}
-  ];
-  const hasAny=filtered.some(s=>s.cats&&CATS.some(c=>s.cats[c.key]>0));
-  if(!hasAny){if(card)card.style.display='none';return;}
-  if(card)card.style.display='block';
-  const datasets=CATS.map(c=>({
-    label:c.label,
-    data:filtered.map(s=>(s.cats&&s.cats[c.key])||0),
-    borderColor:c.color,
-    backgroundColor:c.color+'18',
-    borderWidth:2,
-    pointRadius:2,
-    pointBackgroundColor:c.color,
-    fill:false,
-    tension:0.3
-  }));
-  trDestroyChart('compareChart');
-  const canvas=document.getElementById('compareChart');
-  chartInstances['compareChart']=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
-    responsive:true,maintainAspectRatio:false,
-    plugins:{
-      legend:{position:'bottom',labels:{font:{size:11},padding:8,boxWidth:10,usePointStyle:true}},
-      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw)}},
-      datalabels:{display:false}
-    },
-    scales:{
-      y:{ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}},
-      x:{ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{display:false}}
-    },
-    layout:{padding:{top:8,right:8}}
-  },plugins:[ChartDataLabels]});
-}
 function trRenderCategoryChart(catName,canvasId,cardId,filtered,labels,tickColor,gridColor,isDark){
   // 個別株グラフから完全除外する口座名（PayPay系投信など）
   const EXCLUDE_FROM_CAT={'個別株':['オルカンPayPay','インド(SBI)','全世界PayPay','全世界インデックス']};
