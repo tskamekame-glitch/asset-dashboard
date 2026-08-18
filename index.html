@@ -1093,6 +1093,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div style="padding:4px 16px 16px" id="gainBarDetail"></div>
     </div>
     <div class="card" id="securitiesCard" style="display:none"><div class="card-head"><h2>📈 個別株 推移</h2></div><div class="chart-container"><canvas id="securitiesChart"></canvas></div></div>
+    <div class="card" id="foreignStockCard" style="display:none"><div class="card-head"><h2>🌍 外国株式 推移</h2></div><div class="chart-container"><canvas id="foreignStockChart"></canvas></div></div>
     <div class="card" id="toushiCard" style="display:none"><div class="card-head"><h2>💎 高配当 推移</h2></div><div class="chart-container"><canvas id="toushiChart"></canvas></div></div>
     <div class="card" id="indexCard" style="display:none"><div class="card-head"><h2>🌍 インデックス 推移</h2></div><div class="chart-container"><canvas id="indexChart"></canvas></div></div>
     <div class="card" id="pensionCard" style="display:none"><div class="card-head"><h2>🧓 年金・iDeCo 推移</h2></div><div class="chart-container"><canvas id="pensionChart"></canvas></div></div>
@@ -1103,6 +1104,11 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div class="card-head"><h2>📈 個別株 銘柄別保有</h2></div>
       <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutStockSummary"></div>
       <div class="chart-container" style="min-height:240px"><canvas id="donutStockChart"></canvas></div>
+    </div>
+    <div class="card" id="donutForeignCard" style="display:none">
+      <div class="card-head"><h2>🌍 外国株式 銘柄別保有</h2></div>
+      <div style="font-size:11px;color:var(--text3);padding:0 16px 6px" id="donutForeignSummary"></div>
+      <div class="chart-container" style="min-height:240px"><canvas id="donutForeignChart"></canvas></div>
     </div>
     <div class="card" id="donutDivCard" style="display:none">
       <div class="card-head"><h2>💎 高配当株 銘柄別保有</h2></div>
@@ -6502,7 +6508,7 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutStockCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
@@ -6939,6 +6945,7 @@ function trRenderCharts(){
     }
 
     buildDonut('donutStockChart','donutStockCard','donutStockSummary','個別株',tickColor,isDark);
+    buildDonut('donutForeignChart','donutForeignCard','donutForeignSummary','外国株式',tickColor,isDark);
     buildDonut('donutDivChart','donutDivCard','donutDivSummary','高配当',tickColor,isDark);
     buildDonut('donutGlobalChart','donutGlobalCard','donutGlobalSummary','全世界インデックス',tickColor,isDark);
     buildDonut('donutJpChart','donutJpCard','donutJpSummary','日本インデックス',tickColor,isDark);
@@ -6952,6 +6959,7 @@ function trRenderCharts(){
   }catch(e){console.error('trRenderGainBarChart error:',e);}
   try{trRenderPriceAlert(filtered);}catch(e){console.error('trRenderPriceAlert error:',e);}
   try{trRenderCategoryChart('個別株','securitiesChart','securitiesCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat1 error:',e);}
+  try{trRenderCategoryChart('外国株式','foreignStockChart','foreignStockCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat_foreign error:',e);}
   try{trRenderCategoryChart('高配当','toushiChart','toushiCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat2 error:',e);}
   try{trRenderCategoryChartIndex('indexChart','indexCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat_index error:',e);}
   try{trRenderCategoryChart('年金','pensionChart','pensionCard',filtered,labels,tickColor,gridColor,isDark);}catch(e){console.error('cat3 error:',e);}
