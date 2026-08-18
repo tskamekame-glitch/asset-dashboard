@@ -6758,17 +6758,14 @@ function trRenderCharts(){
   const orderedCats=[...presentCats,...extraCats];
   chartInstances['bar']=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels,datasets:orderedCats.map((cat,i)=>({label:cat,data:filtered.map(s=>s.cats[cat]||0),backgroundColor:TR_BAR_CAT_COLORS[cat]||TR_CAT_COLORS[i%TR_CAT_COLORS.length]+'cc',borderRadius:3}))},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:10,boxWidth:12}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+trFmt(ctx.raw),footer:items=>'合計: '+trFmt(items.reduce((s,i)=>s+i.raw,0))}},datalabels:{display:false}},scales:{x:{stacked:true,ticks:{color:tickColor,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}},y:{stacked:true,ticks:{callback:v=>{const a=Math.abs(v);if(a>=1e8){const ok=Math.floor(v/1e8);const m=Math.round((v-ok*1e8)/1e4);return m===0?ok+'億':ok+'億'+Math.abs(m)+'万';}return'¥'+Math.round(v/10000)+'万';},color:tickColor,font:{size:10}},grid:{color:gridColor}}},layout:{padding:{top:8,right:8}}},plugins:[ChartDataLabels]});
   trDestroyChart('donut');
-  const TR_DONUT_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','外国株式':'#2980b9','年金':'#D4537E','その他':'#888780'};
-  // 「最新の内訳」は名前の通り“今”の内訳であるべきなので、最後に保存したスナップショット(latest.cats)ではなく
-  // ライブのamAccountsから直接集計する（スナップショットは「📈 推移に記録」を押した時にしか更新されないため、
-  // 新しく追加した口座がスナップショット未反映のまま「無いこと」になってしまう問題があった）。
-  const liveCatsNow={};
-  (typeof amAccounts!=='undefined'?amAccounts:[]).forEach(a=>{
-    if(a.sold||!(a.amount>0))return;
-    liveCatsNow[a.cat]=(liveCatsNow[a.cat]||0)+a.amount;
-  });
-  // 表示順は資産の大きい順（金額降順）
-  const catEntries=Object.entries(liveCatsNow).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const TR_DONUT_CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','その他'];
+  const TR_DONUT_CAT_COLORS={'銀行':'#185FA5','全世界インデックス':'#0F6E56','日本インデックス':'#2980b9','インドインデックス':'#EF9F27','高配当':'#8B5CF6','個別株':'#E24B4A','年金':'#D4537E','その他':'#888780'};
+  const latest=filtered[filtered.length-1];
+  // カテゴリ表示順（資産管理タブと統一）。順序リストに無いカテゴリは末尾に金額降順で追加
+  const latestCatsPresent=Object.entries(latest.cats).filter(([,v])=>v>0);
+  const orderedPresent=TR_DONUT_CAT_ORDER.filter(c=>latest.cats[c]>0).map(c=>[c,latest.cats[c]]);
+  const unorderedPresent=latestCatsPresent.filter(([c])=>!TR_DONUT_CAT_ORDER.includes(c)).sort((a,b)=>b[1]-a[1]);
+  const catEntries=[...orderedPresent,...unorderedPresent];
   // 最新内訳donutの中央テキストプラグイン
   const donutCenterPlugin={id:'donutCenter',afterDraw(chart){
     const{ctx,chartArea:{top,bottom,left,right}}=chart;
@@ -8120,7 +8117,7 @@ function trRenderRatioChart(filtered,labels,tickColor,gridColor,isDark){
 // ── 目標配分（外国株式の目標比率）の保存・取得・表示 ──
 function trGetTargetForeignPct(){
   const v=parseFloat(localStorage.getItem('tr_target_foreign_pct'));
-  return(isFinite(v)&&v>=0&&v<=100)?v:30;// デフォルト30%
+  return(isFinite(v)&&v>=0&&v<=100)?v:50;// デフォルト50%
 }
 function trSaveTargetPct(){
   const el=document.getElementById('targetPctInput');
