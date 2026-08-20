@@ -973,12 +973,18 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div class="card" id="lineCard" style="display:none">
       <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <h2>📈 総資産推移</h2>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
-          <span style="color:var(--text3)">🎯 目標</span>
-          <input type="range" id="lineYieldSlider" min="1" max="15" value="7" step="0.5"
-            style="width:70px;accent-color:#EF9F27"
-            oninput="const v=this.value;document.getElementById('lineYieldVal').textContent=v+'%';document.getElementById('yieldSlider').value=v;document.getElementById('yieldVal').textContent=v+'%';trRenderCharts()">
-          <span id="lineYieldVal" style="min-width:28px;font-weight:700;color:#EF9F27">7%</span>
+        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:4px">
+            <span style="color:var(--text3)">📈 実績</span>
+            <span id="lineActualYieldVal" style="min-width:36px;font-weight:700;color:#0F6E56">—</span>
+          </span>
+          <span style="display:flex;align-items:center;gap:6px">
+            <span style="color:var(--text3)">🎯 目標</span>
+            <input type="range" id="lineYieldSlider" min="1" max="15" value="7" step="0.5"
+              style="width:70px;accent-color:#EF9F27"
+              oninput="const v=this.value;document.getElementById('lineYieldVal').textContent=v+'%';document.getElementById('yieldSlider').value=v;document.getElementById('yieldVal').textContent=v+'%';trRenderCharts()">
+            <span id="lineYieldVal" style="min-width:28px;font-weight:700;color:#EF9F27">7%</span>
+          </span>
         </div>
       </div>
       <div class="chart-container"><canvas id="lineChart"></canvas></div>
@@ -6632,7 +6638,7 @@ function trRenderCharts(){
   const gridColor=isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)';
   const tickColor=isDark?'#636366':'#9b9b97';
 
-  // ── 総資産推移グラフ（短期確認用・目標利回りライン追加） ──
+  // ── 総資産推移グラフ（短期確認用・目標利回り＋実績利回りライン追加） ──
   trDestroyChart('line');
   // 目標利回りライン（シミュレーションと同じ計算）
   const yieldRateForLine=(parseFloat(document.getElementById('yieldSlider')?.value)||7)/100;
@@ -6644,24 +6650,42 @@ function trRenderCharts(){
     return Math.round(baseForLine*Math.pow(1+yieldRateForLine,years));
   });
   const yieldPctLabel=(parseFloat(document.getElementById('yieldSlider')?.value)||7)+'%';
+  // 実績利回りライン（基準日〜最新の実績CAGRで複利換算した滑らかな線）
+  const firstTotalForLine=totals[0], lastTotalForLine=totals[totals.length-1];
+  const firstDateForLine=new Date(labels[0]), lastDateForLine=new Date(labels[labels.length-1]);
+  const totalYearsForLine=(lastDateForLine-firstDateForLine)/(1000*60*60*24*365.25);
+  const actualCAGRForLine=totalYearsForLine>0?Math.pow(lastTotalForLine/firstTotalForLine,1/totalYearsForLine)-1:0;
+  const actualCAGRPctLabel=(actualCAGRForLine*100).toFixed(1)+'%';
+  const actualYieldLine=labels.map(label=>{
+    const d=new Date(label);
+    const years=(d-baseDateForLine)/(1000*60*60*24*365.25);
+    return Math.round(baseForLine*Math.pow(1+actualCAGRForLine,years));
+  });
+  // カードヘッダーに現状の利回り（実績CAGR）を表示
+  const lineActualYieldEl=document.getElementById('lineActualYieldVal');
+  if(lineActualYieldEl)lineActualYieldEl.textContent=(actualCAGRForLine>=0?'+':'')+actualCAGRPctLabel;
   chartInstances['line']=new Chart(document.getElementById('lineChart'),{type:'line',data:{labels,datasets:[
     {label:'実績',data:totals,borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,0.08)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#185FA5',fill:true,tension:0.3,order:1},
-    {label:'目標利回り '+yieldPctLabel,data:targetLine,borderColor:'#EF9F27',backgroundColor:'transparent',borderWidth:1.8,borderDash:[5,4],pointRadius:0,fill:false,tension:0.3,order:2}
+    {label:'目標利回り '+yieldPctLabel,data:targetLine,borderColor:'#EF9F27',backgroundColor:'transparent',borderWidth:1.8,borderDash:[5,4],pointRadius:0,fill:false,tension:0.3,order:2},
+    {label:'実績利回り '+actualCAGRPctLabel,data:actualYieldLine,borderColor:'#0F6E56',backgroundColor:'transparent',borderWidth:1.8,borderDash:[2,3],pointRadius:0,fill:false,tension:0.3,order:3}
   ]},options:{responsive:true,plugins:{
     legend:{display:true,position:'top',align:'end',labels:{font:{size:11},padding:12,boxWidth:20,usePointStyle:true,pointStyle:'line'}},
     tooltip:{callbacks:{
       label:ctx=>{
-        const prefix=ctx.datasetIndex===1?'🎯 ':'📊 ';
+        const prefix=ctx.datasetIndex===0?'📊 ':ctx.datasetIndex===1?'🎯 ':'📈 ';
         return prefix+ctx.dataset.label+': '+trFmt(ctx.raw);
       },
       afterBody:items=>{
         if(items.length<2)return[];
         const actual=items.find(i=>i.datasetIndex===0);
         const target=items.find(i=>i.datasetIndex===1);
-        if(!actual||!target)return[];
-        const diff=actual.raw-target.raw;
-        const sign=diff>=0?'+':'';
-        return[`差分: ${sign}${Math.round(diff/10000).toLocaleString()}万円 ${diff>=0?'↑目標超過':'↓目標未達'}`];
+        const lines=[];
+        if(actual&&target){
+          const diff=actual.raw-target.raw;
+          const sign=diff>=0?'+':'';
+          lines.push(`目標比差分: ${sign}${Math.round(diff/10000).toLocaleString()}万円 ${diff>=0?'↑目標超過':'↓目標未達'}`);
+        }
+        return lines;
       }
     },backgroundColor:'rgba(0,0,0,0.8)',padding:10,cornerRadius:8},
     datalabels:{display:false}
@@ -6685,6 +6709,8 @@ function trRenderCharts(){
   const ldCol=lineDiff>=0?'var(--green)':'var(--danger)';
   lineSummaryEl.innerHTML=
     `<span style="color:var(--text3)">基準日 ${labels[0]} 〜 ${labels[labels.length-1]}</span>`
+    +`<span style="padding:2px 8px;border-radius:10px;background:rgba(15,110,86,0.1);color:#0F6E56;font-weight:600">`
+    +`📈 実績利回り（CAGR） ${actualCAGRForLine>=0?'+':''}${actualCAGRPctLabel}</span>`
     +`<span style="padding:2px 8px;border-radius:10px;background:${lineDiff>=0?'rgba(15,110,86,0.1)':'rgba(192,57,43,0.1)'};color:${ldCol};font-weight:600">`
     +`${lineDiff>=0?'📈 目標超過':'📉 目標未達'} ${ldSign}${Math.round(lineDiff/10000).toLocaleString()}万円</span>`;
 
