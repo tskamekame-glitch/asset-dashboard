@@ -2778,7 +2778,11 @@ function amBuildHeatmapItems(accounts){
     // 株価キャッシュ（当日/月間/年間モードで取得済みの前日終値）があればそちらで代替する。
     const q=amLoadDailyQuotes();
     const entries=accounts.filter(a=>a.amount>0).map(a=>{
-      if(a.prevSBIAmount>0){
+      // prevSBIAmountはSBI CSV由来の値。野村・みずほ・moomoo等、SBI以外のブローカーで
+      // 保有している口座に古い/誤ったprevSBIAmountが残っている場合に備え、
+      // ブローカーがSBI証券であると判定できる場合のみ信頼する
+      const isNonSBIBroker=a.broker?a.broker!=='SBI証券':AM_NON_SBI_PAT.test((a.name||'')+' '+(a.note||''));
+      if(a.prevSBIAmount>0&&!isNonSBIBroker){
         return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-a.prevSBIAmount,base:a.prevSBIAmount,id:a.id};
       }
       const code=(a.code||'').trim();
@@ -2786,6 +2790,10 @@ function amBuildHeatmapItems(accounts){
         const qd=q.quotes[code];
         if(qd&&!qd.err&&qd.prev>0){
           const pct=(qd.cur-qd.prev)/qd.prev*100;
+          // 異常値ガード：前回比（前日終値比）としてあり得ない変動率は、株価キャッシュのcur/prevが
+          // 異なる取得タイミングのデータで不整合になっている（例:キャッシュが長期間更新されていない）とみなし、
+          // 誤った巨大%を表示するより「データなし」扱いにする
+          if(!isFinite(pct)||Math.abs(pct)>50)return null;
           const startVal=a.amount/(1+pct/100);
           return{key:amLotKey(a),name:amLotBaseName(a.name)+'≈',amount:a.amount,gain:a.amount-startVal,base:startVal,id:a.id};
         }
