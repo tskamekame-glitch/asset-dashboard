@@ -2454,7 +2454,7 @@ async function amFetchDailyQuotes(codes){
           const m1p=near(30);
           const y1p=pairs[0];// 1yレンジの先頭≒1年前（上場が新しい場合は上場来）
           quotes[code]={cur,prev:prev>0?prev:null,m1:m1p?m1p.c:null,y1:y1p.c,
-            curT:pairs[pairs.length-1].t,prevT:prev>0?prevT:null,m1T:m1p?m1p.t:null,y1T:y1p.t};
+            curT:pairs[pairs.length-1].t,prevT:prev>0?prevT:null,m1T:m1p?m1p.t:null,y1T:y1p.t,fetchedAt:Date.now()};
         }else{
           quotes[code]={err:1};
         }
@@ -2686,8 +2686,8 @@ function amRenderHeatmap(accounts,total){
       return;
     }
     const q=amLoadDailyQuotes();
-    const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
-    const missing=targets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
+    const isCodeFresh=c=>{const qd=q&&q.quotes&&q.quotes[c];return!!(qd&&(Date.now()-(qd.fetchedAt||0)<AM_QUOTE_TTL));};
+    const missing=targets.filter(t=>!isCodeFresh(t.qcode));
     if(missing.length){
       el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
       if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色='+({daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
@@ -2721,8 +2721,8 @@ function amRenderHeatmap(accounts,total){
     const fallbackTargets=amDailyTargets(noPrevAccounts);
     if(fallbackTargets.length){
       const q=amLoadDailyQuotes();
-      const fresh=q&&(Date.now()-q.ts<AM_QUOTE_TTL);
-      const missing=fallbackTargets.filter(t=>!(fresh&&q.quotes&&q.quotes[t.qcode]));
+      const isCodeFresh=c=>{const qd=q&&q.quotes&&q.quotes[c];return!!(qd&&(Date.now()-(qd.fetchedAt||0)<AM_QUOTE_TTL));};
+      const missing=fallbackTargets.filter(t=>!isCodeFresh(t.qcode));
       if(missing.length){
         el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 前回比較データの無い銘柄の株価を取得中...（${missing.length}銘柄）</p>`;
         if(subtitleEl0)subtitleEl0.textContent='色=前回CSV比変動率【前回CSV取込時 → 現在】・個別株/高配当/外国株式が対象';
