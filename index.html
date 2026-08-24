@@ -2455,8 +2455,9 @@ async function amFetchDailyQuotes(codes){
 function amLotKey(a){
   // コード欄優先。空なら銘柄名の先頭のコード(例:「213A 上場インデックス…」)も拾う。大文字化・全角数字英字も正規化
   const normCode=c=>String(c||'').trim().replace(/[０-９Ａ-Ｚａ-ｚ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).toUpperCase();
+  const isValidCode=s=>/^[0-9][0-9A-Z]{3}$/.test(s)||/^[A-Z]{1,5}$/.test(s);// 日本株4桁コード or 米国ティッカー(英字1〜5文字)
   let c=normCode(a.code);
-  if(!/^[0-9][0-9A-Z]{3}$/.test(c)){
+  if(!isValidCode(c)){
     const m=normCode(a.name).match(/^([0-9][0-9A-Z]{3})[\s　]/);
     c=m?m[1]:'';
   }
