@@ -2473,7 +2473,7 @@ async function amFetchDailyQuotes(codes){
 function amLotKey(a){
   // コード欄優先。空なら銘柄名の先頭のコード(例:「213A 上場インデックス…」)も拾う。大文字化・全角数字英字も正規化
   const normCode=c=>String(c||'').trim().replace(/[０-９Ａ-Ｚａ-ｚ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).toUpperCase();
-  const isValidCode=s=>/^[0-9][0-9A-Z]{3}$/.test(s)||/^[A-Z]{1,5}$/.test(s);// 日本株4桁コード or 米国ティッカー(英字1〜5文字)
+  const isValidCode=s=>/^[0-9][0-9A-Z]{3}$/.test(s)||/^[A-Z]{1,5}$/.test(s)||/^[0-9A-Z]{1,10}\.[A-Z]{1,3}$/.test(s);// 日本株4桁コード or 米国ティッカー(英字1〜5文字) or 国際ティッカー(例:000660.KS)
   let c=normCode(a.code);
   if(!isValidCode(c)){
     const m=normCode(a.name).match(/^([0-9][0-9A-Z]{3})[\s　]/);
@@ -2513,8 +2513,9 @@ function amDailyTargets(accounts){
   accounts.forEach(a=>{
     if(a.sold||!a.amount||a.amount<=0||EXCL.includes(a.cat))return;
     const code=(a.code||'').trim();
-    // 日本株コード（数字始まり4桁、213A等の混在含む）または米国ティッカー（英字のみ1〜5文字）の両方を許容
-    const okCode=/^[0-9][0-9A-Za-z]{3}$/.test(code)||/^[A-Za-z]{1,5}$/.test(code);
+    // 日本株コード（数字始まり4桁、213A等の混在含む）、米国ティッカー（英字のみ1〜5文字）、
+    // または「000660.KS」のような取引所サフィックス付き国際ティッカー（韓国株等）を許容
+    const okCode=/^[0-9][0-9A-Za-z]{3}$/.test(code)||/^[A-Za-z]{1,5}$/.test(code)||/^[0-9A-Za-z]{1,10}\.[A-Za-z]{1,3}$/.test(code);
     if(a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式'){
       if(okCode)targets.push({a,qcode:code,approx:false});
     }else if(IDX.includes(a.cat)){
