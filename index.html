@@ -2409,7 +2409,7 @@ async function amFetchDailyQuotes(codes){
     while(queue.length){
       const code=queue.shift();
       try{
-        const resp=await fetch(`${WORKER}?code=${code}&range=1y`);
+        const resp=await fetch(`${WORKER}?code=${code}&range=1y&_ts=${Date.now()}`,{cache:'no-store'});
         if(!resp.ok)throw new Error('http '+resp.status);
         const data=await resp.json();
         const result=data?.chart?.result?.[0];
