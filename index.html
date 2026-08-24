@@ -2421,9 +2421,11 @@ async function amFetchDailyQuotes(codes){
           const cur=(meta.regularMarketPrice&&meta.regularMarketPrice>0)?meta.regularMarketPrice:pairs[pairs.length-1].c;
           // 前日終値の決定: 配列末尾＝当日バーとは限らない（Yahoo側の更新タイミング次第で
           // 当日分がまだ追加されていないことがあり、その場合 pairs[length-2] は「一昨日」になってしまう）。
-          // 1) meta.previousClose / chartPreviousClose があれば最優先（Yahooが明示する「前日終値」そのもの）
+          // 1) meta.previousClose があれば最優先（Yahooが明示する「前日終値」そのもの）
+          //    ※ meta.chartPreviousCloseは「前日」ではなく「リクエストしたrangeの開始日より前の終値」
+          //      （range=1yなら約1年前）を指すことがあるため、前日終値の代用としては使わない
           // 2) 無ければ、配列末尾バーの日付が「今日」と一致するかで pairs[length-2]/[length-1] を切り替える
-          const metaPrevClose=meta.previousClose||meta.chartPreviousClose;
+          const metaPrevClose=meta.previousClose;
           let prev,prevT;
           if(metaPrevClose>0){
             prev=metaPrevClose;
