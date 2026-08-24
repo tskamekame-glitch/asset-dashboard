@@ -2133,9 +2133,13 @@ function refreshHome(){
     const PAYPAY=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
     const rankings=[];
     // BEST/WORST：前回CSV比（prevSBIAmount）で計算
+    // 野村・みずほ・moomoo等、SBI以外のブローカー保有口座に古い/誤ったprevSBIAmountが
+    // 残っている場合に備え、ブローカーがSBI証券と判定できる場合のみ対象にする
     active.forEach(a=>{
       if(PAYPAY.test(a.name))return;
       if(!(a.prevSBIAmount>0&&a.amount>0))return;
+      const isNonSBIBroker=a.broker?a.broker!=='SBI証券':(typeof AM_NON_SBI_PAT!=='undefined'&&AM_NON_SBI_PAT.test((a.name||'')+' '+(a.note||'')));
+      if(isNonSBIBroker)return;
       const pct=(a.amount-a.prevSBIAmount)/a.prevSBIAmount*100;
       const gain=a.amount-a.prevSBIAmount;
       rankings.push({name:a.name,pct,gain});
