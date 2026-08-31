@@ -6566,10 +6566,10 @@ function trParseCSV(text,filename){
   const rows=[];
   for(let i=1;i<lines.length;i++){const cols=[];let cur='',inQ=false;for(const ch of lines[i]){if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur);cur='';}else{cur+=ch;}}cols.push(cur);if(cols.length>=4&&cols[1])rows.push({name:cols[1]||'',cat:cols[2]||'その他',amount:parseFloat(cols[3])||0,updated:cols[5]||''});}
   if(!rows.length){alert('有効なデータがありませんでした: '+filename);return;}
-  const VALID_CATS=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','銀行','年金','預り金','その他'];
+  const VALID_CATS=['全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','外国株式','銀行','年金','預り金','その他'];
   const CAT_NORM={
     '全世界インデックス':'全世界インデックス', '日本インデックス':'日本インデックス',
-    'インドインデックス':'インドインデックス', '高配当':'高配当', '個別株':'個別株',
+    'インドインデックス':'インドインデックス', '高配当':'高配当', '個別株':'個別株', '外国株式':'外国株式',
     '銀行':'銀行', '年金':'年金', '預り金':'銀行',
     '証券':'個別株', '投信':'全世界インデックス', '銀行キープ':'銀行', 'その他':'銀行',
   };
@@ -6578,6 +6578,7 @@ function trParseCSV(text,filename){
     {pat:/TOPIX|日本.*インデックス|国内.*インデックス|eMAXIS.*国内|eMAXIS.*TOPIX|eMAXIS.*日経/i, cat:'日本インデックス'},
     {pat:/インド|India/i, cat:'インドインデックス'},
     {pat:/高配当|SBI.*日本高配当|日本高配当/i, cat:'高配当'},
+    {pat:/NYSE|NASDAQ|外国株|米国株|ADR|^[A-Z]{1,5}$|マイクロン|アルファベット|ハイニクス|Apple|Microsoft|Alphabet|Amazon|Nvidia|Meta|Tesla|Berkshire|Johnson|Exxon/i, cat:'外国株式'},
     {pat:/全世界|オルカン|S&P|S&amp;P|米国|FANG|PayPay|eMAXIS/i, cat:'全世界インデックス'},
     {pat:/銀行|ゆうちょ|UFJ|三菱(?!UFJ以外)|三井住友銀|りそな|新生/i, cat:'銀行'},
   ];
