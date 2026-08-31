@@ -930,11 +930,17 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
       <!-- チャートパネル -->
       <div style="margin:0 10px;background:rgba(0,0,0,0.55);border:0.5px solid rgba(255,255,255,0.12);border-radius:14px;padding:10px 6px 8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 6px 6px">
-          <button id="kv-topix-chip" onclick="kvToggleTopix()" style="display:flex;align-items:center;gap:6px;background:#fff;border:none;border-radius:17px;padding:6px 14px 6px 8px;font-family:inherit;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
-            <span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#2fae8f;color:#fff;font-size:11px;align-items:center;justify-content:center;font-weight:700;line-height:1">⇄</span>
-            <span style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.02em">TOPIX</span>
-          </button>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 6px 6px;gap:6px">
+          <div style="display:flex;gap:6px">
+            <button id="kv-topix-chip" onclick="kvToggleTopix()" style="display:flex;align-items:center;gap:6px;background:#fff;border:none;border-radius:17px;padding:6px 14px 6px 8px;font-family:inherit;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
+              <span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#2fae8f;color:#fff;font-size:11px;align-items:center;justify-content:center;font-weight:700;line-height:1">⇄</span>
+              <span style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.02em">TOPIX</span>
+            </button>
+            <button id="kv-nikkei-chip" onclick="kvToggleNikkei()" style="display:flex;align-items:center;gap:6px;background:#fff;border:none;border-radius:17px;padding:6px 14px 6px 8px;font-family:inherit;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
+              <span style="display:inline-flex;width:17px;height:17px;border-radius:50%;background:#e8944a;color:#fff;font-size:11px;align-items:center;justify-content:center;font-weight:700;line-height:1">⇄</span>
+              <span style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.02em">日経225</span>
+            </button>
+          </div>
           <span id="kv-unit-label" style="font-size:10px;color:rgba(255,255,255,0.75)">(百万円)</span>
         </div>
         <div style="position:relative;height:300px"><canvas id="kvChart"></canvas></div>
@@ -6258,11 +6264,13 @@ function homeRenderCountdown(){
 }
 
 let kvMode='asset',kvPeriod='10d',kvShowTopix=true,kvTopixData=null,kvTopixFetching=false;
+let kvShowNikkei=true,kvNikkeiData=null,kvNikkeiFetching=false;
 const KV_GREEN='#35e0a1',KV_PILL='#2fae8f',KV_YELLOW='#ffd93d',KV_RED='#ff5b5b',KV_BLUE='#57a8ff';
 
 function kvSetMode(m){kvMode=m;kvRender();}
 function kvSetPeriod(p){kvPeriod=p;kvRender();}
 function kvToggleTopix(){kvShowTopix=!kvShowTopix;kvRender();}
+function kvToggleNikkei(){kvShowNikkei=!kvShowNikkei;kvRender();}
 
 function kvSorted(){return[...snapshots].sort((a,b)=>String(a.date).localeCompare(String(b.date)));}
 function kvGetFiltered(){
@@ -6307,6 +6315,38 @@ function kvTopixCloseOn(dateStr){
   return best!=null?best:(kvTopixData.pairs[0]?kvTopixData.pairs[0].c:null);
 }
 
+// ── 日経225（^N225）取得：Worker経由・1時間キャッシュ ──
+async function kvFetchNikkei(fromDateStr){
+  const spanDays=Math.max(15,(Date.now()-new Date(fromDateStr).getTime())/86400000);
+  const range=spanDays<80?'3mo':spanDays<170?'6mo':spanDays<360?'1y':spanDays<720?'2y':'5y';
+  const KEY='kvNikkei_'+range;
+  try{const c=JSON.parse(localStorage.getItem(KEY)||'null');if(c&&Date.now()-c.ts<3600000&&c.pairs&&c.pairs.length){kvNikkeiData=c;return;}}catch(e){}
+  if(kvNikkeiFetching)return;kvNikkeiFetching=true;
+  try{
+    const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+    const resp=await fetch(`${WORKER}?code=${encodeURIComponent('^N225')}&range=${range}`);
+    if(!resp.ok)throw new Error('http '+resp.status);
+    const data=await resp.json();
+    const result=data?.chart?.result?.[0];
+    const ts=result?.timestamp||[];
+    const cl=result?.indicators?.quote?.[0]?.close||[];
+    const pairs=ts.map((t,i)=>({t:t*1000,c:cl[i]})).filter(x=>x.c!=null);
+    if(pairs.length<2)throw new Error('no data');
+    kvNikkeiData={ts:Date.now(),range,pairs};
+    try{localStorage.setItem(KEY,JSON.stringify(kvNikkeiData));}catch(e){}
+    kvRenderChart();// 取得後に再描画して日経225線を反映
+  }catch(e){/* 日経225取得失敗時は他の線のみ表示 */}
+  finally{kvNikkeiFetching=false;}
+}
+// 指定日以前で最も近い日経225終値
+function kvNikkeiCloseOn(dateStr){
+  if(!kvNikkeiData||!kvNikkeiData.pairs)return null;
+  const target=new Date(dateStr+'T15:00:00+09:00').getTime();
+  let best=null;
+  for(const p of kvNikkeiData.pairs){if(p.t<=target)best=p.c;else break;}
+  return best!=null?best:(kvNikkeiData.pairs[0]?kvNikkeiData.pairs[0].c:null);
+}
+
 // ── 黄色バーティカルライン（最新点）プラグイン ──
 const kvYellowLine={id:'kvYellowLine',beforeDatasetsDraw(chart){
   if(chart.canvas.id!=='kvChart')return;
@@ -6327,9 +6367,10 @@ function kvRender(){
   kvUpdatePeriodUI();
   kvRenderHero(filtered);
   kvRenderChart();
-  // TOPIX未取得なら非同期取得（全期間の先頭からカバー）
+  // TOPIX/日経225未取得なら非同期取得（全期間の先頭からカバー）
   const all=kvSorted();
   if(kvShowTopix&&all.length)kvFetchTopix(String(all[0].date));
+  if(kvShowNikkei&&all.length)kvFetchNikkei(String(all[0].date));
 }
 function kvUpdateToggleUI(){
   const a=document.getElementById('kv-mode-asset'),p=document.getElementById('kv-mode-pnl');
@@ -6426,6 +6467,21 @@ function kvRenderChart(){
         });
       }
     }
+    // 日経225正規化オーバーレイ（起点の資産額に合わせる）
+    if(kvShowNikkei&&kvNikkeiData){
+      const baseN=kvNikkeiCloseOn(String(filtered[0].date));
+      if(baseN){
+        const nikkeiLine=filtered.map(s=>{
+          const c=kvNikkeiCloseOn(String(s.date));
+          return c?totals[0]*(c/baseN):null;
+        });
+        datasets.push({
+          label:'日経225',data:nikkeiLine,
+          borderColor:'rgba(255,183,77,0.9)',borderDash:[2,3],borderWidth:2,
+          pointRadius:0,tension:0,fill:false,order:3,spanGaps:true
+        });
+      }
+    }
     chartInstances['kv']=new Chart(canvas,{type:'line',data:{labels,datasets},options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{
@@ -6433,10 +6489,19 @@ function kvRenderChart(){
         datalabels:{display:false},
         tooltip:{backgroundColor:'rgba(0,0,0,0.85)',padding:10,cornerRadius:8,displayColors:false,
           callbacks:{label:ctx=>{
-            if(ctx.datasetIndex===0)return'資産総額: '+kvFmtYen(ctx.raw);
-            const base=kvTopixCloseOn(String(filtered[0].date));
-            const c=kvTopixCloseOn(String(filtered[ctx.dataIndex].date));
-            return(base&&c)?`TOPIX: ${((c/base-1)*100>=0?'+':'')}${((c/base-1)*100).toFixed(1)}%（期間起点比）`:'TOPIX';
+            const lbl=ctx.dataset.label;
+            if(lbl==='資産総額')return'資産総額: '+kvFmtYen(ctx.raw);
+            if(lbl==='TOPIX'){
+              const base=kvTopixCloseOn(String(filtered[0].date));
+              const c=kvTopixCloseOn(String(filtered[ctx.dataIndex].date));
+              return(base&&c)?`TOPIX: ${((c/base-1)*100>=0?'+':'')}${((c/base-1)*100).toFixed(1)}%（期間起点比）`:'TOPIX';
+            }
+            if(lbl==='日経225'){
+              const base=kvNikkeiCloseOn(String(filtered[0].date));
+              const c=kvNikkeiCloseOn(String(filtered[ctx.dataIndex].date));
+              return(base&&c)?`日経225: ${((c/base-1)*100>=0?'+':'')}${((c/base-1)*100).toFixed(1)}%（期間起点比）`:'日経225';
+            }
+            return lbl;
           }}}
       },
       scales:{
