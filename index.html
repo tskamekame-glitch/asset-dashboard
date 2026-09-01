@@ -2353,12 +2353,41 @@ function amRender(){
   const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
   const orderedCatsForBar=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
   document.getElementById('amBarChart').innerHTML=orderedCatsForBar.map(cat=>{const amt=cats[cat];return`<div class="bar-row"><span class="bar-label">${cat}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(amt/maxAmt*100)}%;background:${AM_CAT_COLORS[cat]||'#888'}"></div></div><span class="bar-val">${fmt(amt)}</span></div>`;}).join('')||'<p style="text-align:center;color:var(--text3);font-size:13px">口座を追加してください</p>';
+  // 口座のNISA区分を判定（表示グルーピング用）。tqClassify（NISA区分フィールド優先→名前/メモ判定）を再利用。
+  function amNisaGroupInfo(a){
+    const cls=(typeof tqClassify==='function')?tqClassify(a):null;
+    if(cls==='growth')return{key:'growth',label:'📈 NISA成長投資枠',order:1};
+    if(cls==='tsumitate')return{key:'tsumitate',label:'📅 NISAつみたて投資枠',order:2};
+    if(cls==='ambiguous')return{key:'ambiguous',label:'❓ NISA区分未確定',order:3};
+    return{key:'taxable',label:'💴 特定・その他（課税口座）',order:4};
+  }
   const catGroups={};activeAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
   const sortedCatEntries=[...CAT_ORDER.filter(c=>catGroups[c]),...Object.keys(catGroups).filter(c=>!CAT_ORDER.includes(c))].map(c=>[c,catGroups[c]]);
   document.getElementById('accountSections').innerHTML=sortedCatEntries.map(([cat,accts])=>{
     const catTotal=accts.reduce((s,a)=>s+a.amount,0);
-    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${accts.map(a=>amRenderCard(a)).join('')}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
+    // NISA区分ごとにサブグループ化。区分が複数混在する場合のみ見出し・小計を表示する
+    // （全件が同じ区分＝分ける意味がない場合は、従来通りフラットに一覧表示する）
+    const subMap={};
+    accts.forEach(a=>{
+      const g=amNisaGroupInfo(a);
+      if(!subMap[g.key])subMap[g.key]={label:g.label,order:g.order,items:[]};
+      subMap[g.key].items.push(a);
+    });
+    const subGroups=Object.values(subMap).sort((x,y)=>x.order-y.order);
+    const listHtml=subGroups.length>1
+      ?subGroups.map(g=>{
+          const gTotal=g.items.reduce((s,a)=>s+a.amount,0);
+          return`<div class="nisa-subgroup">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--bg2);font-size:12px;font-weight:700;color:var(--text2)">
+              <span>${g.label}</span><span style="font-variant-numeric:tabular-nums">${fmt(gTotal)}</span>
+            </div>
+            ${g.items.map(a=>amRenderCard(a)).join('')}
+          </div>`;
+        }).join('')
+      :accts.map(a=>amRenderCard(a)).join('');
+    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${listHtml}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
   }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
+
 
   // 売却済みセクション
   amRenderSoldSection(soldAccounts);
@@ -3118,6 +3147,13 @@ function amHmSelectTile(id,sectionKey){
   </div>`;
 }
 // ── 口座カード1件レンダリング（保有中・売却済み共通） ──
+// カード上に表示する小さなNISA区分バッジ（成長=オレンジ／つみたて=水色）。課税口座・未判定は何も表示しない。
+function amNisaBadgeHtml(a){
+  const cls=(typeof tqClassify==='function')?tqClassify(a):null;
+  if(cls==='growth')return'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#f5a62320;color:#f5a623;border:1px solid #f5a62360;vertical-align:middle">📈 NISA成長</span>';
+  if(cls==='tsumitate')return'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:#4fc3f720;color:#2196c9;border:1px solid #4fc3f760;vertical-align:middle">📅 NISAつみたて</span>';
+  return'';
+}
 function amRenderCard(a){
   const stale=!a.sold&&daysSince(a.updated)>=30;
   const staleHtml=stale?'<span style="font-size:11px;color:#ba7517;background:#faeeda;border-radius:10px;padding:2px 8px">⚠ '+daysSince(a.updated)+'日未更新</span>':'';
@@ -3181,6 +3217,7 @@ function amRenderCard(a){
         +'<div style="flex:1;min-width:0">'
           +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
             +'<span class="acct-name" style="color:var(--text2)">'+esc(a.name)+'</span>'
+            +amNisaBadgeHtml(a)
             +'<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:#C0392B20;color:#C0392B;border:1px solid #C0392B40">売却済</span>'
           +'</div>'
           +(soldDateStr?'<div style="font-size:11px;color:var(--text3);margin-top:3px">売却日: '+esc(soldDateStr)+'</div>':'')
@@ -3262,7 +3299,7 @@ function amRenderCard(a){
     +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
       +'<div style="display:flex;align-items:flex-start;padding:12px 16px;gap:10px">'
         +'<div style="flex:1;min-width:0">'
-          +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+'</div>'
+          +'<div class="acct-name">'+esc(a.name)+(hasSBICode?'<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--accent);color:#fff;vertical-align:middle">'+esc(a.code)+'</span>':'')+amNisaBadgeHtml(a)+'</div>'
           +noteHtml
           +(sellTargetHtml?'<div style="margin-top:3px">'+sellTargetHtml+'</div>':'')
           +(a.earningsDate?'<div style="font-size:11px;color:var(--accent);margin-top:2px">📅 決算: '+esc(a.earningsDate)+'</div>':'')
