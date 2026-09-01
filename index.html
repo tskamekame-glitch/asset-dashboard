@@ -4545,6 +4545,7 @@ function amParseSBICSV(text){
     // 外国株は「AAPL Apple Inc.」のようにティッカーが先頭に来る場合がある
     const codeMatch=(!isFund)?nameNorm.match(/^([0-9A-Za-z]{1,6})\s+(.+)$/):null;
     const code=codeMatch?codeMatch[1].replace(/[^0-9A-Za-z]/g,''):'';
+    const bareName=codeMatch?codeMatch[2].trim():nameNorm;
 
     const acctSuffix=sectionToAccount(currentSection);
     // 投資信託の買付日は「----/--/--」のようなプレースホルダーで返ることがあるため、
@@ -4556,6 +4557,7 @@ function amParseSBICSV(text){
       nameRaw,
       nameNorm,
       code,
+      bareName,
       buyDate,
       evalAmt:Math.round(evalAmt),
       shares:isFund?Math.round(shares*10000)/10000:(Math.round(shares)||0),
@@ -4830,8 +4832,10 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
 function amDupNormalize(name){
   return (name||'')
     .replace(/[（(].*?[）)]/g,'') // 「（NISA成長）」等の注記を除去
+    .replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)) // 全角→半角（コード判定を先に行うため空白除去より前）
+    .trim()
+    .replace(/^[0-9A-Za-z]{1,6}\s+/,'') // 「2413 エムスリー」のような先頭の銘柄コードを除去
     .replace(/[・･]/g,'')
-    .replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)) // 全角→半角
     .replace(/[\s　]/g,'')
     .toLowerCase();
 }
@@ -4898,6 +4902,7 @@ async function amApplySBIRows(rows){
     if(acc.nisaType==='none')return '特定';
     return ''; // 不明（特定・一般、または未判定）
   }
+  function toH(s){return (s||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim();}
 
   // ── 個別株：同一銘柄コードのCSV行を「ロット」として1対1で既存口座に割り当てる ──
   // 同じコードのCSV行がN件あれば、既存の同コード口座をN件まで使い切り、
@@ -4938,6 +4943,33 @@ async function amApplySBIRows(rows){
       const accCode=String(acc.code||'').replace(/[^0-9A-Za-z.]/g,'');
       if(accCode.toUpperCase()===code.toUpperCase())existingByCode.push(i);
     });
+
+    // 銘柄コードで一致する既存口座が1件も無い場合：手動登録時に銘柄コードを
+    // 入力していなかった既存口座がある可能性があるため、口座名（コード部分を除いた
+    // 会社名）が完全一致する未売却の株式系口座を探し、フォールバックとして採用する。
+    // 見つかった場合は口座にコードを補完し、以後は自動でコード照合できるようにする。
+    // SBI CSVの略称表記（例:「Ｆ＆ＬＣ」）とユーザーが付けた口座名（正式社名等）が
+    // 異なる既知のケースは、別途エイリアス表で吸収する。
+    const AM_TICKER_NAME_ALIASES={
+      'F&LC':['Food&LifeCompanies','フードアンドライフカンパニーズ','スシローグローバルホールディングス','SUSHIRO','スシロー'],
+    };
+    if(existingByCode.length===0){
+      const bareNames=new Set(groupRows.map(r=>r.bareName).filter(Boolean));
+      const aliasNames=new Set();
+      bareNames.forEach(bn=>{(AM_TICKER_NAME_ALIASES[bn]||[]).forEach(a=>aliasNames.add(toH(a)));});
+      if(bareNames.size||aliasNames.size){
+        amAccounts.forEach((acc,i)=>{
+          if(acc.sold||usedAccIdx.has(i))return;
+          if(acc.code)return; // 既に別コードが設定済みの口座は対象外（別銘柄の可能性があるため）
+          if(!['個別株','高配当','外国株式'].includes(acc.cat))return;
+          const accNameH=toH(acc.name);
+          if(bareNames.has(accNameH)||aliasNames.has(accNameH)){
+            existingByCode.push(i);
+            acc.code=code;// 今後はコードで自動照合できるよう補完
+          }
+        });
+      }
+    }
 
     // 区分が明確に一致する既存口座がある区分を先に処理する（未判定口座を早取りして、
     // 後続の「本来一致するはずの区分」から候補を奪ってしまうのを防ぐため）
