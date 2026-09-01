@@ -4927,11 +4927,25 @@ async function amApplySBIRows(rows){
       if(accCode.toUpperCase()===code.toUpperCase())existingByCode.push(i);
     });
 
-    suffixGroups.forEach((rowsInSuffix,suffixKey)=>{
+    // 区分が明確に一致する既存口座がある区分を先に処理する（未判定口座を早取りして、
+    // 後続の「本来一致するはずの区分」から候補を奪ってしまうのを防ぐため）
+    const suffixEntries=Array.from(suffixGroups.entries());
+    suffixEntries.sort((a,b)=>{
+      const aExact=existingByCode.some(i=>guessAccSuffix(amAccounts[i])===a[0]);
+      const bExact=existingByCode.some(i=>guessAccSuffix(amAccounts[i])===b[0]);
+      if(aExact&&!bExact)return -1;
+      if(!aExact&&bExact)return 1;
+      return 0;
+    });
+
+    suffixEntries.forEach(([suffixKey,rowsInSuffix])=>{
       // まずこのacctSuffixと一致する既存口座を優先的に候補にする
       let accIdxList=existingByCode.filter(i=>!usedAccIdx.has(i)&&guessAccSuffix(amAccounts[i])===suffixKey);
-      // 見つからなければ、口座種別が未判定（特定/一般の可能性が高い）の既存口座も候補にする
-      if(!accIdxList.length&&suffixKey!=='NISA成長'&&suffixKey!=='NISAつみたて'){
+      // 見つからなければ、口座種別が未判定の既存口座も候補にする。
+      // 「NISA区分」フィールドが導入される前からの既存口座は多くが未判定のままなので、
+      // NISA成長/つみたてのCSV行であってもこのフォールバックを適用する
+      // （区分が明確な口座を先に処理済みのため、未判定口座を誤って横取りする心配はない）
+      if(!accIdxList.length){
         accIdxList=existingByCode.filter(i=>!usedAccIdx.has(i)&&guessAccSuffix(amAccounts[i])==='');
       }
 
