@@ -3756,7 +3756,7 @@ const AM_NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イ�
 const AM_NAME_TO_CAT_RULES=[
   {pat:/SBG|ソフトバンクグループ|9984/,           cat:'個別株'},
   {pat:/SBKK|みずほストック|野村持ち株.*SBKK|9434/,cat:'高配当'},
-  {pat:/^[A-Z]{1,5}$|^[A-Z]{1,5}\s/,              cat:'外国株式'},
+  {pat:/^[A-Z]{1,5}$|^[A-Z]{1,5}\s(?!.*(ファンド|インデックス|モメンタム))/, cat:'外国株式'},
   {pat:/NYSE|NASDAQ|外国株|米国株|ADR/i,            cat:'外国株式'},
   {pat:/Apple|Microsoft|Alphabet|Amazon|Nvidia|Meta|Tesla|Berkshire|Johnson|Exxon/i, cat:'外国株式'},
   {pat:/全世界|オルカン|ｵﾙｶﾝ/,                   cat:'全世界インデックス'},
@@ -4760,16 +4760,15 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
     }
     // SBI行にコードなし（投信等）→ 以降のルールで判定
   }
-  // 野村・みずほ・DC年金・iDeCo等、他社/確定拠出で手動管理している口座は、
-  // SBI CSV側の銘柄名と語句（TOPIX・日経等）が偶然一致してもマッチ対象にしない
-  // （銘柄コード完全一致の場合は誤爆しないため対象外＝上のコード判定を通過後にここへ来る）
-  if(AM_NON_SBI_PAT.test(p))return 0;
   // ===== ファンド固有ルール（最優先）=====
-  // SBI銘柄ごとに must/not キーワードで正確に対応するAM口座を特定
+  // SBI銘柄ごとに must/not キーワードで正確に対応するAM口座を特定。
+  // 「野村・みずほ等の他社ブローカー除外」より必ず先に判定する。
+  // （楽天・ＳＭＴ・三菱ＵＦＪ国際投信 等、資産運用会社のブランド名がブローカー名と
+  //   紛らわしいファンドがあり、除外チェックを先にすると誤って除外されてしまうため）
   const FUND_RULES=[
-    {sbi:/eMAXIS.*Slim.*米国|S.P.*500.*eMAXIS/i,   must:['米国'],  not:['インド','TOPIX','日経','国内','SBI iDeCo']},
-    {sbi:/eMAXIS.*Slim.*国内.*日経|日経平均.*eMAXIS/i, must:['日経'],  not:['米国','インド','TOPIX','SBI iDeCo']},
-    {sbi:/eMAXIS.*Slim.*国内.*TOPIX/i,              must:['TOPIX'], not:['米国','インド','日経']},
+    {sbi:/eMAXIS.*Slim.*米国|S.P.*500.*eMAXIS/i,   must:['eMAXIS','米国'],  not:['インド','TOPIX','日経','国内','SBI iDeCo']},
+    {sbi:/eMAXIS.*Slim.*国内.*日経|日経平均.*eMAXIS/i, must:['eMAXIS','日経'],  not:['米国','インド','TOPIX','SBI iDeCo']},
+    {sbi:/eMAXIS.*Slim.*国内.*TOPIX/i,              must:['eMAXIS','TOPIX'], not:['米国','インド','日経']},
     {sbi:/eMAXIS.*インド|インド.*eMAXIS/i,           must:['インド','eMAXIS'], not:['日経','米国','TOPIX','SBI iDeCo']},
     {sbi:/iFreeNEXT.*FANG/i,                        must:['FANG'],  not:[]},
     {sbi:/iTrust.*インド/i,                          must:['iTrust'],not:[]},
@@ -4778,6 +4777,9 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
     {sbi:/楽天.*米国高配当|楽天.*高配当.*米国/i,       must:['楽天','高配当'], not:['インド','TOPIX','日経']},
     {sbi:/楽天.*全世界|楽天.*オールカントリー/i,       must:['楽天','全世界'], not:['米国','高配当','インド']},
     {sbi:/楽天.*全米|楽天.*S.P.*500/i,               must:['楽天','全米'],  not:['高配当','インド','全世界']},
+    {sbi:/SMT.*米国株式|米国株式.*SMT/i,             must:['米国','モメンタム'], not:['中国','日本','インド']},
+    {sbi:/SMT.*日本株式|日本株式.*SMT/i,             must:['日本','モメンタム'], not:['米国','中国','インド']},
+    {sbi:/SMT.*中国株式|中国株式.*SMT/i,             must:['中国','モメンタム'], not:['米国','日本','インド']},
   ];
   // sbiパターンにマッチするルール群を全収集し、条件を満たすものでスコアを返す
   const matchedRules=FUND_RULES.filter(r=>r.sbi.test(s));
@@ -4799,6 +4801,10 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
     // どのルールも条件を満たさない → この銘柄カテゴリには属さない → 0
     return 0;
   }
+  // 野村・みずほ・DC年金・iDeCo等、他社/確定拠出で手動管理している口座は、
+  // SBI CSV側の銘柄名と語句（TOPIX・日経等）が偶然一致してもマッチ対象にしない
+  // （銘柄コード完全一致・FUND_RULES一致の場合は誤爆しないため対象外＝ここまで到達しない）
+  if(AM_NON_SBI_PAT.test(p))return 0;
   // ===== 株式（コード・会社名）=====
   const codeM=s.match(/\b(\d{4})\b/);
   if(codeM&&p.includes(codeM[1]))return 95;
@@ -4871,6 +4877,16 @@ async function amApplySBIRows(rows){
   const log=[];
   const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
 
+  // 口座の推定口座種別（nisaType優先→名前/メモの文字列判定）。
+  // 「特定」「NISA成長」等、税制上別管理すべき口座を区別するために使う。
+  function guessAccSuffix(acc){
+    const cls=(typeof tqClassify==='function')?tqClassify(acc):null;
+    if(cls==='growth')return 'NISA成長';
+    if(cls==='tsumitate')return 'NISAつみたて';
+    if(acc.nisaType==='none')return '特定';
+    return ''; // 不明（特定・一般、または未判定）
+  }
+
   // ── 個別株：同一銘柄コードのCSV行を「ロット」として1対1で既存口座に割り当てる ──
   // 同じコードのCSV行がN件あれば、既存の同コード口座をN件まで使い切り、
   // 残りは必ず新規ロットとして追加する（行数と一致する口座数を保証する）。
@@ -4893,87 +4909,106 @@ async function amApplySBIRows(rows){
   });
 
   codeGroups.forEach((groupRows,code)=>{
-    // この銘柄コードに対応する既存の資産管理口座をすべて収集
-    const accIdxList=[];
-    amAccounts.forEach((acc,i)=>{
-      if(acc.sold)return; // 売却済みはマッチ対象外
-      const accCode=String(acc.code||'').replace(/[^0-9A-Za-z.]/g,'');
-      if(accCode.toUpperCase()===code.toUpperCase())accIdxList.push(i);
+    // 同一銘柄コードでも「特定」「NISA成長」等の口座種別（acctSuffix）が異なる場合は、
+    // 税制上も別々に管理すべき別口座なので、acctSuffixごとにサブグループ化してから処理する。
+    // （これをせず単純にコード一致だけで合算すると、特定口座とNISA口座の残高が
+    //   1つのアカウントに混ざってしまい、NISA枠管理の集計が狂う）
+    const suffixGroups=new Map();
+    groupRows.forEach(row=>{
+      const key=row.acctSuffix||'';
+      if(!suffixGroups.has(key))suffixGroups.set(key,[]);
+      suffixGroups.get(key).push(row);
     });
 
-    // ── CSV行数 vs 既存口座数で動作を切り替え ──
-    if(groupRows.length>accIdxList.length&&accIdxList.length>0){
-      // 株式分割などでCSV行数 > 既存口座数の場合：同コード全行を合算して既存口座に集約
-      // 例: 分割で買付日が2行になったが amAccounts には1口座しかない
-      const mergedShares=groupRows.reduce((s,r)=>s+(r.shares||0),0);
-      const mergedAmt=groupRows.reduce((s,r)=>s+(r.evalAmt||0),0);
-      // 取得単価は加重平均（shares×costPrice の合計 / 合計shares）
-      const totalCostBasis=groupRows.reduce((s,r)=>s+(r.costPrice||0)*(r.shares||0),0);
-      const mergedCostPrice=mergedShares>0?Math.round(totalCostBasis/mergedShares*10)/10:groupRows[0].costPrice||0;
-      // 現在値は最初の行から（全行同じはず）
-      const mergedPrice=groupRows[0].price||0;
-      const isFx=groupRows[0].isForeignStock;
+    const existingByCode=[];
+    amAccounts.forEach((acc,i)=>{
+      if(acc.sold)return;
+      const accCode=String(acc.code||'').replace(/[^0-9A-Za-z.]/g,'');
+      if(accCode.toUpperCase()===code.toUpperCase())existingByCode.push(i);
+    });
 
-      // 既存口座に合算値を反映（1口座目に集約）
-      accIdxList.forEach((accIdx,li)=>{
-        if(usedAccIdx.has(accIdx))return;
-        usedAccIdx.add(accIdx);
-        const acc=amAccounts[accIdx];
-        const oldVal=acc.amount||0;
-        // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
-        acc.updated=todayStr();
-        // li===0 のみ合算値を反映、他の既存口座は変更しない
-        if(li>0)return;
-        if(oldVal>0)acc.prevSBIAmount=oldVal;
-        acc.amount=mergedAmt;
-        if(mergedShares>0)acc.shares=mergedShares;
-        if(mergedCostPrice>0)acc.costPrice=mergedCostPrice;
-        if(isFx&&mergedShares>0&&mergedPrice>0&&mergedAmt>0){
-          acc.price=mergedPrice;
-          const impliedFx=Math.round(mergedAmt/(mergedShares*mergedPrice)*100)/100;
-          if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
-        }else if(mergedPrice>0){
-          acc.price=mergedPrice;
-        }
-        acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
-        updated++;
-        log.push({sbi:groupRows.map(r=>r.nameRaw).join('+'),am:acc.name,val:mergedAmt,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:groupRows[0].acctSuffix});
-        showToast(`🔀 ${acc.name}：${groupRows.length}ロット合算（株式分割等）`,3500);
-      });
-    }else{
-      // 通常処理：CSV行と既存口座を順番に1対1で対応させる
-      groupRows.forEach((row,gi)=>{
-        const accIdx=accIdxList[gi];
-        if(accIdx===undefined||usedAccIdx.has(accIdx)){
-          // 対応する既存口座が無い（CSV行数 > 既存口座数）→ 新規追加対象
-          noMatch.push(row);
-          return;
-        }
-        usedAccIdx.add(accIdx);
-        const acc=amAccounts[accIdx];
-        const oldVal=acc.amount||0;
-        const newVal=row.evalAmt;
-        const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
-        // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
-        acc.updated=todayStr();
-        if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
+    suffixGroups.forEach((rowsInSuffix,suffixKey)=>{
+      // まずこのacctSuffixと一致する既存口座を優先的に候補にする
+      let accIdxList=existingByCode.filter(i=>!usedAccIdx.has(i)&&guessAccSuffix(amAccounts[i])===suffixKey);
+      // 見つからなければ、口座種別が未判定（特定/一般の可能性が高い）の既存口座も候補にする
+      if(!accIdxList.length&&suffixKey!=='NISA成長'&&suffixKey!=='NISAつみたて'){
+        accIdxList=existingByCode.filter(i=>!usedAccIdx.has(i)&&guessAccSuffix(amAccounts[i])==='');
+      }
 
-        if(oldVal>0)acc.prevSBIAmount=oldVal;
-        acc.amount=newVal;
-        if(row.shares>0)acc.shares=row.shares;
-        if(row.isForeignStock&&row.shares>0&&row.price>0&&newVal>0){
-          acc.price=row.price;
-          const impliedFx=Math.round(newVal/(row.shares*row.price)*100)/100;
-          if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
-        }else if(row.price>0){
-          acc.price=row.price;
-        }
-        if(row.costPrice>0)acc.costPrice=row.costPrice;
-        acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
-        updated++;
-        log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:row.acctSuffix});
-      });
-    }
+      // ── CSV行数 vs 既存口座数で動作を切り替え ──
+      if(rowsInSuffix.length>accIdxList.length&&accIdxList.length>0){
+        // 株式分割などでCSV行数 > 既存口座数の場合：同一口座種別内の全行を合算して既存口座に集約
+        // 例: 分割で買付日が2行になったが amAccounts には1口座しかない
+        const mergedShares=rowsInSuffix.reduce((s,r)=>s+(r.shares||0),0);
+        const mergedAmt=rowsInSuffix.reduce((s,r)=>s+(r.evalAmt||0),0);
+        // 取得単価は加重平均（shares×costPrice の合計 / 合計shares）
+        const totalCostBasis=rowsInSuffix.reduce((s,r)=>s+(r.costPrice||0)*(r.shares||0),0);
+        const mergedCostPrice=mergedShares>0?Math.round(totalCostBasis/mergedShares*10)/10:rowsInSuffix[0].costPrice||0;
+        // 現在値は最初の行から（全行同じはず）
+        const mergedPrice=rowsInSuffix[0].price||0;
+        const isFx=rowsInSuffix[0].isForeignStock;
+
+        // 既存口座に合算値を反映（1口座目に集約）
+        accIdxList.forEach((accIdx,li)=>{
+          if(usedAccIdx.has(accIdx))return;
+          usedAccIdx.add(accIdx);
+          const acc=amAccounts[accIdx];
+          const oldVal=acc.amount||0;
+          // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
+          acc.updated=todayStr();
+          // li===0 のみ合算値を反映、他の既存口座は変更しない
+          if(li>0)return;
+          if(oldVal>0)acc.prevSBIAmount=oldVal;
+          acc.amount=mergedAmt;
+          if(mergedShares>0)acc.shares=mergedShares;
+          if(mergedCostPrice>0)acc.costPrice=mergedCostPrice;
+          if(isFx&&mergedShares>0&&mergedPrice>0&&mergedAmt>0){
+            acc.price=mergedPrice;
+            const impliedFx=Math.round(mergedAmt/(mergedShares*mergedPrice)*100)/100;
+            if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
+          }else if(mergedPrice>0){
+            acc.price=mergedPrice;
+          }
+          acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+          updated++;
+          log.push({sbi:rowsInSuffix.map(r=>r.nameRaw).join('+'),am:acc.name,val:mergedAmt,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:rowsInSuffix[0].acctSuffix});
+          showToast(`🔀 ${acc.name}：${rowsInSuffix.length}ロット合算（株式分割等）`,3500);
+        });
+      }else{
+        // 通常処理：CSV行と既存口座を順番に1対1で対応させる
+        rowsInSuffix.forEach((row,gi)=>{
+          const accIdx=accIdxList[gi];
+          if(accIdx===undefined||usedAccIdx.has(accIdx)){
+            // 対応する既存口座が無い（別口座種別で新規保有等）→ 新規追加対象
+            noMatch.push(row);
+            return;
+          }
+          usedAccIdx.add(accIdx);
+          const acc=amAccounts[accIdx];
+          const oldVal=acc.amount||0;
+          const newVal=row.evalAmt;
+          const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+          // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
+          acc.updated=todayStr();
+          if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
+
+          if(oldVal>0)acc.prevSBIAmount=oldVal;
+          acc.amount=newVal;
+          if(row.shares>0)acc.shares=row.shares;
+          if(row.isForeignStock&&row.shares>0&&row.price>0&&newVal>0){
+            acc.price=row.price;
+            const impliedFx=Math.round(newVal/(row.shares*row.price)*100)/100;
+            if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
+          }else if(row.price>0){
+            acc.price=row.price;
+          }
+          if(row.costPrice>0)acc.costPrice=row.costPrice;
+          acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+          updated++;
+          log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:row.acctSuffix});
+        });
+      }
+    });
   });
 
   // ── 投信・コードなし銘柄：従来通りスコアベースのマッチング（1対1）──
@@ -5018,17 +5053,25 @@ async function amApplySBIRows(rows){
   // 取得単価が異なる買付ロットとして区別するため、行ごとに別の口座を新規追加する
   let added=0;
   noMatch.forEach(row=>{
-    // 同一コードの未売却口座が既に存在する場合は重複追加しない
+    // 同一コード「かつ同じ口座種別」の未売却口座が既に存在する場合のみ重複追加しない
+    // （特定口座とNISA口座で同じ銘柄を保有している場合は別口座として追加する必要があるため、
+    //   コード一致のみでは判定しない）
     if(row.code){
-      const exists=amAccounts.some(a=>!a.sold&&String(a.code||'').replace(/[^0-9A-Za-z]/g,'').toUpperCase()===String(row.code).toUpperCase());
+      const exists=amAccounts.some(a=>!a.sold
+        &&String(a.code||'').replace(/[^0-9A-Za-z]/g,'').toUpperCase()===String(row.code).toUpperCase()
+        &&guessAccSuffix(a)===(row.acctSuffix||''));
       if(exists){
         updated++;// 既存扱いにカウント
         return;
       }
     }
     // カテゴリ推定：nameRaw（全角含む）とnameNorm（半角変換済み）の両方で試みる
-    const guessedCat=amGuessCat(row.nameNorm)||amGuessCat(row.nameRaw)||
-      (row.isForeignStock?'外国株式':row.isFund?'全世界インデックス':'個別株');
+    let guessedCat=amGuessCat(row.nameNorm)||amGuessCat(row.nameRaw);
+    // 銘柄コード付きの株式行は、たまたま「三菱」「UFJ」等の銀行名パターンと
+    // 文字列が一致してしまうことがある（例:「8306 三菱ＵＦＪ」という株式名）。
+    // これは口座名（銀行口座）向けの判定ルールなので、コード付き株式行では無視する。
+    if(!row.isFund&&row.code&&guessedCat==='銀行')guessedCat=null;
+    guessedCat=guessedCat||(row.isForeignStock?'外国株式':row.isFund?'全世界インデックス':'個別株');
     const validCat=(guessedCat&&AM_VALID_CATS.includes(guessedCat))?guessedCat:'個別株';
 
     // 表示名：全角英数を半角に変換して使いやすい名前に
@@ -5059,6 +5102,13 @@ async function amApplySBIRows(rows){
       if(impliedFx>50&&impliedFx<300){fxRateForNew=impliedFx;amSetFxRate(impliedFx);}
     }
 
+    // acctSuffixが単一区分で明確な場合のみNISA区分を自動設定する
+    // （複数セクションにまたがるファンドはparse時点でacctSuffix=''になっているため対象外＝手動判定に委ねる）
+    let nisaTypeForNew;
+    if(row.acctSuffix==='NISA成長')nisaTypeForNew='growth';
+    else if(row.acctSuffix==='NISAつみたて')nisaTypeForNew='tsumitate';
+    else if(row.acctSuffix==='特定'||row.acctSuffix==='一般')nisaTypeForNew='none';
+
     const newAcc={
       id:newId,
       name:displayName,
@@ -5070,6 +5120,7 @@ async function amApplySBIRows(rows){
       costPrice:row.costPrice||0,
       fxRate:fxRateForNew,
       note:'',
+      nisaType:nisaTypeForNew,
       updated:todayStr(),
       buyDate:row.buyDate||undefined,
       memo:`[SBI自動追加 ${today}]`,
