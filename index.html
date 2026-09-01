@@ -4852,18 +4852,30 @@ function amFindDuplicates(){
   }
   el.innerHTML=`<div style="margin:0 16px 12px;padding:12px 14px;background:var(--bg2);border-radius:10px">
     <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#c0392b">⚠ 重複候補 ${dupGroups.length}件（口座名が酷似）</div>
-    ${dupGroups.map(g=>`
+    ${dupGroups.map(g=>{
+      // 取得単価がグループ内で全て同じなら「本当に同じロットの重複」の可能性が高く、
+      // 異なっていれば「特定口座とNISA口座など別々の実際の保有」の可能性が高いことを示すヒントを出す
+      const costs=g.map(a=>a.costPrice||0);
+      const allSameCost=costs.every(c=>c===costs[0]);
+      const hintHtml=allSameCost
+        ?'<div style="font-size:10px;color:#c0392b;margin-bottom:6px">⚠ 取得単価も同じ → 本当の重複の可能性が高いです</div>'
+        :'<div style="font-size:10px;color:var(--green);margin-bottom:6px">ℹ 取得単価が異なる → 特定口座・NISA口座など別々の実際の保有の可能性があります（削除前に必ずご確認ください）</div>';
+      return`
       <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:0.5px solid var(--border)">
-        <div style="font-size:12px;font-weight:600;margin-bottom:6px">${esc(g[0].name)} 他（${g.length}件）</div>
-        ${g.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2);padding:4px 0;gap:8px">
-          <span style="flex:1;min-width:0">${esc(a.name)}<br><span style="color:var(--text3)">更新:${a.updated||'-'}／残高:¥${(a.amount||0).toLocaleString()}${a.nisaType?'／'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'課税'):''}</span></span>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button onclick="openEditModal(${a.id})" style="font-size:11px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer">編集</button>
-            <button onclick="amConfirmDelete(${a.id})" style="font-size:11px;color:var(--danger);background:none;border:1px solid var(--danger);border-radius:5px;padding:3px 8px;cursor:pointer">削除</button>
-          </div>
-        </div>`).join('')}
-      </div>
-    `).join('')}
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">${esc(g[0].name)} 他（${g.length}件）</div>
+        ${hintHtml}
+        ${g.map(a=>{
+          const nisaLabel=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':a.nisaType==='none'?'課税（明示）':'未判定';
+          return`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2);padding:4px 0;gap:8px">
+            <span style="flex:1;min-width:0">${esc(a.name)}<br><span style="color:var(--text3)">残高:¥${(a.amount||0).toLocaleString()}／取得単価:${a.costPrice?'¥'+a.costPrice.toLocaleString():'-'}／数量:${a.shares||'-'}／買付日:${a.buyDate||'-'}／区分:${nisaLabel}／更新:${a.updated||'-'}</span></span>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button onclick="openEditModal(${a.id})" style="font-size:11px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer">編集</button>
+              <button onclick="amConfirmDelete(${a.id})" style="font-size:11px;color:var(--danger);background:none;border:1px solid var(--danger);border-radius:5px;padding:3px 8px;cursor:pointer">削除</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}
     <div style="font-size:10px;color:var(--text3);margin-top:4px">※ 削除前に「編集」で残高・取得価格を確認し、残す口座に合算してから削除してください（自動統合はしません）</div>
   </div>`;
   el.style.display='block';
