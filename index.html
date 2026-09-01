@@ -4486,7 +4486,7 @@ function amParseSBICSV(text){
   // 口座種別を口座名サフィックスに変換
   function sectionToAccount(sec){
     if(/NISA.*成長|成長.*NISA/i.test(sec)) return 'NISA成長';
-    if(/NISAつみたて|つみたて.*NISA/i.test(sec)) return 'NISAつみたて';
+    if(/NISA.*つみたて|つみたて.*NISA/i.test(sec)) return 'NISAつみたて';
     if(/特定/i.test(sec)) return '特定';
     if(/一般/i.test(sec)) return '一般';
     return '';
@@ -4571,31 +4571,10 @@ function amParseSBICSV(text){
   }
 
   // 投資信託は「特定」「NISA成長」など複数セクションに分割記載される場合がある。
-  // 資産管理側は1ファンド=1口座で管理する想定のため、同一ファンド名の行は合算する。
-  // （合算後はacctSuffixを空にし、特定/NISA成長による減点を避ける）
-  const merged=[];
-  const fundMap=new Map();
-  rows.forEach(row=>{
-    if(!row.isFund){merged.push(row);return;}
-    const key=row.nameNorm;
-    if(fundMap.has(key)){
-      const ex=fundMap.get(key);
-      const totalShares=Math.round((ex.shares+row.shares)*1e4)/1e4;
-      // 加重平均取得単価
-      const totalCostAmt=ex.shares*ex.costPrice+row.shares*row.costPrice;
-      ex.costPrice=totalShares>0?Math.round(totalCostAmt/totalShares*100)/100:ex.costPrice;
-      ex.shares=totalShares;
-      ex.evalAmt+=row.evalAmt;
-      ex.price=row.price;// 基準価額は共通
-      ex.acctSuffix='';// 複数セクション合算のため口座区分は問わない
-      ex.section+=' + '+row.section;
-    }else{
-      const copy={...row};
-      fundMap.set(key,copy);
-      merged.push(copy);
-    }
-  });
-  return merged;
+  // 以前はここで同一ファンド名の行を合算していたが、特定口座とNISA口座を
+  // 別々の口座として管理したいという要望のため、合算せずそのまま返す。
+  // 口座区分（acctSuffix）ごとの振り分けは amApplySBIRows 側で行う。
+  return rows;
 }
 
 // ============================================================
@@ -4623,7 +4602,7 @@ function amParseSBIHoldingsCSV(text){
   }
   function sectionToAccount(sec){
     if(/NISA.*成長|成長.*NISA/i.test(sec)) return 'NISA成長';
-    if(/NISAつみたて|つみたて.*NISA/i.test(sec)) return 'NISAつみたて';
+    if(/NISA.*つみたて|つみたて.*NISA/i.test(sec)) return 'NISAつみたて';
     if(/特定/i.test(sec)) return '特定';
     if(/一般/i.test(sec)) return '一般';
     return '';
@@ -4710,30 +4689,9 @@ function amParseSBIHoldingsCSV(text){
     }
   }
 
-  // 投資信託は「特定」「NISA成長」等の複数セクションに分割記載される場合があるため合算
-  const merged=[];
-  const fundMap=new Map();
-  rows.forEach(row=>{
-    if(!row.isFund){merged.push(row);return;}
-    const key=row.nameNorm;
-    if(fundMap.has(key)){
-      const ex=fundMap.get(key);
-      const totalShares=Math.round((ex.shares+row.shares)*1e4)/1e4;
-      const totalCostAmt=(ex.costAmt||0)+(row.costAmt||0);
-      ex.costPrice=totalShares>0?Math.round(totalCostAmt/totalShares*100)/100:ex.costPrice;
-      ex.shares=totalShares;
-      ex.evalAmt+=row.evalAmt;
-      ex.costAmt=totalCostAmt;
-      ex.price=row.price;
-      ex.acctSuffix='';
-      ex.section+=' + '+row.section;
-    }else{
-      const copy={...row};
-      fundMap.set(key,copy);
-      merged.push(copy);
-    }
-  });
-  return merged;
+  // 投資信託は「特定」「NISA成長」等の複数セクションに分割記載される場合がある。
+  // 合算せずそのまま返す（口座区分ごとの振り分けは amApplySBIRows 側で行う）。
+  return rows;
 }
 
 // amAccounts内の口座とSBI銘柄をマッチング
@@ -5069,41 +5027,80 @@ async function amApplySBIRows(rows){
     });
   });
 
-  // ── 投信・コードなし銘柄：従来通りスコアベースのマッチング（1対1）──
+  // ── 投信・コードなし銘柄：ファンド名でグループ化し、株式と同様に口座区分ごとに分けて管理 ──
+  // 同じファンドでも「特定」「NISA成長」「NISAつみたて」等の口座区分が異なれば、
+  // 別々の口座として扱う（合算しない）。理由は株式の場合と同じ：
+  // 税制上別管理すべき残高が1つの口座に混ざると、NISA枠管理の集計が狂うため。
+  const fundNameGroups=new Map();
   fundOrOtherRows.forEach(row=>{
-    let bestIdx=-1,bestScore=0;
-    amAccounts.forEach((acc,i)=>{
-      if(usedAccIdx.has(i))return;// すでに他のCSV行がマッチ済みの口座は対象外
-      if(acc.sold)return; // 売却済みはマッチ対象外
-      const score=amSBIMatchScore(row.nameNorm,acc.name,row.acctSuffix,acc.code||'',row.code||'');
-      if(score>bestScore){bestScore=score;bestIdx=i;}
+    if(!fundNameGroups.has(row.nameNorm))fundNameGroups.set(row.nameNorm,[]);
+    fundNameGroups.get(row.nameNorm).push(row);
+  });
+
+  fundNameGroups.forEach((groupRows,nameKey)=>{
+    const suffixGroups=new Map();
+    groupRows.forEach(row=>{
+      const key=row.acctSuffix||'';
+      if(!suffixGroups.has(key))suffixGroups.set(key,[]);
+      suffixGroups.get(key).push(row);
     });
-    if(bestIdx<0||bestScore<55){noMatch.push(row);return;}
 
-    usedAccIdx.add(bestIdx);
-    const acc=amAccounts[bestIdx];
-    const oldVal=acc.amount||0;
-    const newVal=row.evalAmt;
-    const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
-    // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
-    acc.updated=todayStr();
-    if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
+    // このファンド名に構造的に一致する既存口座（口座区分は問わずスコアだけで判定）を洗い出す
+    const existingByName=[];
+    amAccounts.forEach((acc,i)=>{
+      if(acc.sold||usedAccIdx.has(i))return;
+      if(amSBIMatchScore(nameKey,acc.name,'',acc.code||'','')>=55)existingByName.push(i);
+    });
 
-    acc.amount=newVal;
-    if(oldVal>0)acc.prevSBIAmount=oldVal;// 前回SBI金額を保存
-    if(row.shares>0)acc.shares=row.shares;
-    if(row.isForeignStock&&row.shares>0&&row.price>0&&newVal>0){
-      acc.price=row.price;
-      const impliedFx=Math.round(newVal/(row.shares*row.price)*100)/100;
-      if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
-    }else if(row.price>0){
-      acc.price=row.price;
-    }
-    if(row.costPrice>0)acc.costPrice=row.costPrice;
-    acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+    // 区分が明確に一致する既存口座がある区分を先に処理する（未判定口座の早取り防止）
+    const suffixEntries=Array.from(suffixGroups.entries());
+    suffixEntries.sort((a,b)=>{
+      const aExact=existingByName.some(i=>guessAccSuffix(amAccounts[i])===a[0]);
+      const bExact=existingByName.some(i=>guessAccSuffix(amAccounts[i])===b[0]);
+      if(aExact&&!bExact)return -1;
+      if(!aExact&&bExact)return 1;
+      return 0;
+    });
 
-    updated++;
-    log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:bestScore,acctSuffix:row.acctSuffix});
+    suffixEntries.forEach(([suffixKey,rowsInSuffix])=>{
+      let accIdxList=existingByName.filter(i=>!usedAccIdx.has(i)&&guessAccSuffix(amAccounts[i])===suffixKey);
+      if(!accIdxList.length){
+        accIdxList=existingByName.filter(i=>!usedAccIdx.has(i)&&guessAccSuffix(amAccounts[i])==='');
+      }
+
+      rowsInSuffix.forEach((row,gi)=>{
+        const accIdx=accIdxList[gi];
+        if(accIdx===undefined||usedAccIdx.has(accIdx)){
+          // 対応する既存口座が無い（別口座区分で新規保有等）→ 新規追加対象
+          noMatch.push(row);
+          return;
+        }
+        usedAccIdx.add(accIdx);
+        const acc=amAccounts[accIdx];
+        const oldVal=acc.amount||0;
+        const newVal=row.evalAmt;
+        const costChanged=row.costPrice>0&&acc.costPrice!==row.costPrice;
+        // このCSV取込で確認できた口座なので、値の変化有無に関わらず更新日を今日にする
+        acc.updated=todayStr();
+        if(oldVal===newVal&&(!row.shares||acc.shares===row.shares)&&!costChanged)return;
+
+        acc.amount=newVal;
+        if(oldVal>0)acc.prevSBIAmount=oldVal;// 前回SBI金額を保存
+        if(row.shares>0)acc.shares=row.shares;
+        if(row.isForeignStock&&row.shares>0&&row.price>0&&newVal>0){
+          acc.price=row.price;
+          const impliedFx=Math.round(newVal/(row.shares*row.price)*100)/100;
+          if(impliedFx>50&&impliedFx<300){acc.fxRate=impliedFx;amSetFxRate(impliedFx);}
+        }else if(row.price>0){
+          acc.price=row.price;
+        }
+        if(row.costPrice>0)acc.costPrice=row.costPrice;
+        acc.memo=(acc.memo||'').replace(/\s*\[SBI.*?\]$/,'')+` [SBI ${today}]`;
+
+        updated++;
+        log.push({sbi:row.nameRaw,am:acc.name,val:newVal,oldVal:amountBefore[acc.id]||0,score:100,acctSuffix:row.acctSuffix});
+      });
+    });
   });
 
   // ── 未マッチ銘柄を資産管理に自動追加 ──
