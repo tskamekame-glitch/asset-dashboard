@@ -814,6 +814,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="btn-sm" onclick="amFetchAllForeignQuotes()" style="color:#2980b9;border-color:#2980b9;font-weight:600" title="保有中の外国株式（ティッカー登録済み）の株価とドル円レートを一括取得">🌐 外国株更新</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
+      <button class="btn-sm" onclick="amFindDuplicates()" style="color:#c0392b;border-color:#c0392b" title="口座名が酷似する重複候補を検出（同一ファンドがSBI取込等で複数登録されていないか確認）">🔍 重複チェック</button>
       <button class="btn-sm" onclick="amFixFundUnits()" style="color:#e24b4a;border-color:#e24b4a" title="投資信託の数量(口数)を万口単位に補正">🔧 投信数量修正</button>
       <button class="btn-sm" onclick="amToggleSoldView()" id="btnSoldToggle" style="color:var(--text3);border-color:var(--text3)">🏷 売却済を表示</button>
       <button class="btn-sm" onclick="amMigrateConfirmedContribution()" style="color:#0F6E56;border-color:#0F6E56" title="確定拠出年金口座を残高入力方式に変換">🔄 DC年金データ移行</button>
@@ -848,6 +849,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div id="amHeatmapTotal" style="padding:0 16px 6px;font-size:13px"></div>
       <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
+    <div id="amDupResults" style="display:none"></div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
   </div>
@@ -4736,6 +4738,9 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
     {sbi:/iTrust.*インド/i,                          must:['iTrust'],not:[]},
     {sbi:/iTrust.*インド/i,                          must:['インド(SBI)'],not:['eMAXIS']},
     {sbi:/SBI.*高配当|高配当.*SBI/i,                 must:['高配当'], not:[]},
+    {sbi:/楽天.*米国高配当|楽天.*高配当.*米国/i,       must:['楽天','高配当'], not:['インド','TOPIX','日経']},
+    {sbi:/楽天.*全世界|楽天.*オールカントリー/i,       must:['楽天','全世界'], not:['米国','高配当','インド']},
+    {sbi:/楽天.*全米|楽天.*S.P.*500/i,               must:['楽天','全米'],  not:['高配当','インド','全世界']},
   ];
   // sbiパターンにマッチするルール群を全収集し、条件を満たすものでスコアを返す
   const matchedRules=FUND_RULES.filter(r=>r.sbi.test(s));
@@ -4762,7 +4767,10 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
   if(codeM&&p.includes(codeM[1]))return 95;
   if(p===s)return 100;
   if(p.includes(s)||s.includes(p))return 80;
-  const nameTokens=s.match(/[\u3040-\u9FFF\u30A0-\u30FF]{3,}/g)||[];
+  // 「・」(U+30FB)は片仮名Unicode範囲に含まれるため、そのままでは長い連続トークンになってしまい
+  // 口座名の表記ゆれ（省略・並び順違い等）を吸収できない。区切り文字として明示的に分割してからトークン化する。
+  const sForTokens=s.replace(/[・･]/g,' ');
+  const nameTokens=sForTokens.match(/[\u3040-\u9FFF\u30A0-\u30FF]{3,}/g)||[];
   for(const t of nameTokens){if(p.includes(t))return 65;}
   // 2文字以上の英数＋漢字混合トークン（JX金属など）
   const mixTokens=s.match(/[A-Za-z0-9]{1,}[\u4E00-\u9FFF]{1,}|[\u4E00-\u9FFF]{1,}[A-Za-z0-9]{1,}/g)||[];
@@ -4771,6 +4779,51 @@ function amSBIMatchScore(sbiNorm,accName,acctSuffix,accCode,sbiCode){
   const engOnly=s.match(/[A-Z]{2,}/g)||[];
   for(const t of engOnly){if(p.includes(t))return 55;}
   return 0;
+}
+
+// 重複候補チェック：口座名の表記ゆれ（・や空白、括弧内の注記違い等）を吸収して正規化し、
+// 同一カテゴリ内で正規化名が一致する口座が複数あれば「重複候補」として一覧表示する。
+// あくまで候補の提示のみで、削除・統合はユーザーの判断で行う（金額・NISA区分等が異なる場合があるため自動統合はしない）。
+function amDupNormalize(name){
+  return (name||'')
+    .replace(/[（(].*?[）)]/g,'') // 「（NISA成長）」等の注記を除去
+    .replace(/[・･]/g,'')
+    .replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)) // 全角→半角
+    .replace(/[\s　]/g,'')
+    .toLowerCase();
+}
+function amFindDuplicates(){
+  const groups={};
+  (amAccounts||[]).forEach(a=>{
+    if(a.sold)return;
+    const key=a.cat+'|'+amDupNormalize(a.name);
+    (groups[key]=groups[key]||[]).push(a);
+  });
+  const dupGroups=Object.values(groups).filter(g=>g.length>1);
+  const el=document.getElementById('amDupResults');
+  if(!el)return;
+  if(!dupGroups.length){
+    el.innerHTML='<div style="margin:0 16px 12px;padding:10px 14px;background:var(--bg2);border-radius:10px;font-size:12px;color:var(--text3)">✅ 重複候補は見つかりませんでした</div>';
+    el.style.display='block';
+    return;
+  }
+  el.innerHTML=`<div style="margin:0 16px 12px;padding:12px 14px;background:var(--bg2);border-radius:10px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#c0392b">⚠ 重複候補 ${dupGroups.length}件（口座名が酷似）</div>
+    ${dupGroups.map(g=>`
+      <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:0.5px solid var(--border)">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px">${esc(g[0].name)} 他（${g.length}件）</div>
+        ${g.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2);padding:4px 0;gap:8px">
+          <span style="flex:1;min-width:0">${esc(a.name)}<br><span style="color:var(--text3)">更新:${a.updated||'-'}／残高:¥${(a.amount||0).toLocaleString()}${a.nisaType?'／'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'課税'):''}</span></span>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="openEditModal(${a.id})" style="font-size:11px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer">編集</button>
+            <button onclick="amConfirmDelete(${a.id})" style="font-size:11px;color:var(--danger);background:none;border:1px solid var(--danger);border-radius:5px;padding:3px 8px;cursor:pointer">削除</button>
+          </div>
+        </div>`).join('')}
+      </div>
+    `).join('')}
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">※ 削除前に「編集」で残高・取得価格を確認し、残す口座に合算してから削除してください（自動統合はしません）</div>
+  </div>`;
+  el.style.display='block';
 }
 
 async function amApplySBIRows(rows){
