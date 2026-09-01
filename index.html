@@ -3325,6 +3325,7 @@ function amRenderCard(a){
           +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
           +chartBtn
           +sellBtn
+          +'<button class="icon-btn" onclick="amCopyAccount('+a.id+')" style="color:#8B5CF6;border-color:#8B5CF6" title="買い増し等でこの銘柄をもう1件追加">📋 コピー</button>'
           +'<div style="display:flex;gap:3px;margin-bottom:2px">'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',-1)" title="上に移動" style="padding:4px 7px;font-size:12px">▲</button>'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',1)" title="下に移動" style="padding:4px 7px;font-size:12px">▼</button>'+'</div>'+'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
         +'</div>'
       +'</div>'
@@ -3919,6 +3920,26 @@ function amMoveAccount(id,dir){
   amSaveToLocal();
   amSaveToSheet();
   amRender();
+}
+// 買い増し等で同じ銘柄をもう1件追加するためのコピー機能。
+// コピー先はコピー元のすぐ下（同じカテゴリ内）に挿入し、その場で編集モーダルを開いて
+// 数量・株価・取得単価・買付日をすぐ調整できるようにする。
+async function amCopyAccount(id){
+  const idx=amAccounts.findIndex(a=>a.id===id);
+  if(idx<0)return;
+  const orig=amAccounts[idx];
+  const newId=amAccounts.length?Math.max(...amAccounts.map(a=>Number(a.id)||0))+1:1;
+  const copy={...orig,id:newId,updated:todayStr()};
+  // 売却関連・前回SBI金額・SBI同期タグは新規コピーには引き継がない
+  delete copy.sold;delete copy.soldDate;delete copy.soldAmount;delete copy.soldPrice;
+  delete copy.prevSBIAmount;
+  copy.memo='';
+  amAccounts.splice(idx+1,0,copy);// コピー元の直後に挿入
+  amRender();
+  refreshHome();
+  await amSaveToSheet();
+  showToast('📋 銘柄をコピーしました。数量・買付日等を編集してください');
+  openEditModal(newId);
 }
 function amConfirmDelete(id){
   const a=amAccounts.find(x=>x.id===id);
