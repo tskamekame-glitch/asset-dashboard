@@ -5535,29 +5535,21 @@ function pfNisaUpdateTotals(s){
   const tsY=tsM*12;
   const sg26=s.seichou2026.reduce((a,d)=>a+Number(d.amount||0),0);
   const sg27=s.seichou2027.reduce((a,d)=>a+Number(d.amount||0),0);
-
-  function upd(totalId,remId,barId,used,limit,totalTxt,remTxt){
-    const te=document.getElementById(totalId);
-    const re=document.getElementById(remId);
-    const be=document.getElementById(barId);
-    const rem=limit-used;
-    if(te)te.textContent=totalTxt;
-    if(re){re.textContent=remTxt(rem);re.style.color=rem>=0?'var(--text)':'#e74c3c';}
-    if(be)be.style.width=Math.min(100,(used/limit)*100)+'%';
-  }
-
-  upd('nisa-ts-total','nisa-ts-rem','nisa-ts-bar',tsY,T,
-    '月間合計：'+pfFmtFull(tsM),r=>r>=0?'残り：'+pfFmtFull(T-tsY)+'/月（年'+pfFmtFull(T-tsY)+'）':'超過：'+pfFmtFull(tsY-T));
-  upd('nisa-sg26-total','nisa-sg26-rem','nisa-sg26-bar',sg26,G,
-    '使用：'+pfFmtFull(sg26),r=>'残り：'+pfFmtFull(r));
-  upd('nisa-sg27-total','nisa-sg27-rem','nisa-sg27-bar',sg27,G,
-    '使用：'+pfFmtFull(sg27),r=>'残り：'+pfFmtFull(r));
-  // 2027つみたて（同設定）
   const tsM27=(s.tsumitate27||s.tsumitate).reduce((a,d)=>a+Number(d.monthly||0),0);
   const tsY27=tsM27*12;
-  upd('nisa-ts27-total','nisa-ts27-rem','nisa-ts27-bar',tsY27,T,
-    '月間合計：'+pfFmtFull(tsM27)+'（年'+pfFmtFull(tsY27)+'）',
-    r=>r===0?'✅ フル活用':'残り：'+pfFmtFull(r));
+
+  function setTxt(id,txt){const e=document.getElementById(id);if(e)e.textContent=txt;}
+  setTxt('nisa-sg-used-2026',pfFmtFull(sg26));
+  setTxt('nisa-ts-used-2026',pfFmtFull(tsY));
+  setTxt('nisa-ts-month-2026',pfFmtFull(tsM));
+  setTxt('nisa-sg-used-2027',pfFmtFull(sg27));
+  setTxt('nisa-ts-used-2027',pfFmtFull(tsY27));
+  setTxt('nisa-ts-month-2027',pfFmtFull(tsM27));
+
+  if(typeof tqBuildAnnualRing==='function'){
+    tqBuildAnnualRing('nisa-ring-2026','tqAnnualRing2026',tsY,T,sg26,G,'年間投資額',pfFmtFull(tsY+sg26),'/ '+pfFmtFull(T+G));
+    tqBuildAnnualRing('nisa-ring-2027','tqAnnualRing2027',tsY27,T,sg27,G,'年間投資額',pfFmtFull(tsY27+sg27),'/ '+pfFmtFull(T+G));
+  }
 }
 
 function pfNisaAddRow(group){
@@ -5593,27 +5585,40 @@ function pfRenderNisaSection(){
     </div>`).join('');
   }
   function addBtn(g){return`<button onclick="pfNisaAddRow('${g}')" class="tq-mini-btn">＋ 銘柄を追加</button>`;}
-  function bar(id,pct,color){return`<div class="tq-bar"><div id="${id}" style="height:100%;width:${Math.min(100,pct)}%;background:${color};border-radius:5px;transition:width 0.3s"></div></div>`;}
-  function foot(tid,rid,ttxt,rem,color){return`<div class="tq-sub-line" style="font-weight:700"><span id="${tid}">${ttxt}</span><span id="${rid}" style="color:${rem>=0?'var(--text)':'var(--danger)'}">残り ${pfFmtFull(rem)}</span></div>`;}
 
-  function yearBlock(year,tsRowsId,tsGroup,tsUnit,tsRows,tsBarId,tsUsed,tsTotalId,tsRemId,sgRowsId,sgGroup,sgRows,sgBarId,sgUsed,sgTotalId,sgRemId,sgColor){
+  function yearBlock(year,ringId,tsRowsId,tsGroup,tsRows,tsUsed,sgRowsId,sgGroup,sgRows,sgUsed){
     return `
-<div class="tq-card">
-  <div class="tq-card-title">${year}年 NISA年間投資枠</div>
-  <div style="margin-bottom:16px">
-    <div style="font-size:14px;font-weight:600;margin-bottom:8px">📅 つみたて枠（年120万円まで）</div>
-    <div id="${tsRowsId}">${tsRows}</div>
-    ${addBtn(tsGroup)}
-    ${bar(tsBarId,(tsUsed/T)*100,'#185FA5')}
-    ${foot(tsTotalId,tsRemId,'月間合計 '+pfFmtFull(tsUsed/12),T-tsUsed,'#185FA5')}
+<div class="tq-card" style="text-align:center">
+  <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border:0.5px solid var(--border2);border-radius:999px;font-size:13px;font-weight:700;margin-bottom:10px">📅 ${year}年</div>
+  <div style="position:relative;width:190px;height:190px;margin:0 auto">
+    <canvas id="${ringId}"></canvas>
   </div>
-  <div>
-    <div style="font-size:14px;font-weight:600;margin-bottom:8px">📈 成長投資枠（年240万円まで）</div>
-    <div id="${sgRowsId}">${sgRows}</div>
-    ${addBtn(sgGroup)}
-    ${bar(sgBarId,(sgUsed/G)*100,sgColor)}
-    ${foot(sgTotalId,sgRemId,'使用 '+pfFmtFull(sgUsed),G-sgUsed,sgColor)}
+  <div style="display:flex;justify-content:center;gap:24px;margin-top:14px;margin-bottom:6px">
+    <div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:600;color:#f5a623"><span style="width:9px;height:9px;border-radius:50%;background:#f5a623;display:inline-block"></span>成長投資枠</div>
+      <div id="nisa-sg-used-${year}" style="font-size:17px;font-weight:800;margin-top:2px">${pfFmtFull(sgUsed)}</div>
+      <div style="font-size:11px;color:var(--text3)">/${pfFmtFull(G)}</div>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:600;color:#4fc3f7"><span style="width:9px;height:9px;border-radius:50%;background:#4fc3f7;display:inline-block"></span>つみたて枠</div>
+      <div id="nisa-ts-used-${year}" style="font-size:17px;font-weight:800;margin-top:2px">${pfFmtFull(tsUsed)}</div>
+      <div style="font-size:11px;color:var(--text3)">/${pfFmtFull(T)}</div>
+    </div>
   </div>
+
+  <details style="margin-top:10px;border-top:0.5px solid var(--border);padding-top:10px;text-align:left">
+    <summary style="font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">銘柄を編集（タップで開く）</summary>
+    <div style="margin-top:10px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">📅 つみたて枠（月間合計 <span id="nisa-ts-month-${year}">${pfFmtFull(tsUsed/12)}</span>）</div>
+      <div id="${tsRowsId}">${tsRows}</div>
+      ${addBtn(tsGroup)}
+    </div>
+    <div style="margin-top:14px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 成長投資枠</div>
+      <div id="${sgRowsId}">${sgRows}</div>
+      ${addBtn(sgGroup)}
+    </div>
+  </details>
 </div>`;
   }
 
@@ -5621,8 +5626,13 @@ function pfRenderNisaSection(){
 <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
   <span id="pf-nisa-save-indicator" style="font-size:12px;color:var(--text3);opacity:0;transition:opacity 0.3s">✓ 保存しました</span>
 </div>
-${yearBlock(2026,null,'tsumitate','月',mkRows(s.tsumitate,'tsumitate','月'),'nisa-ts-bar',tsY,'nisa-ts-total','nisa-ts-rem',null,'seichou2026',mkRows(s.seichou2026,'seichou2026','回'),'nisa-sg26-bar',sg26,'nisa-sg26-total','nisa-sg26-rem','#2ecc71')}
-${yearBlock(2027,null,'tsumitate27','月',mkRows(s.tsumitate27||s.tsumitate,'tsumitate27','月'),'nisa-ts27-bar',tsY27,'nisa-ts27-total','nisa-ts27-rem',null,'seichou2027',mkRows(s.seichou2027,'seichou2027','回'),'nisa-sg27-bar',sg27,'nisa-sg27-total','nisa-sg27-rem','#f59e0b')}`;
+${yearBlock(2026,'nisa-ring-2026',null,'tsumitate',mkRows(s.tsumitate,'tsumitate','月'),tsY,null,'seichou2026',mkRows(s.seichou2026,'seichou2026','回'),sg26)}
+${yearBlock(2027,'nisa-ring-2027',null,'tsumitate27',mkRows(s.tsumitate27||s.tsumitate,'tsumitate27','月'),tsY27,null,'seichou2027',mkRows(s.seichou2027,'seichou2027','回'),sg27)}`;
+
+  if(typeof tqBuildAnnualRing==='function'){
+    tqBuildAnnualRing('nisa-ring-2026','tqAnnualRing2026',tsY,T,sg26,G,'年間投資額',pfFmtFull(tsY+sg26),'/ '+pfFmtFull(T+G));
+    tqBuildAnnualRing('nisa-ring-2027','tqAnnualRing2027',tsY27,T,sg27,G,'年間投資額',pfFmtFull(tsY27+sg27),'/ '+pfFmtFull(T+G));
+  }
 }
 
 
@@ -11869,6 +11879,75 @@ function tqRecoveredByYear(year){
   return {growth:Math.round(growth),tsumitate:Math.round(tsumitate),items};
 }
 
+// ============================================================
+// リング（ドーナツ）チャート共通ヘルパー（kaView Prime風の見た目）
+// ============================================================
+const tqRingCenterPlugin={id:'tqRingCenter',afterDraw(chart){
+  const cfg=chart.config.options.plugins.tqRingCenter;
+  if(!cfg)return;
+  const{ctx,chartArea:{top,bottom,left,right}}=chart;
+  const cx=(left+right)/2,cy=(top+bottom)/2;
+  ctx.save();
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  if(cfg.label){
+    ctx.font='600 12px -apple-system,sans-serif';ctx.fillStyle=cfg.labelColor||'#9b9b97';
+    ctx.fillText(cfg.label,cx,cy-24);
+  }
+  ctx.font='800 25px -apple-system,sans-serif';ctx.fillStyle=cfg.color||'#1a1a18';
+  ctx.fillText(cfg.big,cx,cy+1);
+  if(cfg.small){
+    ctx.font='500 12px -apple-system,sans-serif';ctx.fillStyle=cfg.smallColor||'#9b9b97';
+    ctx.fillText(cfg.small,cx,cy+23);
+  }
+  ctx.restore();
+}};
+
+// 生涯投資枠用：実際の金額に比例した3分割リング（成長／つみたて／残り）
+function tqBuildLifetimeRing(canvasId,chartKey,growthUsed,tsumitateUsed,cap,centerLabel,centerBig,centerSmall){
+  const canvas=document.getElementById(canvasId);if(!canvas)return;
+  if(typeof trDestroyChart==='function')trDestroyChart(chartKey);
+  const isDarkMode=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const remain=Math.max(0,cap-growthUsed-tsumitateUsed);
+  const textColor=isDarkMode?'#f2f2f7':'#1a1a18';
+  const dimColor=isDarkMode?'#3a3a3c':'#eeecea';
+  chartInstances[chartKey]=new Chart(canvas,{type:'doughnut',data:{
+    labels:['成長投資枠','つみたて枠','残り'],
+    datasets:[{data:[growthUsed,tsumitateUsed,remain],backgroundColor:['#f5a623','#4fc3f7',dimColor],borderWidth:3,borderColor:isDarkMode?'#1c1c1e':'#ffffff',borderRadius:6}]
+  },options:{
+    responsive:true,maintainAspectRatio:true,cutout:'72%',rotation:-90,circumference:360,
+    plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>ctx.label+': '+tqFmt(ctx.raw)}},
+      tqRingCenter:{label:centerLabel,big:centerBig,small:centerSmall,color:textColor,labelColor:dimColor==='#eeecea'?'#9b9b97':'#9b9b97',smallColor:'#9b9b97'}
+    }
+  },plugins:[tqRingCenterPlugin]});
+}
+
+// 年間投資枠用：成長／つみたてそれぞれに半円を割り当て、使用率に応じて塗る（kaView Prime風）
+function tqBuildAnnualRing(canvasId,chartKey,tsumitateUsed,tsumitateCap,growthUsed,growthCap,centerLabel,centerBig,centerSmall){
+  const canvas=document.getElementById(canvasId);if(!canvas)return;
+  if(typeof trDestroyChart==='function')trDestroyChart(chartKey);
+  const isDarkMode=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const tsUsedDeg=50*Math.min(1,tsumitateCap>0?tsumitateUsed/tsumitateCap:0);
+  const tsRemainDeg=50-tsUsedDeg;
+  const gUsedDeg=50*Math.min(1,growthCap>0?growthUsed/growthCap:0);
+  const gRemainDeg=50-gUsedDeg;
+  const tsRemainColor=isDarkMode?'#1f3a4d':'#d7eefb';
+  const gRemainColor=isDarkMode?'#4a3216':'#fbe6c4';
+  const textColor=isDarkMode?'#f2f2f7':'#1a1a18';
+  chartInstances[chartKey]=new Chart(canvas,{type:'doughnut',data:{
+    labels:['つみたて使用','つみたて残り','成長使用','成長残り'],
+    datasets:[{data:[tsUsedDeg,tsRemainDeg,gUsedDeg,gRemainDeg],backgroundColor:['#4fc3f7',tsRemainColor,'#f5a623',gRemainColor],borderWidth:2,borderColor:isDarkMode?'#1c1c1e':'#ffffff',borderRadius:4}]
+  },options:{
+    responsive:true,maintainAspectRatio:true,cutout:'70%',rotation:-90,circumference:360,
+    plugins:{
+      legend:{display:false},
+      tooltip:{enabled:false},
+      tqRingCenter:{label:centerLabel,big:centerBig,small:centerSmall,color:textColor,labelColor:'#9b9b97',smallColor:'#9b9b97'}
+    }
+  },plugins:[tqRingCenterPlugin]});
+}
+
 function tqRenderLifetime(){
   const el=document.getElementById('tq-lifetime-section');if(!el)return;
   const adj=tqLoadAdj();
@@ -11877,10 +11956,6 @@ function tqRenderLifetime(){
   const tsumitateUsed=auto.tsumitate+(Number(adj.tsumitateAdj)||0);
   const totalUsed=growthUsed+tsumitateUsed;
   const GROWTH_CAP=12000000,TOTAL_CAP=18000000;
-  const gPct=Math.min(100,(growthUsed/GROWTH_CAP)*100);
-  const tPct=Math.min(100,(totalUsed/TOTAL_CAP)*100);
-  const gColor=growthUsed>GROWTH_CAP?'var(--danger)':'var(--accent)';
-  const tColor=totalUsed>TOTAL_CAP?'var(--danger)':'var(--green)';
 
   let ambiHtml='';
   if(auto.ambiguous.length){
@@ -11890,21 +11965,29 @@ function tqRenderLifetime(){
   }
 
   el.innerHTML=`
-  <div class="tq-card">
-    <div class="tq-card-title">🏦 NISA生涯投資枠</div>
-    <div class="tq-num-row"><span class="tq-num-label">合計（上限1,800万円）</span><span class="tq-num-big" style="color:${tColor}">${tqFmt(totalUsed)}</span></div>
-    <div class="tq-bar"><div class="tq-bar-fill" style="width:${tPct}%;background:${tColor}"></div></div>
-    <div class="tq-sub-line" style="margin-bottom:14px"><span>残り ${tqFmt(Math.max(0,TOTAL_CAP-totalUsed))}</span><span>${(totalUsed/TOTAL_CAP*100).toFixed(1)}%</span></div>
-
-    <div class="tq-num-row"><span class="tq-num-label">うち成長投資枠（上限1,200万円）</span><span class="tq-num-mid" style="color:${gColor}">${tqFmt(growthUsed)}</span></div>
-    <div class="tq-bar"><div class="tq-bar-fill" style="width:${gPct}%;background:${gColor}"></div></div>
-    <div class="tq-sub-line"><span>残り ${tqFmt(Math.max(0,GROWTH_CAP-growthUsed))}</span><span>${(growthUsed/GROWTH_CAP*100).toFixed(1)}%</span></div>
+  <div class="tq-card" style="text-align:center">
+    <div class="tq-card-title" style="justify-content:center">🏦 NISA生涯投資枠</div>
+    <div style="position:relative;width:210px;height:210px;margin:4px auto 0">
+      <canvas id="tq-lifetime-ring"></canvas>
+    </div>
+    <div style="display:flex;justify-content:center;gap:28px;margin-top:16px">
+      <div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:600;color:#f5a623"><span style="width:9px;height:9px;border-radius:50%;background:#f5a623;display:inline-block"></span>成長投資枠</div>
+        <div style="font-size:18px;font-weight:800;margin-top:2px">${tqFmt(growthUsed)}</div>
+        <div style="font-size:11px;color:var(--text3)">上限 ${tqFmt(GROWTH_CAP)}</div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:600;color:#4fc3f7"><span style="width:9px;height:9px;border-radius:50%;background:#4fc3f7;display:inline-block"></span>つみたて枠</div>
+        <div style="font-size:18px;font-weight:800;margin-top:2px">${tqFmt(tsumitateUsed)}</div>
+        <div style="font-size:11px;color:var(--text3)">生涯枠の一部</div>
+      </div>
+    </div>
 
     <div class="tq-note">資産管理タブの保有データから自動集計（売却済みは含みません）</div>
     ${ambiHtml}
 
-    <div style="margin-top:12px;border-top:0.5px solid var(--border);padding-top:12px">
-      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px">手動調整</div>
+    <details style="margin-top:12px;border-top:0.5px solid var(--border);padding-top:10px;text-align:left">
+      <summary style="font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">手動調整（タップで開く）</summary>
       <div class="tq-adj-row">
         <span style="width:76px">成長枠</span>
         <input type="text" inputmode="numeric" id="tq-adj-growth" value="${adj.growthAdj||0}" oninput="tqSaveAdjFromInputs()">
@@ -11915,8 +11998,10 @@ function tqRenderLifetime(){
         <input type="text" inputmode="numeric" id="tq-adj-tsumitate" value="${adj.tsumitateAdj||0}" oninput="tqSaveAdjFromInputs()">
         <span>円</span>
       </div>
-    </div>
+    </details>
   </div>`;
+
+  tqBuildLifetimeRing('tq-lifetime-ring','tqLifetimeRing',growthUsed,tsumitateUsed,TOTAL_CAP,'生涯投資枠 合計',tqFmt(totalUsed),'/ '+tqFmt(TOTAL_CAP));
 }
 
 function tqSaveAdjFromInputs(){
@@ -11935,20 +12020,28 @@ function tqRenderSaleSim(){
   const manualTsumitate=manual.filter(x=>x.waku==='tsumitate').reduce((s,x)=>s+(Number(x.amount)||0),0);
   const grandTotal=auto2026.growth+auto2026.tsumitate+manualGrowth+manualTsumitate;
 
+  function badge(waku){
+    const c=waku==='growth'?'#f5a623':'#4fc3f7';
+    return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;border:1px solid ${c};color:${c}">${waku==='growth'?'成長投資':'つみたて'}</span>`;
+  }
   function autoItemHtml(x){
-    return `<div class="tq-sale-item">
+    const c=x.waku==='growth'?'#f5a623':'#4fc3f7';
+    return `<div class="tq-sale-item" style="border-left:3px solid ${c};padding-left:10px">
       <div>
+        <div style="margin-bottom:3px">${badge(x.waku)}</div>
         <div class="tq-sale-item-name">${esc(x.name)}</div>
-        <div class="tq-sale-item-sub">${x.waku==='growth'?'成長枠':'つみたて枠'}・${x.soldDate}売却${x.estimated?'（推定）':''}</div>
+        <div class="tq-sale-item-sub">${x.soldDate}売却${x.estimated?'（簿価は推定）':''}</div>
       </div>
       <div class="tq-sale-item-amt" style="color:var(--green)">+${tqFmt(x.cost)}</div>
     </div>`;
   }
   function manualItemHtml(x){
-    return `<div class="tq-sale-item">
+    const c=x.waku==='growth'?'#f5a623':'#4fc3f7';
+    return `<div class="tq-sale-item" style="border-left:3px solid ${c};padding-left:10px">
       <div>
+        <div style="margin-bottom:3px">${badge(x.waku)}</div>
         <div class="tq-sale-item-name">${esc(x.name)}</div>
-        <div class="tq-sale-item-sub">${x.waku==='growth'?'成長枠':'つみたて枠'}・予定 ${x.plannedDate||'未定'}</div>
+        <div class="tq-sale-item-sub">売却予定 ${x.plannedDate||'未定'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="tq-sale-item-amt" style="color:var(--amber)">+${tqFmt(x.amount)}</span>
