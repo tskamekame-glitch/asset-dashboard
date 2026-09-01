@@ -1860,6 +1860,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       </div>
 
       <div class="field"><label>メモ（任意）</label><input type="text" id="fNote" placeholder="例: 退職金積立用" autocomplete="off"></div>
+      <div class="field"><label>NISA区分（任意・積立タブの枠管理に使用）</label><select id="fNisa" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定（名称・メモから自動判定） —</option><option value="growth">📈 NISA成長投資枠</option><option value="tsumitate">📅 NISAつみたて投資枠</option><option value="none">課税口座（NISA対象外）</option></select></div>
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
       <div class="field"><label>セクター（TOPIX-17・任意）</label><select id="fSector" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定 —</option></select></div>
       <div class="field"><label>金融機関（未設定なら名前から自動判定）</label><select id="fBroker" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 自動判定 —</option><option>SBI証券</option><option>moomoo証券</option><option>PayPay証券</option><option>野村證券</option><option>みずほ証券</option><option>iDeCo・DC</option><option>銀行</option><option>その他</option></select></div>
@@ -3689,6 +3690,7 @@ function openAddModal(defaultCat){
   document.getElementById('fCat').value=defaultCat||'銀行';
   document.getElementById('fAmount').value='';
   document.getElementById('fNote').value='';
+  if(document.getElementById('fNisa'))document.getElementById('fNisa').value='';
   document.getElementById('fCode').value='';
   document.getElementById('fShares').value='';
   document.getElementById('fPrice').value='';
@@ -3766,6 +3768,7 @@ function openEditModal(id){
   document.getElementById('fCat').value=finalCat;
   document.getElementById('fAmount').value=a.amount;
   document.getElementById('fNote').value=a.note||'';
+  if(document.getElementById('fNisa'))document.getElementById('fNisa').value=a.nisaType||'';
   document.getElementById('fCode').value=a.code||'';
   document.getElementById('fShares').value=a.shares||'';
   document.getElementById('fPrice').value=a.price||'';
@@ -3834,6 +3837,7 @@ async function saveAccount(){
   const sector=(document.getElementById('fSector')?.value||'').trim();
   const broker=(document.getElementById('fBroker')?.value||'').trim();
   const buyDate=(document.getElementById('fBuyDate')?.value||'').trim();
+  const nisaType=(document.getElementById('fNisa')?.value||'').trim();
   // 分析フィールド
   const sell1=parseFloat(document.getElementById('fSell1')?.value)||undefined;
   const sell2=parseFloat(document.getElementById('fSell2')?.value)||undefined;
@@ -3843,8 +3847,8 @@ async function saveAccount(){
   const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
   const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
   const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,...analysis,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,...analysis,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
   // ウォッチ銘柄からの購入登録: ステータスを購入済に更新
   if(purchasedWlId){
@@ -11837,8 +11841,12 @@ function tqSaveAdj(o){try{localStorage.setItem('nisaLifetimeAdj_v1',JSON.stringi
 function tqLoadSales(){try{const s=localStorage.getItem('nisaSaleSim_v1');if(s)return JSON.parse(s);}catch(e){}return[];}
 function tqSaveSales(arr){try{localStorage.setItem('nisaSaleSim_v1',JSON.stringify(arr));}catch(e){}}
 
-// 銘柄名・メモの文字列からNISA区分を判定（構造化フィールドがないため文字列判定）
+// NISA区分を判定：まず編集フォームの「NISA区分」選択（構造化フィールド）を優先し、
+// 未設定の場合のみ銘柄名・メモの文字列判定にフォールバックする
 function tqClassify(a){
+  if(a.nisaType==='growth')return 'growth';
+  if(a.nisaType==='tsumitate')return 'tsumitate';
+  if(a.nisaType==='none')return null; // 明示的にNISA対象外と指定
   const s=(a.name||'')+' '+(a.note||'');
   if(/NISAつみたて|つみたて投資枠|つみたて枠/.test(s))return 'tsumitate';
   if(/NISA成長|成長投資枠/.test(s))return 'growth';
