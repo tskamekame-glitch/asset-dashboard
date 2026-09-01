@@ -580,19 +580,28 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 .ts-frow input,.ts-frow select{width:100%;padding:7px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:13px}
 .ts-fg2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .ts-hint-btn{margin-top:5px;padding:5px 10px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--accent);font-size:11px;cursor:pointer;font-family:inherit}
-.ts-subtab-btn{flex:1;padding:8px 6px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.ts-subtab-btn{flex:1;padding:10px 6px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text2);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .ts-subtab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.tq-card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px}
-.tq-card-title{font-size:12px;font-weight:600;color:var(--text3);letter-spacing:0.04em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.tq-num-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
-.tq-num-big{font-size:20px;font-weight:800}
-.tq-bar{height:7px;background:var(--bg2);border-radius:4px;overflow:hidden;margin:6px 0}
-.tq-bar-fill{height:100%;border-radius:4px;transition:width 0.3s}
-.tq-sale-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border)}
+.tq-card{background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.tq-card-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.tq-num-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:10px}
+.tq-num-label{font-size:14px;color:var(--text2)}
+.tq-num-big{font-size:26px;font-weight:800}
+.tq-num-mid{font-size:19px;font-weight:700}
+.tq-sub-line{display:flex;justify-content:space-between;font-size:13px;color:var(--text2)}
+.tq-bar{height:10px;background:var(--bg2);border-radius:5px;overflow:hidden;margin:8px 0}
+.tq-bar-fill{height:100%;border-radius:5px;transition:width 0.3s}
+.tq-note{font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5}
+.tq-sale-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:0.5px solid var(--border)}
 .tq-sale-item:last-child{border-bottom:none}
-.tq-adj-row{display:flex;align-items:center;gap:6px;margin-top:8px}
-.tq-adj-row input{flex:1;padding:6px 8px;font-size:12px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text);font-family:inherit}
-.tq-mini-btn{padding:5px 10px;border:0.5px dashed var(--border2);border-radius:6px;background:none;color:var(--text2);font-size:11px;cursor:pointer;font-family:inherit;width:100%;margin-top:6px}
+.tq-sale-item-name{font-size:15px;font-weight:500}
+.tq-sale-item-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.tq-sale-item-amt{font-size:16px;font-weight:700}
+.tq-section-label{font-size:13px;font-weight:700;color:var(--text2);margin:12px 0 4px}
+.tq-adj-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.tq-adj-row input{flex:1;padding:9px 10px;font-size:15px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit}
+.tq-adj-row span{font-size:13px;color:var(--text2)}
+.tq-mini-btn{padding:10px;border:0.5px dashed var(--border2);border-radius:8px;background:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;width:100%;margin-top:8px}
 </style>
 </style>
 </head>
@@ -5576,62 +5585,46 @@ function pfRenderNisaSection(){
   const tsY27=tsM27*12;
 
   function mkRows(items,group,unit){
-    return items.map(d=>`<div class="nisa-${group}-row" style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-      <input class="nisa-name" placeholder="銘柄名" value="${(d.name||'').replace(/"/g,'&quot;')}" oninput="pfNisaCollect()" style="flex:1;padding:5px 8px;font-size:12px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text)">
-      <input class="nisa-val" type="number" value="${unit==='月'?d.monthly||0:d.amount||0}" oninput="pfNisaCollect()" style="width:90px;padding:5px 8px;font-size:12px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text)">
-      <span style="font-size:11px;color:var(--text3);white-space:nowrap">円/${unit}</span>
-      <button onclick="this.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;padding:0 2px;line-height:1">×</button>
+    return items.map(d=>`<div class="nisa-${group}-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <input class="nisa-name" placeholder="銘柄名" value="${(d.name||'').replace(/"/g,'&quot;')}" oninput="pfNisaCollect()" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)">
+      <input class="nisa-val" type="number" value="${unit==='月'?d.monthly||0:d.amount||0}" oninput="pfNisaCollect()" style="width:100px;padding:8px 10px;font-size:14px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text)">
+      <span style="font-size:12px;color:var(--text3);white-space:nowrap">円/${unit}</span>
+      <button onclick="this.parentElement.remove();pfNisaCollect()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:20px;padding:0 4px;line-height:1">×</button>
     </div>`).join('');
   }
-  function addBtn(g){return`<button onclick="pfNisaAddRow('${g}')" style="font-size:11px;color:var(--text3);background:none;border:0.5px dashed var(--border2);border-radius:6px;padding:3px 10px;cursor:pointer;width:100%;margin-bottom:6px">＋ 銘柄を追加</button>`;}
-  function bar(id,pct,color){return`<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:5px"><div id="${id}" style="height:100%;width:${Math.min(100,pct)}%;background:${color};border-radius:3px;transition:width 0.3s"></div></div>`;}
-  function foot(tid,rid,ttxt,rem,color){return`<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;flex-wrap:wrap;gap:4px"><span id="${tid}">${ttxt}</span><span id="${rid}" style="color:${rem>=0?'var(--text)':'#e74c3c'}">残り：${pfFmtFull(rem)}</span></div>`;}
+  function addBtn(g){return`<button onclick="pfNisaAddRow('${g}')" class="tq-mini-btn">＋ 銘柄を追加</button>`;}
+  function bar(id,pct,color){return`<div class="tq-bar"><div id="${id}" style="height:100%;width:${Math.min(100,pct)}%;background:${color};border-radius:5px;transition:width 0.3s"></div></div>`;}
+  function foot(tid,rid,ttxt,rem,color){return`<div class="tq-sub-line" style="font-weight:700"><span id="${tid}">${ttxt}</span><span id="${rid}" style="color:${rem>=0?'var(--text)':'var(--danger)'}">残り ${pfFmtFull(rem)}</span></div>`;}
 
-  el.innerHTML=`
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-  <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:0.06em">NISA枠 年度別管理</div>
-  <span id="pf-nisa-save-indicator" style="font-size:11px;color:var(--text3);opacity:0;transition:opacity 0.3s">✓ 保存しました</span>
-</div>
-<div style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px">
-  <div style="font-size:13px;font-weight:600;margin-bottom:10px">2026年 NISA枠</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-    <div>
-      <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
-      <div id="nisa-tsumitate-rows">${mkRows(s.tsumitate,'tsumitate','月')}</div>
-      ${addBtn('tsumitate')}
-      ${bar('nisa-ts-bar',(tsY/T)*100,'#185FA5')}
-      ${foot('nisa-ts-total','nisa-ts-rem','月間合計：'+pfFmtFull(tsM),T-tsY,'#185FA5')}
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📈 成長枠（年240万上限）</div>
-      <div id="nisa-seichou2026-rows">${mkRows(s.seichou2026,'seichou2026','回')}</div>
-      ${addBtn('seichou2026')}
-      ${bar('nisa-sg26-bar',(sg26/G)*100,'#2ecc71')}
-      ${foot('nisa-sg26-total','nisa-sg26-rem','使用：'+pfFmtFull(sg26),G-sg26,'#2ecc71')}
-    </div>
+  function yearBlock(year,tsRowsId,tsGroup,tsUnit,tsRows,tsBarId,tsUsed,tsTotalId,tsRemId,sgRowsId,sgGroup,sgRows,sgBarId,sgUsed,sgTotalId,sgRemId,sgColor){
+    return `
+<div class="tq-card">
+  <div class="tq-card-title">${year}年 NISA年間投資枠</div>
+  <div style="margin-bottom:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px">📅 つみたて枠（年120万円まで）</div>
+    <div id="${tsRowsId}">${tsRows}</div>
+    ${addBtn(tsGroup)}
+    ${bar(tsBarId,(tsUsed/T)*100,'#185FA5')}
+    ${foot(tsTotalId,tsRemId,'月間合計 '+pfFmtFull(tsUsed/12),T-tsUsed,'#185FA5')}
   </div>
-</div>
-
-<div style="background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:10px">
-  <div style="font-size:13px;font-weight:600;margin-bottom:10px">2027年 NISA枠</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-    <div>
-      <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📅 つみたて枠（年120万上限）</div>
-      <div id="nisa-tsumitate27-rows">${mkRows(s.tsumitate27||s.tsumitate,'tsumitate27','月')}</div>
-      ${addBtn('tsumitate27')}
-      ${bar('nisa-ts27-bar',(tsY27/T)*100,'#185FA5')}
-      ${foot('nisa-ts27-total','nisa-ts27-rem','月間合計：'+pfFmtFull(tsM27),T-tsY27,'#185FA5')}
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📈 成長枠（年240万上限）</div>
-      <div id="nisa-seichou2027-rows">${mkRows(s.seichou2027,'seichou2027','回')}</div>
-      ${addBtn('seichou2027')}
-      ${bar('nisa-sg27-bar',(sg27/G)*100,'#f59e0b')}
-      ${foot('nisa-sg27-total','nisa-sg27-rem','使用：'+pfFmtFull(sg27),G-sg27,'#f59e0b')}
-    </div>
+  <div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px">📈 成長投資枠（年240万円まで）</div>
+    <div id="${sgRowsId}">${sgRows}</div>
+    ${addBtn(sgGroup)}
+    ${bar(sgBarId,(sgUsed/G)*100,sgColor)}
+    ${foot(sgTotalId,sgRemId,'使用 '+pfFmtFull(sgUsed),G-sgUsed,sgColor)}
   </div>
 </div>`;
+  }
+
+  el.innerHTML=`
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+  <span id="pf-nisa-save-indicator" style="font-size:12px;color:var(--text3);opacity:0;transition:opacity 0.3s">✓ 保存しました</span>
+</div>
+${yearBlock(2026,null,'tsumitate','月',mkRows(s.tsumitate,'tsumitate','月'),'nisa-ts-bar',tsY,'nisa-ts-total','nisa-ts-rem',null,'seichou2026',mkRows(s.seichou2026,'seichou2026','回'),'nisa-sg26-bar',sg26,'nisa-sg26-total','nisa-sg26-rem','#2ecc71')}
+${yearBlock(2027,null,'tsumitate27','月',mkRows(s.tsumitate27||s.tsumitate,'tsumitate27','月'),'nisa-ts27-bar',tsY27,'nisa-ts27-total','nisa-ts27-rem',null,'seichou2027',mkRows(s.seichou2027,'seichou2027','回'),'nisa-sg27-bar',sg27,'nisa-sg27-total','nisa-sg27-rem','#f59e0b')}`;
 }
+
 
 
 // 円グラフ描画（目標 vs 現状）
@@ -11891,38 +11884,36 @@ function tqRenderLifetime(){
 
   let ambiHtml='';
   if(auto.ambiguous.length){
-    ambiHtml=`<div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--amber)">
-      ⚠ NISA区分（成長/つみたて）が判定できない銘柄が${auto.ambiguous.length}件あります（集計には含まれていません）：<br>
-      ${auto.ambiguous.map(x=>esc(x.name)+'（'+tqFmt(x.cost)+'）').join('、')}<br>
-      <span style="color:var(--text3)">資産管理タブで銘柄名かメモに「NISA成長」または「NISAつみたて」を含めると自動判定されます。</span>
+    ambiHtml=`<div class="tq-note" style="padding:8px 10px;background:var(--bg2);border-radius:8px;color:var(--amber)">
+      ⚠ 判定不能な銘柄が${auto.ambiguous.length}件（集計外）：${auto.ambiguous.map(x=>esc(x.name)).join('、')}
     </div>`;
   }
 
   el.innerHTML=`
   <div class="tq-card">
-    <div class="tq-card-title">🏦 NISA生涯投資枠（簿価ベース）</div>
-    <div class="tq-num-row"><span style="font-size:12px;color:var(--text2)">合計（上限1,800万円）</span><span class="tq-num-big" style="color:${tColor}">${tqFmt(totalUsed)}</span></div>
+    <div class="tq-card-title">🏦 NISA生涯投資枠</div>
+    <div class="tq-num-row"><span class="tq-num-label">合計（上限1,800万円）</span><span class="tq-num-big" style="color:${tColor}">${tqFmt(totalUsed)}</span></div>
     <div class="tq-bar"><div class="tq-bar-fill" style="width:${tPct}%;background:${tColor}"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:12px"><span>残り：${tqFmt(Math.max(0,TOTAL_CAP-totalUsed))}</span><span>${(totalUsed/TOTAL_CAP*100).toFixed(1)}%使用</span></div>
+    <div class="tq-sub-line" style="margin-bottom:14px"><span>残り ${tqFmt(Math.max(0,TOTAL_CAP-totalUsed))}</span><span>${(totalUsed/TOTAL_CAP*100).toFixed(1)}%</span></div>
 
-    <div class="tq-num-row"><span style="font-size:12px;color:var(--text2)">うち成長投資枠（上限1,200万円）</span><span style="font-size:16px;font-weight:700;color:${gColor}">${tqFmt(growthUsed)}</span></div>
+    <div class="tq-num-row"><span class="tq-num-label">うち成長投資枠（上限1,200万円）</span><span class="tq-num-mid" style="color:${gColor}">${tqFmt(growthUsed)}</span></div>
     <div class="tq-bar"><div class="tq-bar-fill" style="width:${gPct}%;background:${gColor}"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)"><span>残り：${tqFmt(Math.max(0,GROWTH_CAP-growthUsed))}</span><span>${(growthUsed/GROWTH_CAP*100).toFixed(1)}%使用</span></div>
+    <div class="tq-sub-line"><span>残り ${tqFmt(Math.max(0,GROWTH_CAP-growthUsed))}</span><span>${(growthUsed/GROWTH_CAP*100).toFixed(1)}%</span></div>
 
-    <div style="font-size:10px;color:var(--text3);margin-top:10px">自動集計：資産管理タブの保有銘柄（未売却）のうち、名称・メモにNISA区分を含むものの取得総額を合算。売却済み銘柄はここには含まれません（下の「復活枠シミュレーター」で扱います）。</div>
+    <div class="tq-note">資産管理タブの保有データから自動集計（売却済みは含みません）</div>
     ${ambiHtml}
 
-    <div style="margin-top:10px;border-top:0.5px solid var(--border);padding-top:10px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">手動調整（自動集計の誤差・旧NISA分などを補正）</div>
+    <div style="margin-top:12px;border-top:0.5px solid var(--border);padding-top:12px">
+      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px">手動調整</div>
       <div class="tq-adj-row">
-        <span style="font-size:11px;color:var(--text3);width:80px">成長枠 調整</span>
+        <span style="width:76px">成長枠</span>
         <input type="text" inputmode="numeric" id="tq-adj-growth" value="${adj.growthAdj||0}" oninput="tqSaveAdjFromInputs()">
-        <span style="font-size:11px;color:var(--text3)">円</span>
+        <span>円</span>
       </div>
       <div class="tq-adj-row">
-        <span style="font-size:11px;color:var(--text3);width:80px">つみたて枠 調整</span>
+        <span style="width:76px">つみたて枠</span>
         <input type="text" inputmode="numeric" id="tq-adj-tsumitate" value="${adj.tsumitateAdj||0}" oninput="tqSaveAdjFromInputs()">
-        <span style="font-size:11px;color:var(--text3)">円</span>
+        <span>円</span>
       </div>
     </div>
   </div>`;
@@ -11947,21 +11938,21 @@ function tqRenderSaleSim(){
   function autoItemHtml(x){
     return `<div class="tq-sale-item">
       <div>
-        <div style="font-size:13px">${esc(x.name)}</div>
-        <div style="font-size:10px;color:var(--text3)">${x.waku==='growth'?'成長枠':'つみたて枠'}・売却日 ${x.soldDate}${x.estimated?'（簿価は推定値）':''}</div>
+        <div class="tq-sale-item-name">${esc(x.name)}</div>
+        <div class="tq-sale-item-sub">${x.waku==='growth'?'成長枠':'つみたて枠'}・${x.soldDate}売却${x.estimated?'（推定）':''}</div>
       </div>
-      <div style="font-size:13px;font-weight:700;color:var(--green)">+${tqFmt(x.cost)}</div>
+      <div class="tq-sale-item-amt" style="color:var(--green)">+${tqFmt(x.cost)}</div>
     </div>`;
   }
   function manualItemHtml(x){
     return `<div class="tq-sale-item">
       <div>
-        <div style="font-size:13px">${esc(x.name)}<span style="font-size:10px;color:var(--text3)">（売却予定）</span></div>
-        <div style="font-size:10px;color:var(--text3)">${x.waku==='growth'?'成長枠':'つみたて枠'}・予定日 ${x.plannedDate||'未定'}</div>
+        <div class="tq-sale-item-name">${esc(x.name)}</div>
+        <div class="tq-sale-item-sub">${x.waku==='growth'?'成長枠':'つみたて枠'}・予定 ${x.plannedDate||'未定'}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:13px;font-weight:700;color:var(--amber)">+${tqFmt(x.amount)}</span>
-        <button onclick="tqRemoveSale('${x.id}')" style="background:none;border:none;color:var(--danger);font-size:16px;cursor:pointer;line-height:1">×</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="tq-sale-item-amt" style="color:var(--amber)">+${tqFmt(x.amount)}</span>
+        <button onclick="tqRemoveSale('${x.id}')" style="background:none;border:none;color:var(--danger);font-size:20px;cursor:pointer;line-height:1;padding:4px">×</button>
       </div>
     </div>`;
   }
@@ -11969,24 +11960,23 @@ function tqRenderSaleSim(){
   const hasAny=auto2026.items.length||manual.length;
   el.innerHTML=`
   <div class="tq-card">
-    <div class="tq-card-title">📤 2026年売却 → 2027年復活枠シミュレーター</div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">NISAの生涯投資枠は取得価額（簿価）ベースで管理され、売却すると翌年以降にその簿価分の枠が復活します（現行ルールでは同年中の復活はありません）。2026年中に売却済み・売却予定の銘柄から、2027年に使えるようになる枠を試算します。</div>
+    <div class="tq-card-title">📤 2026年売却→2027年復活枠</div>
+    <div class="tq-note" style="margin-top:0;margin-bottom:12px">売却した銘柄の簿価分は、翌年から生涯投資枠に復活します。</div>
 
     ${hasAny?`
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:2px">✅ 売却済み（資産管理タブから自動検出）</div>
-      ${auto2026.items.length?auto2026.items.map(autoItemHtml).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">該当なし</div>'}
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin:10px 0 2px">🕒 売却予定（シミュレーション・登録分）</div>
-      ${manual.length?manual.map(manualItemHtml).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">未登録</div>'}
-    `:'<div style="font-size:11px;color:var(--text3);padding:6px 0">まだ対象銘柄がありません</div>'}
+      <div class="tq-section-label">✅ 売却済み</div>
+      ${auto2026.items.length?auto2026.items.map(autoItemHtml).join(''):'<div class="tq-note" style="margin:0">該当なし</div>'}
+      <div class="tq-section-label">🕒 売却予定（シミュレーション）</div>
+      ${manual.length?manual.map(manualItemHtml).join(''):'<div class="tq-note" style="margin:0">未登録</div>'}
+    `:'<div class="tq-note" style="margin:0">まだ対象銘柄がありません</div>'}
 
-    <button class="tq-mini-btn" onclick="tqOpenSaleModal()">＋ 売却予定を追加（シミュレーション）</button>
+    <button class="tq-mini-btn" onclick="tqOpenSaleModal()">＋ 売却予定を追加</button>
 
-    <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:baseline">
-      <span style="font-size:12px;color:var(--text2)">2027年に復活する見込み額（合計）</span>
-      <span style="font-size:18px;font-weight:800;color:var(--green)">${tqFmt(grandTotal)}</span>
+    <div style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:baseline">
+      <span class="tq-num-label">2027年 復活見込み額</span>
+      <span class="tq-num-mid" style="color:var(--green)">${tqFmt(grandTotal)}</span>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:2px">うち成長枠：${tqFmt(auto2026.growth+manualGrowth)}／つみたて枠：${tqFmt(auto2026.tsumitate+manualTsumitate)}</div>
-    <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 復活した生涯枠を実際に使うには、2027年の年間投資枠（つみたて120万円・成長240万円）の範囲内で買い付ける必要があります。下の「2027年 NISA枠」で年間計画を管理できます。</div>
+    <div class="tq-sub-line" style="margin-top:2px"><span>成長枠 ${tqFmt(auto2026.growth+manualGrowth)}</span><span>つみたて枠 ${tqFmt(auto2026.tsumitate+manualTsumitate)}</span></div>
   </div>`;
 }
 
