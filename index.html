@@ -6904,9 +6904,15 @@ function trRenderFileList(){
 function trRenderSummary(){
   const filtered=getFiltered();if(!filtered.length)return;
   const latest=filtered[filtered.length-1],first=filtered[0];
-  const diff=latest.total-first.total,diffPct=first.total>0?diff/first.total*100:0;
+  // 「現在の総資産」は保存済みスナップショット(latest.total)ではなく、資産管理タブ(amRender)と同一の計算式で
+  // amAccountsからライブ算出する。外国株式の自動価格更新等により記録時点との間に時点差が生じ、
+  // 資産管理タブの合計と推移タブの合計がズレる問題があったための対応。
+  const liveAvailable=typeof amAccounts!=='undefined'&&Array.isArray(amAccounts)&&amAccounts.length>0;
+  const currentTotal=liveAvailable?amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+a.amount,0):latest.total;
+  const currentDateLabel=liveAvailable?todayStr():latest.date;
+  const diff=currentTotal-first.total,diffPct=first.total>0?diff/first.total*100:0;
   const prev=filtered.length>=2?filtered[filtered.length-2]:null;
-  const monthDiff=prev?latest.total-prev.total:null;
+  const monthDiff=prev?currentTotal-prev.total:null;
 
   // ── 含み益・確定損益を amAccounts から計算 ──
   const UNIT_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
@@ -6951,7 +6957,7 @@ function trRenderSummary(){
 
   document.getElementById('trSummaryGrid').innerHTML=
     // 1: 総資産
-    `<div class="metric"><div class="label">現在の総資産</div><div class="value">${trFmt(latest.total)}</div><div class="sub">${latest.date}</div></div>`
+    `<div class="metric"><div class="label">現在の総資産</div><div class="value">${trFmt(currentTotal)}</div><div class="sub">${currentDateLabel}</div></div>`
     // 2: 含み益
     +`<div class="metric"><div class="label">現在の含み益</div><div class="value" style="color:${ug.col};font-size:15px">${ug.val}</div><div class="sub" style="color:${ug.col}">${ug.sub}</div></div>`
     // 3: 確定損益（売却済み）
