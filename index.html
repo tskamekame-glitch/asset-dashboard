@@ -834,6 +834,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div id="amUnifiedPanel"></div>
     <div id="amSectorAllocation"></div>
     <div id="amStage1Panel"></div>
+    <div id="amStage2Panel"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
@@ -2512,8 +2513,35 @@ function amRenderSectorAllocation(activeAccounts){
 }
 
 
+// ── 第2段階：銘柄集中度・半導体集中度・米国/USD比率・証券会社別投資余力 ──
+function amStage2Broker(a){
+  if(a.broker)return String(a.broker);
+  if(a.prevSBIAmount>0||a.prevSBIAmount===0)return 'SBI証券';
+  return 'その他';
+}
+function amStage2IsUSD(a){
+  const ccy=String(a.priceCcy||'').toUpperCase();
+  return ccy==='USD' || amStage2Broker(a)==='moomoo証券' || Number(a.amountUSD||0)>0;
+}
+function amRenderStage2(active){
+  const el=document.getElementById('amStage2Panel'); if(!el)return;
+  const rows=(active||[]).filter(a=>!a.sold&&Number(a.amount||0)>0);
+  const total=rows.reduce((s,a)=>s+Number(a.amount||0),0);
+  const groups={};
+  rows.forEach(a=>{const code=String(a.code||'').trim().toUpperCase();const key=code?'code:'+code:'name:'+String(a.name||'').trim();if(!groups[key])groups[key]={name:a.name||a.code||'—',code,amount:0};groups[key].amount+=Number(a.amount||0);});
+  const top=Object.values(groups).sort((a,b)=>b.amount-a.amount).slice(0,10);
+  const semi=rows.filter(a=>amInferSector(a)==='半導体').reduce((s,a)=>s+Number(a.amount||0),0);
+  const us=rows.filter(a=>amStage1Country(a)==='us').reduce((s,a)=>s+Number(a.amount||0),0);
+  const usd=rows.filter(amStage2IsUSD).reduce((s,a)=>s+Number(a.amount||0),0);
+  const brokerCash={SBI証券:amStage1Num(amStage1Settings.investableCashSBI),moomoo証券:amStage1Num(amStage1Settings.investableCashMoomoo)};
+  const totalCash=Object.values(brokerCash).reduce((s,v)=>s+v,0);
+  const card=(label,value,sub)=>`<div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:18px;font-weight:800;margin-top:3px">${value}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
+  const topHtml=top.map((g,i)=>`<div style="display:grid;grid-template-columns:22px 1fr 72px 48px;gap:5px;align-items:center;padding:7px 0;border-top:0.5px solid var(--border);font-size:11px"><div style="color:var(--text3)">${i+1}</div><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${g.code?` <span style="font-size:9px;color:var(--text3)">${esc(g.code)}</span>`:''}</div><div style="text-align:right;font-weight:700">${fmt(Math.round(g.amount))}</div><div style="text-align:right;color:var(--text2)">${total?(g.amount/total*100).toFixed(1):'0.0'}%</div></div>`).join('');
+  el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)"><div style="font-size:13px;font-weight:700">📌 第2段階：集中度・海外比率・投資余力</div><div style="font-size:10px;color:var(--text3);margin-top:2px">現在の保有額ベース。同一銘柄はSBI・moomooを横断して合算。</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">${card('半導体集中度',total?(semi/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(semi))+' ／ 総資産 '+fmt(Math.round(total)))}${card('米国株比率',total?(us/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(us))+' ／ 米国株分類')}${card('USD資産比率',total?(usd/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(usd))+' ／ USD建てと判定した保有額')}${card('投資可能現金',fmt(Math.round(totalCash)),`SBI ${fmt(Math.round(brokerCash['SBI証券']))} ／ moomoo ${fmt(Math.round(brokerCash['moomoo証券']))}`)}</div><div style="margin-top:12px"><div style="font-size:11px;font-weight:700">🏷️ 銘柄別：総資産比率 TOP10</div>${topHtml||'<div style="font-size:11px;color:var(--text3);padding-top:7px">保有銘柄がありません</div>'}</div><div style="font-size:9px;color:var(--text3);margin-top:8px">※半導体集中度は現在のセクター自動分類「半導体」に基づく目安。USD資産比率は価格通貨・moomoo保有等から判定。投資可能現金は手入力値。</div></div>`;
+}
+
 // ── 第1段階：資産配分・投資可能現金・NISA残り枠 ──
-const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0};
+const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0,investableCashSBI:0,investableCashMoomoo:0};
 let amStage1Settings={...AM_STAGE1_DEFAULTS};
 
 function amStage1LoadLocal(){
@@ -2534,10 +2562,12 @@ async function amStage1SaveSheet(){
       ['targetUS',amStage1Settings.targetUS],
       ['targetCash',amStage1Settings.targetCash],
       ['targetOther',amStage1Settings.targetOther],
-      ['investableCash',amStage1Settings.investableCash]
+      ['investableCash',amStage1Settings.investableCash],
+      ['investableCashSBI',amStage1Settings.investableCashSBI],
+      ['investableCashMoomoo',amStage1Settings.investableCashMoomoo]
     ];
     await gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId:amSpreadsheetId,range:'settings!A1:B6',valueInputOption:'RAW',resource:{values:rows}
+      spreadsheetId:amSpreadsheetId,range:'settings!A1:B8',valueInputOption:'RAW',resource:{values:rows}
     });
     amStage1SaveLocal();
   }catch(e){amStage1SaveLocal();console.error('amStage1SaveSheet',e);}
@@ -2660,16 +2690,19 @@ function amStage1Render(active){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
         ${[['targetJapan','日本株'],['targetUS','米国株'],['targetCash','現金'],['targetOther','その他']].map(([id,label])=>`<label style="font-size:10px;color:var(--text3)">${label}<div style="display:flex;align-items:center;gap:3px;margin-top:3px"><input id="am-${id}" type="number" min="0" max="100" step="0.1" value="${settings[id]}" placeholder="未設定" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>%</span></div></label>`).join('')}
       </div>
-      <label style="display:block;font-size:10px;color:var(--text3);margin-top:8px">投資可能現金（手入力）
-        <div style="display:flex;align-items:center;gap:5px;margin-top:3px"><input id="am-investableCash" type="number" min="0" step="1000" value="${settings.investableCash}" style="width:180px;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>円</span></div>
-      </label>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3);font-weight:700">投資可能現金（手入力）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px">
+        <label style="font-size:10px;color:var(--text3)">SBI証券<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><input id="am-investableCashSBI" type="number" min="0" step="1000" value="${settings.investableCashSBI}" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>円</span></div></label>
+        <label style="font-size:10px;color:var(--text3)">moomoo証券<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><input id="am-investableCashMoomoo" type="number" min="0" step="1000" value="${settings.investableCashMoomoo}" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>円</span></div></label>
+      </div>
       <div style="display:flex;gap:6px;margin-top:9px"><button class="btn-accent" onclick="amStage1SaveSettings()">保存</button><button class="btn-sm" onclick="amStage1ClearTargets()">目標をクリア</button></div>
       <div style="font-size:10px;color:var(--text3);margin-top:7px">${targetMsg}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)">
-        <div style="font-size:10px;color:var(--text3)">投資可能現金（手入力）</div>
-        <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(amStage1Num(settings.investableCash)))}</div>
+        <div style="font-size:10px;color:var(--text3)">投資可能現金（合計）</div>
+        <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(amStage1Num(settings.investableCashSBI)+amStage1Num(settings.investableCashMoomoo)))}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">SBI ${fmt(Math.round(amStage1Num(settings.investableCashSBI)))} ／ moomoo ${fmt(Math.round(amStage1Num(settings.investableCashMoomoo)))}</div>
       </div>${nisaHtml}
     </div>
     <div style="margin-top:11px"><div style="font-size:11px;font-weight:700;margin-bottom:2px">現在の資産配分</div>${rows}</div>
@@ -2681,7 +2714,9 @@ function amStage1ToggleSettings(){
 async function amStage1SaveSettings(){
   const ids=['targetJapan','targetUS','targetCash','targetOther'];
   ids.forEach(k=>{const e=document.getElementById('am-'+k);amStage1Settings[k]=e&&e.value!==''?parseFloat(e.value):'';});
-  const ce=document.getElementById('am-investableCash');amStage1Settings.investableCash=ce?amStage1Num(ce.value):0;
+  const sbi=document.getElementById('am-investableCashSBI');amStage1Settings.investableCashSBI=sbi?amStage1Num(sbi.value):0;
+  const mm=document.getElementById('am-investableCashMoomoo');amStage1Settings.investableCashMoomoo=mm?amStage1Num(mm.value):0;
+  amStage1Settings.investableCash=amStage1Settings.investableCashSBI+amStage1Settings.investableCashMoomoo;
   amStage1SaveLocal();
   await amStage1SaveSheet();
   amStage1Render(amAccounts.filter(a=>!a.sold));
@@ -2722,6 +2757,7 @@ function amRender(){
   amRenderUnifiedSummary(activeAccounts);
   amRenderSectorAllocation(activeAccounts);
   amStage1Render(activeAccounts);
+  amRenderStage2(activeAccounts);
   const maxAmt=Math.max(...Object.values(cats),1);
   const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
   const orderedCatsForBar=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
