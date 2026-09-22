@@ -833,6 +833,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div id="amUnifiedPanel"></div>
     <div id="amSectorAllocation"></div>
+    <div id="amStage1Panel"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
@@ -2510,7 +2511,163 @@ function amRenderSectorAllocation(activeAccounts){
   </div>`;
 }
 
+
+// ── 第1段階：資産配分・投資可能現金・NISA残り枠 ──
+const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0};
+let amStage1Settings={...AM_STAGE1_DEFAULTS};
+
+function amStage1LoadLocal(){
+  try{
+    const s=localStorage.getItem('amStage1Settings_v1');
+    if(s)amStage1Settings={...AM_STAGE1_DEFAULTS,...JSON.parse(s)};
+  }catch(e){}
+}
+function amStage1SaveLocal(){
+  try{localStorage.setItem('amStage1Settings_v1',JSON.stringify(amStage1Settings));}catch(e){}
+}
+async function amStage1SaveSheet(){
+  if(!amIsOnline||!amSpreadsheetId){amStage1SaveLocal();return;}
+  try{
+    const rows=[
+      ['key','value'],
+      ['targetJapan',amStage1Settings.targetJapan],
+      ['targetUS',amStage1Settings.targetUS],
+      ['targetCash',amStage1Settings.targetCash],
+      ['targetOther',amStage1Settings.targetOther],
+      ['investableCash',amStage1Settings.investableCash]
+    ];
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId:amSpreadsheetId,range:'settings!A1:B6',valueInputOption:'RAW',resource:{values:rows}
+    });
+    amStage1SaveLocal();
+  }catch(e){amStage1SaveLocal();console.error('amStage1SaveSheet',e);}
+}
+async function amStage1LoadSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'settings!A2:B100'});
+    const rows=res.result.values||[];
+    const s={...AM_STAGE1_DEFAULTS};
+    rows.forEach(r=>{if(r[0]&&Object.prototype.hasOwnProperty.call(s,r[0]))s[r[0]]=r[1]??'';});
+    amStage1Settings=s;
+    amStage1SaveLocal();
+  }catch(e){amStage1LoadLocal();}
+}
+function amStage1Num(v){const n=parseFloat(v);return Number.isFinite(n)?n:0;}
+function amStage1Country(a){
+  const broker=String(a.broker||'').toLowerCase();
+  const code=String(a.code||'').trim();
+  const name=String(a.name||'');
+  if(/moomoo|米国|usa|us stock|nasdaq|nyse/i.test(broker+' '+name+' '+code))return'us';
+  if(/^[A-Za-z]{1,6}(\.[A-Za-z]+)?$/.test(code))return'us';
+  if(a.cat==='外国株式')return'us';
+  if(a.cat==='日本インデックス')return'jp';
+  if(a.cat==='個別株')return'jp';
+  return'other';
+}
+function amStage1Actual(active){
+  const r={jp:0,us:0,cash:0,other:0};
+  (active||[]).forEach(a=>{
+    const amt=amStage1Num(a.amount); if(!amt)return;
+    const cat=String(a.cat||'');
+    if(cat==='銀行'||cat==='預り金'){r.cash+=amt;return;}
+    const c=amStage1Country(a);
+    if(c==='jp')r.jp+=amt; else if(c==='us')r.us+=amt; else r.other+=amt;
+  });
+  return r;
+}
+function amStage1NisaRemaining(){
+  try{
+    const year=new Date().getFullYear();
+    const s=typeof pfNisaLoadSettings==='function'?pfNisaLoadSettings():null;
+    if(!s)return null;
+    const ts=(s.tsumitate||[]).reduce((x,d)=>x+amStage1Num(d.monthly),0)*12;
+    const growth=(s['seichou'+year]||[]).reduce((x,d)=>x+amStage1Num(d.amount),0);
+    const annualUsed=ts+growth;
+    const cap=3600000;
+    return {year,used:annualUsed,remaining:Math.max(0,cap-annualUsed),tsumitate:ts,growth};
+  }catch(e){return null;}
+}
+function amStage1FmtPct(v){return Number.isFinite(v)?v.toFixed(1)+'%':'—';}
+function amStage1Render(active){
+  const el=document.getElementById('amStage1Panel'); if(!el)return;
+  const a=amStage1Actual(active);
+  const total=Object.values(a).reduce((s,v)=>s+v,0);
+  const settings=amStage1Settings;
+  const target={
+    jp:settings.targetJapan===''?'':amStage1Num(settings.targetJapan),
+    us:settings.targetUS===''?'':amStage1Num(settings.targetUS),
+    cash:settings.targetCash===''?'':amStage1Num(settings.targetCash),
+    other:settings.targetOther===''?'':amStage1Num(settings.targetOther)
+  };
+  const labels={jp:'日本株',us:'米国株',cash:'現金',other:'その他'};
+  const actualPct=k=>total?a[k]/total*100:0;
+  const targetSum=Object.values(target).filter(v=>v!=='').reduce((s,v)=>s+v,0);
+  const targetSet=targetSum>0;
+  const rows=['jp','us','cash','other'].map(k=>{
+    const tv=target[k];
+    const gap=tv===''?null:actualPct(k)-tv;
+    const gapText=gap===null?'目標未設定':`${gap>=0?'+':''}${gap.toFixed(1)}pt`;
+    return `<div style="display:grid;grid-template-columns:70px 1fr 55px 65px;gap:6px;align-items:center;padding:7px 0;border-top:0.5px solid var(--border);font-size:11px">
+      <div style="font-weight:600">${labels[k]}</div>
+      <div style="height:7px;background:rgba(128,128,128,.13);border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.min(100,actualPct(k))}%;background:var(--accent,#3b82f6)"></div></div>
+      <div style="text-align:right">${amStage1FmtPct(actualPct(k))}</div>
+      <div style="text-align:right;color:${gap===null?'var(--text3)':gap>0?'var(--amber,#d97706)':'var(--green,#15803d)'}">${gapText}</div>
+    </div>`;
+  }).join('');
+  const nisa=amStage1NisaRemaining();
+  const nisaHtml=nisa?`<div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)">
+    <div style="font-size:11px;color:var(--text3)">NISA年間残り枠（${nisa.year}年・NISA管理タブ登録額ベース）</div>
+    <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(nisa.remaining))}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:2px">登録済み ${fmt(Math.round(nisa.used))} / 年間上限 360万円</div>
+  </div>`:'';
+  const targetMsg=!targetSet?'目標比率を入力すると、現在との差を表示します。':`目標合計 ${targetSum.toFixed(1)}%${Math.abs(targetSum-100)<0.1?' ✓':' ⚠ 100%に調整してください'}`;
+  el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div><div style="font-size:13px;font-weight:700">🎯 資産配分・投資余力</div><div style="font-size:10px;color:var(--text3);margin-top:2px">目標比率は自分で設定。差分は「現在−目標」のポイント差。</div></div>
+      <button class="btn-sm" onclick="amStage1ToggleSettings()" style="font-size:10px">⚙ 設定</button>
+    </div>
+    <div id="amStage1Settings" style="display:none;margin-top:10px;padding:10px;border-radius:10px;background:var(--bg2)">
+      <div style="font-size:11px;font-weight:700;margin-bottom:7px">目標資産配分（合計100%を目安）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+        ${[['targetJapan','日本株'],['targetUS','米国株'],['targetCash','現金'],['targetOther','その他']].map(([id,label])=>`<label style="font-size:10px;color:var(--text3)">${label}<div style="display:flex;align-items:center;gap:3px;margin-top:3px"><input id="am-${id}" type="number" min="0" max="100" step="0.1" value="${settings[id]}" placeholder="未設定" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>%</span></div></label>`).join('')}
+      </div>
+      <label style="display:block;font-size:10px;color:var(--text3);margin-top:8px">投資可能現金（手入力）
+        <div style="display:flex;align-items:center;gap:5px;margin-top:3px"><input id="am-investableCash" type="number" min="0" step="1000" value="${settings.investableCash}" style="width:180px;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>円</span></div>
+      </label>
+      <div style="display:flex;gap:6px;margin-top:9px"><button class="btn-accent" onclick="amStage1SaveSettings()">保存</button><button class="btn-sm" onclick="amStage1ClearTargets()">目標をクリア</button></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:7px">${targetMsg}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)">
+        <div style="font-size:10px;color:var(--text3)">投資可能現金（手入力）</div>
+        <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(amStage1Num(settings.investableCash)))}</div>
+      </div>${nisaHtml}
+    </div>
+    <div style="margin-top:11px"><div style="font-size:11px;font-weight:700;margin-bottom:2px">現在の資産配分</div>${rows}</div>
+  </div>`;
+}
+function amStage1ToggleSettings(){
+  const el=document.getElementById('amStage1Settings'); if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+async function amStage1SaveSettings(){
+  const ids=['targetJapan','targetUS','targetCash','targetOther'];
+  ids.forEach(k=>{const e=document.getElementById('am-'+k);amStage1Settings[k]=e&&e.value!==''?parseFloat(e.value):'';});
+  const ce=document.getElementById('am-investableCash');amStage1Settings.investableCash=ce?amStage1Num(ce.value):0;
+  amStage1SaveLocal();
+  await amStage1SaveSheet();
+  amStage1Render(amAccounts.filter(a=>!a.sold));
+  const e=document.getElementById('amStage1Settings');if(e)e.style.display='none';
+  showToast('✓ 資産配分設定を保存しました');
+}
+function amStage1ClearTargets(){
+  ['targetJapan','targetUS','targetCash','targetOther'].forEach(k=>amStage1Settings[k]='');
+  amStage1SaveLocal();
+  amStage1Render(amAccounts.filter(a=>!a.sold));
+}
+
 function amRender(){
+  try{amStage1LoadLocal();}catch(e){}
   // 移行: 旧コードで売却済みFXロットに残っていた評価額をゼロ化（CSV書き出し・Sheetsに残さない）
   try{
     let fxMig=false;
@@ -2536,6 +2693,7 @@ function amRender(){
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
   amRenderUnifiedSummary(activeAccounts);
   amRenderSectorAllocation(activeAccounts);
+  amStage1Render(activeAccounts);
   const maxAmt=Math.max(...Object.values(cats),1);
   const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
   const orderedCatsForBar=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
@@ -5919,7 +6077,7 @@ async function slLoadFromSheet(){
   }catch(e){console.error('slLoadFromSheet error',e);}
 }
 function useOffline(){
-  amIsOnline=false;localStorage.setItem('assetGoogleMode','offline');
+  amIsOnline=false;amStage1LoadLocal();localStorage.setItem('assetGoogleMode','offline');
   amLoadFromLocal();
   // カテゴリが旧形式・無効な場合のみ口座名ベースで再判定して保存（手動設定済みの有効カテゴリは尊重）
   let fixed=false;
@@ -5962,10 +6120,12 @@ async function amFindOrCreateSheet(){
       const hasSlSheet=meta.result.sheets.some(s=>s.properties.title==='sell');
       const hasCfSheet=meta.result.sheets.some(s=>s.properties.title==='cashflow');
       const hasTrSheet=meta.result.sheets.some(s=>s.properties.title==='trend');
+      const hasSettingsSheet=meta.result.sheets.some(s=>s.properties.title==='settings');
       const addReqs=[];
       if(!hasSlSheet)addReqs.push({addSheet:{properties:{title:'sell'}}});
       if(!hasCfSheet)addReqs.push({addSheet:{properties:{title:'cashflow'}}});
       if(!hasTrSheet)addReqs.push({addSheet:{properties:{title:'trend'}}});
+      if(!hasSettingsSheet)addReqs.push({addSheet:{properties:{title:'settings'}}});
       if(addReqs.length)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:addReqs}});
     }catch(e){}
   }catch(e){console.error(e);}
@@ -6031,7 +6191,7 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amStage1LoadSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
   try{trRenderAll();}catch(e){}
   try{if(typeof wlAutoSync==='function')wlAutoSync(true);}catch(e){}
 }
