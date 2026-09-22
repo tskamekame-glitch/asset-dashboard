@@ -2647,7 +2647,7 @@ function amStage1Render(active){
     <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(nisa.remaining))}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">つみたて予定 ${fmt(Math.round(nisa.tsumitate))} ／ 成長実績 ${fmt(Math.round(nisa.growthActual))}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">成長枠：NISA成長に分類した個別株・投資信託を取得金額ベースで集計</div>
-    `<div style="font-size:10px;color:var(--text3);margin-top:3px">成長枠 ${nisa.growthCount}件を「NISA区分＝NISA成長投資枠」の設定から集計（買付年は判定しません）</div>`
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">成長枠 ${nisa.growthCount}件を「NISA区分＝NISA成長投資枠」の設定から集計（買付年は判定しません）</div>
   </div>`:'';
   const targetMsg=!targetSet?'目標比率を入力すると、現在との差を表示します。':`目標合計 ${targetSum.toFixed(1)}%${Math.abs(targetSum-100)<0.1?' ✓':' ⚠ 100%に調整してください'}`;
   el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)">
