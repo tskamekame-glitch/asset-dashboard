@@ -832,6 +832,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div id="totalCard"></div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div id="amUnifiedPanel"></div>
+    <div id="amSectorAllocation"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
@@ -2443,6 +2444,72 @@ function amRenderUnifiedSummary(accounts){
   </div>`;
 }
 
+
+// ============================================================
+// ポートフォリオ セクター配分（資産管理用）
+// 明示的なsectorがあれば優先。未設定銘柄はコード/名称から大分類を推定。
+// 「半導体関連」は投資判断用の目安であり、厳密な業種分類ではない。
+// ============================================================
+function amInferSector(a){
+  const explicit=String(a.sector||'').trim();
+  if(explicit){
+    if(/半導体|Semiconductor/i.test(explicit))return'半導体';
+    if(/情報通信|IT|Technology|テクノロジー|電子/i.test(explicit))return'テクノロジー';
+    if(/金融|銀行|保険|証券/i.test(explicit))return'金融';
+    if(/小売|卸売|消費|食品|サービス/i.test(explicit))return'消費・サービス';
+    if(/医薬|医療|ヘルス/i.test(explicit))return'ヘルスケア';
+    if(/エネルギー|電気|ガス|資源/i.test(explicit))return'エネルギー・資源';
+    return explicit;
+  }
+  const code=String(a.code||'').toUpperCase();
+  const n=String(a.name||'').toUpperCase();
+  // 半導体・半導体製造装置・メモリ
+  if(/^(MU|SNDK|NVDA|AMD|AVGO|TSM|QCOM|INTC|ASML|AMAT|LRCX|KLAC|ARM)$/.test(code) ||
+     /半導体|メモリ|キオクシア|アドバンテスト|東京エレクトロン|レーザーテック|信越化学|SCREEN|SUMCO/i.test(n))return'半導体';
+  // ソフトウェア・AI・サイバーセキュリティ
+  if(/PANW|CRWD|FTNT|NET|PLTR|MSFT|ORCL|CRM|NOW|SNOW|GOOGL|GOOG|AMZN|META/.test(code) ||
+     /サイバー|セキュリティ|ソフトウェア|AI|クラウド/i.test(n))return'テクノロジー';
+  if(/銀行|MUFG|三菱UFJ|三井住友|みずほ|りそな|金融|保険/i.test(n))return'金融';
+  if(/医薬|製薬|医療|ヘルス/i.test(n))return'ヘルスケア';
+  if(/商社|小売|食品|外食|サンリオ|サービス/i.test(n))return'消費・サービス';
+  if(/電力|ガス|石油|資源|INPEX/i.test(n))return'エネルギー・資源';
+  if(a.cat==='外国株式'&&a.amount>0)return'海外株式（その他）';
+  if(a.cat==='個別株'||a.cat==='高配当')return'日本株（その他）';
+  return a.cat||'その他';
+}
+
+function amRenderSectorAllocation(activeAccounts){
+  const el=document.getElementById('amSectorAllocation');
+  if(!el)return;
+  const rows=activeAccounts.filter(a=>(a.amount||0)>0).map(a=>({
+    sector:amInferSector(a),amount:Number(a.amount)||0
+  }));
+  const total=rows.reduce((x,r)=>x+r.amount,0);
+  const sums={};
+  rows.forEach(r=>sums[r.sector]=(sums[r.sector]||0)+r.amount);
+  const sorted=Object.entries(sums).sort((a,b)=>b[1]-a[1]);
+  const semi=sums['半導体']||0;
+  const tech=sums['テクノロジー']||0;
+  const cards=sorted.map(([sec,amt])=>{
+    const pct=total?amt/total*100:0;
+    return `<div style="padding:9px 10px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2,#f7f7f7);min-width:135px;flex:1">
+      <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sec}</div>
+      <div style="font-size:16px;font-weight:750;margin-top:3px">${fmt(Math.round(amt))}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${pct.toFixed(1)}%</div>
+      <div style="height:4px;background:rgba(128,128,128,.14);border-radius:3px;margin-top:6px"><div style="height:100%;width:${Math.min(100,pct)}%;background:var(--accent,#3b82f6);border-radius:3px"></div></div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px">
+      <div><div style="font-size:13px;font-weight:700">🧩 セクター別資産配分</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">保有額ベース。未設定銘柄は名称・コードから大分類</div></div>
+      <div style="text-align:right"><div style="font-size:10px;color:var(--text3)">半導体＋テクノロジー</div>
+      <div style="font-size:15px;font-weight:800">${total?((semi+tech)/total*100).toFixed(1):'0.0'}%</div></div>
+    </div>
+    <div style="display:flex;gap:7px;overflow-x:auto;padding-bottom:2px">${cards||'<span style="font-size:11px;color:var(--text3)">保有銘柄がありません</span>'}</div>
+  </div>`;
+}
+
 function amRender(){
   // 移行: 旧コードで売却済みFXロットに残っていた評価額をゼロ化（CSV書き出し・Sheetsに残さない）
   try{
@@ -2468,6 +2535,7 @@ function amRender(){
   document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}口座${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
   amRenderUnifiedSummary(activeAccounts);
+  amRenderSectorAllocation(activeAccounts);
   const maxAmt=Math.max(...Object.values(cats),1);
   const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
   const orderedCatsForBar=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
@@ -4826,6 +4894,7 @@ async function amApplyMoomooRows(rows,fx,fileName){
   amRender();
   refreshHome();
   await amSaveToSheet();
+  amAutoSnapshot();
 
   const totalAfter=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+(a.amount||0),0);
   const diff=totalAfter-totalBefore;
@@ -5569,6 +5638,7 @@ async function amApplySBIRows(rows){
   amRender();
   refreshHome();
   await amSaveToSheet();
+  amAutoSnapshot();
 
 
 
@@ -5675,6 +5745,39 @@ function importCSV(e){
   };reader.readAsText(file,'UTF-8');
 }
 // 現在の口座データをスナップショットとして推移グラフに記録
+
+// CSV取込後などに自動で当日スナップショットを更新。
+// 同日なら上書きするため、SBI→moomooの順に取り込んでも最終状態が残る。
+function amAutoSnapshot(){
+  if(!amAccounts.length)return;
+  const dateStr=todayStr();
+  const PATS=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
+  const MAP={'全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株','外国株式':'外国株式','銀行':'銀行','預り金':'銀行','年金':'年金','その他':'銀行'};
+  const INDEX=['全世界インデックス','日本インデックス','インドインデックス'];
+  const norm=a=>{
+    if(PATS.some(p=>p.test(a.name||'')))return'年金';
+    return MAP[a.cat]||a.cat||'その他';
+  };
+  const active=amAccounts.filter(a=>!a.sold);
+  const cats={}; active.forEach(a=>{const c=norm(a);cats[c]=(cats[c]||0)+(Number(a.amount)||0);});
+  const total=active.reduce((x,a)=>x+(Number(a.amount)||0),0);
+  const accounts=active.map(a=>{
+    const isIndex=INDEX.includes(a.cat);
+    const hasShares=(a.shares||0)>0;
+    const isBal=/PayPay|paypay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i.test(a.name||'');
+    return {name:a.name,cat:norm(a),amount:Number(a.amount)||0,updated:a.updated,costPrice:Number(a.costPrice)||0,
+      shares:isBal?0:(a.shares||0),price:a.price||0,code:a.code||'',broker:a.broker||undefined,
+      buyDate:a.buyDate||undefined,costIsTotal:(isIndex&&!hasShares&&a.costPrice>0)||isBal&&a.costPrice>0||!!a.costIsTotal||undefined};
+  });
+  const snap={date:dateStr,filename:'自動記録_'+dateStr,total,cats,accounts};
+  const i=snapshots.findIndex(x=>x.date===dateStr);
+  if(i>=0)snapshots[i]=snap;else snapshots.push(snap);
+  snapshots.sort((a,b)=>a.date.localeCompare(b.date));
+  trSaveToStorage();
+  dailySnapSave();
+  try{refreshHome();}catch(e){}
+}
+
 function sendToTrend(){
   if(!amAccounts.length){showToast('口座データがありません');return;}
   const dateStr=todayStr();
