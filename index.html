@@ -2548,8 +2548,8 @@ function amRenderStage2(active){
   const semi=rows.filter(a=>amInferSector(a)==='半導体').reduce((s,a)=>s+Number(a.amount||0),0);
   const us=rows.filter(a=>amStage1Country(a)==='us').reduce((s,a)=>s+Number(a.amount||0),0);
   const usd=rows.filter(amStage2IsUSD).reduce((s,a)=>s+Number(a.amount||0),0);
-  const brokerCash={SBI証券:amStage1Num(amStage1Settings.investableCashSBI),moomoo証券:amStage1Num(amStage1Settings.investableCashMoomoo)};
-  const totalCash=Object.values(brokerCash).reduce((s,v)=>s+v,0);
+  const brokerCash=amStage1GetInvestableCashByBank(rows);
+  const totalCash=brokerCash.total;
   const card=(label,value,sub)=>`<div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:18px;font-weight:800;margin-top:3px">${value}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
   const topHtml=top.map((g,i)=>`<div style="display:grid;grid-template-columns:22px 1fr 72px 48px;gap:5px;align-items:center;padding:7px 0;border-top:0.5px solid var(--border);font-size:11px"><div style="color:var(--text3)">${i+1}</div><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${g.code?` <span style="font-size:9px;color:var(--text3)">${esc(g.code)}</span>`:''}</div><div style="text-align:right;font-weight:700">${fmt(Math.round(g.amount))}</div><div style="text-align:right;color:var(--text2)">${total?(g.amount/total*100).toFixed(1):'0.0'}%</div></div>`).join('');
   el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)"><div style="font-size:13px;font-weight:700">📌 第2段階：集中度・海外比率・投資余力</div><div style="font-size:10px;color:var(--text3);margin-top:2px">現在の保有額ベース。同一銘柄はSBI・moomooを横断して合算。</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">${card('半導体集中度',total?(semi/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(semi))+' ／ 総資産 '+fmt(Math.round(total)))}${card('米国株比率',total?(us/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(us))+' ／ 米国株分類')}${card('USD資産比率',total?(usd/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(usd))+' ／ USD建てと判定した保有額')}${card('投資可能現金',fmt(Math.round(totalCash)),`SBI ${fmt(Math.round(brokerCash['SBI証券']))} ／ moomoo ${fmt(Math.round(brokerCash['moomoo証券']))}`)}</div><div style="margin-top:12px"><div style="font-size:11px;font-weight:700">🏷️ 銘柄別：総資産比率 TOP10</div>${topHtml||'<div style="font-size:11px;color:var(--text3);padding-top:7px">保有銘柄がありません</div>'}</div><div style="font-size:9px;color:var(--text3);margin-top:8px">※米国株比率は米国市場の外国株式を判定。USD資産比率は取引通貨がUSDの資産（USD現金・USD株等）を集計。旧データで通貨未登録の外国株は英字ティッカー等から推定。投資可能現金は手入力値。</div></div>`;
@@ -2663,11 +2663,27 @@ function amStage1NisaRemaining(){
   }catch(e){return null;}
 }
 function amStage1FmtPct(v){return Number.isFinite(v)?v.toFixed(1)+'%':'—';}
+function amStage1GetInvestableCashByBank(active){
+  const rows=(active||amAccounts||[]).filter(a=>!a.sold&&a.cat==='銀行'&&Number(a.amount||0)>0);
+  let sbi=0, moomoo=0;
+  rows.forEach(a=>{
+    const name=String(a.name||'').trim();
+    const broker=String(a.broker||'').trim();
+    if(/SBI\s*(?:証券)?\s*(?:預かり|預り|預り金|預かり金)/i.test(name) || /SBI預り|SBI預かり/i.test(name)){
+      sbi+=Number(a.amount||0);
+    }else if(/moomoo|ムームー/i.test(name) || /moomoo証券/i.test(broker)){
+      moomoo+=Number(a.amount||0);
+    }
+  });
+  return {SBI証券:sbi,moomoo証券:moomoo,total:sbi+moomoo};
+}
+
 function amStage1Render(active){
   const el=document.getElementById('amStage1Panel'); if(!el)return;
   const a=amStage1Actual(active);
   const total=Object.values(a).reduce((s,v)=>s+v,0);
   const settings=amStage1Settings;
+  const brokerCash=amStage1GetInvestableCashByBank(active);
   const target={
     jp:settings.targetJapan===''?'':amStage1Num(settings.targetJapan),
     us:settings.targetUS===''?'':amStage1Num(settings.targetUS),
@@ -2708,10 +2724,10 @@ function amStage1Render(active){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
         ${[['targetJapan','日本株'],['targetUS','米国株'],['targetCash','現金'],['targetOther','その他']].map(([id,label])=>`<label style="font-size:10px;color:var(--text3)">${label}<div style="display:flex;align-items:center;gap:3px;margin-top:3px"><input id="am-${id}" type="number" min="0" max="100" step="0.1" value="${settings[id]}" placeholder="未設定" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>%</span></div></label>`).join('')}
       </div>
-      <div style="margin-top:8px;font-size:10px;color:var(--text3);font-weight:700">投資可能現金（手入力）</div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3);font-weight:700">投資可能現金（銀行区分から自動集計）</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px">
-        <label style="font-size:10px;color:var(--text3)">SBI証券<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><input id="am-investableCashSBI" type="number" min="0" step="1000" value="${settings.investableCashSBI}" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>円</span></div></label>
-        <label style="font-size:10px;color:var(--text3)">moomoo証券<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><input id="am-investableCashMoomoo" type="number" min="0" step="1000" value="${settings.investableCashMoomoo}" style="width:100%;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)"><span>円</span></div></label>
+        <div style="font-size:10px;color:var(--text3)">SBI預かり<div style="margin-top:3px;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-weight:700">${fmt(Math.round(brokerCash.SBI証券))} 円</div></div>
+        <div style="font-size:10px;color:var(--text3)">moomoo証券<div style="margin-top:3px;padding:7px 8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-weight:700">${fmt(Math.round(brokerCash.moomoo証券))} 円</div></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:9px"><button class="btn-accent" onclick="amStage1SaveSettings()">保存</button><button class="btn-sm" onclick="amStage1ClearTargets()">目標をクリア</button></div>
       <div style="font-size:10px;color:var(--text3);margin-top:7px">${targetMsg}</div>
@@ -2719,8 +2735,8 @@ function amStage1Render(active){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)">
         <div style="font-size:10px;color:var(--text3)">投資可能現金（合計）</div>
-        <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(amStage1Num(settings.investableCashSBI)+amStage1Num(settings.investableCashMoomoo)))}</div>
-        <div style="font-size:9px;color:var(--text3);margin-top:2px">SBI ${fmt(Math.round(amStage1Num(settings.investableCashSBI)))} ／ moomoo ${fmt(Math.round(amStage1Num(settings.investableCashMoomoo)))}</div>
+        <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(brokerCash.total))}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">SBI ${fmt(Math.round(brokerCash.SBI証券))} ／ moomoo ${fmt(Math.round(brokerCash.moomoo証券))}</div>
       </div>${nisaHtml}
     </div>
     <div style="margin-top:11px"><div style="font-size:11px;font-weight:700;margin-bottom:2px">現在の資産配分</div>${rows}</div>
@@ -2732,14 +2748,15 @@ function amStage1ToggleSettings(){
 async function amStage1SaveSettings(){
   const ids=['targetJapan','targetUS','targetCash','targetOther'];
   ids.forEach(k=>{const e=document.getElementById('am-'+k);amStage1Settings[k]=e&&e.value!==''?parseFloat(e.value):'';});
-  const sbi=document.getElementById('am-investableCashSBI');amStage1Settings.investableCashSBI=sbi?amStage1Num(sbi.value):0;
-  const mm=document.getElementById('am-investableCashMoomoo');amStage1Settings.investableCashMoomoo=mm?amStage1Num(mm.value):0;
-  amStage1Settings.investableCash=amStage1Settings.investableCashSBI+amStage1Settings.investableCashMoomoo;
+  const brokerCash=amStage1GetInvestableCashByBank(amAccounts.filter(a=>!a.sold));
+  amStage1Settings.investableCashSBI=brokerCash.SBI証券;
+  amStage1Settings.investableCashMoomoo=brokerCash.moomoo証券;
+  amStage1Settings.investableCash=brokerCash.total;
   amStage1SaveLocal();
   await amStage1SaveSheet();
   amStage1Render(amAccounts.filter(a=>!a.sold));
   const e=document.getElementById('amStage1Settings');if(e)e.style.display='none';
-  showToast('✓ 資産配分設定を保存しました');
+  showToast(`✓ 投資可能現金を自動集計しました（SBI ${fmt(Math.round(brokerCash.SBI証券))} ／ moomoo ${fmt(Math.round(brokerCash.moomoo証券))}）`);
 }
 function amStage1ClearTargets(){
   ['targetJapan','targetUS','targetCash','targetOther'].forEach(k=>amStage1Settings[k]='');
