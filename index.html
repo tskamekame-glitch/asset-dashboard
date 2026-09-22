@@ -602,6 +602,30 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 .tq-adj-row input{flex:1;padding:9px 10px;font-size:15px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-family:inherit}
 .tq-adj-row span{font-size:13px;color:var(--text2)}
 .tq-mini-btn{padding:10px;border:0.5px dashed var(--border2);border-radius:8px;background:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;width:100%;margin-top:8px}
+
+/* === 統合資産サマリー v1 === */
+.am-unified-panel{margin:10px 0 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);overflow:hidden}
+.am-unified-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border)}
+.am-unified-title{font-size:13px;font-weight:700;color:var(--text)}
+.am-unified-sub{font-size:10px;color:var(--text3)}
+.am-unified-body{padding:10px 12px}
+.am-broker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.am-broker-card{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg2)}
+.am-broker-name{font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px}
+.am-broker-value{font-size:16px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.am-broker-meta{font-size:10px;color:var(--text3);margin-top:3px;line-height:1.5}
+.am-diff-up{color:var(--green)!important}.am-diff-down{color:var(--danger)!important}
+.am-unified-table{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+.am-unified-row{display:grid;grid-template-columns:minmax(0,1.35fr) .9fr .8fr;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px solid var(--border);font-size:11px}
+.am-unified-row:last-child{border-bottom:0}
+.am-unified-name{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.am-unified-brokers{font-size:9px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.am-unified-amount{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.am-unified-diff{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:10px}
+@media(max-width:480px){
+  .am-unified-row{grid-template-columns:minmax(0,1.2fr) .8fr .75fr}
+  .am-broker-grid{grid-template-columns:1fr 1fr}
+}
 </style>
 </style>
 </head>
@@ -807,6 +831,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div id="soldSummaryBanner"></div>
     <div id="totalCard"></div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
+    <div id="amUnifiedPanel"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
@@ -2327,6 +2352,97 @@ function amRenderReminder(){
   const stale=amAccounts.filter(a=>!a.sold&&daysSince(a.updated)>=30);
   el.innerHTML=stale.length?`<div class="reminder-banner"><span class="reminder-icon">🔔</span><div><div class="reminder-title">残高の更新をお忘れなく！</div><div class="reminder-text">${stale.map(a=>a.name+'（'+daysSince(a.updated)+'日未更新）').join('<br>')}</div></div></div>`:'';
 }
+
+// ── 証券会社横断・前回取込比較サマリー ──
+// SBI: prevSBIAmount、moomoo: prevBrokerAmount を使用。
+// 「前日比」ではなく、実際に前回CSVを取り込んだ時点との比較として表示する。
+// 株価の値動きとCSV取込間隔が一致しないため、誤解を避けるため「前回取込比」と表記。
+function amRenderUnifiedSummary(accounts){
+  const el=document.getElementById('amUnifiedPanel');
+  if(!el)return;
+  const active=(accounts||[]).filter(a=>!a.sold&&Number(a.amount||0)>0);
+  if(!active.length){el.innerHTML='';return;}
+
+  const brokerOf=a=>{
+    if(a.broker)return a.broker;
+    // 既存のSBIデータ（broker未設定）を安全側に推定。
+    if(a.prevSBIAmount>0||a.prevSBIAmount===0){
+      const non=/野村|みずほ|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|moomoo|ムームー|楽天|松井|大和|au|マネックス/i;
+      if(!non.test((a.name||'')+' '+(a.note||'')))return'SBI証券';
+    }
+    return'その他';
+  };
+
+  const brokers={};
+  active.forEach(a=>{
+    const b=brokerOf(a);
+    if(!brokers[b])brokers[b]={amount:0,prev:0,prevKnown:0,count:0};
+    const x=brokers[b];
+    x.amount+=Number(a.amount||0);x.count++;
+    // 証券会社別の前回値は、そのブローカー用の前回値だけを採用
+    const pv=b==='moomoo証券'?Number(a.prevBrokerAmount||0):(b==='SBI証券'?Number(a.prevSBIAmount||0):0);
+    if(pv>0){x.prev+=pv;x.prevKnown++;}
+  });
+
+  const brokerEntries=Object.entries(brokers).sort((a,b)=>b[1].amount-a[1].amount);
+  const total=active.reduce((sum,a)=>sum+Number(a.amount||0),0);
+
+  const brokerCards=brokerEntries.map(([b,x])=>{
+    const hasPrev=x.prev>0&&x.prevKnown>0;
+    const diff=hasPrev?x.amount-x.prev:null;
+    const pct=hasPrev?diff/x.prev*100:null;
+    const diffHtml=hasPrev
+      ?`<div class="am-broker-meta ${diff>=0?'am-diff-up':'am-diff-down'}">前回取込比 ${diff>=0?'+':''}${fmt(Math.round(diff))} (${pct>=0?'+':''}${pct.toFixed(1)}%)</div>`
+      :`<div class="am-broker-meta">前回比較データ ${x.prevKnown}/${x.count}件</div>`;
+    return`<div class="am-broker-card">
+      <div class="am-broker-name">${esc(b)}</div>
+      <div class="am-broker-value">${fmt(Math.round(x.amount))}</div>
+      <div class="am-broker-meta">${x.count}件 ・ 総資産の${total>0?(x.amount/total*100).toFixed(1):'0.0'}%</div>
+      ${diffHtml}
+    </div>`;
+  }).join('');
+
+  // 同一銘柄を証券会社横断で合算。ティッカー優先、なければ銘柄名。
+  const groups={};
+  active.forEach(a=>{
+    const code=String(a.code||'').trim().toUpperCase();
+    const key=code?'code:'+code:'name:'+String(a.name||'').trim();
+    if(!groups[key])groups[key]={code,name:a.name,amount:0,brokers:{},ids:[]};
+    const g=groups[key];
+    g.amount+=Number(a.amount||0);g.ids.push(a.id);
+    const b=brokerOf(a);g.brokers[b]=(g.brokers[b]||0)+Number(a.amount||0);
+    if(!g.name)g.name=a.name;
+  });
+  const combined=Object.values(groups).filter(g=>Object.keys(g.brokers).length>1)
+    .sort((a,b)=>b.amount-a.amount).slice(0,8);
+
+  const combinedHtml=combined.length
+    ?`<div class="am-unified-table">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:3px">🔗 複数証券会社にまたがる保有</div>
+      ${combined.map(g=>{
+        const bs=Object.entries(g.brokers).sort((a,b)=>b[1]-a[1]).map(([b,v])=>`${esc(b)} ${fmt(Math.round(v))}`).join(' / ');
+        return`<div class="am-unified-row" onclick="openEditModal(${g.ids[0]})" style="cursor:pointer">
+          <div><div class="am-unified-name">${esc(g.name||g.code||'—')}</div><div class="am-unified-brokers">${bs}</div></div>
+          <div class="am-unified-amount">${fmt(Math.round(g.amount))}</div>
+          <div class="am-unified-diff">${total>0?(g.amount/total*100).toFixed(1):'0.0'}%</div>
+        </div>`;
+      }).join('')}
+      <div style="font-size:9px;color:var(--text3);padding-top:6px">同一ティッカーを証券会社横断で合算。クリックすると代表口座を編集できます。</div>
+    </div>`
+    :'';
+
+  const coverage=brokerEntries.map(([b,x])=>`${b}: ${x.prevKnown}/${x.count}件`).join(' ・ ');
+  el.innerHTML=`<div class="am-unified-panel">
+    <div class="am-unified-head">
+      <div><div class="am-unified-title">📊 総資産・証券会社横断サマリー</div><div class="am-unified-sub">現在 ${fmt(Math.round(total))} ・ ${coverage}</div></div>
+    </div>
+    <div class="am-unified-body">
+      <div class="am-broker-grid">${brokerCards}</div>
+      ${combinedHtml}
+    </div>
+  </div>`;
+}
+
 function amRender(){
   // 移行: 旧コードで売却済みFXロットに残っていた評価額をゼロ化（CSV書き出し・Sheetsに残さない）
   try{
@@ -2351,6 +2467,7 @@ function amRender(){
 
   document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}口座${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
+  amRenderUnifiedSummary(activeAccounts);
   const maxAmt=Math.max(...Object.values(cats),1);
   const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
   const orderedCatsForBar=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
