@@ -1849,8 +1849,14 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
         </div>
         <button type="button" id="fFetchQuoteBtn" onclick="amFetchQuoteIntoModal()" style="display:none;margin-top:8px;padding:8px 12px;border:1px solid #2980b9;border-radius:var(--radius);background:var(--bg2);color:#2980b9;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🌐 ティッカーから株価・為替を自動取得</button>
       </div>
+      <div class="field" id="fCcyRow" style="display:none">
+        <label>取引通貨 <span style="font-size:11px;color:var(--text3);font-weight:400">（米国株=USD、韓国株=KRWなど）</span></label>
+        <select id="fPriceCcy" onchange="amUpdateForeignCurrencyLabels()" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none">
+          <option value="USD">USD（米ドル）</option><option value="KRW">KRW（韓国ウォン）</option><option value="HKD">HKD（香港ドル）</option><option value="EUR">EUR（ユーロ）</option><option value="GBP">GBP（英ポンド）</option><option value="CNY">CNY（人民元）</option><option value="AUD">AUD（豪ドル）</option>
+        </select>
+      </div>
       <div class="field" id="fFxRow" style="display:none">
-        <label>為替レート <span style="font-size:11px;color:var(--text3);font-weight:400">（USD/JPY）</span></label>
+        <label>為替レート <span id="fFxCcyLabel" style="font-size:11px;color:var(--text3);font-weight:400">（USD/JPY）</span></label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="number" id="fFxRate" placeholder="例: 150.5" inputmode="decimal" step="0.1" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-width:100px" oninput="amCalcAmount()">
           <span style="font-size:13px;color:var(--text3)">円/USD</span>
@@ -2519,10 +2525,19 @@ function amStage2Broker(a){
   if(a.prevSBIAmount>0||a.prevSBIAmount===0)return 'SBI証券';
   return 'その他';
 }
-function amStage2IsUSD(a){
-  const ccy=String(a.priceCcy||'').toUpperCase();
-  return ccy==='USD' || amStage2Broker(a)==='moomoo証券' || Number(a.amountUSD||0)>0;
+function amStage2Currency(a){
+  const ccy=String(a.priceCcy||'').trim().toUpperCase();
+  if(ccy)return ccy;
+  if(Number(a.amountUSD||0)>0)return 'USD';
+  if(a.cat==='FX')return 'USD';
+  // 旧データ互換：外国株式の英字ティッカーは米国株として推定。韓国等の市場コードは除外。
+  const code=String(a.code||'').trim().toUpperCase();
+  if(a.cat==='外国株式'&&/^[A-Z]{1,6}$/.test(code))return 'USD';
+  if(/\.(KS|KQ)$/.test(code))return 'KRW';
+  if(/\.HK$/.test(code))return 'HKD';
+  return '';
 }
+function amStage2IsUSD(a){return amStage2Currency(a)==='USD';}
 function amRenderStage2(active){
   const el=document.getElementById('amStage2Panel'); if(!el)return;
   const rows=(active||[]).filter(a=>!a.sold&&Number(a.amount||0)>0);
@@ -2537,7 +2552,7 @@ function amRenderStage2(active){
   const totalCash=Object.values(brokerCash).reduce((s,v)=>s+v,0);
   const card=(label,value,sub)=>`<div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:18px;font-weight:800;margin-top:3px">${value}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
   const topHtml=top.map((g,i)=>`<div style="display:grid;grid-template-columns:22px 1fr 72px 48px;gap:5px;align-items:center;padding:7px 0;border-top:0.5px solid var(--border);font-size:11px"><div style="color:var(--text3)">${i+1}</div><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${g.code?` <span style="font-size:9px;color:var(--text3)">${esc(g.code)}</span>`:''}</div><div style="text-align:right;font-weight:700">${fmt(Math.round(g.amount))}</div><div style="text-align:right;color:var(--text2)">${total?(g.amount/total*100).toFixed(1):'0.0'}%</div></div>`).join('');
-  el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)"><div style="font-size:13px;font-weight:700">📌 第2段階：集中度・海外比率・投資余力</div><div style="font-size:10px;color:var(--text3);margin-top:2px">現在の保有額ベース。同一銘柄はSBI・moomooを横断して合算。</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">${card('半導体集中度',total?(semi/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(semi))+' ／ 総資産 '+fmt(Math.round(total)))}${card('米国株比率',total?(us/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(us))+' ／ 米国株分類')}${card('USD資産比率',total?(usd/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(usd))+' ／ USD建てと判定した保有額')}${card('投資可能現金',fmt(Math.round(totalCash)),`SBI ${fmt(Math.round(brokerCash['SBI証券']))} ／ moomoo ${fmt(Math.round(brokerCash['moomoo証券']))}`)}</div><div style="margin-top:12px"><div style="font-size:11px;font-weight:700">🏷️ 銘柄別：総資産比率 TOP10</div>${topHtml||'<div style="font-size:11px;color:var(--text3);padding-top:7px">保有銘柄がありません</div>'}</div><div style="font-size:9px;color:var(--text3);margin-top:8px">※半導体集中度は現在のセクター自動分類「半導体」に基づく目安。USD資産比率は価格通貨・moomoo保有等から判定。投資可能現金は手入力値。</div></div>`;
+  el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)"><div style="font-size:13px;font-weight:700">📌 第2段階：集中度・海外比率・投資余力</div><div style="font-size:10px;color:var(--text3);margin-top:2px">現在の保有額ベース。同一銘柄はSBI・moomooを横断して合算。</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">${card('半導体集中度',total?(semi/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(semi))+' ／ 総資産 '+fmt(Math.round(total)))}${card('米国株比率',total?(us/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(us))+' ／ 米国株分類')}${card('USD資産比率',total?(usd/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(usd))+' ／ USD建てと判定した保有額')}${card('投資可能現金',fmt(Math.round(totalCash)),`SBI ${fmt(Math.round(brokerCash['SBI証券']))} ／ moomoo ${fmt(Math.round(brokerCash['moomoo証券']))}`)}</div><div style="margin-top:12px"><div style="font-size:11px;font-weight:700">🏷️ 銘柄別：総資産比率 TOP10</div>${topHtml||'<div style="font-size:11px;color:var(--text3);padding-top:7px">保有銘柄がありません</div>'}</div><div style="font-size:9px;color:var(--text3);margin-top:8px">※米国株比率は米国市場の外国株式を判定。USD資産比率は取引通貨がUSDの資産（USD現金・USD株等）を集計。旧データで通貨未登録の外国株は英字ティッカー等から推定。投資可能現金は手入力値。</div></div>`;
 }
 
 // ── 第1段階：資産配分・投資可能現金・NISA残り枠 ──
@@ -2585,15 +2600,18 @@ async function amStage1LoadSheet(){
 }
 function amStage1Num(v){const n=parseFloat(v);return Number.isFinite(n)?n:0;}
 function amStage1Country(a){
-  const broker=String(a.broker||'').toLowerCase();
-  const code=String(a.code||'').trim();
+  const code=String(a.code||'').trim().toUpperCase();
   const name=String(a.name||'');
-  if(/moomoo|米国|usa|us stock|nasdaq|nyse/i.test(broker+' '+name+' '+code))return'us';
-  if(/^[A-Za-z]{1,6}(\.[A-Za-z]+)?$/.test(code))return'us';
-  if(a.cat==='外国株式')return'us';
-  if(a.cat==='日本インデックス')return'jp';
-  if(a.cat==='個別株')return'jp';
-  return'other';
+  const ccy=amStage2Currency(a);
+  if(a.cat==='銀行'||a.cat==='預り金')return 'cash';
+  if(a.cat==='日本インデックス'||a.cat==='個別株'||a.cat==='高配当')return 'jp';
+  if(a.cat==='外国株式'){
+    if(/\.(KS|KQ)$/.test(code)||ccy==='KRW')return 'kr';
+    if(/\.HK$/.test(code)||ccy==='HKD')return 'hk';
+    if(ccy==='USD'||/nasdaq|nyse|米国株|us stock|usa/i.test(name+' '+code))return 'us';
+    return 'other';
+  }
+  return 'other';
 }
 function amStage1Actual(active){
   const r={jp:0,us:0,cash:0,other:0};
@@ -4296,8 +4314,8 @@ async function saveAccount(){
   const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
   const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
   const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,priceCcy:priceCcy||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,priceCcy:priceCcy||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
   // ウォッチ銘柄からの購入登録: ステータスを購入済に更新
   if(purchasedWlId){
@@ -4359,6 +4377,19 @@ function closeConfirm(){document.getElementById('confirmBg').classList.remove('o
 document.getElementById('confirmOkBtn').onclick=async()=>{amAccounts=amAccounts.filter(a=>a.id!==amDeleteId);closeConfirm();amRender();await amSaveToSheet();refreshHome();};
 document.getElementById('sheetBg').addEventListener('click',e=>{if(e.target===document.getElementById('sheetBg'))closeSheet()});
 document.getElementById('confirmBg').addEventListener('click',e=>{if(e.target===document.getElementById('confirmBg'))closeConfirm()});
+function amUpdateForeignCurrencyLabels(){
+  const ccy=(document.getElementById('fPriceCcy')?.value||'USD').toUpperCase();
+  const label=document.getElementById('fFxCcyLabel');
+  const price=document.getElementById('fPrice');
+  const stock=document.getElementById('fStockFieldsLabel');
+  const cost=document.getElementById('fCostLabel');
+  if(label)label.textContent='（'+ccy+'/JPY）';
+  if(price)price.placeholder='株価（'+ccy+'）';
+  if(stock)stock.textContent='外国株 自動計算（'+ccy+'×為替→円）';
+  if(cost)cost.textContent='取得株価（'+ccy+'/株）';
+  const unit=document.querySelector('#fFxRow span:last-child'); if(unit)unit.textContent='円/'+ccy;
+}
+
 function amToggleStockFields(){
   const cat=document.getElementById('fCat').value;
   const isStock=(cat==='個別株'||cat==='高配当');
@@ -4384,7 +4415,8 @@ function amToggleStockFields(){
   // インデックスの場合は専用フィールドを表示（数量×単価欄は非表示）
   const showIndexFields=isIndexFund&&!isPayPay;
 
-  if(fxRow)fxRow.style.display=isForeignStock?'block':'none';
+  if(ccyRow)ccyRow.style.display=isForeignStock?'block':'none';
+   if(fxRow)fxRow.style.display=isForeignStock?'block':'none';
   if(sf)sf.style.display=(isUnitBased&&!showIndexFields)?'block':'none';
   if(cf)cf.style.display=(isStock||isForeignStock)?'block':'none';
   if(costF)costF.style.display=(isStock||isForeignStock||isFX)?'block':'none';// 株・FXのみ取得単価欄
@@ -6100,13 +6132,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','prevBrokerAmount','amountUSD','costAmountUSD','pnlUSD','brokerUpdatedAt'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','prevBrokerAmount','amountUSD','costAmountUSD','pnlUSD','brokerUpdatedAt','priceCcy'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.prevBrokerAmount||'',a.amountUSD||'',a.costAmountUSD||'',a.pnlUSD||'',a.brokerUpdatedAt||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.prevBrokerAmount||'',a.amountUSD||'',a.costAmountUSD||'',a.pnlUSD||'',a.brokerUpdatedAt||'',a.priceCcy||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AG${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AG1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AH${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AH1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
