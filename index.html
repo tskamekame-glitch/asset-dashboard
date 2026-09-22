@@ -2580,29 +2580,38 @@ function amStage1NisaRemaining(){
   try{
     const year=new Date().getFullYear();
     const s=typeof pfNisaLoadSettings==='function'?pfNisaLoadSettings():null;
-    // NISA管理タブの予定額に加え、資産管理で「NISA成長」に分類した
-    // 個別株・投資信託（例：全世界インデックス）も実績として集計する。
-    // NISAの年間投資枠は「取得金額（買付額）」で管理するため、評価額ではなく簿価を使用。
+    // NISA区分は「資産管理 > 銘柄の編集 > NISA区分」で設定した分類をそのまま使用。
+    // ユーザー運用では「NISA成長投資枠」に分類された個別株・全世界インデックス等を
+    // 成長投資枠の実績として合算する。買付年は判定条件にしない。
     const active=(amAccounts||[]).filter(a=>!a.sold);
-    const growthHoldings=active.filter(a=>a.nisaType==='growth');
+    const growthHoldings=active.filter(a=>String(a.nisaType||'').toLowerCase()==='growth');
     const growthActual=growthHoldings.reduce((sum,a)=>{
-      const y=String(a.buyDate||'').slice(0,4);
-      // 買付年が確認できるものだけ当年実績に算入。年不明は二重計上を避けるため除外。
-      if(y!==String(year))return sum;
       let cost=amStage1Num(a.costAmount);
       if(!cost && a.costPrice && a.shares)cost=amStage1Num(a.costPrice)*amStage1Num(a.shares);
       if(!cost && a.amountUSD && a.costAmountUSD && a.fxRate)cost=amStage1Num(a.costAmountUSD)*amStage1Num(a.fxRate);
       return sum+cost;
     },0);
-    const growthUnknown=active.filter(a=>a.nisaType==='growth' && !String(a.buyDate||'').slice(0,4)).length;
     const ts=(s?.tsumitate||[]).reduce((x,d)=>x+amStage1Num(d.monthly),0)*12;
     const growthPlan=(s?.['seichou'+year]||[]).reduce((x,d)=>x+amStage1Num(d.amount),0);
-    // 成長投資枠は「実際に資産へ分類された当年買付額」を優先。
-    // 実績が0の場合のみ、従来のNISA管理タブの予定額を表示用に使用。
-    const growth= growthActual>0 ? growthActual : growthPlan;
+    // 成長投資枠は「NISA成長投資枠」に分類された保有銘柄の取得金額を実績として使用。
+    // NISA管理タブの成長予定額は、分類された保有銘柄がない場合の補助値としてのみ使用。
+    const growth=growthActual>0 ? growthActual : growthPlan;
     const annualUsed=ts+growth;
     const cap=3600000;
-    return {year,used:annualUsed,remaining:Math.max(0,cap-annualUsed),tsumitate:ts,growth,growthActual,growthPlan,growthCount:growthHoldings.length,growthUnknown};
+    const growthCap=2400000;
+    return {
+      year,
+      used:annualUsed,
+      remaining:Math.max(0,cap-annualUsed),
+      tsumitate:ts,
+      growth,
+      growthActual,
+      growthPlan,
+      growthCount:growthHoldings.length,
+      growthUnknown:0,
+      growthCap,
+      growthRemaining:Math.max(0,growthCap-growthActual)
+    };
   }catch(e){return null;}
 }
 function amStage1FmtPct(v){return Number.isFinite(v)?v.toFixed(1)+'%':'—';}
@@ -2638,7 +2647,7 @@ function amStage1Render(active){
     <div style="font-size:18px;font-weight:800;margin-top:3px">${fmt(Math.round(nisa.remaining))}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">つみたて予定 ${fmt(Math.round(nisa.tsumitate))} ／ 成長実績 ${fmt(Math.round(nisa.growthActual))}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">成長枠：NISA成長に分類した個別株・投資信託を取得金額ベースで集計</div>
-    ${nisa.growthUnknown?`<div style="font-size:10px;color:var(--amber,#d97706);margin-top:3px">⚠ NISA成長 ${nisa.growthUnknown}件は買付年不明のため当年実績から除外</div>`:''}
+    `<div style="font-size:10px;color:var(--text3);margin-top:3px">成長枠 ${nisa.growthCount}件を「NISA区分＝NISA成長投資枠」の設定から集計（買付年は判定しません）</div>`
   </div>`:'';
   const targetMsg=!targetSet?'目標比率を入力すると、現在との差を表示します。':`目標合計 ${targetSum.toFixed(1)}%${Math.abs(targetSum-100)<0.1?' ✓':' ⚠ 100%に調整してください'}`;
   el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)">
