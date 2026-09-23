@@ -850,6 +850,14 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
     <div id="amDupResults" style="display:none"></div>
+    <!-- 半導体ポートフォリオ専用分析 -->
+    <div class="section" id="amSemiconductorSection">
+      <div class="section-head" onclick="toggleSection('amSemiconductorSection')">
+        <div class="section-head-left"><span>🧠</span><h2>半導体ポートフォリオ分析</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amSemiconductorPanel"></div>
+    </div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
   </div>
@@ -14566,6 +14574,34 @@ async function pnlFetchChart(code, name, costPrice, buyDate, period, saleDate){
     if(areaEl) areaEl.innerHTML=`<div style="text-align:center;color:var(--text3);font-size:13px">📋 株価データを取得できませんでした<br><small>${e.message}</small></div>`;
   }
 }
+</script>
+<script>
+/* SEMICONDUCTOR PORTFOLIO */
+function amSemiIsSemiconductor(a){
+ const t=String([a.ticker,a.code,a.symbol,a.name,a.sector].filter(Boolean).join(' ')).toLowerCase();
+ const k=['nvda','nvidia','mu','micron','sndk','sandisk','wdc','seagate','stx','sk hynix','skhynix','hynix','kioxia','キオクシア','マイクロン','サンディスク','エヌビディア','アドバンテスト','advantest','東京エレクトロン','tel','disco','ディスコ','broadcom','ブロードコム','amd','intel','インテル','asml','tsmc','arm','lam research','applied materials','synopsys','cadence','semiconductor','半導体','メモリ'];
+ if(k.some(x=>t.includes(x)))return true;
+ return /半導体|電機・精密|semiconductor/i.test(String(a.sector||''))&&a.cat!=='銀行';
+}
+function amSemiTicker(a){return String(a.ticker||a.code||a.symbol||'').trim()||String(a.name||'').trim();}
+function amSemiRegion(a){const x=String([a.name,a.ticker,a.code,a.broker].filter(Boolean).join(' ')).toLowerCase();if(/kioxia|キオクシア|advantest|アドバンテスト|東京エレクトロン|disco|ディスコ|ソシオネクスト|ルネサス|renesas/.test(x))return '日本';if(/sk hynix|hynix|韓国/.test(x))return '韓国';return '米国・その他';}
+function amSemiMoney(v){return fmt(Number(v)||0);}
+function amSemiRender(){
+ const el=document.getElementById('amSemiconductorPanel');if(!el)return;
+ const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&Number(a.amount||0)>0&&amSemiIsSemiconductor(a));
+ const all=(Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&Number(a.amount||0)>0);
+ const totalSemi=rows.reduce((x,a)=>x+Number(a.amount||0),0);
+ const totalInvest=all.filter(a=>a.cat!=='銀行'&&!/現金|預り|預かり/.test(String(a.name||''))).reduce((x,a)=>x+Number(a.amount||0),0);
+ const by={};rows.forEach(a=>{const key=amSemiTicker(a);if(!by[key])by[key]={key,name:a.name||key,amount:0};by[key].amount+=Number(a.amount||0);});
+ const stocks=Object.values(by).sort((a,b)=>b.amount-a.amount);const byR={};rows.forEach(a=>{const r=amSemiRegion(a);byR[r]=(byR[r]||0)+Number(a.amount||0);});
+ const pct=totalInvest?totalSemi/totalInvest*100:0;
+ if(!rows.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">現在の保有銘柄から半導体関連銘柄を検出できませんでした。銘柄編集の「業種」に半導体関連を設定すると、より正確に集計できます。</div>';return;}
+ const metric=(l,v,sub='')=>`<div class="metric"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div></div>`;
+ const sh=stocks.map((x,i)=>{const p=totalSemi?x.amount/totalSemi*100:0,tp=totalInvest?x.amount/totalInvest*100:0;return `<div style="padding:9px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i+1}. ${esc(x.key)}${x.key!==x.name?' <span style="color:var(--text3);font-weight:400">('+esc(x.name)+')</span>':''}</span><span style="font-variant-numeric:tabular-nums">${amSemiMoney(x.amount)}</span></div><div style="display:flex;align-items:center;gap:7px;margin-top:5px"><div style="flex:1;height:7px;background:var(--bg2);border-radius:5px;overflow:hidden"><div style="height:100%;width:${Math.min(100,p)}%;background:#7C3AED;border-radius:5px"></div></div><span style="width:45px;text-align:right;font-size:10px;color:var(--text2)">${p.toFixed(1)}%</span><span style="width:52px;text-align:right;font-size:10px;color:var(--text3)">${tp.toFixed(1)}%</span></div></div>`;}).join('');
+ const rh=Object.entries(byR).sort((a,b)=>b[1]-a[1]).map(([r,v])=>{const p=totalSemi?v/totalSemi*100:0;return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px"><span style="width:78px">${esc(r)}</span><div style="flex:1;height:8px;background:var(--bg2);border-radius:5px;overflow:hidden"><div style="height:100%;width:${p}%;background:#0891B2;border-radius:5px"></div></div><span style="width:78px;text-align:right;font-variant-numeric:tabular-nums">${amSemiMoney(v)}</span><span style="width:38px;text-align:right;color:var(--text3)">${p.toFixed(0)}%</span></div>`;}).join('');
+ el.innerHTML=`<div class="summary-grid" style="padding:10px 16px 4px">${metric('半導体保有額',amSemiMoney(totalSemi),`${rows.length}件`)}${metric('投資資産比率',pct.toFixed(1)+'%','銀行・現金を除く')}${metric('銘柄数',stocks.length+'銘柄','同一銘柄は合算')}</div><div style="padding:8px 16px 4px;font-size:12px;font-weight:700;color:var(--text2)">📌 銘柄別構成</div><div style="padding:0 16px 10px">${sh}</div><div style="padding:8px 16px 4px;border-top:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2)">🌏 地域別</div><div style="padding:0 16px 10px">${rh}</div><div style="padding:2px 16px 12px;font-size:10px;color:var(--text3);line-height:1.5">半導体関連はティッカー・銘柄名・業種から自動判定。評価額を基準に構成比を計算します。</div>`;
+}
+(function(){const base=window.amRender;if(typeof base==='function'&&!window.__amSemiWrapped){window.__amSemiWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amSemiRender();}catch(e){}return r;};}setTimeout(()=>{try{amSemiRender();}catch(e){}},500);})();
 </script>
 </body>
 </html>
