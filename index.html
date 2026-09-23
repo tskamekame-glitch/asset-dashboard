@@ -14735,7 +14735,7 @@ function amPwRender(){
       <input id="pw-memo-${a.id}" value="${escv(a.watchMemo||'')}" placeholder="メモ（任意）" style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px">
     </div>`;
   }).join('');
-  el.innerHTML=`<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">現在値に対して自分で設定した目標買値・目標売値・目標保有比率を管理します。現在値は資産管理に登録されている株価を使用します。</div><div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資銘柄 ${rows.length}件</span><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div><div style="padding:0 16px 14px">${cards}</div>`;
+  el.innerHTML=`<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">資産管理に登録されている投資銘柄を自動表示します。新しい銘柄を資産管理へ追加すると、この画面にも自動反映されます。現在値・評価額・保有比率も資産管理の最新データを使用し、目標買値・目標売値・目標保有比率・管理区分・メモだけをここで設定します。</div><div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資銘柄 ${rows.length}件</span><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div><div style="padding:0 16px 14px">${cards}</div>`;
 }
 async function amPwSave(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
