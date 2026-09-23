@@ -13584,8 +13584,8 @@ function trRenderAllocationTrend(){
   });
   const cashColor='#475569';
   datasets.push({label:'銀行・現金',data:data.map(s=>s.total?((s.cats?.銀行||0)/s.total*100):0),
-    fill:true,tension:.2,borderWidth:2,pointRadius:1.5,
-    borderColor:cashColor,backgroundColor:cashColor+'55',pointBackgroundColor:cashColor,pointBorderColor:'#fff'});
+    fill:true,tension:.2,borderWidth:0,pointRadius:0,
+    borderColor:'transparent',backgroundColor:cashColor+'AA'});
   if(allocationTrendChartInstance){allocationTrendChartInstance.destroy();allocationTrendChartInstance=null;}
   const canvas=document.getElementById('allocationTrendChart'); if(!canvas)return;
   allocationTrendChartInstance=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:9},boxWidth:12,usePointStyle:true,padding:10}},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>`${c.dataset.label}: ${Number(c.raw).toFixed(1)}%`}}},scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9}}}}}});
