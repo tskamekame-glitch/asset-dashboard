@@ -866,6 +866,14 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       </div>
       <div class="account-list" id="amUsFxPanel"></div>
     </div>
+    <!-- 買い増し・売却候補：価格管理 -->
+    <div class="section" id="amPriceWatchSection">
+      <div class="section-head" onclick="toggleSection('amPriceWatchSection')">
+        <div class="section-head-left"><span>🎯</span><h2>買い増し・売却候補の価格管理</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amPriceWatchPanel"></div>
+    </div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
   </div>
@@ -5488,13 +5496,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AB${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AB1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AF${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AF1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -5583,7 +5591,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AB1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AF1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -5614,6 +5622,11 @@ async function amLoadFromSheet(){
       broker:r[25]||'',
       buyDate:r[26]||'',
       nisaType:r[27]||undefined,
+      targetBuyPrice:r[28]?parseFloat(r[28])||0:0,
+      targetSellPrice:r[29]?parseFloat(r[29])||0:0,
+      targetRatio:r[30]?parseFloat(r[30])||0:0,
+      watchStatus:r[31]||'',
+      watchMemo:r[32]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
@@ -14675,6 +14688,77 @@ function amUsFxRender(){
  <div style="padding:2px 16px 7px;font-size:12px;font-weight:700;color:var(--text2)">📌 銘柄別</div><div style="padding:0 16px 8px">${html}</div>`;
 }
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__amUsFxWrapped){window.__amUsFxWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amUsFxRender();}catch(e){}return r;};}setTimeout(()=>{try{amUsFxRender();}catch(e){}},700);})();
+</script>
+<script>
+// ── 買い増し・売却候補：価格管理 ──
+function amPwIsInvestment(a){
+  if(a.sold||Number(a.amount||0)<=0)return false;
+  if(a.cat==='銀行'||/現金|預り|預かり/.test(String(a.name||'')))return false;
+  return /個別株|外国株|日本株|高配当|株式|半導体|投信|インデックス/.test(String(a.cat||'')) || Number(a.shares||0)>0 || Number(a.price||0)>0;
+}
+function amPwTicker(a){return String(a.ticker||a.code||a.symbol||'').trim()||String(a.name||'').trim();}
+function amPwCurrentPrice(a){
+  const p=Number(a.price||0); if(p>0)return p;
+  return 0;
+}
+function amPwMoney(v){return Number(v||0).toLocaleString('ja-JP',{maximumFractionDigits:0});}
+function amPwPriceGap(current,target){return current>0&&target>0?(current-target)/target*100:null;}
+function amPwRender(){
+  const el=document.getElementById('amPriceWatchPanel'); if(!el)return;
+  const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amPwIsInvestment);
+  if(!rows.length){el.innerHTML='<div style="padding:14px 16px;font-size:12px;color:var(--text3)">投資銘柄がありません。</div>';return;}
+  rows.sort((a,b)=>Number(b.amount||0)-Number(a.amount||0));
+  const total=rows.reduce((s,a)=>s+Number(a.amount||0),0);
+  const escv=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const cards=rows.map(a=>{
+    const cur=amPwCurrentPrice(a), buy=Number(a.targetBuyPrice||0), sell=Number(a.targetSellPrice||0), ratio=total?Number(a.amount||0)/total*100:0;
+    const buyGap=amPwPriceGap(cur,buy), sellGap=amPwPriceGap(cur,sell);
+    const status=a.watchStatus||'保有';
+    const statusColor=status==='買い増し候補'?'#16a34a':status==='売却候補'?'#dc2626':'var(--text2)';
+    const buyState=buy>0&&cur>0?(cur<=buy?'🟢 目標買値以下':'⚪ 目標買値より上'):'';
+    const sellState=sell>0&&cur>0?(cur>=sell?'🔴 目標売値以上':'⚪ 目標売値より下'):'';
+    const unit=(a.cat==='外国株式'||a.cat==='外国株')?'$':'¥';
+    return `<div style="border-bottom:1px solid var(--border);padding:10px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div style="min-width:0"><div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escv(amPwTicker(a))}${amPwTicker(a)!==a.name?' <span style="color:var(--text3);font-weight:400">'+escv(a.name)+'</span>':''}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">評価額 ¥${amPwMoney(a.amount)} ・ 保有比率 ${ratio.toFixed(1)}%</div></div>
+        <div style="text-align:right;white-space:nowrap"><div style="font-size:10px;color:var(--text3)">現在値</div><div style="font-size:14px;font-weight:700">${cur>0?unit+amPwMoney(cur):'未登録'}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px">
+        <label style="font-size:10px;color:var(--text3)">目標買値${buyGap!==null?'（'+(buyGap>=0?'+':'')+buyGap.toFixed(1)+'%）':''}<input id="pw-buy-${a.id}" type="number" inputmode="decimal" value="${buy||''}" placeholder="例：${cur?Math.round(cur*0.9):''}" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
+        <label style="font-size:10px;color:var(--text3)">目標売値${sellGap!==null?'（'+(sellGap>=0?'+':'')+sellGap.toFixed(1)+'%）':''}<input id="pw-sell-${a.id}" type="number" inputmode="decimal" value="${sell||''}" placeholder="例：${cur?Math.round(cur*1.15):''}" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px">
+        <label style="font-size:10px;color:var(--text3)">目標保有比率（%）<input id="pw-ratio-${a.id}" type="number" step="0.1" value="${a.targetRatio||''}" placeholder="例：10" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
+        <label style="font-size:10px;color:var(--text3)">管理区分<select id="pw-status-${a.id}" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"><option ${status==='買い増し候補'?'selected':''}>買い増し候補</option><option ${status==='保有'?'selected':''}>保有</option><option ${status==='売却候補'?'selected':''}>売却候補</option></select></label>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px"><div style="font-size:10px;color:${statusColor};font-weight:700">${status}${buyState?' ・ '+buyState:''}${sellState?' ・ '+sellState:''}</div><button class="btn-sm" onclick="amPwSave(${a.id})">保存</button></div>
+      <input id="pw-memo-${a.id}" value="${escv(a.watchMemo||'')}" placeholder="メモ（任意）" style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px">
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">現在値に対して自分で設定した目標買値・目標売値・目標保有比率を管理します。現在値は資産管理に登録されている株価を使用します。</div><div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資銘柄 ${rows.length}件</span><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div><div style="padding:0 16px 14px">${cards}</div>`;
+}
+async function amPwSave(id){
+  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  const val=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  a.targetBuyPrice=parseFloat(val('pw-buy-'+id))||0;
+  a.targetSellPrice=parseFloat(val('pw-sell-'+id))||0;
+  a.targetRatio=parseFloat(val('pw-ratio-'+id))||0;
+  a.watchStatus=val('pw-status-'+id)||'保有';
+  a.watchMemo=val('pw-memo-'+id)||'';
+  a.updated=todayStr();
+  amSaveToLocal();
+  try{await amSaveToSheet();}catch(e){}
+  amPwRender();
+  showToast('✓ 価格管理を保存しました');
+}
+(function(){
+  const base=window.amRender;
+  if(typeof base==='function'&&!window.__amPwWrapped){
+    window.__amPwWrapped=true;
+    window.amRender=function(){const r=base.apply(this,arguments);try{amPwRender();}catch(e){}return r;};
+  }
+  setTimeout(()=>{try{amPwRender();}catch(e){}},800);
+})();
 </script>
 </body>
 </html>
