@@ -621,8 +621,8 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <button class="nav-btn" data-tab="cashflow" onclick="switchTab('cashflow')"><span class="ni">💸</span>収支</button>
   <button class="nav-btn" data-tab="tsumitate" onclick="switchTab('tsumitate')"><span class="ni">🌱</span>積立</button>
   <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ni">👀</span>ウォッチ銘柄</button>
-  <button class="nav-btn" data-tab="pricewatch" onclick="switchTab('pricewatch')"><span class="ni">🎯</span>価格管理</button>
   <button class="nav-btn" data-tab="returns" onclick="switchTab('returns')"><span class="ni">📅</span>収益レポート</button>
+  <button class="nav-btn" data-tab="pricewatch" onclick="switchTab('pricewatch')"><span class="ni">🎯</span>価格管理</button>
 </nav>
 
 <!-- ============================================================
@@ -1301,6 +1301,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       資産管理に登録されている<strong>保有中の投資銘柄を自動表示</strong>します。新しい銘柄を資産管理へ追加すると、この画面にも自動反映されます。現在値・評価額・保有比率は資産管理の最新データを使用し、目標買値・目標売値・目標保有比率・管理区分・メモをここで設定できます。
     </div>
     <div id="amPriceWatchSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px"></div>
+    <div id="amPriceDecisionPanel" style="margin-bottom:12px"></div>
     <div id="amPriceWatchPanel"></div>
   </div>
 </div>
@@ -12386,6 +12387,59 @@ function amPwPct(v){return Number(v||0).toLocaleString('ja-JP',{minimumFractionD
 function amPwGap(current,target){return current>0&&target>0?(current-target)/target*100:null;}
 function amPwStatusLabel(v){return v==='buy'?'買い増し候補':v==='sell'?'売却候補':v==='hold'?'保有継続':'未設定';}
 function amPwStatusColor(v){return v==='buy'?'#34d399':v==='sell'?'#fb7185':v==='hold'?'#60a5fa':'var(--text3)';}
+function amPwRenderDecision(rows,total){
+  const el=document.getElementById('amPriceDecisionPanel'); if(!el)return;
+  const items=rows.map(a=>{
+    const cur=amPwCurrentPrice(a);
+    const buy=Number(a.targetBuyPrice||0);
+    const sell=Number(a.targetSellPrice||0);
+    const ratio=Number(a.targetRatio||0);
+    const currentRatio=total>0?Number(a.amount||0)/total*100:0;
+    const buyGap=cur>0&&buy>0?(cur-buy)/buy*100:null;
+    const sellGap=cur>0&&sell>0?(cur-sell)/sell*100:null;
+    const ratioGap=ratio>0?ratio-currentRatio:null;
+    const buyHit=cur>0&&buy>0&&cur<=buy;
+    const sellHit=cur>0&&sell>0&&cur>=sell;
+    const ratioUnder=ratio>0&&currentRatio<ratio;
+    let score=0;
+    if(buyHit)score+=3; else if(buyGap!==null&&buyGap<=5)score+=1;
+    if(ratioUnder)score+=1;
+    if(sellHit)score=-5;
+    return {...a,cur,buy,sell,ratio,currentRatio,buyGap,sellGap,ratioGap,buyHit,sellHit,ratioUnder,score};
+  }).filter(x=>x.buyHit||x.sellHit||x.ratioUnder||x.watchStatus==='buy'||x.watchStatus==='sell'||x.buy>0||x.sell>0||x.ratio>0)
+    .sort((a,b)=>b.score-a.score);
+  const buyCount=items.filter(x=>x.buyHit).length;
+  const sellCount=items.filter(x=>x.sellHit).length;
+  const ratioCount=items.filter(x=>x.ratioUnder&&!x.sellHit).length;
+  const rowHtml=items.slice(0,10).map(x=>{
+    const states=[];
+    if(x.buyHit)states.push('<span style="color:#34d399;font-weight:700">買値条件一致</span>');
+    else if(x.buyGap!==null&&x.buyGap<=5)states.push(`<span style="color:#fbbf24">買値まで ${Math.abs(x.buyGap).toFixed(1)}%</span>`);
+    if(x.ratioUnder)states.push(`<span style="color:#60a5fa">目標比率まで +${x.ratioGap.toFixed(1)}pt</span>`);
+    if(x.sellHit)states.push('<span style="color:#fb7185;font-weight:700">売値条件一致</span>');
+    return `<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div style="min-width:0"><div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.name||'')}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">現在 ${x.cur>0?amPwMoney(x.cur):'—'}　保有比率 ${amPwPct(x.currentRatio)}</div></div>
+        <div style="text-align:right;font-size:10px;line-height:1.7">${states.join('<br>')||'<span style="color:var(--text3)">条件未到達</span>'}</div>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="background:var(--card);border:0.5px solid var(--border);border-radius:13px;padding:13px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:14px;font-weight:800">📌 買い増し・売却判断チェック</div>
+      <div style="font-size:9px;color:var(--text3)">${items.length}銘柄</div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);line-height:1.6;margin-bottom:9px">設定した目標価格・目標保有比率と現在値を機械的に比較します。投資判断そのものは行わず、設定条件への到達状況を表示します。</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      <span style="font-size:10px;background:rgba(52,211,153,.12);color:#34d399;border-radius:6px;padding:4px 7px">買値条件一致 ${buyCount}</span>
+      <span style="font-size:10px;background:rgba(96,165,250,.12);color:#60a5fa;border-radius:6px;padding:4px 7px">目標比率未満 ${ratioCount}</span>
+      <span style="font-size:10px;background:rgba(251,113,133,.12);color:#fb7185;border-radius:6px;padding:4px 7px">売値条件一致 ${sellCount}</span>
+    </div>
+    ${rowHtml||'<div style="padding:12px 0;color:var(--text3);font-size:11px">目標買値・目標売値・目標保有比率を設定すると、ここに条件到達状況が表示されます。</div>'}
+    ${items.length>10?'<div style="font-size:9px;color:var(--text3);margin-top:8px">上位10銘柄を表示。詳細は下の価格管理で確認できます。</div>':''}
+  </div>`;
+}
+
 function amPwRender(){
   const el=document.getElementById('amPriceWatchPanel'); if(!el)return;
   const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amPwIsInvestment);
@@ -12393,6 +12447,7 @@ function amPwRender(){
   const total=rows.reduce((s,a)=>s+Number(a.amount||0),0);
   const buy=rows.filter(a=>a.watchStatus==='buy').length;
   const sell=rows.filter(a=>a.watchStatus==='sell').length;
+  amPwRenderDecision(rows,total);
   if(summary)summary.innerHTML=`
     <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">管理銘柄</div><div style="font-size:17px;font-weight:800">${rows.length}</div></div>
     <div style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">買い増し候補</div><div style="font-size:17px;font-weight:800;color:#34d399">${buy}</div></div>
