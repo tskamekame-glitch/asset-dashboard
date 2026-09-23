@@ -13570,11 +13570,25 @@ function trRenderAllocationTrend(){
   const cats=[...new Set(data.flatMap(s=>Object.keys(s.cats||{})))];
   const totalCats=cats.filter(c=>c&&c!=='銀行').slice(0,7);
   const others=data.map(s=>Math.max(0,(s.total||0)-totalCats.reduce((sum,c)=>sum+(s.cats?.[c]||0),0)-(s.cats?.銀行||0)));
-  const datasets=totalCats.map(c=>({label:c,data:data.map(s=>s.total?((s.cats?.[c]||0)/s.total*100):0),fill:true,tension:.2,borderWidth:1,pointRadius:0}));
-  datasets.push({label:'銀行・現金',data:data.map(s=>s.total?((s.cats?.銀行||0)/s.total*100):0),fill:true,tension:.2,borderWidth:1,pointRadius:0});
+  // 色を固定して、隣接する系列でも判別しやすくする。
+  // Chart.jsの自動配色だとカテゴリ数が増えた際に似た色が割り当てられるため、
+  // 高コントラストの色を順番に使用する。
+  const palette=[
+    '#2563EB','#F97316','#16A34A','#DC2626','#7C3AED','#0891B2','#CA8A04','#DB2777'
+  ];
+  const datasets=totalCats.map((c,i)=>{
+    const color=palette[i%palette.length];
+    return {label:c,data:data.map(s=>s.total?((s.cats?.[c]||0)/s.total*100):0),
+      fill:true,tension:.2,borderWidth:2,pointRadius:1.5,
+      borderColor:color,backgroundColor:color+'55',pointBackgroundColor:color,pointBorderColor:'#fff'};
+  });
+  const cashColor='#475569';
+  datasets.push({label:'銀行・現金',data:data.map(s=>s.total?((s.cats?.銀行||0)/s.total*100):0),
+    fill:true,tension:.2,borderWidth:2,pointRadius:1.5,
+    borderColor:cashColor,backgroundColor:cashColor+'55',pointBackgroundColor:cashColor,pointBorderColor:'#fff'});
   if(allocationTrendChartInstance){allocationTrendChartInstance.destroy();allocationTrendChartInstance=null;}
   const canvas=document.getElementById('allocationTrendChart'); if(!canvas)return;
-  allocationTrendChartInstance=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:9},boxWidth:12}},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>`${c.dataset.label}: ${Number(c.raw).toFixed(1)}%`}}},scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9}}}}}});
+  allocationTrendChartInstance=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:9},boxWidth:12,usePointStyle:true,padding:10}},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>`${c.dataset.label}: ${Number(c.raw).toFixed(1)}%`}}},scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9}}}}}});
   const n=document.getElementById('allocationTrendNote'); if(n)n.textContent='月末時点のスナップショットを基にした概算比率。';
 }
 function trRenderMonthlyTrend(){
