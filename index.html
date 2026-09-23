@@ -1376,10 +1376,16 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
       <!-- サイドFIRE必要資産 -->
       <div id="s-sidefire-line" style="background:rgba(37,99,235,0.06);border:0.5px solid rgba(37,99,235,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🔥 サイドFIRE必要資産（現在の月次不足額×25年）</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div><span id="s-sidefire-current" style="font-size:18px;font-weight:700;color:var(--accent)"></span><span style="font-size:11px;color:var(--text3)"> / <span id="s-sidefire-target-val"></span></span></div><div id="s-sidefire-pct" style="font-size:13px;font-weight:600;color:var(--accent)"></div></div>
-        <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:8px"><div id="s-sidefire-bar" style="height:100%;border-radius:99px;background:var(--accent);transition:width 0.5s"></div></div>
-        <div id="s-sidefire-gap" style="font-size:11px;color:var(--text3);line-height:1.6"></div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🔥 サイドFIRE必要資産</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
+          <div><div style="font-size:10px;color:var(--text3)">現在の資産</div><div id="s-sidefire-current" style="font-size:17px;font-weight:700;color:var(--accent)"></div></div>
+          <div><div style="font-size:10px;color:var(--text3)">必要資産</div><div id="s-sidefire-target-val" style="font-size:17px;font-weight:700;color:var(--accent)"></div></div>
+          <div><div style="font-size:10px;color:var(--text3)">月の不足額</div><div id="s-sidefire-month-gap" style="font-size:15px;font-weight:700;color:var(--text2)"></div></div>
+          <div><div style="font-size:10px;color:var(--text3)">残り必要資産</div><div id="s-sidefire-remaining" style="font-size:15px;font-weight:700;color:var(--text2)"></div></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:10px;color:var(--text3)">達成率</span><span id="s-sidefire-pct" style="font-size:12px;font-weight:700;color:var(--accent)"></span></div>
+        <div style="height:7px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:7px"><div id="s-sidefire-bar" style="height:100%;border-radius:99px;background:var(--accent);transition:width 0.5s"></div></div>
+        <div id="s-sidefire-gap" style="font-size:10px;color:var(--text3);line-height:1.6"></div>
       </div>
 
       <!-- 3シナリオ比較カード -->
@@ -1513,10 +1519,16 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
       <!-- サイドFIRE必要資産 -->
       <div id="f-sidefire-line" style="background:rgba(124,58,237,0.06);border:0.5px solid rgba(124,58,237,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🔥 サイドFIRE必要資産（現在の月次不足額×25年）</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div><span id="f-sidefire-current" style="font-size:18px;font-weight:700;color:var(--purple)"></span><span style="font-size:11px;color:var(--text3)"> / <span id="f-sidefire-target-val"></span></span></div><div id="f-sidefire-pct" style="font-size:13px;font-weight:600;color:var(--purple)"></div></div>
-        <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:8px"><div id="f-sidefire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div></div>
-        <div id="f-sidefire-gap" style="font-size:11px;color:var(--text3);line-height:1.6"></div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🔥 サイドFIRE必要資産</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
+          <div><div style="font-size:10px;color:var(--text3)">現在の資産</div><div id="f-sidefire-current" style="font-size:17px;font-weight:700;color:var(--purple)"></div></div>
+          <div><div style="font-size:10px;color:var(--text3)">必要資産</div><div id="f-sidefire-target-val" style="font-size:17px;font-weight:700;color:var(--purple)"></div></div>
+          <div><div style="font-size:10px;color:var(--text3)">月の不足額</div><div id="f-sidefire-month-gap" style="font-size:15px;font-weight:700;color:var(--text2)"></div></div>
+          <div><div style="font-size:10px;color:var(--text3)">残り必要資産</div><div id="f-sidefire-remaining" style="font-size:15px;font-weight:700;color:var(--text2)"></div></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:10px;color:var(--text3)">達成率</span><span id="f-sidefire-pct" style="font-size:12px;font-weight:700;color:var(--purple)"></span></div>
+        <div style="height:7px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:7px"><div id="f-sidefire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div></div>
+        <div id="f-sidefire-gap" style="font-size:10px;color:var(--text3);line-height:1.6"></div>
       </div>
 
       <!-- FIRE達成ライン（家族） -->
@@ -9379,7 +9391,7 @@ function calcSingle(){try{
   var fireTarget=E*12*25;
   // サイドFIRE必要資産：現在の生活費から副収入を差し引いた年間不足額の25倍
   var sideGap=Math.max(0,E-I),sideFireTarget=sideGap*12*25,sideEl=document.getElementById('s-sidefire-line');
-  if(sideEl){sideEl.style.display='block';document.getElementById('s-sidefire-current').textContent=fwOku(A*10000);document.getElementById('s-sidefire-target-val').textContent=fwOku(sideFireTarget*10000);var sidePct=sideFireTarget>0?Math.min(100,Math.round(A/sideFireTarget*100)):100;document.getElementById('s-sidefire-pct').textContent=sidePct+'%';document.getElementById('s-sidefire-bar').style.width=sidePct+'%';document.getElementById('s-sidefire-gap').textContent=sideGap>0?'現在の不足額：月'+sideGap+'万円 → 必要資産：約'+fwOku(sideFireTarget*10000):'現在の副収入だけで生活費をカバーする想定です（必要資産0円）';}
+  if(sideEl){sideEl.style.display='block';var sideRemaining=Math.max(0,sideFireTarget-A);document.getElementById('s-sidefire-current').textContent=fwOku(A*10000);document.getElementById('s-sidefire-target-val').textContent=fwOku(sideFireTarget*10000);document.getElementById('s-sidefire-month-gap').textContent=sideGap>0?'月'+sideGap+'万円':'0万円';document.getElementById('s-sidefire-remaining').textContent=sideRemaining>0?fwOku(sideRemaining*10000):'0円';var sidePct=sideFireTarget>0?Math.min(100,Math.round(A/sideFireTarget*100)):100;document.getElementById('s-sidefire-pct').textContent=sidePct+'%';document.getElementById('s-sidefire-bar').style.width=sidePct+'%';document.getElementById('s-sidefire-gap').textContent=sideGap>0?'副収入で生活費の一部を補い、残りを資産運用で賄う前提。必要資産＝月の不足額×12×25':'現在の副収入だけで生活費をカバーする想定です（必要資産0円）';}
   var fireEl=document.getElementById('s-fire-line');
   fireEl.style.display='block';
   document.getElementById('s-fire-current').textContent=fwOku(A*10000);
@@ -9463,7 +9475,7 @@ function calcFamily(){
   var fireTarget=(living+housing)*12*25;
   // サイドFIRE必要資産：現在の生活費・住宅費から世帯収入を差し引いた年間不足額の25倍
   var familySideGap=Math.max(0,(living+housing)-I-SI),familySideFireTarget=familySideGap*12*25,familySideEl=document.getElementById('f-sidefire-line');
-  if(familySideEl){familySideEl.style.display='block';document.getElementById('f-sidefire-current').textContent=fwOku(A*10000);document.getElementById('f-sidefire-target-val').textContent=fwOku(familySideFireTarget*10000);var familySidePct=familySideFireTarget>0?Math.min(100,Math.round(A/familySideFireTarget*100)):100;document.getElementById('f-sidefire-pct').textContent=familySidePct+'%';document.getElementById('f-sidefire-bar').style.width=familySidePct+'%';document.getElementById('f-sidefire-gap').textContent=familySideGap>0?'現在の不足額：月'+familySideGap+'万円 → 必要資産：約'+fwOku(familySideFireTarget*10000):'現在の世帯収入だけで生活費・住宅費をカバーする想定です（必要資産0円）';}
+  if(familySideEl){familySideEl.style.display='block';var familySideRemaining=Math.max(0,familySideFireTarget-A);document.getElementById('f-sidefire-current').textContent=fwOku(A*10000);document.getElementById('f-sidefire-target-val').textContent=fwOku(familySideFireTarget*10000);document.getElementById('f-sidefire-month-gap').textContent=familySideGap>0?'月'+familySideGap+'万円':'0万円';document.getElementById('f-sidefire-remaining').textContent=familySideRemaining>0?fwOku(familySideRemaining*10000):'0円';var familySidePct=familySideFireTarget>0?Math.min(100,Math.round(A/familySideFireTarget*100)):100;document.getElementById('f-sidefire-pct').textContent=familySidePct+'%';document.getElementById('f-sidefire-bar').style.width=familySidePct+'%';document.getElementById('f-sidefire-gap').textContent=familySideGap>0?'世帯収入で生活費・住宅費の一部を補い、残りを資産運用で賄う前提。必要資産＝月の不足額×12×25':'現在の世帯収入だけで生活費・住宅費をカバーする想定です（必要資産0円）';}
   var fireEl=document.getElementById('f-fire-line');
   fireEl.style.display='block';
   document.getElementById('f-fire-current').textContent=fwOku(A*10000);
