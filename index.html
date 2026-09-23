@@ -835,6 +835,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div id="amSectorAllocation"></div>
     <div id="amStage1Panel"></div>
     <div id="amStage2Panel"></div>
+    <div id="amWatchPanel"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
@@ -2611,6 +2612,81 @@ function amRenderStage2(active){
   const card=(label,value,sub)=>`<div style="padding:11px 12px;border:0.5px solid var(--border);border-radius:10px;background:var(--bg2)"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:18px;font-weight:800;margin-top:3px">${value}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
   const topHtml=top.map((g,i)=>`<div style="display:grid;grid-template-columns:22px 1fr 72px 48px;gap:5px;align-items:center;padding:7px 0;border-top:0.5px solid var(--border);font-size:11px"><div style="color:var(--text3)">${i+1}</div><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${g.code?` <span style="font-size:9px;color:var(--text3)">${esc(g.code)}</span>`:''}</div><div style="text-align:right;font-weight:700">${fmt(Math.round(g.amount))}</div><div style="text-align:right;color:var(--text2)">${total?(g.amount/total*100).toFixed(1):'0.0'}%</div></div>`).join('');
   el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)"><div style="font-size:13px;font-weight:700">📌 第2段階：集中度・海外比率・投資余力</div><div style="font-size:10px;color:var(--text3);margin-top:2px">現在の保有額ベース。同一銘柄はSBI・moomooを横断して合算。</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px">${card('半導体集中度',total?(semi/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(semi))+' ／ 総資産 '+fmt(Math.round(total)))}${card('米国株比率',total?(us/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(us))+' ／ 米国株分類')}${card('USD資産比率',total?(usd/total*100).toFixed(1)+'%':'0.0%',fmt(Math.round(usd))+' ／ USD建てと判定した保有額')}${card('投資可能現金',fmt(Math.round(totalCash)),`SBI ${fmt(Math.round(brokerCash['SBI証券']))} ／ moomoo ${fmt(Math.round(brokerCash['moomoo証券']))}`)}</div><div style="margin-top:12px"><div style="font-size:11px;font-weight:700">🏷️ 銘柄別：総資産比率 TOP10</div>${topHtml||'<div style="font-size:11px;color:var(--text3);padding-top:7px">保有銘柄がありません</div>'}</div><div style="font-size:9px;color:var(--text3);margin-top:8px">※米国株比率は米国市場の外国株式を判定。USD資産比率は取引通貨がUSDの資産（USD現金・USD株等）を集計。旧データで通貨未登録の外国株は英字ティッカー等から推定。投資可能現金は手入力値。</div></div>`;
+}
+
+// ── 買い増し・売却候補管理 ──
+const AM_WATCH_KEY='amWatchItems_v1';
+let amWatchItems=[];
+function amWatchLoadLocal(){try{const x=localStorage.getItem(AM_WATCH_KEY);amWatchItems=x?JSON.parse(x):[];}catch(e){amWatchItems=[];}}
+function amWatchSaveLocal(){try{localStorage.setItem(AM_WATCH_KEY,JSON.stringify(amWatchItems));}catch(e){}}
+async function amWatchSaveSheet(){
+  if(!amIsOnline||!amSpreadsheetId){amWatchSaveLocal();return;}
+  try{
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:'settings!D1:E2',valueInputOption:'RAW',resource:{values:[['watchItems','updated'],['json',JSON.stringify(amWatchItems)]]}});
+    amWatchSaveLocal();
+  }catch(e){amWatchSaveLocal();console.error('amWatchSaveSheet',e);}
+}
+async function amWatchLoadSheet(){
+  if(!amIsOnline||!amSpreadsheetId)return;
+  try{
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'settings!D2:E2'});
+    const raw=res.result.values?.[0]?.[1];
+    if(raw){const x=JSON.parse(raw);if(Array.isArray(x))amWatchItems=x;}
+    amWatchSaveLocal();
+  }catch(e){amWatchLoadLocal();}
+}
+function amWatchEsc(v){return esc(String(v??''));}
+function amWatchId(){return 'w'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function amWatchStatusLabel(v){return v==='buy'?'買い増し検討':v==='sell'?'売却検討':v==='hold'?'保有継続':'未設定';}
+function amWatchAdd(prefill={}){
+  const code=String(prefill.code||'').trim().toUpperCase();
+  const name=String(prefill.name||'').trim();
+  if(!code&&!name){showToast('銘柄名またはコードを入力してください');return;}
+  const key=(code||name).toUpperCase();
+  const old=amWatchItems.find(x=>String(x.key||'').toUpperCase()===key);
+  if(old){old.status=prefill.status||old.status;old.target=prefill.target??old.target;old.memo=prefill.memo??old.memo;}
+  else amWatchItems.push({id:amWatchId(),key,name,code,status:prefill.status||'',target:prefill.target||'',memo:prefill.memo||'',updated:todayStr()});
+  amWatchSaveLocal();amWatchRender();amWatchSaveSheet();
+}
+function amWatchUpdate(id,field,val){const x=amWatchItems.find(a=>a.id===id);if(!x)return;x[field]=val;x.updated=todayStr();amWatchSaveLocal();amWatchSaveSheet();}
+function amWatchDelete(id){amWatchItems=amWatchItems.filter(x=>x.id!==id);amWatchSaveLocal();amWatchRender();amWatchSaveSheet();}
+function amWatchAddHolding(){
+  const sel=document.getElementById('amWatchHoldingSelect');if(!sel||!sel.value)return;
+  const [code,name]=sel.value.split('|');
+  amWatchAdd({code,name});
+  sel.value='';
+}
+function amWatchRender(){
+  const el=document.getElementById('amWatchPanel');if(!el)return;
+  const holdings=[];const seen=new Set();
+  (amAccounts||[]).filter(a=>!a.sold&&a.amount>0&&a.cat!=='銀行').forEach(a=>{
+    const code=String(a.code||'').trim().toUpperCase();const name=String(a.name||'').trim();const key=(code||name).toUpperCase();
+    if(!key||seen.has(key))return;seen.add(key);holdings.push({code,name});
+  });
+  const rows=amWatchItems.map(x=>`<div style="display:grid;grid-template-columns:minmax(95px,1.2fr) 105px 72px minmax(90px,1fr) 30px;gap:6px;align-items:center;padding:8px 0;border-top:0.5px solid var(--border)">
+    <div style="min-width:0"><div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${amWatchEsc(x.name||x.code)}</div><div style="font-size:9px;color:var(--text3)">${amWatchEsc(x.code||'')}</div></div>
+    <select onchange="amWatchUpdate('${x.id}','status',this.value)" style="width:100%;padding:6px 5px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-size:10px;font-family:inherit"><option value="" ${!x.status?'selected':''}>未設定</option><option value="buy" ${x.status==='buy'?'selected':''}>買い増し検討</option><option value="hold" ${x.status==='hold'?'selected':''}>保有継続</option><option value="sell" ${x.status==='sell'?'selected':''}>売却検討</option></select>
+    <input value="${amWatchEsc(x.target)}" placeholder="例 10" inputmode="decimal" onchange="amWatchUpdate('${x.id}','target',this.value)" style="width:100%;box-sizing:border-box;padding:6px 5px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-size:10px;font-family:inherit" title="目標比率（%）">
+    <input value="${amWatchEsc(x.memo)}" placeholder="メモ" onchange="amWatchUpdate('${x.id}','memo',this.value)" style="width:100%;box-sizing:border-box;padding:6px 7px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font-size:10px;font-family:inherit">
+    <button onclick="amWatchDelete('${x.id}')" style="border:none;background:transparent;color:#C0392B;font-size:15px;cursor:pointer">×</button>
+  </div>`).join('');
+  const options=holdings.map(h=>`<option value="${amWatchEsc(h.code+'|'+h.name)}">${amWatchEsc(h.code?`${h.code}｜${h.name}`:h.name)}</option>`).join('');
+  const buy=amWatchItems.filter(x=>x.status==='buy').length,sell=amWatchItems.filter(x=>x.status==='sell').length,hold=amWatchItems.filter(x=>x.status==='hold').length;
+  el.innerHTML=`<div style="margin:10px 0 12px;padding:13px 14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg)">
+    <div style="font-size:13px;font-weight:700">🎯 買い増し・売却候補管理</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.5">自動売買判断ではなく、あなた自身の売買方針を銘柄ごとに記録します。目標比率は投資資産に対する目安（%）です。</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px">
+      <div style="padding:8px;border-radius:9px;background:var(--bg2);text-align:center"><div style="font-size:9px;color:var(--text3)">買い増し検討</div><div style="font-size:17px;font-weight:800">${buy}</div></div>
+      <div style="padding:8px;border-radius:9px;background:var(--bg2);text-align:center"><div style="font-size:9px;color:var(--text3)">保有継続</div><div style="font-size:17px;font-weight:800">${hold}</div></div>
+      <div style="padding:8px;border-radius:9px;background:var(--bg2);text-align:center"><div style="font-size:9px;color:var(--text3)">売却検討</div><div style="font-size:17px;font-weight:800">${sell}</div></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <select id="amWatchHoldingSelect" style="flex:1;min-width:0;padding:8px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit"><option value="">保有銘柄から追加…</option>${options}</select>
+      <button onclick="amWatchAddHolding()" style="padding:8px 10px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">＋追加</button>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(95px,1.2fr) 105px 72px minmax(90px,1fr) 30px;gap:6px;margin-top:12px;padding:0 0 5px;color:var(--text3);font-size:9px"><div>銘柄</div><div>方針</div><div>目標比率%</div><div>メモ</div><div></div></div>
+    ${rows||'<div style="padding:14px 0 4px;text-align:center;font-size:11px;color:var(--text3)">まだ登録されていません。保有銘柄から追加できます。</div>'}
+  </div>`;
 }
 
 // ── 第1段階：資産配分・投資可能現金・NISA残り枠 ──
@@ -6252,7 +6328,7 @@ async function slLoadFromSheet(){
 }
 function useOffline(){
   amIsOnline=false;amStage1LoadLocal();localStorage.setItem('assetGoogleMode','offline');
-  amLoadFromLocal();
+  amLoadFromLocal();amWatchLoadLocal();
   // カテゴリが旧形式・無効な場合のみ口座名ベースで再判定して保存（手動設定済みの有効カテゴリは尊重）
   let fixed=false;
   amAccounts.forEach(a=>{
@@ -6365,7 +6441,7 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amStage1LoadSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();try{amRenderFxDecomp();}catch(e){}
+  await amFindOrCreateSheet();await amStage1LoadSheet();await amWatchLoadSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();try{amRenderFxDecomp();}catch(e){}
   try{trRenderAll();}catch(e){}
   try{if(typeof wlAutoSync==='function')wlAutoSync(true);}catch(e){}
 }
@@ -15401,6 +15477,16 @@ function st5RenderAll(){try{st5RenderConcentration();st5RenderPerformance();st5R
 const _st5OldRefresh=window.refreshHome;window.refreshHome=function(){if(typeof _st5OldRefresh==='function')_st5OldRefresh();setTimeout(st5RenderAll,300);};
 const _st5OldTrRenderAll=window.trRenderAll;window.trRenderAll=function(){if(typeof _st5OldTrRenderAll==='function')_st5OldTrRenderAll();setTimeout(st5RenderAll,100);};
 setTimeout(st5RenderAll,800);
+</script>
+<script>
+// 買い増し・売却候補管理：既存のamRender後に再描画
+(function(){
+  const _amRenderBase=window.amRender;
+  if(typeof _amRenderBase==='function'){
+    window.amRender=function(){const r=_amRenderBase.apply(this,arguments);try{amWatchRender();}catch(e){}return r;};
+  }
+  try{amWatchLoadLocal();setTimeout(amWatchRender,350);}catch(e){}
+})();
 </script>
 </body>
 </html>
