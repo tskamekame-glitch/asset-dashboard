@@ -858,6 +858,14 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       </div>
       <div class="account-list" id="amSemiconductorPanel"></div>
     </div>
+    <!-- 米国株：株価上昇益 vs 為替益 個別分析 -->
+    <div class="section" id="amUsFxSection">
+      <div class="section-head" onclick="toggleSection('amUsFxSection')">
+        <div class="section-head-left"><span>💵</span><h2>米国株・株価益 vs 為替益</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amUsFxPanel"></div>
+    </div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
   </div>
@@ -14616,6 +14624,57 @@ function amSemiRender(){
  el.innerHTML=`<div class="summary-grid" style="padding:10px 16px 4px">${metric('半導体保有額',amSemiMoney(totalSemi),`${rows.length}件`)}${metric('半導体評価損益',(totalSemiGain>=0?'+':'−')+'¥'+Math.abs(totalSemiGain).toLocaleString(),`損益率 ${gainPctSemi.toFixed(1)}%`)}${metric('投資資産比率',pct.toFixed(1)+'%','銀行・現金を除く')} ${metric('銘柄数',stocks.length+'銘柄','同一銘柄は合算')}</div><div style="padding:8px 16px 4px;font-size:12px;font-weight:700;color:var(--text2)">📌 銘柄別構成</div><div style="padding:0 16px 10px">${sh}</div><div style="padding:8px 16px 4px;border-top:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2)">🌏 地域別</div><div style="padding:0 16px 10px">${rh}</div><div style="padding:2px 16px 12px;font-size:10px;color:var(--text3);line-height:1.5">半導体関連はティッカー・銘柄名・業種から自動判定。評価額を基準に構成比を計算します。</div>`;
 }
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__amSemiWrapped){window.__amSemiWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amSemiRender();}catch(e){}return r;};}setTimeout(()=>{try{amSemiRender();}catch(e){}},500);})();
+</script>
+<script>
+// ── 米国株：株価要因と為替要因の個別分解 ──
+function amUsFxIsTarget(a){
+  if(a.sold||Number(a.amount||0)<=0)return false;
+  const cat=String(a.cat||'');
+  if(!/外国株|米国|US|海外/.test(cat))return false;
+  const x=String([a.name,a.ticker,a.code,a.symbol].filter(Boolean).join(' ')).toLowerCase();
+  return !/韓国|korea|hynix|sk hynix|中国|香港|hkex/.test(x);
+}
+function amUsFxTicker(a){return String(a.ticker||a.code||a.symbol||'').trim()||String(a.name||'').trim();}
+function amUsFxMoney(v){const n=Number(v)||0;return (n>=0?'+':'−')+'¥'+Math.abs(Math.round(n)).toLocaleString();}
+function amUsFxRender(){
+ const el=document.getElementById('amUsFxPanel');if(!el)return;
+ const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amUsFxIsTarget);
+ if(!rows.length){el.innerHTML='<div style="padding:12px 16px 16px;font-size:12px;color:var(--text3)">米国株として判定できる保有銘柄がありません。</div>';return;}
+ const by={};
+ rows.forEach(a=>{
+   const key=amUsFxTicker(a), shares=Number(a.shares||0), price=Number(a.price||0), costPrice=Number(a.costPrice||0);
+   const fx=Number(a.fxRate||((typeof amGetFxRate==='function')?amGetFxRate():145));
+   let totalGain;
+   if(shares>0&&costPrice>0&&price>0) totalGain=Number(a.amount||0)-costPrice*shares*fx;
+   else totalGain=Number(a.amount||0)-Number(a.costPrice||0);
+   let stockGain=0;
+   if(shares>0&&price>0&&costPrice>0&&fx>0) stockGain=(price-costPrice)*shares*fx;
+   const fxGain=totalGain-stockGain;
+   const cost=Math.max(0,totalGain<Number(a.amount||0)?Number(a.amount||0)-totalGain:0);
+   if(!by[key])by[key]={key,name:a.name||key,amount:0,totalGain:0,stockGain:0,fxGain:0,cost:0,fx};
+   by[key].amount+=Number(a.amount||0);by[key].totalGain+=totalGain;by[key].stockGain+=stockGain;by[key].fxGain+=fxGain;by[key].cost+=cost;by[key].fx=fx;
+ });
+ const stocks=Object.values(by).sort((a,b)=>b.amount-a.amount);
+ const total=stocks.reduce((s,x)=>s+x.amount,0),tg=stocks.reduce((s,x)=>s+x.totalGain,0),sg=stocks.reduce((s,x)=>s+x.stockGain,0),fg=stocks.reduce((s,x)=>s+x.fxGain,0);
+ const card=(label,val)=>`<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><div style="font-size:13px;font-weight:700;color:${val>=0?'var(--green)':'var(--danger)'}">${amUsFxMoney(val)}</div></div>`;
+ const html=stocks.map(x=>{
+   const pct=x.totalGain!==0&&x.cost>0?x.totalGain/x.cost*100:0;
+   const sp=x.stockGain!==0&&x.cost>0?x.stockGain/x.cost*100:0;
+   const fp=x.fxGain!==0&&x.cost>0?x.fxGain/x.cost*100:0;
+   return `<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:10px 12px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div style="font-size:13px;font-weight:700">${x.name}</div><div style="font-size:11px;color:var(--text3)">${Math.round(x.amount/total*1000)/10}%</div></div>
+    <div style="font-size:11px;color:var(--text3);margin:3px 0 8px">評価額 ¥${Math.round(x.amount).toLocaleString()} ／ 損益 ${amUsFxMoney(x.totalGain)} (${x.totalGain>=0?'+':'−'}${Math.abs(pct).toFixed(1)}%)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <div><div style="font-size:10px;color:var(--text3)">📈 株価要因</div><div style="font-size:12px;font-weight:700;color:${x.stockGain>=0?'var(--green)':'var(--danger)'}">${amUsFxMoney(x.stockGain)} <span style="font-size:10px">(${x.stockGain>=0?'+':'−'}${Math.abs(sp).toFixed(1)}%)</span></div></div>
+      <div><div style="font-size:10px;color:var(--text3)">💱 為替要因（残差）</div><div style="font-size:12px;font-weight:700;color:${x.fxGain>=0?'var(--green)':'var(--danger)'}">${amUsFxMoney(x.fxGain)} <span style="font-size:10px">(${x.fxGain>=0?'+':'−'}${Math.abs(fp).toFixed(1)}%)</span></div></div>
+    </div>
+   </div>`;
+ }).join('');
+ el.innerHTML=`<div style="padding:0 16px 10px;font-size:11px;color:var(--text3);line-height:1.5">米国株を銘柄別に、円換算の評価損益を「株価要因」と「為替要因（残差）」に分けて表示します。為替取得レートの履歴がない銘柄は、現在の為替レートを基準にした概算です。</div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 16px 10px">${card('米国株 評価額',total)}${card('合計損益',tg)}${card('株価要因',sg)}${card('為替要因',fg)}</div>
+ <div style="padding:2px 16px 7px;font-size:12px;font-weight:700;color:var(--text2)">📌 銘柄別</div><div style="padding:0 16px 8px">${html}</div>`;
+}
+(function(){const base=window.amRender;if(typeof base==='function'&&!window.__amUsFxWrapped){window.__amUsFxWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amUsFxRender();}catch(e){}return r;};}setTimeout(()=>{try{amUsFxRender();}catch(e){}},700);})();
 </script>
 </body>
 </html>
