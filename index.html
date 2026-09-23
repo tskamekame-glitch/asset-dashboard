@@ -15488,6 +15488,37 @@ setTimeout(st5RenderAll,800);
   try{amWatchLoadLocal();setTimeout(amWatchRender,350);}catch(e){}
 })();
 </script>
+<script>
+// 銘柄編集モーダルの安全ラッパー：追加機能側の例外で既存の編集操作を壊さない
+(function(){
+  const baseOpenEditModal=window.openEditModal;
+  window.openEditModal=function(id){
+    try{
+      if(typeof baseOpenEditModal==='function'){
+        baseOpenEditModal(id);
+        const bg=document.getElementById('sheetBg');
+        if(bg && !bg.classList.contains('open')) bg.classList.add('open');
+        return;
+      }
+    }catch(e){
+      console.warn('openEditModal fallback:',e);
+    }
+    // 最低限の編集画面を開くフォールバック
+    try{
+      const a=(typeof amAccounts!=='undefined'&&Array.isArray(amAccounts))?amAccounts.find(x=>x.id===id):null;
+      const bg=document.getElementById('sheetBg');
+      if(!a||!bg)return;
+      const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v??'';};
+      const txt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v??'';};
+      set('fName',a.name);set('fAmount',a.amount);set('fNote',a.note);set('fCode',a.code);set('fShares',a.shares);set('fPrice',a.price);set('fCost',a.costPrice);set('fBroker',a.broker);set('fBuyDate',a.buyDate);set('fSector',a.sector);set('fEarningsDate',a.earningsDate);set('fPer',a.per);set('fPbr',a.pbr);set('fEps1',a.eps1);set('fEps2',a.eps2);set('fSell1',a.sell1);set('fSell2',a.sell2);set('fSell3',a.sell3);
+      set('fCat',a.cat||'その他');set('fNisa',a.nisaType||'');
+      txt('sheetTitle','口座を編集');
+      if(typeof amEditId!=='undefined')amEditId=id;
+      bg.classList.add('open');
+    }catch(e){console.error('銘柄編集画面を開けませんでした',e);}
+  };
+})();
+</script>
 </body>
 </html>
 
