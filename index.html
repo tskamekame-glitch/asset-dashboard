@@ -13504,16 +13504,23 @@ function cfSetChartMode(mode){
 
 function amRenderFxDecomp(){
   const el=document.getElementById('fxDecompPanel'); if(!el) return;
-  const rows=(amAccounts||[]).filter(a=>!a.sold && Number(a.qty||a.quantity||0)>0 && Number(a.amount||0)>0);
-  const fxRows=rows.filter(a=>{const cur=String(a.currency||a.ccy||a.tradeCurrency||'').toUpperCase();return cur&&cur!=='JPY'&&/USD|KRW|HKD|EUR|GBP|CNY|AUD/.test(cur);});
+  const rows=(amAccounts||[]).filter(a=>!a.sold && Number(a.qty||a.quantity||a.shares||0)>0 && Number(a.amount||0)>0);
+  // 通貨列がaccountsシートに保存されていない旧データにも対応。
+  // moomooのUSD評価額(amountUSD)がある場合はUSD建てとして判定する。
+  const fxRows=rows.filter(a=>{
+    const cur=String(a.currency||a.ccy||a.tradeCurrency||'').toUpperCase();
+    const usdByField=Number(a.amountUSD||0)>0 || Number(a.costAmountUSD||0)>0 || Number(a.pnlUSD||0)!==0;
+    const usdByBroker=/moomoo/i.test(String(a.broker||'')) && (Number(a.amountUSD||0)>0 || Number(a.costAmountUSD||0)>0);
+    return (cur&&cur!=='JPY'&&/USD|KRW|HKD|EUR|GBP|CNY|AUD/.test(cur)) || usdByField || usdByBroker;
+  });
   if(!fxRows.length){el.innerHTML='<div style="padding:10px;color:var(--text3);font-size:10px">外貨建て保有銘柄がありません。</div>';return;}
   const saved=window.amFxDecompSettings||{}; let h='<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px">銘柄</th><th style="text-align:right;padding:6px">現在価値</th><th style="text-align:right;padding:6px">平均取得価格</th><th style="text-align:right;padding:6px">取得時為替</th></tr></thead><tbody>';
   fxRows.forEach((a,i)=>{const key=String(a.code||a.ticker||a.name||i).replace(/[^A-Za-z0-9_-]/g,'_');const rate=saved[key]??'';h+=`<tr><td style="padding:6px;border-top:0.5px solid var(--border)">${a.name||a.code||'-'} <span style="color:var(--text3)">${a.currency||''}</span></td><td style="text-align:right;padding:6px;border-top:0.5px solid var(--border)">${fmt(Math.round(Number(a.amount||0)))}</td><td style="text-align:right;padding:6px;border-top:0.5px solid var(--border)">${fmt(Number(a.avgPrice||a.averagePrice||0))}</td><td style="text-align:right;padding:4px;border-top:0.5px solid var(--border)"><input id="fxrate_${key}" type="number" step="0.0001" min="0" value="${rate}" placeholder="例 150" style="width:90px;padding:5px;border:0.5px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></td></tr>`});
   h+='</tbody></table></div><button onclick="amCalcFxDecomp()" style="margin-top:9px;padding:7px 12px;border-radius:7px;border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer">損益を計算</button><div id="fxDecompResult" style="margin-top:9px"></div>';el.innerHTML=h;
 }
 function amCalcFxDecomp(){
-  const rows=(amAccounts||[]).filter(a=>!a.sold&&Number(a.qty||a.quantity||0)>0&&Number(a.amount||0)>0);const out=[];let tg=0,tp=0,tf=0;
-  rows.filter(a=>{const c=String(a.currency||a.ccy||a.tradeCurrency||'').toUpperCase();return c==='USD';}).forEach((a,i)=>{const key=String(a.code||a.ticker||a.name||i).replace(/[^A-Za-z0-9_-]/g,'_');const r=Number(document.getElementById('fxrate_'+key)?.value||0);if(!(r>0))return;const now=Number(a.amount||0),qty=Number(a.qty||a.quantity||0),avg=Number(a.avgPrice||a.averagePrice||0),curFx=Number(window.amUsdJpy||0);if(!(curFx>0))return;const pf=qty*avg,pj=pf*r,cf=now/curFx,pg=(cf-pf)*r,fg=cf*(curFx-r),g=now-pj;tg+=g;tp+=pg;tf+=fg;out.push(1);});
+  const rows=(amAccounts||[]).filter(a=>!a.sold&&Number(a.qty||a.quantity||a.shares||0)>0&&Number(a.amount||0)>0);const out=[];let tg=0,tp=0,tf=0;
+  rows.filter(a=>{const c=String(a.currency||a.ccy||a.tradeCurrency||'').toUpperCase();return c==='USD' || Number(a.amountUSD||0)>0 || Number(a.costAmountUSD||0)>0 || Number(a.pnlUSD||0)!==0;}).forEach((a,i)=>{const key=String(a.code||a.ticker||a.name||i).replace(/[^A-Za-z0-9_-]/g,'_');const r=Number(document.getElementById('fxrate_'+key)?.value||0);if(!(r>0))return;const now=Number(a.amount||0),qty=Number(a.qty||a.quantity||a.shares||0),avg=Number(a.avgPrice||a.averagePrice||a.costPrice||0),curFx=Number(window.amUsdJpy||0);if(!(curFx>0))return;const pf=qty*avg,pj=pf*r,cf=now/curFx,pg=(cf-pf)*r,fg=cf*(curFx-r),g=now-pj;tg+=g;tp+=pg;tf+=fg;out.push(1);});
   const el=document.getElementById('fxDecompResult');if(!el)return;if(!out.length){el.innerHTML='<div style="font-size:10px;color:var(--text3)">取得時為替レートと現在USD/JPY設定値が必要です。現在はUSD建て資産を対象にしています。</div>';return;}const card=(t,v)=>`<div style="padding:9px;border:0.5px solid var(--border);border-radius:8px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">${t}</div><div style="font-size:15px;font-weight:800;margin-top:2px;color:${v>=0?'var(--green)':'var(--red)'}">${v>=0?'+':''}${fmt(Math.round(v))}円</div></div>`;el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">${card('円ベース損益',tg)}${card('株価要因',tp)}${card('為替要因',tf)}</div><div style="font-size:9px;color:var(--text3);margin-top:7px">※概算値。株価要因＋為替要因＝円ベース損益となる近似計算です。</div>`;
 }
 
