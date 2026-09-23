@@ -1038,6 +1038,28 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       </div>
     </div>
 
+    <!-- 第5段階：資産形成パフォーマンス・月次推移 -->
+    <div class="card" id="performanceTrendCard" style="display:none;margin-bottom:10px">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h2>📊 資産形成パフォーマンス</h2>
+        <span id="perfDataNote" style="font-size:9px;color:var(--text3)">—</span>
+      </div>
+      <div id="performanceSummary" style="padding:0 14px 10px"></div>
+      <div style="height:260px;padding:0 8px 10px"><canvas id="performanceTrendChart"></canvas></div>
+      <div style="padding:0 14px 12px;font-size:9px;color:var(--text3)">総資産と純入金額を同じ時系列で表示します。入金情報を保存した時点以降のデータが蓄積されます。</div>
+    </div>
+
+    <div class="card" id="allocationTrendCard" style="display:none;margin-bottom:10px">
+      <div class="card-head"><h2>🥧 ポートフォリオ比率の推移</h2></div>
+      <div style="height:250px;padding:0 8px 12px"><canvas id="allocationTrendChart"></canvas></div>
+      <div id="allocationTrendNote" style="padding:0 14px 12px;font-size:9px;color:var(--text3)"></div>
+    </div>
+
+    <div class="card" id="monthlyTrendCard" style="display:none;margin-bottom:10px">
+      <div class="card-head"><h2>🗓️ 月次資産スナップショット</h2></div>
+      <div id="monthlyTrendTable" style="padding:0 14px 12px;overflow:auto"></div>
+    </div>
+
     <div class="tr-summary-grid" id="trSummaryGrid" style="display:none"></div>
     <div class="filter-bar" id="filterBar" style="display:none">
       <button class="filter-btn active" data-f="all" onclick="setFilter('all')">全期間</button>
@@ -6116,7 +6138,7 @@ function sendToTrend(){
       costIsTotal:(isIndex&&!hasShares&&costPrice>0)||isBalanceAcc&&costPrice>0||!!a.costIsTotal||undefined,
     };
   });
-  snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
+  snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts,investedPrincipal:Number(amStage1Settings.investedPrincipal)||0,investedWithdrawals:Number(amStage1Settings.investedWithdrawals)||0});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
   dailySnapSave();
@@ -7037,31 +7059,31 @@ function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.string
 // 1スナップショット = 1行。accounts配列はJSON文字列としてセルに格納する
 // （口座数が可変で列固定が難しいため）
 // ============================================================
-const TR_SHEET_COLS=['date','filename','total','cats','accounts'];
+const TR_SHEET_COLS=['date','filename','total','cats','accounts','investedPrincipal','investedWithdrawals'];
 async function trSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){setSyncStatus('','未ログイン（ローカル保存のみ）');return;}
   setSyncStatus('syncing','同期中...');
   try{
     const values=[TR_SHEET_COLS,...snapshots.map(s=>[
       s.date||'', s.filename||'', s.total||0,
-      JSON.stringify(s.cats||{}), JSON.stringify(s.accounts||[])
+      JSON.stringify(s.cats||{}), JSON.stringify(s.accounts||[]), s.investedPrincipal||0, s.investedWithdrawals||0
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:E${values.length+50}`,valueInputOption:'RAW',resource:{values}});
-    if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:E5000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:G${values.length+50}`,valueInputOption:'RAW',resource:{values}});
+    if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:G5000`});
     setSyncStatus('ok','同期済み✓');
   }catch(e){console.warn('trSaveToSheet error',e);setSyncStatus('err','同期失敗');}
 }
 async function trLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'trend!A2:E5000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'trend!A2:G5000'});
     const rows=res.result.values||[];
     if(rows.length===0)return;// Sheetsにデータがなければローカルのものを維持
     const loaded=rows.filter(r=>r[0]).map(r=>{
       let cats={},accounts=[];
       try{cats=JSON.parse(r[3]||'{}');}catch(e){}
       try{accounts=JSON.parse(r[4]||'[]');}catch(e){}
-      return{date:r[0],filename:r[1]||'',total:parseFloat(r[2])||0,cats,accounts};
+      return{date:r[0],filename:r[1]||'',total:parseFloat(r[2])||0,cats,accounts,investedPrincipal:parseFloat(r[5])||0,investedWithdrawals:parseFloat(r[6])||0};
     });
     snapshots=loaded;
     snapshots.sort((a,b)=>a.date.localeCompare(b.date));
@@ -7634,7 +7656,7 @@ function trParseCSV(text,filename){
     };
   });
 
-  snapshots.push({date:dateStr,filename,total,cats,accounts:enrichedRows});
+  snapshots.push({date:dateStr,filename,total,cats,accounts:enrichedRows,investedPrincipal:Number(amStage1Settings.investedPrincipal)||0,investedWithdrawals:Number(amStage1Settings.investedWithdrawals)||0});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   // 追加したスナップショットを含めて正規化（trLoadFromStorageは使わない＝新規データを破棄しない）
   trNormalizeSnapshots(snapshots);
@@ -7650,12 +7672,12 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard','capitalReturnCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard','capitalReturnCard','performanceTrendCard','allocationTrendCard','monthlyTrendCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){kvRender();trRenderSummary();trRenderCapitalReturn();trRenderCharts();trRenderTable();renderComment();}
+  if(hasData){kvRender();trRenderSummary();trRenderCapitalReturn();trRenderPerformance();trRenderCharts();trRenderTable();renderComment();}
   else{const kc=document.getElementById('kvCard');if(kc)kc.style.display='none';}
   // FIREタブのCAGR自動反映
   if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,200);
@@ -13500,6 +13522,64 @@ function cfSetChartMode(mode){
     else{btn.style.background='var(--bg2)';btn.style.color='var(--text2)';btn.style.borderColor='var(--border2)';}
   });
   cfRenderTrendChart();
+}
+
+
+let performanceTrendChartInstance=null, allocationTrendChartInstance=null;
+function perfFmt(n){
+  if(!Number.isFinite(n))return '—';
+  const a=Math.abs(n), sign=n<0?'−':'';
+  if(a>=100000000)return sign+(a/100000000).toFixed(2)+'億円';
+  if(a>=10000)return sign+Math.round(a/10000).toLocaleString('ja-JP')+'万円';
+  return sign+'¥'+Math.round(a).toLocaleString('ja-JP');
+}
+function trMonthlySnapshots(){
+  const map={};
+  snapshots.forEach(s=>{if(s&&s.date){const m=String(s.date).slice(0,7);if(!map[m]||s.date>map[m].date)map[m]=s;}});
+  return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
+}
+function trRenderPerformance(){
+  const pc=document.getElementById('performanceTrendCard'), ac=document.getElementById('allocationTrendCard'), mc=document.getElementById('monthlyTrendCard');
+  if(!pc||!snapshots.length)return;
+  pc.style.display='block'; ac.style.display=snapshots.length>=2?'block':'none'; mc.style.display=snapshots.length>=1?'block':'none';
+  const rows=snapshots.filter(s=>s.investedPrincipal>0||s.investedWithdrawals>0||s===snapshots[snapshots.length-1]);
+  const labels=rows.map(s=>s.date), assets=rows.map(s=>Number(s.total)||0), netIn=rows.map(s=>(Number(s.investedPrincipal)||0)-(Number(s.investedWithdrawals)||0));
+  const perf=rows.map((s,i)=>{const n=netIn[i];return n>0?assets[i]-n:null;});
+  const last=rows[rows.length-1], lastNet=netIn[netIn.length-1], lastPerf=lastNet>0?assets[assets.length-1]-lastNet:null, lastRate=lastNet>0?lastPerf/lastNet*100:null;
+  const first=rows[0], firstAsset=Number(first.total)||0, firstNet=(Number(first.investedPrincipal)||0)-(Number(first.investedWithdrawals)||0);
+  const note=document.getElementById('perfDataNote'); if(note)note.textContent=rows.some(r=>r.investedPrincipal>0)?'入金情報保存済み期間':'入金情報を設定すると運用益を表示';
+  const body=document.getElementById('performanceSummary');
+  if(body)body.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
+    <div style="padding:9px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">現在総資産</div><div style="font-size:15px;font-weight:800;margin-top:2px">${perfFmt(last.total)}</div></div>
+    <div style="padding:9px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">現在の純入金</div><div style="font-size:15px;font-weight:800;margin-top:2px">${lastNet>0?perfFmt(lastNet):'—'}</div></div>
+    <div style="padding:9px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">運用損益</div><div style="font-size:15px;font-weight:800;margin-top:2px;color:${lastPerf==null?'var(--text3)':lastPerf>=0?'var(--green)':'var(--red)'}">${lastPerf==null?'—':(lastPerf>=0?'+':'')+perfFmt(lastPerf)}</div><div style="font-size:9px;color:${lastRate==null?'var(--text3)':lastRate>=0?'var(--green)':'var(--red)'}">${lastRate==null?'入金設定が必要':(lastRate>=0?'+':'')+lastRate.toFixed(2)+'%'}</div></div>
+  </div>`;
+  if(performanceTrendChartInstance){performanceTrendChartInstance.destroy();performanceTrendChartInstance=null;}
+  const canvas=document.getElementById('performanceTrendChart'); if(canvas){
+    performanceTrendChartInstance=new Chart(canvas,{type:'line',data:{labels,datasets:[
+      {label:'総資産',data:assets,borderWidth:2.5,pointRadius:3,tension:.25,fill:false},
+      {label:'純入金額',data:netIn.map(v=>v||null),borderWidth:1.8,pointRadius:2,tension:.25,fill:false,borderDash:[5,4]},
+      {label:'運用損益',data:perf,borderWidth:1.8,pointRadius:2,tension:.25,fill:false,borderDash:[2,3],yAxisID:'y2'}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:10},usePointStyle:true}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw==null?'—':perfFmt(c.raw)}`}}},scales:{y:{ticks:{callback:v=>perfFmt(v),font:{size:9}}},y2:{position:'right',ticks:{callback:v=>perfFmt(v),font:{size:9}},grid:{drawOnChartArea:false}},x:{ticks:{font:{size:9},maxTicksLimit:10}}}}});
+  }
+  trRenderAllocationTrend(); trRenderMonthlyTrend();
+}
+function trRenderAllocationTrend(){
+  const data=trMonthlySnapshots(); if(data.length<2)return;
+  const labels=data.map(s=>s.date.slice(0,7));
+  const cats=[...new Set(data.flatMap(s=>Object.keys(s.cats||{})))];
+  const totalCats=cats.filter(c=>c&&c!=='銀行').slice(0,7);
+  const others=data.map(s=>Math.max(0,(s.total||0)-totalCats.reduce((sum,c)=>sum+(s.cats?.[c]||0),0)-(s.cats?.銀行||0)));
+  const datasets=totalCats.map(c=>({label:c,data:data.map(s=>s.total?((s.cats?.[c]||0)/s.total*100):0),fill:true,tension:.2,borderWidth:1,pointRadius:0}));
+  datasets.push({label:'銀行・現金',data:data.map(s=>s.total?((s.cats?.銀行||0)/s.total*100):0),fill:true,tension:.2,borderWidth:1,pointRadius:0});
+  if(allocationTrendChartInstance){allocationTrendChartInstance.destroy();allocationTrendChartInstance=null;}
+  const canvas=document.getElementById('allocationTrendChart'); if(!canvas)return;
+  allocationTrendChartInstance=new Chart(canvas,{type:'line',data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{font:{size:9},boxWidth:12}},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>`${c.dataset.label}: ${Number(c.raw).toFixed(1)}%`}}},scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,min:0,max:100,ticks:{callback:v=>v+'%',font:{size:9}}}}}});
+  const n=document.getElementById('allocationTrendNote'); if(n)n.textContent='月末時点のスナップショットを基にした概算比率。';
+}
+function trRenderMonthlyTrend(){
+  const data=trMonthlySnapshots().slice(-12).reverse(), el=document.getElementById('monthlyTrendTable'); if(!el)return;
+  el.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px">月</th><th style="text-align:right;padding:6px">総資産</th><th style="text-align:right;padding:6px">純入金</th><th style="text-align:right;padding:6px">運用損益</th><th style="text-align:right;padding:6px">半導体</th></tr></thead><tbody>`+data.map(s=>{const net=(s.investedPrincipal||0)-(s.investedWithdrawals||0), gain=net>0?s.total-net:null, semi=(s.cats?.['半導体']||0)+(s.cats?.['半導体・電子部品']||0);return `<tr><td style="padding:6px;border-top:.5px solid var(--border)">${s.date.slice(0,7)}</td><td style="padding:6px;text-align:right;border-top:.5px solid var(--border)">${perfFmt(s.total)}</td><td style="padding:6px;text-align:right;border-top:.5px solid var(--border)">${net>0?perfFmt(net):'—'}</td><td style="padding:6px;text-align:right;border-top:.5px solid var(--border);color:${gain==null?'var(--text3)':gain>=0?'var(--green)':'var(--red)'}">${gain==null?'—':(gain>=0?'+':'')+perfFmt(gain)}</td><td style="padding:6px;text-align:right;border-top:.5px solid var(--border)">${s.total&&semi?((semi/s.total)*100).toFixed(1)+'%':'—'}</td></tr>`;}).join('')+'</tbody></table>';
 }
 
 function amRenderFxDecomp(){
