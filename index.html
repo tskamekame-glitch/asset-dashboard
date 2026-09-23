@@ -1320,6 +1320,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div class="card-head"><div class="dot"></div><h2>資産・収支</h2></div>
       <div class="field-list">
         <div class="field-row"><span class="field-label">現在の資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-asset" value="4400" inputmode="numeric"><span class="field-unit">万円</span></div></div>
+        <div class="field-row"><span class="field-label">毎月の追加投資額<div class="field-sub">FIRE到達まで継続して積立する想定</div></span><div class="field-input-wrap"><input class="field-input" type="number" id="s-monthly-invest" value="15" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><span class="field-label">月の生活費</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-expense" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><span class="field-label">サイドFIRE月収</span><div class="field-input-wrap"><input class="field-input" type="number" id="s-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
       </div>
@@ -1386,6 +1387,17 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:10px;color:var(--text3)">達成率</span><span id="s-sidefire-pct" style="font-size:12px;font-weight:700;color:var(--accent)"></span></div>
         <div style="height:7px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:7px"><div id="s-sidefire-bar" style="height:100%;border-radius:99px;background:var(--accent);transition:width 0.5s"></div></div>
         <div id="s-sidefire-gap" style="font-size:10px;color:var(--text3);line-height:1.6"></div>
+      </div>
+
+      <!-- FIRE到達予想 -->
+      <div id="s-fire-projection" style="background:rgba(16,185,129,0.06);border:0.5px solid rgba(16,185,129,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🚀 FIRE目標までの到達予想</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">現在資産＋毎月の追加投資を、各シナリオの利回りで運用した場合の「年間生活費×25倍」到達時期。生活費・副収入による取り崩しは含めない積立フェーズの試算です。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">
+          <div style="background:var(--bg2);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">😔 悲観</div><div id="s-proj-bear" style="font-size:14px;font-weight:700;margin-top:3px">—</div><div id="s-proj-bear-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
+          <div style="background:rgba(52,211,153,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--green)">📈 実績</div><div id="s-proj-actual" style="font-size:14px;font-weight:700;color:var(--green);margin-top:3px">—</div><div id="s-proj-actual-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
+          <div style="background:rgba(251,191,36,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--amber)">🎯 目標</div><div id="s-proj-target" style="font-size:14px;font-weight:700;color:var(--amber);margin-top:3px">—</div><div id="s-proj-target-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
+        </div>
       </div>
 
       <!-- 3シナリオ比較カード -->
@@ -1477,6 +1489,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div class="card-head"><div class="dot"></div><h2>資産・収支（共通）</h2></div>
       <div class="field-list">
         <div class="field-row"><span class="field-label">現在の資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-asset" value="4400" inputmode="numeric"><span class="field-unit">万円</span></div></div>
+        <div class="field-row"><span class="field-label">毎月の追加投資額<div class="field-sub">FIRE到達まで継続して積立する想定</div></span><div class="field-input-wrap"><input class="field-input" type="number" id="f-monthly-invest" value="15" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><span class="field-label">自分の月収（副業）</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><span class="field-label">配偶者の月収</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-spouse-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
         <div class="field-row"><span class="field-label">現在の年齢</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-curage" value="45" inputmode="numeric"><span class="field-unit">歳</span></div></div>
@@ -1529,6 +1542,17 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:10px;color:var(--text3)">達成率</span><span id="f-sidefire-pct" style="font-size:12px;font-weight:700;color:var(--purple)"></span></div>
         <div style="height:7px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:7px"><div id="f-sidefire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div></div>
         <div id="f-sidefire-gap" style="font-size:10px;color:var(--text3);line-height:1.6"></div>
+      </div>
+
+      <!-- FIRE到達予想 -->
+      <div id="f-fire-projection" style="background:rgba(124,58,237,0.06);border:0.5px solid rgba(124,58,237,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🚀 FIRE目標までの到達予想</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">現在資産＋毎月の追加投資を、各シナリオの利回りで運用した場合の到達時期。生活費・副収入による取り崩しは含めない積立フェーズの試算です。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">
+          <div style="background:var(--bg2);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">😔 悲観</div><div id="f-proj-bear" style="font-size:14px;font-weight:700;margin-top:3px">—</div><div id="f-proj-bear-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
+          <div style="background:rgba(52,211,153,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--green)">📈 実績</div><div id="f-proj-actual" style="font-size:14px;font-weight:700;color:var(--green);margin-top:3px">—</div><div id="f-proj-actual-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
+          <div style="background:rgba(251,191,36,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--amber)">🎯 目標</div><div id="f-proj-target" style="font-size:14px;font-weight:700;color:var(--amber);margin-top:3px">—</div><div id="f-proj-target-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
+        </div>
       </div>
 
       <!-- FIRE達成ライン（家族） -->
@@ -9349,6 +9373,20 @@ function fireRenderTimeline(containerId,ages,bals,curAge,curYear){
   }).join('');
 }
 
+function fireProjectToTarget(asset,monthly,rate,target,curAge){
+  asset=Number(asset)||0; monthly=Math.max(0,Number(monthly)||0); rate=Number(rate)||0; target=Number(target)||0; curAge=Math.round(Number(curAge)||0);
+  if(asset>=target)return {age:curAge,months:0,years:0};
+  var bal=asset, mr=Math.pow(1+rate/100,1/12)-1, maxMonths=Math.max(0,(90-curAge)*12);
+  for(var m=1;m<=maxMonths;m++){bal=bal*(1+mr)+monthly;if(bal>=target)return {age:curAge+Math.ceil(m/12),months:m,years:m/12,balance:bal};}
+  return null;
+}
+function fireProjectionText(r,curAge){
+  if(!r)return {main:'90歳までに未達',detail:'90歳時点でも目標未達'};
+  if(r.months===0)return {main:'達成済み',detail:curAge+'歳時点'};
+  var years=Math.floor(r.months/12),months=r.months%12;
+  return {main:r.age+'歳',detail:years+'年'+(months?months+'か月':'')+'後'};
+}
+
 function calcSingle(){try{
   var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income');
   var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
@@ -9389,6 +9427,10 @@ function calcSingle(){try{
   document.getElementById('s-pct-target').textContent=' '+rTarget+'%';
   // FIRE達成ライン
   var fireTarget=E*12*25;
+  var monthlyInvest=gv('s-monthly-invest')||0;
+  var projBear=fireProjectToTarget(A,monthlyInvest,rBear,fireTarget,CA),projActual=fireProjectToTarget(A,monthlyInvest,rActual,fireTarget,CA),projTarget=fireProjectToTarget(A,monthlyInvest,rTarget,fireTarget,CA);
+  var projEl=document.getElementById('s-fire-projection');if(projEl){projEl.style.display='block';[['bear',projBear],['actual',projActual],['target',projTarget]].forEach(function(x){var t=fireProjectionText(x[1],CA);document.getElementById('s-proj-'+x[0]).textContent=t.main;document.getElementById('s-proj-'+x[0]+'-detail').textContent=t.detail;});}
+
   // サイドFIRE必要資産：現在の生活費から副収入を差し引いた年間不足額の25倍
   var sideGap=Math.max(0,E-I),sideFireTarget=sideGap*12*25,sideEl=document.getElementById('s-sidefire-line');
   if(sideEl){sideEl.style.display='block';var sideRemaining=Math.max(0,sideFireTarget-A);document.getElementById('s-sidefire-current').textContent=fwOku(A*10000);document.getElementById('s-sidefire-target-val').textContent=fwOku(sideFireTarget*10000);document.getElementById('s-sidefire-month-gap').textContent=sideGap>0?'月'+sideGap+'万円':'0万円';document.getElementById('s-sidefire-remaining').textContent=sideRemaining>0?fwOku(sideRemaining*10000):'0円';var sidePct=sideFireTarget>0?Math.min(100,Math.round(A/sideFireTarget*100)):100;document.getElementById('s-sidefire-pct').textContent=sidePct+'%';document.getElementById('s-sidefire-bar').style.width=sidePct+'%';document.getElementById('s-sidefire-gap').textContent=sideGap>0?'副収入で生活費の一部を補い、残りを資産運用で賄う前提。必要資産＝月の不足額×12×25':'現在の副収入だけで生活費をカバーする想定です（必要資産0円）';}
@@ -9473,6 +9515,10 @@ function calcFamily(){
   document.getElementById('f-sub-target').textContent=resTarget.zero&&resTarget.zero<=65?resTarget.zero+'歳で枯渇':'65歳時点';
   document.getElementById('f-pct-target').textContent=' '+rTarget+'%';
   var fireTarget=(living+housing)*12*25;
+  var monthlyInvest=gv('f-monthly-invest')||0;
+  var projBear=fireProjectToTarget(A,monthlyInvest,rBear,fireTarget,CA),projActual=fireProjectToTarget(A,monthlyInvest,rActual,fireTarget,CA),projTarget=fireProjectToTarget(A,monthlyInvest,rTarget,fireTarget,CA);
+  var projEl=document.getElementById('f-fire-projection');if(projEl){projEl.style.display='block';[['bear',projBear],['actual',projActual],['target',projTarget]].forEach(function(x){var t=fireProjectionText(x[1],CA);document.getElementById('f-proj-'+x[0]).textContent=t.main;document.getElementById('f-proj-'+x[0]+'-detail').textContent=t.detail;});}
+
   // サイドFIRE必要資産：現在の生活費・住宅費から世帯収入を差し引いた年間不足額の25倍
   var familySideGap=Math.max(0,(living+housing)-I-SI),familySideFireTarget=familySideGap*12*25,familySideEl=document.getElementById('f-sidefire-line');
   if(familySideEl){familySideEl.style.display='block';var familySideRemaining=Math.max(0,familySideFireTarget-A);document.getElementById('f-sidefire-current').textContent=fwOku(A*10000);document.getElementById('f-sidefire-target-val').textContent=fwOku(familySideFireTarget*10000);document.getElementById('f-sidefire-month-gap').textContent=familySideGap>0?'月'+familySideGap+'万円':'0万円';document.getElementById('f-sidefire-remaining').textContent=familySideRemaining>0?fwOku(familySideRemaining*10000):'0円';var familySidePct=familySideFireTarget>0?Math.min(100,Math.round(A/familySideFireTarget*100)):100;document.getElementById('f-sidefire-pct').textContent=familySidePct+'%';document.getElementById('f-sidefire-bar').style.width=familySidePct+'%';document.getElementById('f-sidefire-gap').textContent=familySideGap>0?'世帯収入で生活費・住宅費の一部を補い、残りを資産運用で賄う前提。必要資産＝月の不足額×12×25':'現在の世帯収入だけで生活費・住宅費をカバーする想定です（必要資産0円）';}
