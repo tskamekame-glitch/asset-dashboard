@@ -6228,7 +6228,7 @@ function useOffline(){
     if(a.cat!==validCat){a.cat=validCat;fixed=true;}
   });
   if(fixed)amSaveToLocal();
-  amShowMain();amRender();refreshHome();
+  amShowMain();amRender();refreshHome();try{amRenderFxDecomp();}catch(e){}
 }
 function amShowMain(){
   document.getElementById('managerLogin').style.display='none';
@@ -6311,7 +6311,7 @@ async function amLoadFromSheet(){
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
-    amSaveToLocal();amRender();
+    amSaveToLocal();amRender();try{amRenderFxDecomp();}catch(e){}
     // 推移グラフの損益除外リストをQ1セルから読み込む（端末間で共有）
     try{
       const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Q1'});
@@ -6325,12 +6325,12 @@ async function amLoadFromSheet(){
         if(raw2){trGainExcludeNames=JSON.parse(raw2);trSaveGainExclude();}
       }catch(e2){}
     }
-  }catch(e){amLoadFromLocal();amRender();}
+  }catch(e){amLoadFromLocal();amRender();try{amRenderFxDecomp();}catch(e){}}
 }
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amStage1LoadSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amStage1LoadSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();try{amRenderFxDecomp();}catch(e){}
   try{trRenderAll();}catch(e){}
   try{if(typeof wlAutoSync==='function')wlAutoSync(true);}catch(e){}
 }
