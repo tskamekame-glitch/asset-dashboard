@@ -1038,6 +1038,20 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       </div>
     </div>
 
+    <!-- サイドFIRE目標進捗 -->
+    <div class="card" id="fireGoalCard" style="display:none;margin-bottom:10px">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h2>🎯 サイドFIRE目標進捗</h2>
+        <button class="btn-sm" onclick="trToggleFireGoalSettings()" style="font-size:10px">⚙ 目標設定</button>
+      </div>
+      <div id="fireGoalBody" style="padding:0 14px 12px"></div>
+      <div id="fireGoalSettings" style="display:none;margin:0 14px 14px;padding:10px;border-radius:10px;background:var(--bg2)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:7px">サイドFIREの目標として、目標資産額を設定します。</div>
+        <label style="font-size:10px;color:var(--text3)">目標資産額（円）<input id="tr-fireTargetAsset" type="number" min="0" step="10000" placeholder="例：30000000" style="width:100%;margin-top:3px;padding:8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);box-sizing:border-box"></label>
+        <button class="btn-accent" onclick="trSaveFireGoalSettings()" style="margin-top:8px">保存</button>
+      </div>
+    </div>
+
     <!-- 第5段階：資産形成パフォーマンス・月次推移 -->
     <div class="card" id="performanceTrendCard" style="display:none;margin-bottom:10px">
       <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
@@ -2602,7 +2616,7 @@ function amRenderStage2(active){
 }
 
 // ── 第1段階：資産配分・投資可能現金・NISA残り枠 ──
-const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0,investableCashSBI:0,investableCashMoomoo:0,investedPrincipal:'',investedWithdrawals:''};
+const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0,investableCashSBI:0,investableCashMoomoo:0,investedPrincipal:'',investedWithdrawals:'',fireTargetAsset:''};
 let amStage1Settings={...AM_STAGE1_DEFAULTS};
 
 function amStage1LoadLocal(){
@@ -2627,10 +2641,11 @@ async function amStage1SaveSheet(){
       ['investableCashSBI',amStage1Settings.investableCashSBI],
       ['investableCashMoomoo',amStage1Settings.investableCashMoomoo],
       ['investedPrincipal',amStage1Settings.investedPrincipal],
-      ['investedWithdrawals',amStage1Settings.investedWithdrawals]
+      ['investedWithdrawals',amStage1Settings.investedWithdrawals],
+      ['fireTargetAsset',amStage1Settings.fireTargetAsset]
     ];
     await gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId:amSpreadsheetId,range:'settings!A1:B10',valueInputOption:'RAW',resource:{values:rows}
+      spreadsheetId:amSpreadsheetId,range:'settings!A1:B11',valueInputOption:'RAW',resource:{values:rows}
     });
     amStage1SaveLocal();
   }catch(e){amStage1SaveLocal();console.error('amStage1SaveSheet',e);}
@@ -7672,12 +7687,12 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard','capitalReturnCard','performanceTrendCard','allocationTrendCard','monthlyTrendCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard','capitalReturnCard','fireGoalCard','performanceTrendCard','allocationTrendCard','monthlyTrendCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){kvRender();trRenderSummary();trRenderCapitalReturn();trRenderPerformance();trRenderCharts();trRenderTable();renderComment();}
+  if(hasData){kvRender();trRenderSummary();trRenderCapitalReturn();trRenderFireGoal();trRenderPerformance();trRenderCharts();trRenderTable();renderComment();}
   else{const kc=document.getElementById('kvCard');if(kc)kc.style.display='none';}
   // FIREタブのCAGR自動反映
   if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,200);
@@ -13538,7 +13553,56 @@ function trMonthlySnapshots(){
   snapshots.forEach(s=>{if(s&&s.date){const m=String(s.date).slice(0,7);if(!map[m]||s.date>map[m].date)map[m]=s;}});
   return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
 }
+function trToggleFireGoalSettings(){
+  const el=document.getElementById('fireGoalSettings');
+  if(!el)return;
+  const show=el.style.display==='none'||!el.style.display;
+  el.style.display=show?'block':'none';
+  if(show){const inp=document.getElementById('tr-fireTargetAsset');if(inp)inp.value=amStage1Settings.fireTargetAsset||'';}
+}
+async function trSaveFireGoalSettings(){
+  const inp=document.getElementById('tr-fireTargetAsset');
+  const v=inp&&inp.value!==''?Number(inp.value):'';
+  amStage1Settings.fireTargetAsset=(Number.isFinite(v)&&v>0)?v:'';
+  amStage1SaveLocal();
+  await amStage1SaveSheet();
+  trRenderFireGoal();
+  const box=document.getElementById('fireGoalSettings');if(box)box.style.display='none';
+  showToast(amStage1Settings.fireTargetAsset?`✓ サイドFIRE目標を ${fmt(Math.round(amStage1Settings.fireTargetAsset))} に設定しました`:'✓ サイドFIRE目標をクリアしました');
+}
+function trRenderFireGoal(){
+  const card=document.getElementById('fireGoalCard'),body=document.getElementById('fireGoalBody');
+  if(!card||!body)return;
+  const target=Number(amStage1Settings.fireTargetAsset)||0;
+  if(!target){card.style.display=snapshots.length?'block':'none';body.innerHTML='<div style="padding:9px 0;color:var(--text3);font-size:10px">目標資産額を設定すると、現在の達成率・残り金額・資産増加ペースを表示します。</div>';return;}
+  const latest=snapshots[snapshots.length-1], current=Number(latest?.total)||0;
+  const pct=Math.max(0,Math.min(100,current/target*100));
+  const remain=Math.max(0,target-current);
+  const monthly=trMonthlySnapshots();
+  let avgMonthly=null,monthsTo=null;
+  if(monthly.length>=2){
+    const first=monthly[0],last=monthly[monthly.length-1];
+    const firstV=Number(first.total)||0,lastV=Number(last.total)||0;
+    const m=(new Date(String(last.date).slice(0,7)+'-01')-new Date(String(first.date).slice(0,7)+'-01'))/(30.4375*86400000);
+    if(m>0){avgMonthly=(lastV-firstV)/m;if(avgMonthly>0&&remain>0)monthsTo=remain/avgMonthly;}
+  }
+  const forecast=monthsTo!=null?`総資産の過去平均増加ペースなら約${Math.ceil(monthsTo)}か月`:'—';
+  body.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
+    <div style="padding:9px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">現在総資産</div><div style="font-size:15px;font-weight:800;margin-top:2px">${perfFmt(current)}</div></div>
+    <div style="padding:9px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">目標資産</div><div style="font-size:15px;font-weight:800;margin-top:2px">${perfFmt(target)}</div></div>
+    <div style="padding:9px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">残り</div><div style="font-size:15px;font-weight:800;margin-top:2px">${remain?perfFmt(remain):'達成'}</div></div>
+  </div>
+  <div style="margin-top:10px">
+    <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:5px"><span>目標達成率</span><strong>${pct.toFixed(1)}%</strong></div>
+    <div style="height:12px;background:rgba(128,128,128,.15);border-radius:7px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent,#3b82f6);border-radius:7px;transition:width .3s"></div></div>
+  </div>
+  <div style="margin-top:9px;padding:9px;border-radius:9px;background:var(--bg2);font-size:9px;color:var(--text3);line-height:1.6">
+    ${avgMonthly!=null?`過去の総資産平均増加ペース：<strong style="color:var(--text)">${avgMonthly>=0?'+':''}${perfFmt(avgMonthly)}/月</strong><br>`:''}
+    参考到達ペース：<strong style="color:var(--text)">${forecast}</strong><br>※これは過去の総資産増加ペースを単純延長した参考値で、将来の資産額を予測するものではありません。
+  </div>`;
+}
 function trRenderPerformance(){
+  trRenderFireGoal();
   const pc=document.getElementById('performanceTrendCard'), ac=document.getElementById('allocationTrendCard'), mc=document.getElementById('monthlyTrendCard');
   if(!pc||!snapshots.length)return;
   pc.style.display='block'; ac.style.display=snapshots.length>=2?'block':'none'; mc.style.display=snapshots.length>=1?'block':'none';
