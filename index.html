@@ -1063,6 +1063,11 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div style="padding:0 14px 12px;font-size:9px;color:var(--text3)">総資産と純入金額を同じ時系列で表示します。入金情報を保存した時点以降のデータが蓄積されます。</div>
     </div>
 
+    <div class="card" id="capitalBreakdownCard" style="display:none;margin-bottom:10px">
+      <div class="card-head"><h2>💰 資産増加の内訳</h2></div>
+      <div id="capitalBreakdownBody" style="padding:0 14px 12px"></div>
+    </div>
+
     <div class="card" id="allocationTrendCard" style="display:none;margin-bottom:10px">
       <div class="card-head"><h2>🥧 ポートフォリオ比率の推移</h2></div>
       <div style="height:250px;padding:0 8px 12px"><canvas id="allocationTrendChart"></canvas></div>
@@ -13601,8 +13606,37 @@ function trRenderFireGoal(){
     参考到達ペース：<strong style="color:var(--text)">${forecast}</strong><br>※これは過去の総資産増加ペースを単純延長した参考値で、将来の資産額を予測するものではありません。
   </div>`;
 }
+function trRenderCapitalBreakdown(){
+  const card=document.getElementById('capitalBreakdownCard'),body=document.getElementById('capitalBreakdownBody');
+  if(!card||!body)return;
+  const latest=snapshots[snapshots.length-1];
+  const dep=Number(latest?.investedPrincipal)||0;
+  const wd=Number(latest?.investedWithdrawals)||0;
+  const total=Number(latest?.total)||0;
+  if(!latest || (dep<=0 && wd<=0)){
+    card.style.display='none';
+    return;
+  }
+  const net=dep-wd;
+  const gain=total-net;
+  const gainRate=net>0?gain/net*100:null;
+  card.style.display='block';
+  const gainColor=gain>=0?'var(--green)':'var(--red)';
+  body.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+      <div style="padding:8px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:8px;color:var(--text3)">累計入金</div><div style="font-size:13px;font-weight:800;margin-top:2px">${perfFmt(dep)}</div></div>
+      <div style="padding:8px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:8px;color:var(--text3)">累計出金</div><div style="font-size:13px;font-weight:800;margin-top:2px">${perfFmt(wd)}</div></div>
+      <div style="padding:8px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:8px;color:var(--text3)">純入金</div><div style="font-size:13px;font-weight:800;margin-top:2px">${perfFmt(net)}</div></div>
+      <div style="padding:8px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:8px;color:var(--text3)">運用損益</div><div style="font-size:13px;font-weight:800;margin-top:2px;color:${gainColor}">${gain>=0?'+':''}${perfFmt(gain)}</div><div style="font-size:8px;color:${gainColor}">${gainRate==null?'—':(gainRate>=0?'+':'')+gainRate.toFixed(2)+'%'}</div></div>
+    </div>
+    <div style="margin-top:9px;padding:9px 10px;border-radius:9px;background:var(--bg2);font-size:9px;color:var(--text2);line-height:1.7">
+      <strong>現在総資産 ${perfFmt(total)}</strong> ＝ 純入金 ${perfFmt(net)} ＋ 運用損益 <span style="color:${gainColor};font-weight:700">${gain>=0?'+':''}${perfFmt(gain)}</span><br>
+      ※運用損益は「現在総資産＋累計出金−累計入金」で算出した概算値です。口座間振替が入金・出金の両方に含まれる場合は二重計上に注意してください。
+    </div>`;
+}
 function trRenderPerformance(){
   trRenderFireGoal();
+  trRenderCapitalBreakdown();
   const pc=document.getElementById('performanceTrendCard'), ac=document.getElementById('allocationTrendCard'), mc=document.getElementById('monthlyTrendCard');
   if(!pc||!snapshots.length)return;
   pc.style.display='block'; ac.style.display=snapshots.length>=2?'block':'none'; mc.style.display=snapshots.length>=1?'block':'none';
