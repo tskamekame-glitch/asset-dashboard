@@ -1021,6 +1021,23 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     </div>
     <!-- ═══════════ /kaView風ヒーロー ═══════════ -->
 
+    <div class="card" id="capitalReturnCard" style="display:none;margin-bottom:10px">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <h2>💰 入金額と運用益</h2>
+        <button class="btn-sm" onclick="trToggleCapitalSettings()" style="font-size:10px">⚙ 設定</button>
+      </div>
+      <div id="capitalReturnBody" style="padding:0 14px 14px"></div>
+      <div id="capitalReturnSettings" style="display:none;margin:0 14px 14px;padding:10px;border-radius:10px;background:var(--bg2)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:7px">資金移動を除いた運用成績を出すため、これまでの累計額を入力します。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+          <label style="font-size:10px;color:var(--text3)">累計入金額（円）<input id="tr-investedPrincipal" type="number" min="0" step="1000" placeholder="例：5700000" style="width:100%;margin-top:3px;padding:8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);box-sizing:border-box"></label>
+          <label style="font-size:10px;color:var(--text3)">累計出金額（円）<input id="tr-investedWithdrawals" type="number" min="0" step="1000" placeholder="なければ0" style="width:100%;margin-top:3px;padding:8px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);box-sizing:border-box"></label>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:7px">運用損益 ＝ 現在総資産 ＋ 累計出金額 − 累計入金額。入出金額が未設定の場合は表示しません。</div>
+        <button class="btn-accent" onclick="trSaveCapitalSettings()" style="margin-top:8px">保存</button>
+      </div>
+    </div>
+
     <div class="tr-summary-grid" id="trSummaryGrid" style="display:none"></div>
     <div class="filter-bar" id="filterBar" style="display:none">
       <button class="filter-btn active" data-f="all" onclick="setFilter('all')">全期間</button>
@@ -2556,7 +2573,7 @@ function amRenderStage2(active){
 }
 
 // ── 第1段階：資産配分・投資可能現金・NISA残り枠 ──
-const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0,investableCashSBI:0,investableCashMoomoo:0};
+const AM_STAGE1_DEFAULTS={targetJapan:'',targetUS:'',targetCash:'',targetOther:'',investableCash:0,investableCashSBI:0,investableCashMoomoo:0,investedPrincipal:'',investedWithdrawals:''};
 let amStage1Settings={...AM_STAGE1_DEFAULTS};
 
 function amStage1LoadLocal(){
@@ -2579,10 +2596,12 @@ async function amStage1SaveSheet(){
       ['targetOther',amStage1Settings.targetOther],
       ['investableCash',amStage1Settings.investableCash],
       ['investableCashSBI',amStage1Settings.investableCashSBI],
-      ['investableCashMoomoo',amStage1Settings.investableCashMoomoo]
+      ['investableCashMoomoo',amStage1Settings.investableCashMoomoo],
+      ['investedPrincipal',amStage1Settings.investedPrincipal],
+      ['investedWithdrawals',amStage1Settings.investedWithdrawals]
     ];
     await gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId:amSpreadsheetId,range:'settings!A1:B8',valueInputOption:'RAW',resource:{values:rows}
+      spreadsheetId:amSpreadsheetId,range:'settings!A1:B10',valueInputOption:'RAW',resource:{values:rows}
     });
     amStage1SaveLocal();
   }catch(e){amStage1SaveLocal();console.error('amStage1SaveSheet',e);}
@@ -7624,16 +7643,60 @@ function trRenderAll(){
   trRenderFileList();
   const hasData=snapshots.length>0;
   document.getElementById('emptyMsg').style.display=hasData?'none':'block';
-  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
+  ['lineCard','simCard','weeklyCard','gainLineCard','gainBarCard','barCard','donutCard','donutCcyCard','donutStockCard','donutForeignCard','donutDivCard','donutGlobalCard','donutJpCard','donutIndiaCard','ratioCard','targetCard','bubbleCard','securitiesCard','foreignStockCard','toushiCard','indexCard','pensionCard','commentCard','tableCard','priceAlertCard','capitalReturnCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=hasData?'block':'none';});
   const csvListCard=document.getElementById('csvListCard');if(csvListCard)csvListCard.style.display='block';
   document.getElementById('trSummaryGrid').style.display=hasData?'grid':'none';
   document.getElementById('filterBar').style.display=hasData?'flex':'none';
   document.getElementById('exportBar').style.display=hasData?'block':'none';
-  if(hasData){kvRender();trRenderSummary();trRenderCharts();trRenderTable();renderComment();}
+  if(hasData){kvRender();trRenderSummary();trRenderCapitalReturn();trRenderCharts();trRenderTable();renderComment();}
   else{const kc=document.getElementById('kvCard');if(kc)kc.style.display='none';}
   // FIREタブのCAGR自動反映
   if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,200);
 }
+function trToggleCapitalSettings(){
+  const el=document.getElementById('capitalReturnSettings');
+  if(!el)return;
+  const isHidden=el.style.display==='none'||!el.style.display;
+  if(isHidden){
+    const p=document.getElementById('tr-investedPrincipal'),w=document.getElementById('tr-investedWithdrawals');
+    if(p)p.value=amStage1Settings.investedPrincipal??'';
+    if(w)w.value=amStage1Settings.investedWithdrawals??'';
+  }
+  el.style.display=isHidden?'block':'none';
+}
+async function trSaveCapitalSettings(){
+  const p=document.getElementById('tr-investedPrincipal'),w=document.getElementById('tr-investedWithdrawals');
+  amStage1Settings.investedPrincipal=p&&p.value!==''?Number(p.value):'';
+  amStage1Settings.investedWithdrawals=w&&w.value!==''?Number(w.value):'';
+  amStage1SaveLocal();
+  await amStage1SaveSheet();
+  trRenderCapitalReturn();
+  const el=document.getElementById('capitalReturnSettings');if(el)el.style.display='none';
+  showToast('✓ 入出金設定を保存しました');
+}
+function trRenderCapitalReturn(){
+  const card=document.getElementById('capitalReturnCard'),body=document.getElementById('capitalReturnBody');
+  if(!card||!body)return;
+  const active=typeof amAccounts!=='undefined'&&Array.isArray(amAccounts)?amAccounts.filter(a=>!a.sold):[];
+  const total=active.length?active.reduce((s,a)=>s+Number(a.amount||0),0):(snapshots.length?snapshots[snapshots.length-1].total:0);
+  const dep=amStage1Num(amStage1Settings.investedPrincipal);
+  const wd=amStage1Num(amStage1Settings.investedWithdrawals);
+  const has=amStage1Settings.investedPrincipal!==''&&Number.isFinite(Number(amStage1Settings.investedPrincipal));
+  if(!has){
+    body.innerHTML='<div style="padding:4px 0;font-size:11px;color:var(--text3)">累計入金額を設定すると、入金による資産増加と運用による増加を分離して表示できます。現在の総資産：<strong style="color:var(--text)">'+fmt(Math.round(total))+'</strong></div>';
+    return;
+  }
+  const gain=total+wd-dep;
+  const rate=dep>0?gain/dep*100:0;
+  const c=gain>=0?'var(--green)':'var(--danger)';
+  body.innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
+    <div style="padding:9px 10px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">累計入金額</div><div style="font-size:16px;font-weight:800;margin-top:2px">${fmt(Math.round(dep))}</div></div>
+    <div style="padding:9px 10px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">現在総資産</div><div style="font-size:16px;font-weight:800;margin-top:2px">${fmt(Math.round(total))}</div></div>
+    <div style="padding:9px 10px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">純運用損益</div><div style="font-size:16px;font-weight:800;margin-top:2px;color:${c}">${gain>=0?'+':''}${fmt(Math.round(gain))}</div></div>
+    <div style="padding:9px 10px;border:0.5px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:9px;color:var(--text3)">入金額ベース利回り</div><div style="font-size:16px;font-weight:800;margin-top:2px;color:${c}">${gain>=0?'+':''}${rate.toFixed(2)}%</div></div>
+  </div><div style="font-size:9px;color:var(--text3);margin-top:7px">${wd>0?'累計出金 '+fmt(Math.round(wd))+' を運用損益の計算に反映しています。':'累計出金額は0円として計算。'}　※入出金設定は手入力値です。</div>`;
+}
+
 function trRenderFileList(){
   document.getElementById('fileList').innerHTML=snapshots.map(s=>`<div class="file-item"><div><div class="fname">📄 ${s.filename}</div><div class="fmeta">${s.date} ・ ${trFmt(s.total)}</div></div><button class="file-del" onclick="removeSnapshot('${s.date}')">✕</button></div>`).join('');
 }
