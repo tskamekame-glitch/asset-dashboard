@@ -616,6 +616,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
   <button class="nav-btn" data-tab="pricewatch" onclick="switchTab('pricewatch')"><span class="ni">🎯</span>価格管理</button>
   <button class="nav-btn" data-tab="buysim" onclick="switchTab('buysim')"><span class="ni">🧮</span>買付シミュ</button>
+  <button class="nav-btn" data-tab="events" onclick="switchTab('events')"><span class="ni">📅</span>重要イベント</button>
   <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
   <button class="nav-btn" data-tab="pnl" onclick="switchTab('pnl')"><span class="ni">📊</span>損益</button>
   <button class="nav-btn" data-tab="todo" onclick="switchTab('todo')"><span class="ni">✅</span>TODO</button>
@@ -967,6 +968,61 @@ function amConcRender(){
 }
 (function(){const base=window.amRender;if(typeof base==='function'){window.amRender=function(){const r=base.apply(this,arguments);try{amConcRender();}catch(e){console.error('amConcRender',e)}return r;};}setTimeout(()=>{try{amConcRender();}catch(e){console.error('amConcRender',e)}},1000);})();
 </script>
+<!-- セクター別目標配分管理 -->
+<div class="section" id="amSectorTargetSection">
+  <div class="section-head" onclick="toggleSection('amSectorTargetSection')">
+    <div class="section-head-left"><span>📊</span><h2>セクター配分・目標管理</h2></div>
+    <span><span class="chevron">▼</span></span>
+  </div>
+  <div class="account-list" id="amSectorTargetPanel"></div>
+</div>
+<script>
+const AM_SECTOR_TARGET_KEY='amSectorTargets_v1';
+function amSectorTargetNum(v){const n=Number(String(v??'').replace(/[,¥￥%\s]/g,''));return Number.isFinite(n)?n:0;}
+function amSectorTargetEsc(v){return typeof esc==='function'?esc(String(v)):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function amSectorTargetLoad(){
+  try{const x=JSON.parse(localStorage.getItem(AM_SECTOR_TARGET_KEY)||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}
+}
+function amSectorTargetSave(){
+  const out={};
+  document.querySelectorAll('[data-st-target]').forEach(el=>{const k=el.dataset.stTarget;const v=amSectorTargetNum(el.value);if(k&&v>=0)out[k]=v;});
+  try{localStorage.setItem(AM_SECTOR_TARGET_KEY,JSON.stringify(out));showToast('✓ セクター目標配分を保存しました');}catch(e){}
+  amSectorTargetRender();
+}
+function amSectorTargetClear(){try{localStorage.removeItem(AM_SECTOR_TARGET_KEY);}catch(e){}amSectorTargetRender();}
+function amSectorTargetRows(){
+  let src=Array.isArray(amAccounts)?amAccounts.slice():[];
+  try{const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');if(Array.isArray(ls)){const ids=new Set(src.map(a=>String(a.id||'')));ls.forEach(a=>{if(!ids.has(String(a.id||'')))src.push(a);});}}catch(e){}
+  const active=a=>{const sold=String(a.sold??'').toLowerCase();return sold!=='true'&&sold!=='1'&&sold!=='yes'&&!a.sold;};
+  const rows=src.filter(a=>active(a)&&amSectorTargetNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||'')));
+  const map={};
+  rows.forEach(a=>{const sec=String(a.sector||'').trim()||'その他・未分類';map[sec]=(map[sec]||0)+amSectorTargetNum(a.amount);});
+  return Object.entries(map).map(([sector,amount])=>({sector,amount})).sort((a,b)=>b.amount-a.amount);
+}
+function amSectorTargetRender(){
+  const el=document.getElementById('amSectorTargetPanel');if(!el)return;
+  const rows=amSectorTargetRows(),targets=amSectorTargetLoad(),total=rows.reduce((s,r)=>s+r.amount,0);
+  if(!rows.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">投資銘柄がありません。</div>';return;}
+  const targetSum=rows.reduce((s,r)=>s+amSectorTargetNum(targets[r.sector]),0);
+  const cash=(()=>{try{return typeof amStage1GetInvestableCashByBank==='function'?amSectorTargetNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}})();
+  const gapRows=rows.map(r=>{const cur=total?r.amount/total*100:0;const target=amSectorTargetNum(targets[r.sector]);return {...r,currentPct:cur,target,gap:target-cur};});
+  const positive=gapRows.filter(r=>r.gap>0&&r.target>0),positiveGap=positive.reduce((s,r)=>s+r.gap,0);
+  const projected=gapRows.map(r=>{const add=positiveGap>0&&r.gap>0&&r.target>0?cash*r.gap/positiveGap:0;const afterAmt=r.amount+add;return {...r,add,afterPct:(total+cash)>0?afterAmt/(total+cash)*100:0};});
+  const card=(label,val,sub)=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:18px;font-weight:750;margin-top:3px">${val}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
+  let html=`<div style="padding:10px 16px 5px;font-size:11px;color:var(--text3);line-height:1.6">銀行・現金等を除く投資資産をセクター別に集計します。目標比率はこの端末に保存され、買付シミュレーターの保有比率とは別に管理します。</div>`;
+  html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:6px 16px 10px">${card('投資資産','¥'+Math.round(total).toLocaleString('ja-JP'),'セクター合計')}${card('目標設定',''+targetSum.toFixed(1)+'%','入力済み合計')}${card('投資可能現金','¥'+Math.round(cash).toLocaleString('ja-JP'),'SBI＋moomoo')}</div>`;
+  html+=`<div style="padding:4px 16px 6px;font-size:11px;color:${Math.abs(targetSum-100)<0.1?'var(--green)':'var(--text3)'}">${Math.abs(targetSum-100)<0.1?'✓ 目標合計は100%です。':'※ 目標合計を100%にすると全体配分として使いやすくなります。現在 '+targetSum.toFixed(1)+'%'}</div>`;
+  html+=`<div style="padding:0 16px 8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:620px"><thead><tr style="color:var(--text3);text-align:right;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px 4px">セクター</th><th>現在額</th><th>現在比率</th><th>目標比率</th><th>差</th><th>目標額</th><th>不足/超過額</th></tr></thead><tbody>`;
+  gapRows.forEach(r=>{const targetAmt=total*r.target/100;const diffAmt=targetAmt-r.amount;const sign=r.gap>0?'+':'';html+=`<tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 4px;font-weight:650">${amSectorTargetEsc(r.sector)}</td><td style="text-align:right">¥${Math.round(r.amount).toLocaleString('ja-JP')}</td><td style="text-align:right">${r.currentPct.toFixed(1)}%</td><td style="text-align:right"><input data-st-target="${amSectorTargetEsc(r.sector)}" type="number" min="0" max="100" step="0.5" value="${r.target? r.target:''}" style="width:64px;box-sizing:border-box;padding:5px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);text-align:right"></td><td style="text-align:right;color:${r.gap>0?'var(--blue)':r.gap<0?'var(--red)':'var(--text3)'}">${sign}${r.gap.toFixed(1)}pt</td><td style="text-align:right">¥${Math.round(targetAmt).toLocaleString('ja-JP')}</td><td style="text-align:right;color:${diffAmt>0?'var(--blue)':diffAmt<0?'var(--red)':'var(--text3)'}">${diffAmt>0?'+':'−'}¥${Math.abs(Math.round(diffAmt)).toLocaleString('ja-JP')}</td></tr>`;});
+  html+=`</tbody></table></div>`;
+  html+=`<div style="padding:6px 16px 4px;font-size:12px;font-weight:700">💰 投資可能現金を全額投入した場合</div><div style="padding:0 16px 6px;font-size:10px;color:var(--text3);line-height:1.6">目標比率を下回るセクターへ、不足ポイントの大きさに比例して現金を仮配分した場合の試算です。実際の注文は行いません。</div>`;
+  html+=`<div style="padding:0 16px 10px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:520px"><thead><tr style="color:var(--text3);text-align:right;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px 4px">セクター</th><th>現在比率</th><th>仮想追加額</th><th>買付後比率</th></tr></thead><tbody>`;
+  projected.forEach(r=>{html+=`<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 4px">${amSectorTargetEsc(r.sector)}</td><td style="text-align:right">${r.currentPct.toFixed(1)}%</td><td style="text-align:right">¥${Math.round(r.add).toLocaleString('ja-JP')}</td><td style="text-align:right;font-weight:700">${r.afterPct.toFixed(1)}%</td></tr>`;});
+  html+=`</tbody></table></div><div style="display:flex;gap:7px;padding:0 16px 14px;flex-wrap:wrap"><button class="btn-sm" type="button" onclick="amSectorTargetSave()">💾 目標配分を保存</button><button class="btn-sm" type="button" onclick="amSectorTargetClear()">リセット</button></div>`;
+  el.innerHTML=html;
+}
+(function(){const base=window.amRender;if(typeof base==='function'&&!window.__amSectorTargetWrapped){window.__amSectorTargetWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amSectorTargetRender();}catch(e){}return r;};}setTimeout(()=>{try{amSectorTargetRender();}catch(e){}},1000);})();
+</script>
 <!-- 米国株：株価上昇益 vs 為替益 個別分析 -->
     <div class="section" id="amUsFxSection">
       <div class="section-head" onclick="toggleSection('amUsFxSection')">
@@ -1026,6 +1082,65 @@ function amFireGoalRender(){
 }
 (function(){const base=window.amRender;if(typeof base==='function'){window.amRender=function(){const r=base.apply(this,arguments);try{amFireGoalRender();}catch(e){console.error('amFireGoalRender',e)}return r;};}setTimeout(()=>{try{amFireGoalRender();}catch(e){console.error('amFireGoalRender',e)}},1000);})();
     </script>
+    <!-- 前回取込比ランキング -->
+    <div class="section" id="amImportDiffSection">
+      <div class="section-head" onclick="toggleSection('amImportDiffSection')">
+        <div class="section-head-left"><span>📈</span><h2>前回取込比ランキング</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amImportDiffPanel"></div>
+    </div>
+    <script>
+function amImportDiffNum(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
+function amImportDiffMoney(v){const n=Math.round(amImportDiffNum(v));return (n<0?'−':'')+'¥'+Math.abs(n).toLocaleString('ja-JP');}
+function amImportDiffPct(v){const n=amImportDiffNum(v);return (n>0?'＋':'')+n.toFixed(1)+'%';}
+function amImportDiffEsc(v){return typeof esc==='function'?esc(String(v)):String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function amImportDiffRender(){
+  const el=document.getElementById('amImportDiffPanel');if(!el)return;
+  let data=null;try{data=JSON.parse(localStorage.getItem(DAILY_SNAP_KEY)||'null');}catch(e){}
+  if(!data||!data.today||!data.prev){
+    el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">前回取込との比較データがありません。別の日にもう一度CSVを取り込むと、今回のデータと比較できるようになります。</div>';return;
+  }
+  const today=data.today,prev=data.prev;
+  const map={};
+  Object.values(today.items||{}).forEach(x=>{const key=String(x.code||x.name||x.id);map[key]={today:x,prev:null};});
+  Object.values(prev.items||{}).forEach(x=>{const key=String(x.code||x.name||x.id);if(!map[key])map[key]={today:null,prev:x};else map[key].prev=x;});
+  const rows=Object.values(map).map(x=>{
+    const t=x.today,p=x.prev;
+    const amount=amImportDiffNum(t?t.amount:0),prevAmount=amImportDiffNum(p?p.amount:0),diff=amount-prevAmount;
+    const base=prevAmount||amImportDiffNum(p&&p.costBasis);
+    const pct=base?diff/base*100:null;
+    const price=amImportDiffNum(t?t.price:0),prevPrice=amImportDiffNum(p?p.price:0);
+    const pricePct=prevPrice&&price?((price/prevPrice)-1)*100:null;
+    const name=t?t.name:p?p.name:'—';
+    const code=t?t.code:p?p.code:'';
+    return {name,code,amount,prevAmount,diff,pct,price,prevPrice,pricePct,cat:t?t.cat:p?p.cat:''};
+  }).filter(r=>r.diff!==0||r.pricePct!==null).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+  if(!rows.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">前回取込から大きな変動はありません。</div>';return;}
+  const up=rows.filter(r=>r.diff>0).sort((a,b)=>b.diff-a.diff).slice(0,10);
+  const down=rows.filter(r=>r.diff<0).sort((a,b)=>a.diff-b.diff).slice(0,10);
+  const totalDiff=rows.reduce((s,r)=>s+r.diff,0);
+  const card=(title,list)=>{
+    if(!list.length)return '<div style="padding:8px 0;color:var(--text3);font-size:11px">該当銘柄なし</div>';
+    return list.map(r=>{
+      const col=r.diff>0?'var(--green)':r.diff<0?'var(--danger)':'var(--text)';
+      const label=r.code&&r.code!==r.name?r.code+' / '+r.name:r.name;
+      return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div style="min-width:0"><div style="font-size:11px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${amImportDiffEsc(label)}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">評価額 ${amImportDiffMoney(r.amount)}${r.pct===null?'':' ・ '+amImportDiffPct(r.pct)}${r.pricePct===null?'':' ・ 株価 '+amImportDiffPct(r.pricePct)}</div></div><div style="text-align:right;font-size:12px;font-weight:750;color:${col}">${r.diff>0?'＋':''}${amImportDiffMoney(r.diff)}</div></div>`;
+    }).join('');
+  };
+  el.innerHTML=`<div style="padding:10px 16px 4px;font-size:11px;color:var(--text3);line-height:1.5">${amImportDiffEsc(prev.date)} → ${amImportDiffEsc(today.date)} の保有銘柄を比較。評価額の増減は、株価変動だけでなく為替・保有数量・入出庫なども含みます。</div>`+
+    `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;padding:6px 16px 10px"><div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px"><div style="font-size:9px;color:var(--text3)">評価額増減</div><div style="font-size:17px;font-weight:750;margin-top:2px;color:${totalDiff>=0?'var(--green)':'var(--danger)'}">${totalDiff>=0?'＋':''}${amImportDiffMoney(totalDiff)}</div></div><div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px"><div style="font-size:9px;color:var(--text3)">上昇</div><div style="font-size:17px;font-weight:750;margin-top:2px">${up.length}銘柄</div></div><div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px"><div style="font-size:9px;color:var(--text3)">下落</div><div style="font-size:17px;font-weight:750;margin-top:2px">${down.length}銘柄</div></div></div>`+
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 16px 14px"><div><div style="font-size:12px;font-weight:700;padding:3px 0 2px">⬆️ 評価額増加 TOP10</div>${card('up',up)}</div><div><div style="font-size:12px;font-weight:700;padding:3px 0 2px">⬇️ 評価額減少 TOP10</div>${card('down',down)}</div></div>`+
+    `<div style="padding:0 16px 12px;font-size:10px;color:var(--text3);line-height:1.5">※「前回取込比」は現在保存されている前回スナップショットとの比較です。同日に複数回取り込んだ場合は最新データで上書きされます。</div>`;
+}
+(function(){
+  const base=window.amRender;
+  if(typeof base==='function'){
+    window.amRender=function(){const r=base.apply(this,arguments);try{amImportDiffRender();}catch(e){console.error('amImportDiffRender',e)}return r;};
+  }
+  setTimeout(()=>{try{amImportDiffRender();}catch(e){}},1000);
+})();
+    </script>
     <!-- 月次運用成績 -->
     <div class="section" id="amMonthlyPerformanceSection">
       <div class="section-head" onclick="toggleSection('amMonthlyPerformanceSection')">
@@ -1043,47 +1158,25 @@ function amMonthlyPerfMoney(v){
 }
 function amMonthlyPerfRender(){
   const el=document.getElementById('amMonthlyPerformancePanel'); if(!el)return;
-  let snaps=[];
-  try{ snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]'); }catch(e){ snaps=[]; }
-  if(!Array.isArray(snaps)||!snaps.length){
-    el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">月次スナップショットがありません。資産管理の「📈 推移に記録」を実行すると、月次データを蓄積できます。</div>';
-    return;
-  }
-  const byMonth={};
-  snaps.filter(x=>x&&x.date).sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(x=>{
-    const ym=String(x.date).slice(0,7); if(!ym)return;
-    byMonth[ym]=x;
-  });
-  const months=Object.keys(byMonth).sort().slice(-12);
-  const allMonths=Object.keys(byMonth).sort();
-  const rows=months.map((ym,i)=>{
-    const sn=byMonth[ym];
-    const idx=allMonths.indexOf(ym);
-    const prev=idx>0?byMonth[allMonths[idx-1]]:null;
-    const total=amMonthlyPerfNum(sn.total);
-    const prevTotal=prev?amMonthlyPerfNum(prev.total):null;
-    const diff=prevTotal==null?null:total-prevTotal;
-    let snapshotGain=null;
-    try{ if(typeof trCalcSnapshotGain==='function'){ const g=trCalcSnapshotGain(sn); if(g&&Number.isFinite(Number(g.gain))) snapshotGain=Number(g.gain); } }catch(e){}
-    return {ym,sn,total,diff,snapshotGain};
-  });
-  const latest=rows[rows.length-1];
-  const positive=latest&&latest.diff!=null&&latest.diff>=0;
-  let html='<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">毎月のスナップショットから、資産残高と前月からの増減を確認します。入出金データがない月は、増減を純粋な運用損益とはみなしません。</div>';
-  if(latest){
-    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 16px 10px">';
-    html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--text3)">最新月の総資産</div><div style="font-size:18px;font-weight:750;margin-top:3px">'+amMonthlyPerfMoney(latest.total)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">'+latest.ym.replace('-','/')+'</div></div>';
-    html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--text3)">前月比</div><div style="font-size:18px;font-weight:750;margin-top:3px;color:'+(latest.diff==null?'var(--text)':positive?'var(--green)':'var(--danger)')+'">'+(latest.diff==null?'—':(latest.diff>=0?'＋':'')+amMonthlyPerfMoney(latest.diff))+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">資産残高の増減</div></div>';
-    html+='</div>';
-  }
-  html+='<div style="padding:2px 16px 6px;font-size:12px;font-weight:700">📊 月次推移（直近12か月）</div><div style="padding:0 16px 14px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:430px"><thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">月</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">総資産</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">前月比</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">月次評価損益</th></tr></thead><tbody>';
-  rows.forEach(r=>{
-    const d=r.diff; const g=r.snapshotGain;
-    html+='<tr><td style="padding:7px 4px;border-bottom:1px solid var(--border)">'+r.ym.replace('-','/')+'</td><td style="padding:7px 4px;text-align:right;border-bottom:1px solid var(--border);font-weight:600">'+amMonthlyPerfMoney(r.total)+'</td><td style="padding:7px 4px;text-align:right;border-bottom:1px solid var(--border);color:'+(d==null?'var(--text3)':d>=0?'var(--green)':'var(--danger)')+'">'+(d==null?'—':(d>=0?'＋':'')+amMonthlyPerfMoney(d))+'</td><td style="padding:7px 4px;text-align:right;border-bottom:1px solid var(--border);color:'+(g==null?'var(--text3)':g>=0?'var(--green)':'var(--danger)')+'">'+(g==null?'—':(g>=0?'＋':'')+amMonthlyPerfMoney(g))+'</td></tr>';
-  });
-  html+='</tbody></table></div>';
+  let snaps=[]; try{snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snaps=[];}
+  if(!Array.isArray(snaps)||!snaps.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">月次スナップショットがありません。資産管理の「📈 推移に記録」を実行すると、月次データを蓄積できます。</div>';return;}
+  snaps.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  const byMonth={};snaps.filter(x=>x&&x.date).forEach(x=>{const ym=String(x.date).slice(0,7);if(ym)byMonth[ym]=x;});
+  const allMonths=Object.keys(byMonth).sort(),months=allMonths.slice(-12);
+  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
+  const money=v=>{const n=Math.round(num(v));return(n<0?'−':'')+'¥'+Math.abs(n).toLocaleString('ja-JP');};
+  const save=()=>{try{localStorage.setItem('assetSnapshots',JSON.stringify(snaps));}catch(e){} if(typeof trSaveToStorage==='function')try{trSaveToStorage();}catch(e){}};
+  window.amMonthlyPerfSetFlow=function(ym,val){const sn=byMonth[ym];if(!sn)return;sn.netFlow=(val===''||val==null)?null:num(val);sn.flowSource='manual';save();amMonthlyPerfRender();};
+  const rows=months.map(ym=>{const sn=byMonth[ym],idx=allMonths.indexOf(ym),prev=idx>0?byMonth[allMonths[idx-1]]:null,total=num(sn.total),prevTotal=prev?num(prev.total):null,assetChange=prevTotal==null?null:total-prevTotal,flow=(sn.netFlow===undefined||sn.netFlow===null||sn.netFlow==='')?null:num(sn.netFlow),operating=assetChange==null||flow==null?null:assetChange-flow,base=prevTotal!=null?prevTotal+Math.max(0,flow||0):null,opRate=operating!=null&&base>0?operating/base*100:null;return{ym,sn,total,assetChange,flow,operating,opRate};});
+  const known=rows.filter(r=>r.operating!=null),opSum=known.reduce((a,r)=>a+r.operating,0),flowSum=known.reduce((a,r)=>a+r.flow,0),assetSum=known.reduce((a,r)=>a+r.assetChange,0);
+  let html='<div style="padding:0 16px 10px;font-size:11px;color:var(--text3);line-height:1.55">資産増減から当月の純入金・純出金を差し引き、<b>実質運用損益</b>を分離します。入金を＋、出金を−で入力。未入力月は運用損益を計算しません。</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px">';[['累計資産増減',assetSum],['累計純入金',flowSum],['累計実質運用損益',opSum]].forEach(c=>{html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 7px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+c[0]+'</div><div style="font-size:15px;font-weight:800">'+money(c[1])+'</div></div>';});html+='</div>';
+  html+='<div style="overflow-x:auto;padding:0 16px 12px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px"><thead><tr style="color:var(--text3);text-align:right;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:7px 4px">月</th><th>月末資産</th><th>資産増減</th><th>純入金/出金</th><th>実質運用損益</th><th>実質運用利回り</th></tr></thead><tbody>';
+  rows.forEach(r=>{const c=r.operating==null?'var(--text3)':r.operating>=0?'#C0392B':'#2563EB';html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;text-align:left;font-weight:700">'+r.ym.replace('-','/')+'</td><td style="text-align:right">'+money(r.total)+'</td><td style="text-align:right">'+(r.assetChange==null?'—':money(r.assetChange))+'</td><td style="text-align:right"><input type="number" value="'+(r.flow==null?'':Math.round(r.flow))+'" placeholder="未入力" onchange="amMonthlyPerfSetFlow(\''+r.ym+'\',this.value)" style="width:105px;padding:5px 6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text);text-align:right;font-size:11px"></td><td style="text-align:right;font-weight:800;color:'+c+'">'+(r.operating==null?'未入力':money(r.operating))+'</td><td style="text-align:right;color:'+c+'">'+(r.opRate==null?'—':(r.opRate>=0?'+':'')+r.opRate.toFixed(2)+'%')+'</td></tr>';});
+  html+='</tbody></table></div><div style="padding:0 16px 14px;font-size:10px;color:var(--text3)">※ 純入金/出金は「入金を＋、出金を−」。税金・手数料・配当などはスナップショットの資産増減に含まれます。入出金を正確に入力できるほど実質運用損益の精度が上がります。</div>';
   el.innerHTML=html;
 }
+
 (function(){
   const base=window.amRender;
   if(typeof base==='function'&&!window.__amMonthlyPerfWrapped){
@@ -1469,6 +1562,32 @@ function amMonthlyPerfRender(){
   </div>
 </div>
 
+<!-- ========== EVENTS ========== -->
+<div class="panel" id="tab-events">
+  <div style="padding:16px">
+    <div style="font-size:18px;font-weight:700;margin-bottom:4px">📅 決算・重要イベント管理</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:14px">保有銘柄の決算予定と、FOMC・日銀会合・米CPI・雇用統計など、売買判断前に確認したいイベントをまとめて管理します。日付は自動取得ではなく、登録内容を編集して使います。</div>
+    <div id="ev-alert" style="margin-bottom:12px"></div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h2>⏰ 直近イベント</h2><button class="btn-accent" style="padding:6px 12px;font-size:12px" onclick="evAddEvent()">＋ イベント追加</button></div>
+      <div id="ev-list"></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-head"><h2>📈 保有銘柄の決算予定</h2></div>
+      <div style="padding:0 16px 8px;font-size:11px;color:var(--text3)">資産管理に登録された「決算日」を自動表示。決算前後の売買予定もここで記録できます。</div>
+      <div id="ev-earnings"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>🧭 重要イベント一覧（初期登録）</h2></div>
+      <div style="padding:0 16px 12px;font-size:11px;color:var(--text3);line-height:1.6">初期データは公表済みの日程を登録しています。日程変更があり得るため、売買前には各公式サイトで最終確認してください。</div>
+      <div style="padding:0 16px 14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="icon-btn" onclick="evResetDefaults()">初期イベントを再登録</button>
+        <button class="icon-btn" onclick="switchTab('buysim')">🧮 買付シミュレーターへ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ========== SELL ========== -->
 <div class="panel" id="tab-pricewatch">
   <div class="section" id="amPriceWatchSectionStandalone">
@@ -1520,6 +1639,310 @@ function amMonthlyPerfRender(){
         <button class="btn-sm" type="button" onclick="baReset()">リセット</button>
       </div>
       <div id="ba-results" style="margin-top:10px"></div>
+    </div>
+
+    <!-- 買付前後ポートフォリオ比較 -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">🔍 買付前 → 買付後 ポートフォリオ比較</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">上の配分シミュレーターで入力した買付を反映し、集中度・半導体・米国株・現金比率がどう変わるかを確認します。実際の資産・注文は変更しません。</div>
+      <div id="ba-compare-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="ba-compare-table"></div>
+      <div id="ba-compare-detail" style="margin-top:10px"></div>
+    </div>
+
+    <!-- 投資戦略別ポートフォリオ -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">🎯 投資戦略別ポートフォリオ</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">長期コア・半導体/AI・バリュー・その他の4戦略で資産配分を確認します。目標比率を設定すると不足/超過を表示し、上の買付シミュレーターの入力額を買付後に反映できます。</div>
+      <div id="strat-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="strat-targets" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px"></div>
+      <div id="strat-table"></div>
+      <div id="strat-buyafter" style="margin-top:10px"></div>
+      <div id="strat-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+    <!-- 目標配分までの買付額自動配分 -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 目標配分までの買付額自動配分</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">投資可能現金・戦略目標・銘柄の目標保有比率を使って、今回使える資金を機械的に配分します。暴落時用の現金は別に確保できます。実際の資産・注文は変更しません。</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label style="font-size:10px;color:var(--text3)">最低現金維持額（円）<input id="aa-reserve" type="number" min="0" step="10000" value="500000" oninput="aaRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);text-align:right"></label>
+        <label style="font-size:10px;color:var(--text3)">今回の最大投入額（円）<input id="aa-max" type="number" min="0" step="10000" placeholder="未入力＝可能額まで" oninput="aaRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);text-align:right"></label>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
+        <button class="btn-sm" type="button" onclick="aaSetMax(0.25)">25%投入</button><button class="btn-sm" type="button" onclick="aaSetMax(0.5)">50%投入</button><button class="btn-sm" type="button" onclick="aaSetMax(1)">投入可能額まで</button><button class="btn-sm" type="button" onclick="aaResetInputs()">初期値</button>
+      </div>
+      <div id="aa-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="aa-strategy"></div>
+      <div id="aa-ticker" style="margin-top:10px"></div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text3);line-height:1.6">※戦略目標が未設定の場合は、銘柄の「目標保有比率」を優先します。どちらも未設定の銘柄は、現在の戦略配分を維持する方向で残余資金を配分します。</div>
+      <div id="aa-drawdown" style="margin-top:10px"></div>
+    </div>
+
+    <!-- 定期リバランス・買付優先順位 -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">🔄 定期リバランス・買付優先順位</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">目標配分との差を機械的に確認し、今月の投入資金をどの銘柄・戦略へ振り向けると目標に近づくかを整理します。株価の将来予測による順位ではありません。</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
+        <label style="font-size:10px;color:var(--text3)">今月の追加投資額（円）<input id="rb-month-buy" type="number" min="0" step="10000" value="100000" oninput="rbRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);text-align:right"></label>
+        <label style="font-size:10px;color:var(--text3)">最低現金比率（%）<input id="rb-min-cash" type="number" min="0" max="100" step="1" value="10" oninput="rbRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);text-align:right"></label>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+        <button class="btn-sm" type="button" onclick="rbSetBuy(50000)">5万円</button><button class="btn-sm" type="button" onclick="rbSetBuy(100000)">10万円</button><button class="btn-sm" type="button" onclick="rbSetBuy(300000)">30万円</button><button class="btn-sm" type="button" onclick="rbSetBuy(0)">買付なし</button>
+      </div>
+      <div id="rb-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="rb-strategy"></div>
+      <div id="rb-ticker" style="margin-top:10px"></div>
+      <div id="rb-fire" style="margin-top:10px"></div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-sm" type="button" onclick="rbSaveMonth()">💾 今月の実績を記録</button><button class="btn-sm" type="button" onclick="rbRenderHistory()">🔄 履歴更新</button><button class="btn-sm" type="button" onclick="rbClearHistory()">履歴をリセット</button>
+      </div>
+      <div id="rb-history" style="margin-top:10px"></div>
+      <div style="font-size:10px;color:var(--text3);line-height:1.6;margin-top:8px">※「今月の実績を記録」は、その時点の資産・現金・買付額を保存します。運用損益は入力した入出金を差し引いて機械的に算出します。外部市場予測ではありません。</div>
+    </div>
+
+    <!-- リスク管理・暴落耐性シミュレーター -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📉 リスク管理・暴落耐性シミュレーター</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">現在のポートフォリオを基準に、株式市場や半導体・AIが下落した場合の資産影響と、暴落時に使える現金を試算します。実際の資産・注文は変更しません。</div>
+      <div id="risk-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px">
+        <label style="font-size:10px;color:var(--text3)">今後の買付予定額<input id="risk-planned-buy" type="number" min="0" step="10000" value="0" oninput="riskRender()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"></label>
+        <label style="font-size:10px;color:var(--text3)">サイドFIRE想定年利<input id="risk-fire-rate" type="number" min="0" step="0.1" value="5" oninput="riskRender()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"></label>
+      </div>
+      <div id="risk-scenarios"></div>
+      <div id="risk-strategy"></div>
+      <div id="risk-fire"></div>
+      <div id="risk-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+    <!-- 暴落時の買い増しルール・資金投入シミュレーター -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📉 暴落時の買い増しルール・資金投入シミュレーター</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">暴落率に応じて現金を段階投入した場合の買付額、残り現金、買い増し後の半導体比率・集中度を試算します。実際の資産・注文は変更しません。</div>
+      <div id="crashbuy-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-bottom:10px">
+        <label style="font-size:10px;color:var(--text3)">暴落前に確保する現金<input id="crashbuy-reserve" type="number" min="0" step="10000" value="0" oninput="crashBuyRender()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"></label>
+        <label style="font-size:10px;color:var(--text3)">買い増し対象<select id="crashbuy-target" onchange="crashBuyRender()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"><option value="semi">半導体・AIを優先</option><option value="all">ポートフォリオ全体</option></select></label>
+      </div>
+      <div id="crashbuy-rules"></div>
+      <div id="crashbuy-after" style="margin-top:10px"></div>
+      <div id="crashbuy-fire" style="margin-top:10px"></div>
+      <div id="crashbuy-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+<script>
+// ============================================================
+// 暴落時の買い増しルール・資金投入シミュレーター
+// ============================================================
+function crashBuyNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function crashBuyEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function crashBuyMoney(v){return '¥'+Math.round(crashBuyNum(v)).toLocaleString('ja-JP');}
+function crashBuyRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[],map={};
+  src.filter(a=>!a.sold&&crashBuyNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const ticker=String(a.ticker||a.code||a.symbol||'').trim(),name=String(a.name||ticker).trim(),key=ticker||name; if(!key)return;
+    if(!map[key])map[key]={ticker:ticker||key,name,amount:0,strategy:'',sector:String(a.sector||'')};
+    map[key].amount+=crashBuyNum(a.amount); if(a.strategy)map[key].strategy=String(a.strategy); if(a.sector)map[key].sector=String(a.sector);
+  });
+  return Object.values(map).map(r=>({...r,strategy:r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):'')||'その他')}));
+}
+function crashBuyCash(){try{return typeof amStage1GetInvestableCashByBank==='function'?crashBuyNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}}
+function crashBuySemi(r){return r.strategy==='半導体・AI'||/半導体|メモリ|AI|GPU|HDD|データセンター/i.test([r.name,r.ticker,r.sector].join(' '));}
+function crashBuyInput(id,def){const e=document.getElementById(id);return e?Math.max(0,Math.min(100,crashBuyNum(e.value))):def;}
+function crashBuyRender(){
+  const sum=document.getElementById('crashbuy-summary'),rules=document.getElementById('crashbuy-rules'),after=document.getElementById('crashbuy-after'),fire=document.getElementById('crashbuy-fire'),note=document.getElementById('crashbuy-note');
+  if(!sum||!rules)return;
+  const rows=crashBuyRows(),invest=rows.reduce((s,r)=>s+r.amount,0),cash=crashBuyCash();
+  let reserve=crashBuyNum(document.getElementById('crashbuy-reserve')?.value); if(!reserve)reserve=Math.round(cash*0.2); reserve=Math.min(reserve,cash);
+  const available=Math.max(0,cash-reserve),target=document.getElementById('crashbuy-target')?.value||'semi';
+  const levels=[{drop:10,default:10},{drop:20,default:20},{drop:30,default:30},{drop:40,default:40}];
+  rules.innerHTML='<div style="font-size:12px;font-weight:650;margin-bottom:7px">🎯 下落率ごとの現金投入率</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'+levels.map((x,i)=>`<label style="font-size:10px;color:var(--text3)">−${x.drop}%で投入<input id="crashbuy-pct-${i}" type="number" min="0" max="100" step="5" value="${x.default}" oninput="crashBuyRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"></label>`).join('')+'</div>';
+  const puts=levels.map((x,i)=>Math.min(available,available*crashBuyInput('crashbuy-pct-'+i,x.default)/100));
+  let cumulative=0; const table=levels.map((x,i)=>{cumulative=Math.min(available,cumulative+puts[i]);const remain=available-cumulative;return {x,put:puts[i],cum:cumulative,remain};});
+  const final=table[table.length-1]?.cum||0;
+  sum.innerHTML=`投資資産 <b>${crashBuyMoney(invest)}</b> ／ 投資可能現金 <b>${crashBuyMoney(cash)}</b> ／ 暴落用に確保 <b>${crashBuyMoney(reserve)}</b> ／ 投入可能額 <b>${crashBuyMoney(available)}</b>`;
+  rules.innerHTML+=`<div style="overflow:auto;margin-top:10px"><table style="width:100%;min-width:610px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">下落率</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">今回投入</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">累計投入</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">残り投入枠</th></tr></thead><tbody>${table.map(r=>`<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)"><b>−${r.x.drop}%</b></td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${crashBuyMoney(r.put)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);font-weight:700">${crashBuyMoney(r.cum)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${crashBuyMoney(r.remain)}</td></tr>`).join('')}</tbody></table></div>`;
+  const semi=rows.filter(crashBuySemi).reduce((s,r)=>s+r.amount,0),other=Math.max(0,invest-semi);
+  const targetName=target==='semi'?'半導体・AIを優先':'ポートフォリオ全体';
+  const semiBuy=target==='semi'?final:final*(invest?semi/invest:0), otherBuy=final-semiBuy;
+  const semiAfter=semi+semiBuy, otherAfter=other+otherBuy, totalAfter=invest+final, cashAfter=cash-final;
+  const top=rows.slice().sort((a,b)=>b.amount-a.amount).slice(0,5).map(r=>({name:r.ticker||r.name,amount:r.amount}));
+  after.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">📊 −40%到達時の買い増し後</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">累計買い増し</div><b>${crashBuyMoney(final)}</b></div><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">残り現金</div><b>${crashBuyMoney(cashAfter)}</b></div><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">半導体・AI比率</div><b>${totalAfter?(semiAfter/totalAfter*100).toFixed(1):'0.0'}%</b></div></div><div style="font-size:11px;margin-top:8px;color:var(--text2)">買い増し対象：${crashBuyEsc(targetName)} ／ 半導体・AIへの追加 ${crashBuyMoney(semiBuy)} ／ その他への追加 ${crashBuyMoney(otherBuy)}</div>`;
+  let fireTarget=0; try{const x=JSON.parse(localStorage.getItem('amFireGoalSettings')||'null')||{};fireTarget=crashBuyNum(x.target);}catch(e){}
+  if(fireTarget>0){const monthly=crashBuyNum((()=>{try{return (JSON.parse(localStorage.getItem('amFireGoalSettings')||'null')||{}).monthly}catch(e){return 0}})());const rate=5/100/12;const months=(cur=>{let b=cur,m=0;while(b<fireTarget&&m<1200){b=b*(1+rate)+monthly;m++;}return m;})(invest);const months2=(cur=>{let b=cur,m=0;while(b<fireTarget&&m<1200){b=b*(1+rate)+monthly;m++;}return m;})(invest+final);const fmt=m=>m>=1200?'30年以上':m===0?'達成済み':Math.floor(m/12)+'年'+(m%12?m%12+'か月':'');fire.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">🔥 サイドFIREへの機械的な影響</div><div style="font-size:11px">買い増し前：<b>${fmt(months)}</b> → −40%時点で累計買い増しした場合：<b>${fmt(months2)}</b><br><span style="color:var(--text3)">目標 ${crashBuyMoney(fireTarget)}・想定年利5%・毎月追加投資 ${crashBuyMoney(monthly)}で計算</span></div>`;}else fire.innerHTML='';
+  note.textContent='※下落率と投入率はユーザー設定による仮定です。将来の暴落を予測するものではありません。投入額は現金残高を上限とし、買付後の株価変動・税金・手数料は考慮していません。';
+}
+(function(){[900,2000,4000].forEach(ms=>setTimeout(()=>{try{crashBuyRender();}catch(e){}},ms));const base=window.amRender;if(typeof base==='function'&&!window.__crashBuyAmWrapped){window.__crashBuyAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{crashBuyRender();}catch(e){}return r;};}const baseBa=window.baRender;if(typeof baseBa==='function'&&!window.__crashBuyBaWrapped){window.__crashBuyBaWrapped=true;window.baRender=function(){const r=baseBa.apply(this,arguments);try{crashBuyRender();}catch(e){}return r;};}})();
+</script>
+    <!-- 売買ルール・投資判断チェック -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📌 売買ルール・投資判断チェック</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">価格管理・最新情報・決算・投資戦略・集中度を横断して、登録した投資ルールを満たしているか確認します。判定は機械的なチェックで、売買を自動実行しません。</div>
+      <div style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚙️ ルール設定</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
+          <label style="font-size:10px;color:var(--text3)">最大1銘柄比率<input id="rule-max-stock" type="number" min="1" max="100" step="1" value="20" oninput="ruleRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">半導体・AI上限<input id="rule-max-semi" type="number" min="1" max="100" step="1" value="45" oninput="ruleRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">最低現金比率<input id="rule-min-cash" type="number" min="0" max="100" step="1" value="10" oninput="ruleRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">決算までの最低日数<input id="rule-earn-days" type="number" min="0" max="90" step="1" value="7" oninput="ruleRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">最新分析の有効日数<input id="rule-analysis-days" type="number" min="1" max="365" step="1" value="30" oninput="ruleRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">目標買値から許容する上振れ<input id="rule-buy-over" type="number" min="0" max="100" step="1" value="0" oninput="ruleRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn-sm" type="button" onclick="ruleReset()">初期値に戻す</button><button class="btn-sm" type="button" onclick="ruleSave()">ルールを保存</button></div>
+      </div>
+      <div id="rule-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="rule-buy-list"></div>
+      <div id="rule-sell-list" style="margin-top:10px"></div>
+      <div id="rule-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+<script>
+// ============================================================
+// 売買ルール・投資判断チェック
+// ============================================================
+const RULE_KEY='assetTradingRules_v1';
+const RULE_DEFAULT={maxStock:20,maxSemi:45,minCash:10,earnDays:7,analysisDays:30,buyOver:0};
+function ruleEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function ruleNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function ruleLoad(){try{const x=JSON.parse(localStorage.getItem(RULE_KEY)||'null');return Object.assign({},RULE_DEFAULT,x||{});}catch(e){return {...RULE_DEFAULT};}}
+function ruleVals(){return {maxStock:ruleNum(document.getElementById('rule-max-stock')?.value),maxSemi:ruleNum(document.getElementById('rule-max-semi')?.value),minCash:ruleNum(document.getElementById('rule-min-cash')?.value),earnDays:ruleNum(document.getElementById('rule-earn-days')?.value),analysisDays:ruleNum(document.getElementById('rule-analysis-days')?.value),buyOver:ruleNum(document.getElementById('rule-buy-over')?.value)};}
+function ruleSave(){localStorage.setItem(RULE_KEY,JSON.stringify(ruleVals()));showToast('✓ 売買ルールを保存しました');ruleRender();}
+function ruleReset(){Object.entries(RULE_DEFAULT).forEach(([k,v])=>{const id={'maxStock':'rule-max-stock','maxSemi':'rule-max-semi','minCash':'rule-min-cash','earnDays':'rule-earn-days','analysisDays':'rule-analysis-days','buyOver':'rule-buy-over'}[k];const e=document.getElementById(id);if(e)e.value=v;});localStorage.setItem(RULE_KEY,JSON.stringify(RULE_DEFAULT));ruleRender();}
+function ruleInit(){const r=ruleLoad();[['maxStock','rule-max-stock'],['maxSemi','rule-max-semi'],['minCash','rule-min-cash'],['earnDays','rule-earn-days'],['analysisDays','rule-analysis-days'],['buyOver','rule-buy-over']].forEach(([k,id])=>{const e=document.getElementById(id);if(e)e.value=r[k];});}
+function ruleRows(){
+  let src=Array.isArray(window.amAccounts)?window.amAccounts.slice():[];
+  try{const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');if(Array.isArray(ls)&&ls.length){const ids=new Set(src.map(a=>String(a.id)));ls.forEach(a=>{if(!ids.has(String(a.id)))src.push(a);});}}catch(e){}
+  const map={};
+  src.filter(a=>a&&!a.sold&&ruleNum(a.amount)>0&&a.cat!=='銀行'&&a.cat!=='FX'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const ticker=String(a.ticker||a.code||a.symbol||'').trim(),name=String(a.name||ticker).trim(),key=ticker||name;if(!key)return;
+    if(!map[key])map[key]={ticker:ticker||key,name,amount:0,targetBuy:0,targetSell:0,targetRatio:0,sector:'',strategy:'',per:0,forwardPER:0,pbr:0,revenueGrowth:null,opProfitGrowth:null,analystTarget:0,lastAnalysisDate:'',earningsDate:'',watchStatus:''};
+    const r=map[key];r.amount+=ruleNum(a.amount);if(ruleNum(a.targetBuyPrice)>0)r.targetBuy=ruleNum(a.targetBuyPrice);if(ruleNum(a.targetSellPrice)>0)r.targetSell=ruleNum(a.targetSellPrice);if(ruleNum(a.targetRatio)>0)r.targetRatio=ruleNum(a.targetRatio);if(a.sector)r.sector=String(a.sector);if(a.strategy)r.strategy=String(a.strategy);if(ruleNum(a.per)>0)r.per=ruleNum(a.per);if(ruleNum(a.forwardPER)>0)r.forwardPER=ruleNum(a.forwardPER);if(ruleNum(a.pbr)>0)r.pbr=ruleNum(a.pbr);if(a.revenueGrowth!==undefined&&a.revenueGrowth!=='')r.revenueGrowth=ruleNum(a.revenueGrowth);if(a.opProfitGrowth!==undefined&&a.opProfitGrowth!=='')r.opProfitGrowth=ruleNum(a.opProfitGrowth);if(ruleNum(a.analystTargetPrice)>0)r.analystTarget=ruleNum(a.analystTargetPrice);if(a.lastAnalysisDate)r.lastAnalysisDate=String(a.lastAnalysisDate);if(a.earningsDate)r.earningsDate=String(a.earningsDate);if(a.watchStatus)r.watchStatus=String(a.watchStatus);
+  });
+  const total=Object.values(map).reduce((s,r)=>s+r.amount,0);return Object.values(map).map(r=>({...r,ratio:total?r.amount/total*100:0,semi:/半導体|メモリ|AI|GPU|HDD|データセンター/i.test([r.name,r.ticker,r.sector,r.strategy].join(' '))})).sort((a,b)=>b.amount-a.amount);
+}
+function ruleDays(date){if(!date)return null;const d=new Date(String(date)+'T00:00:00'),t=new Date();t.setHours(0,0,0,0);return Number.isNaN(d.getTime())?null:Math.ceil((d-t)/86400000);}
+function ruleDateAge(date){if(!date)return null;const d=new Date(String(date)+'T00:00:00'),t=new Date();t.setHours(0,0,0,0);return Number.isNaN(d.getTime())?null:Math.floor((t-d)/86400000);}
+function ruleStatus(ok,warn){return ok?'🟢 クリア':warn?'🟡 確認':'🔴 未達';}
+function ruleRender(){
+  const buy=document.getElementById('rule-buy-list'),sell=document.getElementById('rule-sell-list'),sum=document.getElementById('rule-summary'),note=document.getElementById('rule-note');if(!buy||!sell)return;
+  const cfg=ruleVals(),rows=ruleRows(),invest=rows.reduce((s,r)=>s+r.amount,0),cash=typeof amStage1GetInvestableCashByBank==='function'?ruleNum(amStage1GetInvestableCashByBank(amAccounts).total):0,totalWithCash=invest+cash,cashPct=totalWithCash?cash/totalWithCash*100:0,semi=rows.filter(r=>r.semi).reduce((s,r)=>s+r.amount,0),semiPct=invest?semi/invest*100:0;
+  const buyCandidates=rows.filter(r=>r.targetBuy>0||r.watchStatus==='購入候補');
+  let buyPass=0,buyWarn=0,buyFail=0;
+  const buyCards=buyCandidates.map(r=>{
+    const current=ruleNum(r.price||0); // current price is intentionally read below from source fallback
+    const src=rows.find(x=>x.ticker===r.ticker)||r;
+    const price=ruleCurrentPrice(r);
+    const buyGap=r.targetBuy>0&&price>0?(price-r.targetBuy)/r.targetBuy*100:null;
+    const priceOk=r.targetBuy<=0?null:buyGap<=cfg.buyOver;
+    const days=ruleDays(r.earningsDate),earnOk=days===null?null:days>cfg.earnDays;
+    const age=ruleDateAge(r.lastAnalysisDate),analysisOk=age===null?null:age<=cfg.analysisDays;
+    const ratioOk=r.ratio<=cfg.maxStock;
+    const semiOk=!r.semi||semiPct<=cfg.maxSemi;
+    const vals=[priceOk,earnOk,analysisOk,ratioOk,semiOk].filter(v=>v!==null);const fails=vals.filter(v=>v===false).length,warns=5-vals.length;
+    if(fails)buyFail++;else if(warns)buyWarn++;else buyPass++;
+    const status=fails?ruleStatus(false,true):warns?ruleStatus(false,true):ruleStatus(true,false);
+    const line=(label,val,kind)=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span>'+label+'</span><span style="font-weight:600;color:'+(kind==='bad'?'var(--red)':kind==='warn'?'#D68910':'var(--text)')+'">'+val+'</span></div>';
+    return '<div style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+ruleEsc(r.ticker)+'｜'+ruleEsc(r.name)+'</b><span>'+status+'</span></div>'+line('現在値',price?'¥'+Math.round(price).toLocaleString('ja-JP'):'—','')+line('目標買値',r.targetBuy?'¥'+Math.round(r.targetBuy).toLocaleString('ja-JP')+' ／ '+(buyGap===null?'—':(buyGap>0?'+'+buyGap.toFixed(1):buyGap.toFixed(1))+'%'):'未設定',priceOk===false?'bad':'')+line('決算まで',days===null?'未登録':(days<0?'終了':days+'日'),earnOk===false?'bad':earnOk===null?'warn':'')+line('最新分析',age===null?'未登録':age+'日前',analysisOk===false?'bad':analysisOk===null?'warn':'')+line('保有比率',r.ratio.toFixed(1)+'%',ratioOk?'':'bad')+line('半導体・AI比率',r.semi?semiPct.toFixed(1)+'%（上限 '+cfg.maxSemi+'%）':'対象外',r.semi&&!semiOk?'bad':'')+'</div>';
+  }).join('');
+  buy.innerHTML='<div style="font-size:12px;font-weight:700;margin-bottom:7px">🟢 買付条件チェック <span style="font-size:10px;color:var(--text3);font-weight:400">候補 '+buyCandidates.length+'件</span></div>'+(buyCards||'<div style="padding:12px;color:var(--text3);font-size:11px">価格管理で「目標買値」または管理区分「購入候補」を登録すると表示されます。</div>');
+  const sellCandidates=rows.filter(r=>r.targetSell>0||r.targetRatio>0||r.watchStatus==='売却候補');
+  const sellCards=sellCandidates.map(r=>{
+    const price=ruleCurrentPrice(r),sellOk=r.targetSell>0&&price>0&&price>=r.targetSell,over=r.targetRatio>0&&r.ratio>r.targetRatio,days=ruleDays(r.earningsDate),earnWarn=days!==null&&days>=0&&days<=cfg.earnDays;
+    const reasons=[];if(sellOk)reasons.push('目標売値到達');if(over)reasons.push('目標比率超過');if(earnWarn)reasons.push('決算接近');if(r.watchStatus==='売却候補')reasons.push('売却候補');
+    return '<div style="background:var(--bg);border-radius:10px;padding:10px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+ruleEsc(r.ticker)+'｜'+ruleEsc(r.name)+'</b><span>'+(reasons.length?'🟡 確認':'🟢 条件なし')+'</span></div><div style="font-size:11px;margin-top:6px;line-height:1.6">現在値 '+(price?'¥'+Math.round(price).toLocaleString('ja-JP'):'—')+' ／ 目標売値 '+(r.targetSell?'¥'+Math.round(r.targetSell).toLocaleString('ja-JP'):'未設定')+' ／ 保有比率 '+r.ratio.toFixed(1)+'%'+(r.targetRatio?' → 目標 '+r.targetRatio+'%':'')+(reasons.length?'<br><b>確認要因：</b>'+reasons.join('・'):'')+'</div></div>';
+  }).join('');
+  sell.innerHTML='<div style="font-size:12px;font-weight:700;margin-bottom:7px">💰 売却条件チェック <span style="font-size:10px;color:var(--text3);font-weight:400">候補 '+sellCandidates.length+'件</span></div>'+(sellCards||'<div style="padding:12px;color:var(--text3);font-size:11px">目標売値・目標保有比率・売却候補を登録すると表示されます。</div>');
+  sum.innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><div style="background:var(--bg);border-radius:9px;padding:9px"><div style="font-size:10px;color:var(--text3)">買付候補</div><b>'+buyCandidates.length+'件</b><div style="font-size:10px;margin-top:3px">🟢 '+buyPass+' ・ 🟡 '+buyWarn+' ・ 🔴 '+buyFail+'</div></div><div style="background:var(--bg);border-radius:9px;padding:9px"><div style="font-size:10px;color:var(--text3)">半導体・AI比率</div><b>'+semiPct.toFixed(1)+'%</b><div style="font-size:10px;margin-top:3px">上限 '+cfg.maxSemi+'%</div></div><div style="background:var(--bg);border-radius:9px;padding:9px"><div style="font-size:10px;color:var(--text3)">投資可能現金比率</div><b>'+cashPct.toFixed(1)+'%</b><div style="font-size:10px;margin-top:3px">最低 '+cfg.minCash+'%</div></div></div>';
+  const cashOk=cashPct>=cfg.minCash,stockMax=rows.length?Math.max(...rows.map(r=>r.ratio)):0;
+  note.innerHTML='全体チェック：最大1銘柄比率 <b>'+stockMax.toFixed(1)+'%</b>（上限 '+cfg.maxStock+'%） '+(stockMax<=cfg.maxStock?'🟢':'🔴')+' ／ 最低現金比率 <b>'+cashPct.toFixed(1)+'%</b> '+(cashOk?'🟢':'🔴')+'。未登録の株価・決算日・分析日は「確認」として扱います。';
+}
+function ruleCurrentPrice(r){
+  let src=Array.isArray(window.amAccounts)?window.amAccounts:[];let found=src.find(a=>String(a.ticker||a.code||a.symbol||'').trim()===r.ticker);return found&&ruleNum(found.price)>0?ruleNum(found.price):0;
+}
+(function(){ruleInit();[900,2000,4000].forEach(ms=>setTimeout(()=>{try{ruleRender();}catch(e){}},ms));const base=window.amRender;if(typeof base==='function'&&!window.__ruleAmWrapped){window.__ruleAmWrapped=true;window.amRender=function(){const x=base.apply(this,arguments);try{ruleRender();}catch(e){}return x;};}})();
+</script>
+    <!-- 買付候補比較 -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📊 買付候補比較</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">価格管理・資産管理に登録された銘柄を、現在のデータから「価格面・割安度・業績・ポートフォリオ不足」の4項目で比較します。順位を付けず、項目別に確認できます。</div>
+      <div id="bc-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="bc-list"></div>
+      <div id="bc-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+    <!-- 買付判断チェック -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📋 買付判断チェック</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">価格・バリュエーション・業績・アナリスト目標株価・ポートフォリオ配分を1画面で確認します。順位付けはせず、未入力項目は「—」で表示します。</div>
+      <div id="bc2-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="bc2-list"></div>
+      <div id="bc2-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+    <!-- 最新情報確認 -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📡 最新情報確認</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">買付候補の最新情報を確認するためのチェックパネルです。古い分析データを見つけやすくし、銘柄ごとに株価・決算・IRをすぐ確認できます。外部サイトから数値を自動取得する機能ではありません。</div>
+      <div id="latest-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="latest-list"></div>
+      <div id="latest-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
+    <!-- 利益確定シミュレーター -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 利益確定シミュレーター</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">保有銘柄を指定して売却株数・売却価格を入力し、売却益、売却後の保有比率、投資可能現金への追加額を試算します。実際の資産・注文は変更しません。税金・手数料は含めない概算です。</div>
+      <div id="ps-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div style="background:var(--bg);border-radius:10px;padding:10px">
+        <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:5px">売却銘柄</label>
+        <select id="ps-ticker" onchange="psRender()" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2);color:var(--text);font-size:13px"></select>
+        <div id="ps-current" style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.6"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+          <label style="font-size:10px;color:var(--text3)">売却株数<input id="ps-shares" type="number" inputmode="decimal" min="0" step="1" value="100" oninput="psRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">売却価格<input id="ps-price" type="number" inputmode="decimal" min="0" step="0.01" oninput="psRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:right"></label>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn-sm" type="button" onclick="psSetShares(100)">100株</button>
+          <button class="btn-sm" type="button" onclick="psSetShares(50)">50株</button>
+          <button class="btn-sm" type="button" onclick="psSetAllShares()">全株売却</button>
+          <button class="btn-sm" type="button" onclick="psSetCurrentPrice()">現在値を入力</button>
+        </div>
+      </div>
+      <div id="ps-results" style="margin-top:10px"></div>
+    </div>
+
+    <!-- 利益確定・再投資戦略シミュレーター -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">🔄 利益確定・再投資戦略シミュレーター</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">含み益のある銘柄を一部利益確定し、税引後の資金を長期コア・半導体/AI・バリュー・現金へ再配分した場合の変化を試算します。実際の資産・注文は変更しません。</div>
+      <div id="ri-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div style="background:var(--bg);border-radius:10px;padding:10px">
+        <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:5px">利益確定する銘柄</label>
+        <select id="ri-ticker" onchange="riRender()" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2);color:var(--text);font-size:13px"></select>
+        <div id="ri-current" style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.6"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+          <label style="font-size:10px;color:var(--text3)">利益確定率<input id="ri-sell-pct" type="number" inputmode="decimal" min="0" max="100" step="5" value="30" oninput="riRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">売却価格<input id="ri-price" type="number" inputmode="decimal" min="0" step="0.01" oninput="riRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:right"></label>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn-sm" type="button" onclick="riSetPct(10)">10%</button><button class="btn-sm" type="button" onclick="riSetPct(30)">30%</button><button class="btn-sm" type="button" onclick="riSetPct(50)">50%</button><button class="btn-sm" type="button" onclick="riSetPct(100)">全売却</button><button class="btn-sm" type="button" onclick="riSetCurrentPrice()">現在値</button>
+        </div>
+      </div>
+      <div id="ri-tax" style="margin-top:10px"></div>
+      <div style="background:var(--bg);border-radius:10px;padding:10px;margin-top:10px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:7px;font-weight:650">税引後資金の再配分</div>
+        <div id="ri-alloc"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px">
+          <label style="font-size:10px;color:var(--text3)">長期コア<input id="ri-a-core" type="number" min="0" max="100" step="5" value="40" oninput="riRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">半導体・AI<input id="ri-a-semi" type="number" min="0" max="100" step="5" value="30" oninput="riRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">バリュー<input id="ri-a-value" type="number" min="0" max="100" step="5" value="20" oninput="riRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+          <label style="font-size:10px;color:var(--text3)">現金<input id="ri-a-cash" type="number" min="0" max="100" step="5" value="10" oninput="riRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);text-align:right"></label>
+        </div>
+      </div>
+      <div id="ri-results" style="margin-top:10px"></div>
+      <div id="ri-strategy" style="margin-top:10px"></div>
+      <div id="ri-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
     </div>
 
     <!-- 買い増し優先度シミュレーター -->
@@ -1784,6 +2207,22 @@ function amMonthlyPerfRender(){
 
       <p class="note">※税金・医療費・インフレは未考慮。参考試算としてご利用ください。</p>
     </div>
+  </div>
+
+  <!-- ========== サイドFIRE必要資産・到達時期シミュレーター ========== -->
+  <div class="card" id="sidefire-precision-card" style="margin-top:12px">
+    <div class="card-head"><div class="dot"></div><h2>🔥 サイドFIRE必要資産・到達時期シミュレーター</h2></div>
+    <div class="hint-box" style="margin-bottom:10px">生活費−副収入を資産から補う前提で、必要資産・到達時期・目標年数から逆算した毎月投資額を試算します。利回りは仮定値であり、将来の運用成果を保証しません。</div>
+    <div class="field-list">
+      <div class="field-row"><span class="field-label">年間生活費</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-expense" value="240" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/年</span></div></div>
+      <div class="field-row"><span class="field-label">年間サイド収入</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-income" value="240" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/年</span></div></div>
+      <div class="field-row"><span class="field-label">安全取り崩し率</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-swr" value="4" min="0.1" step="0.1" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
+      <div class="field-row"><span class="field-label">想定年利</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-rate" value="5" min="0" step="0.1" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
+      <div class="field-row"><span class="field-label">現在の投資資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-asset" value="4400" min="0" step="1" inputmode="numeric"><span class="field-unit">万円</span></div></div>
+      <div class="field-row"><span class="field-label">毎月の追加投資</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-monthly" value="15" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
+    </div>
+    <button class="calc-btn" type="button" onclick="calcSideFirePrecision()">🔮 サイドFIREを試算</button>
+    <div id="sf-result" style="margin-top:12px;display:none"></div>
   </div>
 
   <!-- ========== 家族タブ ========== -->
@@ -2271,6 +2710,39 @@ function amMonthlyPerfRender(){
           <div class="field" style="margin:0">
             <label>EPS来期（円）</label>
             <input type="number" id="fEps2" placeholder="例: 130" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div class="field" style="margin:0">
+            <label>投資戦略</label>
+            <select id="fStrategy" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+              <option value="">— 未設定 —</option><option value="長期コア">🟦 長期コア</option><option value="半導体・AI">🟥 半導体・AI</option><option value="バリュー">🟨 バリュー</option><option value="その他">⬜ その他</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0">
+            <label>アナリスト目標株価</label>
+            <input type="number" id="fAnalystTarget" placeholder="例: 250" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div class="field" style="margin:0">
+            <label>予想PER（倍）</label>
+            <input type="number" id="fForwardPER" placeholder="例: 18.5" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+          <div class="field" style="margin:0">
+            <label>売上高前年比（%）</label>
+            <input type="number" id="fRevenueGrowth" placeholder="例: 15.2" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div class="field" style="margin:0">
+            <label>営業利益前年比（%）</label>
+            <input type="number" id="fOpProfitGrowth" placeholder="例: 20.0" inputmode="decimal" step="0.1" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+          </div>
+          <div class="field" style="margin:0">
+            <label>最終分析確認日</label>
+            <input type="date" id="fLastAnalysisDate" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
+            <input type="url" id="fAnalysisSource" placeholder="情報源URL（任意）" style="width:100%;margin-top:6px;padding:10px 12px;font-size:13px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
           </div>
         </div>
         <div id="fAnalysisMemo" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
@@ -4099,7 +4571,8 @@ function openAddModal(defaultCat){
   if(document.getElementById('fSector'))document.getElementById('fSector').value='';
   if(document.getElementById('fBroker'))document.getElementById('fBroker').value='';
   if(document.getElementById('fBuyDate'))document.getElementById('fBuyDate').value='';
-  ['fSell1','fSell2','fSell3','fPer','fPbr','fEps1','fEps2'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
+  ['fSell1','fSell2','fSell3','fPer','fPbr','fEps1','fEps2','fAnalystTarget','fForwardPER','fRevenueGrowth','fOpProfitGrowth','fLastAnalysisDate','fAnalysisSource'].forEach(id=>{if(document.getElementById(id))document.getElementById(id).value='';});
+  if(document.getElementById('fStrategy'))document.getElementById('fStrategy').value='';
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
   const fxEl=document.getElementById('fFxRate');
@@ -4185,6 +4658,13 @@ function openEditModal(id){
   if(document.getElementById('fPbr'))document.getElementById('fPbr').value=a.pbr||'';
   if(document.getElementById('fEps1'))document.getElementById('fEps1').value=a.eps1||'';
   if(document.getElementById('fEps2'))document.getElementById('fEps2').value=a.eps2||'';
+  if(document.getElementById('fStrategy'))document.getElementById('fStrategy').value=a.strategy||'';
+  if(document.getElementById('fAnalystTarget'))document.getElementById('fAnalystTarget').value=a.analystTargetPrice||'';
+  if(document.getElementById('fForwardPER'))document.getElementById('fForwardPER').value=a.forwardPER||'';
+  if(document.getElementById('fRevenueGrowth'))document.getElementById('fRevenueGrowth').value=a.revenueGrowth||'';
+  if(document.getElementById('fOpProfitGrowth'))document.getElementById('fOpProfitGrowth').value=a.opProfitGrowth||'';
+  if(document.getElementById('fLastAnalysisDate'))document.getElementById('fLastAnalysisDate').value=a.lastAnalysisDate||'';
+  if(document.getElementById('fAnalysisSource'))document.getElementById('fAnalysisSource').value=a.analysisSource||'';
   setTimeout(amCalcSellPct,50);
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
@@ -4243,7 +4723,14 @@ async function saveAccount(){
   const pbr=parseFloat(document.getElementById('fPbr')?.value)||undefined;
   const eps1=parseFloat(document.getElementById('fEps1')?.value)||undefined;
   const eps2=parseFloat(document.getElementById('fEps2')?.value)||undefined;
-  const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2};
+  const strategy=(document.getElementById('fStrategy')?.value||'').trim();
+  const analystTargetPrice=parseFloat(document.getElementById('fAnalystTarget')?.value)||undefined;
+  const forwardPER=parseFloat(document.getElementById('fForwardPER')?.value)||undefined;
+  const revenueGrowth=parseFloat(document.getElementById('fRevenueGrowth')?.value);
+  const opProfitGrowth=parseFloat(document.getElementById('fOpProfitGrowth')?.value);
+  const lastAnalysisDate=(document.getElementById('fLastAnalysisDate')?.value||'').trim();
+  const analysisSource=(document.getElementById('fAnalysisSource')?.value||'').trim();
+  const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2,strategy:strategy||undefined,analystTargetPrice,forwardPER,revenueGrowth:Number.isFinite(revenueGrowth)?revenueGrowth:undefined,opProfitGrowth:Number.isFinite(opProfitGrowth)?opProfitGrowth:undefined,lastAnalysisDate:lastAnalysisDate||undefined,analysisSource:analysisSource||undefined};
   if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()};}
   else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
@@ -5721,6 +6208,7 @@ function sendToTrend(){
   snapshots.push({date:dateStr,filename:'資産管理_'+dateStr,total,cats,accounts});
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   trSaveToStorage();
+  try{if(typeof amMonthlyPerfRender==='function')amMonthlyPerfRender();}catch(e){}
   dailySnapSave();
   showToast('✓ 推移グラフに記録しました（'+dateStr+'）',3000);
   refreshHome();
@@ -5735,9 +6223,15 @@ function dailySnapSave(){
     const existing=JSON.parse(localStorage.getItem(DAILY_SNAP_KEY)||'{}');
     // 銘柄ごとの残高をid+nameをキーに保存
     const snap={date:today,items:{}};
-    accs.filter(a=>!a.sold&&a.amount>0).forEach(a=>{
-      const key=String(a.id)+'_'+a.name;
-      snap.items[key]={id:a.id,name:a.name,cat:a.cat,amount:a.amount};
+    accs.filter(a=>!a.sold&&Number(a.amount||0)>0).forEach(a=>{
+      const key=String(a.code||a.id)+'_'+a.name;
+      const shares=Number(a.shares||0), price=Number(a.price||0), costPrice=Number(a.costPrice||0), fxRate=Number(a.fxRate||0);
+      let pnl=Number(a.pnl||0);
+      if(!pnl && shares>0 && price>0 && costPrice>0){
+        const fx=fxRate>0?fxRate:1;
+        pnl=(price-costPrice)*shares*fx;
+      }
+      snap.items[key]={id:a.id,name:a.name,code:a.code||'',cat:a.cat,amount:Number(a.amount||0),shares,price,costPrice,fxRate,pnl};
     });
     // 今日のデータを保存（前日を退避してから）
     if(existing.today&&existing.today.date!==today){
@@ -5777,13 +6271,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AF${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AF1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AN${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AN1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -5872,7 +6366,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AF1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AN1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -5908,6 +6402,13 @@ async function amLoadFromSheet(){
       targetRatio:r[30]?parseFloat(r[30])||0:0,
       watchStatus:r[31]||'',
       watchMemo:r[32]||'',
+      strategy:r[33]||'',
+      analystTargetPrice:r[34]?parseFloat(r[34])||0:0,
+      forwardPER:r[35]?parseFloat(r[35])||0:0,
+      revenueGrowth:r[36]!==undefined&&r[36]!==''?parseFloat(r[36])||0:undefined,
+      opProfitGrowth:r[37]!==undefined&&r[37]!==''?parseFloat(r[37])||0:undefined,
+      lastAnalysisDate:r[38]||'',
+      analysisSource:r[39]||'',
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
@@ -6638,37 +7139,39 @@ function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.string
 // 1スナップショット = 1行。accounts配列はJSON文字列としてセルに格納する
 // （口座数が可変で列固定が難しいため）
 // ============================================================
-const TR_SHEET_COLS=['date','filename','total','cats','accounts'];
+const TR_SHEET_COLS=['date','filename','total','cats','accounts','netFlow','flowSource'];
 async function trSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){setSyncStatus('','未ログイン（ローカル保存のみ）');return;}
   setSyncStatus('syncing','同期中...');
   try{
     const values=[TR_SHEET_COLS,...snapshots.map(s=>[
       s.date||'', s.filename||'', s.total||0,
-      JSON.stringify(s.cats||{}), JSON.stringify(s.accounts||[])
+      JSON.stringify(s.cats||{}), JSON.stringify(s.accounts||[]), s.netFlow===undefined?'':s.netFlow, s.flowSource||''
     ])];
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:E${values.length+50}`,valueInputOption:'RAW',resource:{values}});
-    if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:E5000`});
+    if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:G5000`});
     setSyncStatus('ok','同期済み✓');
   }catch(e){console.warn('trSaveToSheet error',e);setSyncStatus('err','同期失敗');}
 }
 async function trLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'trend!A2:E5000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'trend!A2:G5000'});
     const rows=res.result.values||[];
     if(rows.length===0)return;// Sheetsにデータがなければローカルのものを維持
     const loaded=rows.filter(r=>r[0]).map(r=>{
       let cats={},accounts=[];
       try{cats=JSON.parse(r[3]||'{}');}catch(e){}
       try{accounts=JSON.parse(r[4]||'[]');}catch(e){}
-      return{date:r[0],filename:r[1]||'',total:parseFloat(r[2])||0,cats,accounts};
+      const nf=(r[5]!==undefined&&r[5]!==''&&Number.isFinite(Number(r[5])))?Number(r[5]):null;
+      return{date:r[0],filename:r[1]||'',total:parseFloat(r[2])||0,cats,accounts,netFlow:nf,flowSource:r[6]||''};
     });
     snapshots=loaded;
     snapshots.sort((a,b)=>a.date.localeCompare(b.date));
     trNormalizeSnapshots(snapshots);
     localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));
     if(typeof trRenderAll==='function')try{trRenderAll();}catch(e){}
+    if(typeof amMonthlyPerfRender==='function')try{amMonthlyPerfRender();}catch(e){}
   }catch(e){console.warn('trLoadFromSheet error',e);}
 }
 function trLoadFromStorage(){
@@ -7239,9 +7742,9 @@ function trParseCSV(text,filename){
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   // 追加したスナップショットを含めて正規化（trLoadFromStorageは使わない＝新規データを破棄しない）
   trNormalizeSnapshots(snapshots);
-  trSaveToStorage();trRenderAll();refreshHome();
+  trSaveToStorage();try{if(typeof amMonthlyPerfRender==='function')amMonthlyPerfRender();}catch(e){};trRenderAll();refreshHome();
 }
-function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();trRenderAll();refreshHome();}
+function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();try{if(typeof amMonthlyPerfRender==='function')amMonthlyPerfRender();}catch(e){};trRenderAll();refreshHome();}
 function trRenderAll(){
   if(amIsOnline&&amSpreadsheetId){
     setSyncStatus('ok','同期済み✓');
@@ -9698,6 +10201,63 @@ function fireProjectionText(r,curAge){
   return {main:r.age+'歳',detail:years+'年'+(months?months+'か月':'')+'後'};
 }
 
+function sfMoney(n){return Math.round(n).toLocaleString('ja-JP')+'万円'}
+function sfReachMonths(asset,target,monthly,rate){
+  asset=Math.max(0,Number(asset)||0); target=Math.max(0,Number(target)||0); monthly=Math.max(0,Number(monthly)||0); rate=Number(rate)||0;
+  if(asset>=target)return 0;
+  if(monthly<=0 && rate<=0)return Infinity;
+  var mrate=Math.pow(1+rate/100,1/12)-1, bal=asset;
+  for(var m=1;m<=1200;m++){
+    bal=bal*(1+mrate)+monthly;
+    if(bal>=target)return m;
+  }
+  return Infinity;
+}
+function sfFuture(asset,monthly,rate,years){
+  var mrate=Math.pow(1+(Number(rate)||0)/100,1/12)-1, n=Math.max(0,Math.round(years*12)), bal=Math.max(0,Number(asset)||0);
+  for(var i=0;i<n;i++)bal=bal*(1+mrate)+(Number(monthly)||0);
+  return bal;
+}
+function sfRequiredMonthly(asset,target,rate,years){
+  asset=Math.max(0,Number(asset)||0); target=Math.max(0,Number(target)||0); rate=Number(rate)||0; years=Math.max(0,Number(years)||0);
+  if(asset>=target)return 0;
+  var n=Math.round(years*12); if(n<=0)return Infinity;
+  var mr=Math.pow(1+rate/100,1/12)-1;
+  var growth=Math.pow(1+mr,n);
+  if(Math.abs(mr)<1e-12)return Math.max(0,(target-asset)/n);
+  return Math.max(0,(target-asset*growth)*mr/(growth-1));
+}
+function sfYearsText(months){
+  if(months===0)return '達成済み';
+  if(!isFinite(months))return '30年以上';
+  var y=Math.floor(months/12),m=months%12;
+  return y+'年'+(m?m+'か月':'');
+}
+function calcSideFirePrecision(){
+  try{
+    var expense=Math.max(0,gv('sf-expense')), income=Math.max(0,gv('sf-income')), swr=Math.max(0.1,gv('sf-swr'));
+    var rate=Math.max(0,gv('sf-rate')), asset=Math.max(0,gv('sf-asset')), monthly=Math.max(0,gv('sf-monthly'));
+    var annualGap=Math.max(0,expense-income), target=annualGap/(swr/100);
+    var gap=Math.max(0,target-asset), pct=target>0?Math.min(100,asset/target*100):100;
+    var rates=[3,5,7], scenarios=rates.map(function(r){return{r:r,m:sfReachMonths(asset,target,monthly,r)}});
+    var proj=[1,3,5,10].map(function(y){return{y:y,v:sfFuture(asset,monthly,rate,y)}});
+    var rev=[3,5,10].map(function(y){return{y:y,m:sfRequiredMonthly(asset,target,rate,y)}});
+    var el=document.getElementById('sf-result'); if(!el)return;
+    function cell(label,val,sub){return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px"><div style="font-size:10px;color:var(--text3)">'+label+'</div><div style="font-size:15px;font-weight:700;margin-top:3px">'+val+'</div><div style="font-size:9px;color:var(--text3);margin-top:2px">'+sub+'</div></div>';}
+    var scen=scenarios.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px"><b>年'+x.r+'%</b><span>'+sfYearsText(x.m)+'</span></div>';}).join('');
+    var pj=proj.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px"><span>'+x.y+'年後</span><b>'+sfMoney(x.v)+'</b></div>';}).join('');
+    var rv=rev.map(function(x){return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px"><span>'+x.y+'年で到達</span><b>'+sfMoney(x.m)+'/月</b></div>';}).join('');
+    el.style.display='block';
+    el.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px">'+
+      cell('現在の投資資産',sfMoney(asset),'設定値')+cell('必要資産',sfMoney(target),annualGap>0?'年間不足額×取り崩し率':'副収入が生活費以上なら0円')+
+      cell('残り必要資産',sfMoney(gap),pct.toFixed(1)+'%達成')+cell('年間不足額',sfMoney(annualGap),expense+'万円−'+income+'万円')+'</div>'+
+      '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;margin-bottom:6px">📅 利回り別の到達目安（毎月'+monthly+'万円を追加投資）</div>'+scen+'</div>'+
+      '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;margin-bottom:6px">📈 現在設定（年'+rate+'%）での資産推移</div>'+pj+'</div>'+
+      '<div><div style="font-size:11px;font-weight:700;margin-bottom:6px">🔄 目標年数から逆算した毎月投資額</div>'+rv+'</div>'+
+      '<div style="font-size:9px;color:var(--text3);margin-top:9px;line-height:1.5">※必要資産＝年間不足額÷安全取り崩し率。到達時期は月次複利＋毎月末の追加投資として概算。税金・手数料・相場変動・インフレ・年金はこの簡易計算には含めません。</div>';
+  }catch(e){console.error(e)}
+}
+
 function calcSingle(){try{
   var A=gv('s-asset'),E=gv('s-expense'),I=gv('s-income');
   var CA=Math.round(gv('s-curage')),PA=Math.round(gv('s-pension-age')),PM=gv('s-pension-amt');
@@ -10209,6 +10769,16 @@ function slRender(){
 
 </script>
 <script>
+// サイドFIRE精密シミュレーター初期値を既存FIRE設定から同期
+function syncSideFirePrecision(){
+  var e=el('s-expense'),i=el('s-income'),a=el('s-asset'),m=el('s-monthly-invest');
+  if(e&&el('sf-expense'))el('sf-expense').value=Math.round(gv('s-expense')*12);
+  if(i&&el('sf-income'))el('sf-income').value=Math.round(gv('s-income')*12);
+  if(a&&el('sf-asset'))el('sf-asset').value=Math.round(gv('s-asset'));
+  if(m&&el('sf-monthly'))el('sf-monthly').value=Math.round(gv('s-monthly-invest'));
+  calcSideFirePrecision();
+}
+
 // FIREタブの自動連携：ページロード後に実行
 window.addEventListener('load', function(){
   setTimeout(function(){
@@ -15004,6 +15574,92 @@ async function amPwSave(id){
 
 
 // ============================================================
+// 利益確定シミュレーター
+// ============================================================
+function psInvestmentRows(){
+  let src=Array.isArray(amAccounts)?amAccounts.slice():[];
+  try{
+    const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    if(Array.isArray(ls)&&ls.length){const ids=new Set(src.map(a=>String(a.id)));ls.forEach(a=>{if(!ids.has(String(a.id)))src.push(a);});}
+  }catch(e){}
+  const map={};
+  src.filter(a=>{
+    if(a.sold)return false;
+    const cat=String(a.cat||'');
+    if(cat==='銀行'||cat==='FX'||/年金|現金|預り|預かり/.test(String(a.name||'')))return false;
+    const shares=Number(a.shares||0), amount=Number(a.amount||0), price=Number(a.price||0);
+    return shares>0 || amount>0 || price>0 || !!a.code;
+  }).forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim();
+    const name=String(a.name||code).trim();
+    const key=code||name;
+    if(!key)return;
+    if(!map[key])map[key]={ticker:code||key,name,shares:0,amount:0,cost:0,currentPrice:0,fxRate:Number(a.fxRate||0),currency:String(a.currency||a.ccy||''),nisa:String(a.nisaType||a.nisa||'')};
+    const sh=Number(a.shares||0), amt=Number(a.amount||0), cp=Number(a.costPrice||0), pr=Number(a.price||0);
+    map[key].shares+=sh; map[key].amount+=amt; map[key].cost+=cp*sh;
+    if(pr>0)map[key].currentPrice=pr;
+    if(Number(a.fxRate||0)>0)map[key].fxRate=Number(a.fxRate);
+    if(a.currency||a.ccy)map[key].currency=String(a.currency||a.ccy);
+    if(a.nisaType||a.nisa)map[key].nisa=String(a.nisaType||a.nisa);
+  });
+  return Object.values(map).filter(r=>r.shares>0).sort((a,b)=>b.amount-a.amount);
+}
+function psIsForeign(row){return /外国|米国|韓国|香港|欧|ドル|USD|KRW|HKD/i.test(String(row.currency||'')) || (row.fxRate>0 && row.currentPrice>0 && row.currentPrice*row.shares < row.amount*0.2);}
+function psFx(row){return Number(row.fxRate||0)>0?Number(row.fxRate):1;}
+function psMoney(v){return Math.round(Number(v||0)).toLocaleString('ja-JP');}
+function psEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function psSetShares(v){const e=document.getElementById('ps-shares');if(e){e.value=v;psRender();}}
+function psSetAllShares(){const row=psSelectedRow();const e=document.getElementById('ps-shares');if(row&&e){e.value=Math.floor(row.shares*10000)/10000;psRender();}}
+function psSetCurrentPrice(){const row=psSelectedRow();const e=document.getElementById('ps-price');if(row&&e&&row.currentPrice>0){e.value=row.currentPrice;psRender();}}
+function psSelectedRow(){const rows=psInvestmentRows(), sel=document.getElementById('ps-ticker');return rows.find(r=>r.ticker===sel?.value)||rows[0];}
+function psRender(){
+  const sel=document.getElementById('ps-ticker'), cur=document.getElementById('ps-current'), res=document.getElementById('ps-results'), summary=document.getElementById('ps-summary');
+  if(!sel||!res)return;
+  const rows=psInvestmentRows();
+  if(summary)summary.innerHTML=`保有銘柄 <b>${rows.length}件</b> ／ 売却シミュレーションは概算です`;
+  const old=sel.value;
+  if(rows.length){
+    sel.innerHTML=rows.map(r=>`<option value="${psEsc(r.ticker)}">${psEsc(r.ticker)}｜${psEsc(r.name)}（${psMoney(r.amount)}円）</option>`).join('');
+    if(rows.some(r=>r.ticker===old))sel.value=old;
+  }else{sel.innerHTML='<option value="">保有銘柄を取得中…</option>';res.innerHTML='<div style="padding:12px;color:var(--text3);font-size:12px">保有銘柄データを読み込んでいます。数秒後に自動更新します。</div>';return;}
+  const row=psSelectedRow(); if(!row)return;
+  const priceEl=document.getElementById('ps-price'), sharesEl=document.getElementById('ps-shares');
+  if(priceEl && !priceEl.value && row.currentPrice>0)priceEl.value=row.currentPrice;
+  if(sharesEl && (!sharesEl.value || Number(sharesEl.value)<=0))sharesEl.value=Math.min(100,row.shares);
+  const shares=Math.max(0,Number(sharesEl?.value||0));
+  const price=Math.max(0,Number(priceEl?.value||0));
+  const foreign=psIsForeign(row), fx=psFx(row);
+  const proceeds=foreign?price*shares*fx:price*shares;
+  const costBasis=shares*(row.shares>0?row.cost/row.shares:0);
+  const gain=proceeds-costBasis;
+  const gainPct=costBasis>0?gain/costBasis*100:0;
+  const sellPct=row.shares>0?Math.min(100,shares/row.shares*100):0;
+  const remainShares=Math.max(0,row.shares-shares);
+  const remainAmount=Math.max(0,row.amount-proceeds);
+  const investAssets=rows.reduce((s,r)=>s+r.amount,0);
+  const afterInvest=Math.max(0,investAssets-proceeds);
+  const beforePct=investAssets>0?row.amount/investAssets*100:0;
+  const afterPct=afterInvest>0?remainAmount/afterInvest*100:0;
+  const cash=typeof bsCash==='function'?bsCash():0;
+  const cashAfter=cash+proceeds;
+  if(cur)cur.innerHTML=`現在保有 <b>${row.shares.toLocaleString('ja-JP',{maximumFractionDigits:4})}株</b> ／ 現在値 <b>${row.currentPrice>0?(foreign?'$':'¥')+row.currentPrice.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未登録'}</b> ／ 平均取得価格 <b>${row.shares>0?(foreign?'$':'¥')+(row.cost/row.shares).toLocaleString('ja-JP',{maximumFractionDigits:2}):'未登録'}</b>${foreign?` ／ 為替 ¥${fx.toLocaleString('ja-JP',{maximumFractionDigits:2})}`:''}`;
+  const warn=shares>row.shares||price<=0?'⚠ 売却株数または売却価格を確認してください。':`✓ 売却代金を投資可能現金に加えると約 ¥${psMoney(cashAfter)} になります。`;
+  res.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">売却代金</div><div style="font-size:18px;font-weight:700;margin-top:4px">¥${psMoney(proceeds)}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">売却比率 ${sellPct.toFixed(1)}%</div></div>
+    <div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">売却益</div><div style="font-size:18px;font-weight:700;margin-top:4px">${gain>=0?'+':'−'}¥${psMoney(Math.abs(gain))}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">損益率 ${gainPct.toFixed(1)}%</div></div>
+    <div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">売却後の保有株数</div><div style="font-size:17px;font-weight:700;margin-top:4px">${remainShares.toLocaleString('ja-JP',{maximumFractionDigits:4})}株</div></div>
+    <div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">売却後の保有比率</div><div style="font-size:17px;font-weight:700;margin-top:4px">${afterPct.toFixed(1)}%</div><div style="font-size:10px;color:var(--text3)">${beforePct.toFixed(1)}% → ${afterPct.toFixed(1)}%</div></div>
+  </div>
+  <div style="background:var(--bg);border-radius:10px;padding:12px;margin-top:8px"><div style="font-size:12px;font-weight:600;margin-bottom:7px">💵 売却資金の変化</div><div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0"><span>現在の投資可能現金</span><b>¥${psMoney(cash)}</b></div><div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0"><span>売却代金</span><b>＋¥${psMoney(proceeds)}</b></div><div style="display:flex;justify-content:space-between;font-size:11px;padding:6px 0 0;border-top:1px solid var(--border)"><span>売却後の投資可能現金</span><b>¥${psMoney(cashAfter)}</b></div></div>
+  <div style="font-size:10px;color:${shares>row.shares||price<=0?'var(--red)':'var(--text3)'};line-height:1.6;margin-top:8px">${warn}<br>※売却益は「売却代金−平均取得価格×売却株数」の概算。税金・手数料・為替手数料は含みません。外国株は登録された為替レートを使用します。</div>`;
+}
+(function(){
+  const base=window.amRender;
+  if(typeof base==='function'&&!window.__psWrapped){window.__psWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{psRender();}catch(e){}return r;};}
+  [800,1800,3500].forEach(ms=>setTimeout(()=>{try{psRender();}catch(e){}},ms));
+})();
+
+// ============================================================
 // 買い付けシミュレーター
 // ============================================================
 function bsInvestmentRows(){
@@ -15182,7 +15838,46 @@ function baRender(){
 function baChangeTicker(el){const i=Number(el.dataset.baI);if(baState[i])baState[i].ticker=el.value;baRender();}
 function baChangeAmount(el){const i=Number(el.dataset.baI);if(baState[i])baState[i].amount=Math.max(0,Number(el.value||0));baRender();}
 function baRemoveRow(i){baState.splice(i,1);baRender();}
-setTimeout(()=>{try{baRender();}catch(e){}},900);
+function baCompareRows(){
+  const opts=baInvestmentRows();
+  const add={};
+  baState.forEach(x=>{const n=Math.max(0,Number(x.amount||0));if(n)add[x.ticker]=(add[x.ticker]||0)+n;});
+  return opts.map(o=>({...o,add:Number(add[o.ticker]||0),after:o.amount+Number(add[o.ticker]||0)}));
+}
+function baCompareEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function baCompareRender(){
+  const sum=document.getElementById('ba-compare-summary'), table=document.getElementById('ba-compare-table'), detail=document.getElementById('ba-compare-detail');
+  if(!sum||!table||!detail)return;
+  const rows=baCompareRows(), cash=baCash(), addTotal=rows.reduce((s,r)=>s+r.add,0);
+  const beforeInv=rows.reduce((s,r)=>s+r.amount,0), afterInv=beforeInv+addTotal;
+  const beforeTotal=beforeInv+cash, afterCash=Math.max(0,cash-addTotal), afterTotal=afterInv+afterCash;
+  if(!rows.length){sum.textContent='保有銘柄を読み込んでいます…';table.innerHTML='';detail.innerHTML='';return;}
+  const pct=(v,t)=>t>0?v/t*100:0;
+  const sortedBefore=[...rows].sort((a,b)=>b.amount-a.amount), sortedAfter=[...rows].sort((a,b)=>b.after-a.after);
+  const topN=(arr,n,key)=>arr.slice(0,n).reduce((s,r)=>s+(key==='after'?r.after:r.amount),0);
+  const semiRx=/半導体|semiconductor|nvda|nvidia|mu\b|micron|sndk|sandisk|kioxia|キオクシア|sk hynix|hynix|advantest|アドバンテスト|東京エレクトロン|disco|broadcom|amd\b|intel/i;
+  const usRx=/GOOGL|GOOG|NVDA|MU|SNDK|MSFT|AAPL|AMZN|META|AVGO|AMD|INTC|TSM|ASML|ARM|QCOM|CRWD|PANW|PLTR/i;
+  const metric=(label,b,a,unit='%')=>{const d=a-b;const sign=d>0?'+':'';return `<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)">${label}</td><td style="padding:7px 6px;text-align:right;border-bottom:1px solid var(--border)">${b.toFixed(1)}${unit}</td><td style="padding:7px 6px;text-align:right;border-bottom:1px solid var(--border);font-weight:700">${a.toFixed(1)}${unit}</td><td style="padding:7px 6px;text-align:right;border-bottom:1px solid var(--border);color:${Math.abs(d)<0.05?'var(--text3)':d>0?'var(--red)':'var(--accent)'}">${sign}${d.toFixed(1)}pt</td></tr>`};
+  const semiBefore=rows.filter(r=>semiRx.test([r.ticker,r.name,r.sector].join(' '))).reduce((s,r)=>s+r.amount,0);
+  const semiAfter=rows.filter(r=>semiRx.test([r.ticker,r.name,r.sector].join(' '))).reduce((s,r)=>s+r.after,0);
+  const usBefore=rows.filter(r=>usRx.test(r.ticker)).reduce((s,r)=>s+r.amount,0);
+  const usAfter=rows.filter(r=>usRx.test(r.ticker)).reduce((s,r)=>s+r.after,0);
+  const rows2=[
+    ['半導体比率',pct(semiBefore,beforeInv),pct(semiAfter,afterInv)],
+    ['米国株比率',pct(usBefore,beforeInv),pct(usAfter,afterInv)],
+    ['最大1銘柄比率',pct(sortedBefore[0]?.amount||0,beforeInv),pct(sortedAfter[0]?.after||0,afterInv)],
+    ['TOP3集中度',pct(topN(sortedBefore,3,'before'),beforeInv),pct(topN(sortedAfter,3,'after'),afterInv)],
+    ['TOP5集中度',pct(topN(sortedBefore,5,'before'),beforeInv),pct(topN(sortedAfter,5,'after'),afterInv)],
+    ['現金比率（投資＋現金）',pct(cash,beforeTotal),pct(afterCash,afterTotal)]
+  ];
+  sum.innerHTML=`買付額 <b>¥${Math.round(addTotal).toLocaleString('ja-JP')}</b> ／ 買付後現金 <b>¥${Math.round(afterCash).toLocaleString('ja-JP')}</b> ／ ${addTotal>cash?'<span style="color:var(--red)">現金超過</span>':'現金内'}`;
+  table.innerHTML=`<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:7px 6px;border-bottom:1px solid var(--border)">指標</th><th style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">買付前</th><th style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">買付後</th><th style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">変化</th></tr></thead><tbody>${rows2.map(x=>metric(x[0],x[1],x[2])).join('')}</tbody></table></div>`;
+  const changed=rows.filter(r=>r.add>0).sort((a,b)=>b.add-a.add);
+  const topAfter=sortedAfter.slice(0,5);
+  detail.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:10px"><div style="font-size:12px;font-weight:650;margin-bottom:7px">買付銘柄ごとの影響</div>${changed.length?changed.map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:10px"><span>${baCompareEsc(r.ticker)} ＋¥${Math.round(r.add).toLocaleString('ja-JP')}</span><span>${pct(r.amount,beforeInv).toFixed(1)}% → ${pct(r.after,afterInv).toFixed(1)}%</span></div>`).join(''):'<div style="font-size:10px;color:var(--text3)">買付額を入力すると影響が表示されます。</div>'}<div style="font-size:11px;font-weight:650;margin:9px 0 5px">買付後の上位5銘柄</div>${topAfter.map((r,i)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:10px"><span>${i+1}. ${baCompareEsc(r.ticker)}</span><span>¥${Math.round(r.after).toLocaleString('ja-JP')}（${pct(r.after,afterInv).toFixed(1)}%）</span></div>`).join('')}<div style="font-size:10px;color:var(--text3);margin-top:8px">※半導体・米国株の判定は現在の資産管理データの銘柄コード・名称・セクターを基にした概算です。</div></div>`;
+}
+const _baRenderBase=baRender; baRender=function(){const r=_baRenderBase.apply(this,arguments);try{baCompareRender();}catch(e){}return r;};
+setTimeout(()=>{try{baRender();}catch(e){}try{baCompareRender();}catch(e){}},900);
 
 // ============================================================
 // 買い増し優先度シミュレーター
@@ -15263,6 +15958,574 @@ setTimeout(()=>{try{bpRender();}catch(e){}},1000);
   [300,1000,2000,4000].forEach(ms=>setTimeout(()=>{try{bsRender();}catch(e){}try{bpRender();}catch(e){}},ms));
 })();
 </script>
+
+<script>
+// ============================================================
+// リスク管理・暴落耐性シミュレーター
+// ============================================================
+function riskNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function riskEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function riskRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[], map={};
+  src.filter(a=>!a.sold&&riskNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const ticker=String(a.ticker||a.code||a.symbol||'').trim(), name=String(a.name||ticker).trim(), key=ticker||name;
+    if(!key)return;
+    if(!map[key])map[key]={ticker:ticker||key,name,amount:0,sector:String(a.sector||''),strategy:''};
+    map[key].amount+=riskNum(a.amount); if(a.sector)map[key].sector=String(a.sector); if(a.strategy)map[key].strategy=String(a.strategy);
+  });
+  return Object.values(map).map(r=>({...r,strategy:r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):'')||'その他')}));
+}
+function riskCash(){try{return typeof amStage1GetInvestableCashByBank==='function'?riskNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}}
+function riskScenarioLoss(rows,allDrop,semiDrop){
+  return rows.reduce((sum,r)=>{const d=r.strategy==='半導体・AI'?semiDrop:allDrop;return sum+r.amount*d/100;},0);
+}
+function riskMonthsToTarget(current,target,monthly,rate){
+  if(target<=0||current>=target)return 0;
+  const m=Math.max(0,monthly), r=Math.max(0,rate)/100/12; let bal=current,months=0;
+  while(bal<target&&months<1200){bal=bal*(1+r)+m;months++;}
+  return months>=1200?null:months;
+}
+function riskMoney(v){return '¥'+Math.round(v).toLocaleString('ja-JP');}
+function riskRender(){
+  const summary=document.getElementById('risk-summary'),sc=document.getElementById('risk-scenarios'),st=document.getElementById('risk-strategy'),fire=document.getElementById('risk-fire'),note=document.getElementById('risk-note');
+  if(!summary||!sc)return;
+  const rows=riskRows(), invest=rows.reduce((s,r)=>s+r.amount,0), cash=riskCash(), total=invest+cash;
+  const planned=Math.max(0,riskNum(document.getElementById('risk-planned-buy')?.value)), reserve=Math.max(0,cash-planned), rate=Math.max(0,riskNum(document.getElementById('risk-fire-rate')?.value));
+  const scenarios=[
+    {name:'軽い調整',all:-10,semi:-10},
+    {name:'半導体調整',all:0,semi:-25},
+    {name:'AI・半導体調整',all:-10,semi:-30},
+    {name:'大幅下落',all:-30,semi:-30},
+    {name:'厳しいケース',all:-20,semi:-50}
+  ];
+  summary.innerHTML=`投資資産 <b>${riskMoney(invest)}</b> ／ 投資可能現金 <b>${riskMoney(cash)}</b> ／ 総資産 <b>${riskMoney(total)}</b><br><span style="color:var(--text3)">今後の買付予定 ${riskMoney(planned)} → 暴落時に残る現金 <b>${riskMoney(reserve)}</b></span>`;
+  sc.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">📉 想定シナリオ</div><div style="overflow:auto"><table style="width:100%;min-width:650px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">シナリオ</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">想定下落</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">損失額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">下落後総資産</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">総資産減少率</th></tr></thead><tbody>${scenarios.map(x=>{const loss=riskScenarioLoss(rows,x.all,x.semi), after=total-loss, pct=total?loss/total*100:0;return `<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)"><b>${riskEsc(x.name)}</b></td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${x.semi!==x.all?`全体 ${x.all}% / 半導体 ${x.semi}%`:`${x.all}%`}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);color:var(--red)">−${riskMoney(loss)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);font-weight:700">${riskMoney(after)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">−${pct.toFixed(1)}%</td></tr>`;}).join('')}</tbody></table></div>`;
+  const sg={};['長期コア','半導体・AI','バリュー','その他'].forEach(k=>sg[k]=0);rows.forEach(r=>{if(sg[r.strategy]!==undefined)sg[r.strategy]+=r.amount;});
+  st.innerHTML=`<div style="font-size:12px;font-weight:650;margin:12px 0 7px">🎯 戦略別の下落耐性（半導体・AI -30%、その他 -10%）</div><div style="overflow:auto"><table style="width:100%;min-width:560px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">保有額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">想定損失</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">残存額</th></tr></thead><tbody>${Object.keys(sg).map(k=>{const d=k==='半導体・AI'?30:10,loss=sg[k]*d/100;return `<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)">${riskEsc(k)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${riskMoney(sg[k])}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);color:var(--red)">−${riskMoney(loss)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${riskMoney(sg[k]-loss)}</td></tr>`;}).join('')}</tbody></table></div>`;
+  let fireTarget=0,monthly=0;try{const x=JSON.parse(localStorage.getItem('amFireGoalSettings')||'null')||{};fireTarget=riskNum(x.target);monthly=riskNum(x.monthly);}catch(e){}
+  if(fireTarget>0){
+    const baseMonths=riskMonthsToTarget(invest,fireTarget,monthly,rate), worstLoss=riskScenarioLoss(rows,-20,-50), shocked=Math.max(0,total-worstLoss), shockedInvest=Math.max(0,invest-worstLoss), shockMonths=riskMonthsToTarget(shockedInvest,fireTarget,monthly,rate);
+    const fmt=m=>m===null?'30年以上':m===0?'達成済み':Math.floor(m/12)+'年'+(m%12?m%12+'か月':'');
+    fire.innerHTML=`<div style="font-size:12px;font-weight:650;margin:12px 0 7px">🔥 サイドFIREへの影響（目標 ${riskMoney(fireTarget)}）</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px"><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">現在</div><b>${riskMoney(invest)}</b><div style="font-size:10px;margin-top:3px">到達目安 ${fmt(baseMonths)}</div></div><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">厳しいケース後</div><b>${riskMoney(shockedInvest)}</b><div style="font-size:10px;margin-top:3px">到達目安 ${fmt(shockMonths)}</div></div><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">到達時期の差</div><b>${baseMonths!==null&&shockMonths!==null?('+'+Math.max(0,shockMonths-baseMonths)+'か月'):'—'}</b><div style="font-size:10px;margin-top:3px">年利 ${rate.toFixed(1)}%</div></div></div>`;
+  }else fire.innerHTML='<div style="margin-top:12px;font-size:10px;color:var(--text3)">サイドFIRE目標資産が未設定のため、到達時期への影響は表示しません。</div>';
+  note.textContent='※ストレステストは仮定シナリオです。将来の株価下落幅を予測するものではありません。下落率は投資資産にのみ適用し、現金は減少しない前提です。サイドFIRE到達時期は設定された目標・毎月追加投資・想定年利からの機械計算です。';
+}
+(function(){[800,1800,3500].forEach(ms=>setTimeout(()=>{try{riskRender();}catch(e){}},ms));const base=window.amRender;if(typeof base==='function'&&!window.__riskAmWrapped){window.__riskAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{riskRender();}catch(e){}return r;};}const baseBa=window.baRender;if(typeof baseBa==='function'&&!window.__riskBaWrapped){window.__riskBaWrapped=true;window.baRender=function(){const r=baseBa.apply(this,arguments);try{riskRender();}catch(e){}return r;};}})();
+</script>
+<script>
+// ============================================================
+// 利益確定・再投資戦略シミュレーター
+// ============================================================
+function riEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function riNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function riMoney(v){return '¥'+Math.round(riNum(v)).toLocaleString('ja-JP');}
+function riInvestmentRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[], map={};
+  src.filter(a=>!a.sold&&riNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim(), name=String(a.name||code).trim(), key=code||name;
+    if(!key)return;
+    if(!map[key])map[key]={ticker:code||key,name,amount:0,shares:0,cost:0,price:0,fxRate:0,strategy:'',nisa:0,taxable:0,sector:String(a.sector||'')};
+    const r=map[key]; r.amount+=riNum(a.amount); r.shares+=riNum(a.shares); r.price=Math.max(r.price,riNum(a.price));
+    r.sector=r.sector||String(a.sector||''); r.strategy=r.strategy||String(a.strategy||'');
+    const isForeign=a.cat==='外国株式'; const fx=riNum(a.fxRate)||((typeof amGetFxRate==='function')?riNum(amGetFxRate()):145);
+    const cost=riNum(a.costPrice)*riNum(a.shares)*(isForeign?fx:1);
+    r.cost+=cost;
+    const nt=String(a.nisaType||'').toLowerCase();
+    if(/nisa|成長|つみたて|積立|非課税/.test(nt))r.nisa+=riNum(a.amount);else r.taxable+=riNum(a.amount);
+    if(isForeign&&fx)r.fxRate=fx;
+  });
+  return Object.values(map).filter(r=>r.amount>0).sort((a,b)=>b.amount-a.amount);
+}
+function riSelected(){const rows=riInvestmentRows(),sel=document.getElementById('ri-ticker');if(!sel)return null;return rows.find(r=>r.ticker===sel.value)||rows[0]||null;}
+function riSetPct(v){const el=document.getElementById('ri-sell-pct');if(el){el.value=v;riRender();}}
+function riSetCurrentPrice(){const r=riSelected();const el=document.getElementById('ri-price');if(r&&el){el.value=r.price>0?r.price:'';riRender();}}
+function riInit(){
+  const sel=document.getElementById('ri-ticker');if(!sel)return;
+  const rows=riInvestmentRows(),prev=sel.value;
+  sel.innerHTML=rows.map(r=>`<option value="${riEsc(r.ticker)}">${riEsc(r.ticker)}${r.name&&r.name!==r.ticker?' / '+riEsc(r.name):''}（${riMoney(r.amount)}）</option>`).join('');
+  if(prev&&rows.some(r=>r.ticker===prev))sel.value=prev;
+  const r=riSelected(); const p=document.getElementById('ri-price'); if(r&&p&&!p.value)p.value=r.price||'';
+  riRender();
+}
+function riAlloc(){return {core:Math.max(0,riNum(document.getElementById('ri-a-core')?.value)),semi:Math.max(0,riNum(document.getElementById('ri-a-semi')?.value)),value:Math.max(0,riNum(document.getElementById('ri-a-value')?.value)),cash:Math.max(0,riNum(document.getElementById('ri-a-cash')?.value))};}
+function riRender(){
+  const sum=document.getElementById('ri-summary'),cur=document.getElementById('ri-current'),taxBox=document.getElementById('ri-tax'),alloc=document.getElementById('ri-alloc'),res=document.getElementById('ri-results'),str=document.getElementById('ri-strategy'),note=document.getElementById('ri-note');
+  if(!sum||!res)return;
+  const rows=riInvestmentRows();
+  if(!rows.length){sum.textContent='投資銘柄がありません';cur.innerHTML='';taxBox.innerHTML='';alloc.innerHTML='';res.innerHTML='';str.innerHTML='';return;}
+  const r=riSelected()||rows[0], pct=Math.min(100,Math.max(0,riNum(document.getElementById('ri-sell-pct')?.value||30))), price=riNum(document.getElementById('ri-price')?.value)||r.price;
+  const sharesToSell=r.shares>0?r.shares*pct/100:0, proceeds=r.shares>0?sharesToSell*price:(r.amount*pct/100), costSold=r.cost*(pct/100), gain=proceeds-costSold;
+  // NISA/課税口座の保有額比率から課税対象利益を概算
+  const taxableRatio=r.amount>0?Math.min(1,Math.max(0,r.taxable/r.amount)):1, taxableGain=Math.max(0,gain*taxableRatio), tax=Math.max(0,taxableGain*0.20315), net=Math.max(0,proceeds-tax);
+  const cashNow=(()=>{try{return typeof amStage1GetInvestableCashByBank==='function'?riNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}})();
+  sum.innerHTML=`<b>${riEsc(r.ticker)}</b> ／ 保有額 ${riMoney(r.amount)} ／ 含み益概算 ${riMoney(r.amount-r.cost)} ／ 利益確定 ${pct.toFixed(0)}%`;
+  cur.innerHTML=`現在値 ${price?riMoney(price):'—'} ／ 売却株数 ${sharesToSell?sharesToSell.toLocaleString('ja-JP',{maximumFractionDigits:4}):'—'} ／ 現在の投資資産 ${riMoney(rows.reduce((s,x)=>s+x.amount,0))}`;
+  tax.innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px"><div style="background:var(--bg2);padding:8px;border-radius:8px"><div style="font-size:10px;color:var(--text3)">売却金額</div><b>${riMoney(proceeds)}</b></div><div style="background:var(--bg2);padding:8px;border-radius:8px"><div style="font-size:10px;color:var(--text3)">売却対象の取得原価</div><b>${riMoney(costSold)}</b></div><div style="background:var(--bg2);padding:8px;border-radius:8px"><div style="font-size:10px;color:var(--text3)">税引前利益</div><b>${riMoney(gain)}</b></div><div style="background:var(--bg2);padding:8px;border-radius:8px"><div style="font-size:10px;color:var(--text3)">概算税引後資金</div><b>${riMoney(net)}</b></div></div>`;
+  const a=riAlloc(),at=a.core+a.semi+a.value+a.cash;
+  alloc.innerHTML=`配分合計 <b style="color:${Math.abs(at-100)<0.01?'var(--text2)':'var(--red)'}">${at.toFixed(0)}%</b> ／ 再投資可能額 ${riMoney(net)} ／ 課税対象利益の概算 ${riMoney(taxableGain)}（NISA比率等から機械計算）`;
+  if(Math.abs(at-100)>0.01){res.innerHTML='<div style="padding:10px;border-radius:8px;background:var(--bg);color:var(--red);font-size:12px">再配分の合計を100%にしてください。</div>';str.innerHTML='';note.textContent='';return;}
+  const investAfter=rows.reduce((s,x)=>s+x.amount,0)-Math.min(r.amount,proceeds)+net*(1-a.cash/100); // 売却後に再投資した投資資産概算
+  const cashAfter=cashNow+net*a.cash/100;
+  const strategyMap={};STRAT_KEYS.forEach(k=>strategyMap[k]=0);
+  rows.forEach(x=>{let k=x.strategy||stratAuto([x.ticker,x.name,x.sector].join(' '))||'その他';if(strategyMap[k]===undefined)k='その他';strategyMap[k]+=x.amount;});
+  let selectedStrategy=r.strategy||stratAuto([r.ticker,r.name,r.sector].join(' '))||'その他'; if(strategyMap[selectedStrategy]===undefined)selectedStrategy='その他';
+  strategyMap[selectedStrategy]=Math.max(0,strategyMap[selectedStrategy]-proceeds);
+  strategyMap['長期コア']+=net*a.core/100; strategyMap['半導体・AI']+=net*a.semi/100; strategyMap['バリュー']+=net*a.value/100;
+  const totalInvestAfter=Object.values(strategyMap).reduce((s,x)=>s+x,0), totalAssetsAfter=totalInvestAfter+cashAfter;
+  res.innerHTML=`<div style="background:var(--bg2);border-radius:9px;padding:10px"><div style="font-size:12px;font-weight:650;margin-bottom:7px">売却 → 再投資後の概算</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:11px"><div>売却前投資資産 <b>${riMoney(rows.reduce((s,x)=>s+x.amount,0))}</b></div><div>売却後投資資産 <b>${riMoney(totalInvestAfter)}</b></div><div>現金残高の想定 <b>${riMoney(cashAfter)}</b></div><div>総資産概算 <b>${riMoney(totalAssetsAfter)}</b></div></div></div>`;
+  const stratHtml=STRAT_KEYS.map(k=>{const v=strategyMap[k],p=totalInvestAfter?v/totalInvestAfter*100:0,add=k==='長期コア'?net*a.core/100:k==='半導体・AI'?net*a.semi/100:k==='バリュー'?net*a.value/100:0;return `<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border)">${riEsc(k)}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${riMoney(v)}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${p.toFixed(1)}%</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${add?riMoney(add):'—'}</td></tr>`;}).join('');
+  str.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">🎯 再配分後の投資戦略</div><div style="overflow:auto"><table style="width:100%;min-width:480px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">保有額</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">比率</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">今回の再投資</th></tr></thead><tbody>${stratHtml}</tbody></table></div>`;
+  note.textContent='税金は課税対象利益×20.315%の概算です。NISA/課税口座の混在、取得原価の配分、外国株の為替、手数料等は簡略化しています。再投資先は戦略単位の仮想配分で、個別銘柄の注文には変換しません。';
+}
+(function(){
+  [800,1800,3500].forEach(ms=>setTimeout(()=>{try{riInit();}catch(e){}},ms));
+  const base=window.amRender;if(typeof base==='function'&&!window.__riAmWrapped){window.__riAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{riInit();}catch(e){}return r;};}
+  const basePs=window.psRender;if(typeof basePs==='function'&&!window.__riPsWrapped){window.__riPsWrapped=true;window.psRender=function(){const r=basePs.apply(this,arguments);try{riInit();}catch(e){}return r;};}
+})();
+</script>
+<script>
+// ============================================================
+// 定期リバランス・買付優先順位
+// ============================================================
+const RB_KEY='assetRebalanceHistory_v1', RB_SET_KEY='assetRebalanceSettings_v1';
+function rbNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function rbEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function rbMoney(v){return '¥'+Math.round(rbNum(v)).toLocaleString('ja-JP');}
+function rbLoadHistory(){try{const x=JSON.parse(localStorage.getItem(RB_KEY)||'[]');return Array.isArray(x)?x:[];}catch(e){return [];}}
+function rbSaveHistory(a){localStorage.setItem(RB_KEY,JSON.stringify(a.slice(-24)));}
+function rbLoadSettings(){try{return JSON.parse(localStorage.getItem(RB_SET_KEY)||'{}')||{};}catch(e){return {};}}
+function rbSaveSettings(){localStorage.setItem(RB_SET_KEY,JSON.stringify({buy:rbNum(document.getElementById('rb-month-buy')?.value),minCash:rbNum(document.getElementById('rb-min-cash')?.value)}));}
+function rbInvestmentRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[],map={};
+  src.filter(a=>!a.sold&&rbNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const ticker=String(a.ticker||a.code||a.symbol||'').trim(),name=String(a.name||ticker).trim(),key=ticker||name;if(!key)return;
+    if(!map[key])map[key]={ticker:ticker||key,name,amount:0,strategy:'',sector:String(a.sector||''),targetRatio:0};
+    map[key].amount+=rbNum(a.amount);if(a.strategy)map[key].strategy=String(a.strategy);if(a.sector)map[key].sector=String(a.sector);if(rbNum(a.targetRatio)>0)map[key].targetRatio=rbNum(a.targetRatio);
+  });
+  return Object.values(map).map(r=>({...r,strategy:r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):'')||'その他')}));
+}
+function rbCash(){try{return typeof amStage1GetInvestableCashByBank==='function'?rbNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}}
+function rbTargets(){const keys=['長期コア','半導体・AI','バリュー','その他'],t=typeof stratTargets==='function'?stratTargets():{};const o={};keys.forEach(k=>o[k]=rbNum(t[k]));return o;}
+function rbFireMonths(invest,target,monthly,rate){if(target<=0)return 0;if(invest>=target)return 0;let b=invest,m=0,r=Math.max(0,rate)/100/12;while(b<target&&m<1200){b=b*(1+r)+monthly;m++;}return m;}
+function rbData(){
+ const rows=rbInvestmentRows(), invest=rows.reduce((s,r)=>s+r.amount,0),cash=rbCash(),total=invest+cash;
+ const buy=Math.min(Math.max(0,rbNum(document.getElementById('rb-month-buy')?.value)),cash);
+ const minCash=Math.max(0,Math.min(100,rbNum(document.getElementById('rb-min-cash')?.value)));
+ const maxBuyByCash=Math.max(0,cash-total*minCash/100);const deploy=Math.min(buy,maxBuyByCash);const postInvest=invest+deploy,postCash=cash-deploy,postTotal=postInvest+postCash;
+ const tg=rbTargets(), keys=Object.keys(tg), groups={};keys.forEach(k=>groups[k]={amount:0,target:tg[k]});rows.forEach(r=>{groups[r.strategy]??={amount:0,target:tg[r.strategy]||0};groups[r.strategy].amount+=r.amount;});
+ const strategy=keys.map(k=>{const g=groups[k]||{amount:0,target:0},cur=total?g.amount/total*100:0,need=g.target>0?Math.max(0,postTotal*g.target/100-g.amount):0;return {k,...g,current:cur,gap:g.target-cur,need};});
+ const needsSum=strategy.reduce((s,x)=>s+x.need,0);
+ const pools={};strategy.forEach(x=>pools[x.k]=needsSum>0?deploy*x.need/needsSum:deploy*(x.amount/Math.max(1,invest)));
+ const alloc=rows.map(r=>{const pool=pools[r.strategy]||0, groupRows=rows.filter(x=>x.strategy===r.strategy), groupNeed=groupRows.reduce((s,x)=>s+(x.targetRatio>0?Math.max(0,postTotal*x.targetRatio/100-x.amount):0),0), targetNeed=r.targetRatio>0?Math.max(0,postTotal*r.targetRatio/100-r.amount):0;const add=groupNeed>0?pool*targetNeed/groupNeed:pool*(r.amount/Math.max(1,(groups[r.strategy]?.amount||invest)));return {...r,currentRatio:total?r.amount/total*100:0,gap:r.targetRatio-r.currentRatio,targetNeed,add};});
+ alloc.sort((a,b)=>b.targetNeed-a.targetNeed); alloc.forEach((r,i)=>r.rank=i+1);
+ return {rows,invest,cash,total,buy,minCash,maxBuyByCash,deploy,postInvest,postCash,postTotal,groups,strategy,alloc};
+}
+function rbRender(){
+ const sum=document.getElementById('rb-summary'),st=document.getElementById('rb-strategy'),tk=document.getElementById('rb-ticker'),fire=document.getElementById('rb-fire');if(!sum||!st||!tk)return;
+ rbSaveSettings();const d=rbData();
+ const cashRatio=d.total?d.cash/d.total*100:0,postCashRatio=d.postTotal?d.postCash/d.postTotal*100:0;
+ sum.innerHTML=`投資資産 <b>${rbMoney(d.invest)}</b> ／ 投資可能現金 <b>${rbMoney(d.cash)}</b> ／ 現金比率 <b>${cashRatio.toFixed(1)}%</b> → 買付後 <b>${postCashRatio.toFixed(1)}%</b> ／ 今月投入 <b>${rbMoney(d.deploy)}</b>${d.buy>d.deploy?' <span style="color:#C0392B">（現金下限で制限）</span>':''}`;
+ st.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">🎯 戦略別リバランス</div><div style="overflow:auto"><table style="width:100%;min-width:620px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">現在</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">差</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">今回追加</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">買付後</th></tr></thead><tbody>${d.strategy.map(x=>{const after=d.postTotal?((x.amount+(d.deploy*(x.need/(d.strategy.reduce((s,y)=>s+y.need,0)||1))))/d.postTotal*100):x.current;return `<tr><td style="padding:6px;border-bottom:1px solid var(--border)">${rbEsc(x.k)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.current.toFixed(1)}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.target?x.target.toFixed(1)+'%':'—'}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.target?((x.target-x.current>=0?'+':'')+(x.target-x.current).toFixed(1)+'pt'):'—'}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">${rbMoney((d.strategy.reduce((s,y)=>s+y.need,0)>0?d.deploy*x.need/d.strategy.reduce((s,y)=>s+y.need,0):d.deploy*(x.amount/Math.max(1,d.invest))))}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${after.toFixed(1)}%</td></tr>`;}).join('')}</tbody></table></div>`;
+ const valid=d.alloc.filter(x=>x.add>100).slice(0,12);
+ tk.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">📌 銘柄別の買付優先順位（目標比率の不足額ベース）</div>${valid.length?`<div style="overflow:auto"><table style="width:100%;min-width:720px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:center;padding:6px;border-bottom:1px solid var(--border)">優先</th><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">銘柄</th><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">現在比率</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">不足額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">今回買付</th></tr></thead><tbody>${valid.map(x=>`<tr><td style="text-align:center;padding:6px;border-bottom:1px solid var(--border);font-weight:700">${x.rank}</td><td style="padding:6px;border-bottom:1px solid var(--border);font-weight:650">${rbEsc(x.ticker)}</td><td style="padding:6px;border-bottom:1px solid var(--border)">${rbEsc(x.strategy)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.currentRatio.toFixed(1)}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.targetRatio?x.targetRatio.toFixed(1)+'%':'—'}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.targetRatio?rbMoney(x.targetNeed):'—'}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">${rbMoney(x.add)}</td></tr>`).join('')}</tbody></table></div>`:'<div style="padding:8px;color:var(--text3);font-size:10px">銘柄別の「目標保有比率」が登録されている銘柄がないため、戦略別配分を表示しています。</div>'}`;
+ const fireSettings=(()=>{try{return JSON.parse(localStorage.getItem('amFireGoalSettings')||'{}')||{};}catch(e){return {};}})();
+ const target=rbNum(fireSettings.target), monthly=rbNum(fireSettings.monthly), rate=rbNum(fireSettings.rate||5);if(target>0){const before=rbFireMonths(d.invest,target,monthly,rate),after=rbFireMonths(d.invest+d.deploy,target,monthly,rate),diff=before-after;const fmt=m=>m>=1200?'30年以上':m===0?'達成済み':Math.floor(m/12)+'年'+(m%12?' '+m%12+'か月':'');fire.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">🔥 サイドFIREへの月次買付効果</div><div style="font-size:11px">今月買付なし：<b>${fmt(before)}</b> ／ 今月${rbMoney(d.deploy)}投入：<b>${fmt(after)}</b>${diff>0?' ／ 機械的には <b>'+diff+'か月短縮</b>':''}<div style="font-size:10px;color:var(--text3);margin-top:4px">目標 ${rbMoney(target)}・想定年利${rate}%・毎月追加投資 ${rbMoney(monthly)}で試算</div></div>`;}else fire.innerHTML='<div style="font-size:10px;color:var(--text3)">サイドFIRE目標資産が未設定のため、到達時期への影響は表示しません。</div>';
+ rbRenderHistory();
+}
+function rbSetBuy(v){const e=document.getElementById('rb-month-buy');if(e)e.value=v;rbRender();}
+function rbSaveMonth(){
+ const d=rbData(), now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+ const prev=rbLoadHistory().filter(x=>x.ym!==ym);const netFlow=rbNum(prompt('今月の入金−出金額（円）を入力してください。未入力/0なら0円', '0')||0);
+ const rec={ym,date:now.toISOString(),total:d.total,invest:d.invest,cash:d.cash,monthlyBuy:d.deploy,netFlow,operatingPnl:0,investRatio:d.total?d.invest/d.total*100:0,cashRatio:d.total?d.cash/d.total*100:0};
+ const old=rbLoadHistory().filter(x=>x.ym!==ym).sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));const last=old[old.length-1];if(last)rec.operatingPnl=rec.total-last.total-rec.netFlow;
+ rbSaveHistory([...old,rec]);rbRenderHistory();showToast('✓ 今月のリバランス実績を記録しました');
+}
+function rbRenderHistory(){const el=document.getElementById('rb-history');if(!el)return;const h=rbLoadHistory().sort((a,b)=>String(b.ym).localeCompare(String(a.ym))).slice(0,12);if(!h.length){el.innerHTML='<div style="padding:10px;color:var(--text3);font-size:10px">月次実績はまだありません。「今月の実績を記録」で保存できます。</div>';return;}el.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">📅 月次リバランス履歴（最新12か月）</div><div style="overflow:auto"><table style="width:100%;min-width:720px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">月</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">総資産</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">買付</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">入出金</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">実質運用損益</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">現金比率</th></tr></thead><tbody>${h.map(x=>`<tr><td style="padding:6px;border-bottom:1px solid var(--border)">${rbEsc(x.ym)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${rbMoney(x.total)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${rbMoney(x.monthlyBuy)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${rbMoney(x.netFlow)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">${rbMoney(x.operatingPnl)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${rbNum(x.cashRatio).toFixed(1)}%</td></tr>`).join('')}</tbody></table></div>`;}
+function rbClearHistory(){if(!confirm('月次リバランス履歴をすべて削除しますか？'))return;localStorage.removeItem(RB_KEY);rbRenderHistory();}
+(function(){const s=rbLoadSettings();setTimeout(()=>{try{if(document.getElementById('rb-month-buy')&&s.buy!==undefined)document.getElementById('rb-month-buy').value=s.buy; if(document.getElementById('rb-min-cash')&&s.minCash!==undefined)document.getElementById('rb-min-cash').value=s.minCash;rbRender();}catch(e){}},1200);const base=window.amRender;if(typeof base==='function'&&!window.__rbAmWrapped){window.__rbAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{rbRender();}catch(e){}return r;};}})();
+</script>
 </body>
 </html>
 
+
+<script>setTimeout(function(){if(typeof syncSideFirePrecision==='function'){syncSideFirePrecision();}},600);
+// ============================================================
+// 買付候補比較：価格面・割安度・業績・ポートフォリオ不足を項目別表示
+// ============================================================
+function bcEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function bcNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function bcRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[];
+  const map={};
+  src.filter(a=>{
+    if(a.sold)return false;
+    const cat=String(a.cat||'');
+    if(cat==='銀行'||cat==='FX'||/年金|現金|預り|預かり/.test(String(a.name||'')))return false;
+    return bcNum(a.amount)>0 || bcNum(a.shares)>0 || bcNum(a.price)>0 || !!a.code;
+  }).forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim();
+    const name=String(a.name||code).trim();
+    const key=code||name;
+    if(!key)return;
+    if(!map[key]) map[key]={ticker:code||key,name,amount:0,price:0,targetBuy:0,targetSell:0,targetRatio:0,sector:'',per:0,pbr:0,eps1:0,eps2:0,earningsDate:'',broker:'',costPrice:0};
+    map[key].amount+=bcNum(a.amount);
+    if(bcNum(a.price)>0)map[key].price=bcNum(a.price);
+    if(bcNum(a.targetBuyPrice)>0)map[key].targetBuy=bcNum(a.targetBuyPrice);
+    if(bcNum(a.targetRatio)>0)map[key].targetRatio=bcNum(a.targetRatio);
+    if(bcNum(a.targetSellPrice)>0)map[key].targetSell=bcNum(a.targetSellPrice);
+    if(a.sector)map[key].sector=String(a.sector);
+    if(bcNum(a.per)>0)map[key].per=bcNum(a.per);
+    if(bcNum(a.pbr)>0)map[key].pbr=bcNum(a.pbr);
+    if(bcNum(a.eps1)>0)map[key].eps1=bcNum(a.eps1);
+    if(bcNum(a.eps2)>0)map[key].eps2=bcNum(a.eps2);
+    if(a.earningsDate)map[key].earningsDate=String(a.earningsDate);
+    if(a.broker)map[key].broker=String(a.broker);
+    if(bcNum(a.costPrice)>0)map[key].costPrice=bcNum(a.costPrice);
+  });
+  try{
+    const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    if(Array.isArray(ls))ls.forEach(a=>{
+      if(a.sold)return;
+      const code=String(a.ticker||a.code||a.symbol||'').trim(); const name=String(a.name||code).trim(); const key=code||name; if(!key)return;
+      if(!map[key])map[key]={ticker:code||key,name,amount:0,price:0,targetBuy:0,targetSell:0,targetRatio:0,sector:'',per:0,pbr:0,eps1:0,eps2:0,earningsDate:'',broker:'',costPrice:0};
+      if(bcNum(a.amount)>0)map[key].amount+=bcNum(a.amount);
+      if(bcNum(a.targetBuyPrice)>0)map[key].targetBuy=bcNum(a.targetBuyPrice);
+      if(bcNum(a.targetRatio)>0)map[key].targetRatio=bcNum(a.targetRatio);
+      if(bcNum(a.per)>0)map[key].per=bcNum(a.per); if(bcNum(a.pbr)>0)map[key].pbr=bcNum(a.pbr);
+      if(bcNum(a.eps1)>0)map[key].eps1=bcNum(a.eps1); if(bcNum(a.eps2)>0)map[key].eps2=bcNum(a.eps2);
+      if(a.sector)map[key].sector=String(a.sector); if(bcNum(a.price)>0)map[key].price=bcNum(a.price);
+    });
+  }catch(e){}
+  return Object.values(map);
+}
+function bcBadge(v){
+  const c=v==='◎'?'var(--accent)':v==='○'?'var(--text2)':v==='△'?'var(--text3)':'var(--red)';
+  return `<span style="font-weight:800;color:${c};font-size:14px">${v}</span>`;
+}
+function bcRender(){
+  const list=document.getElementById('bc-list'),summary=document.getElementById('bc-summary'),note=document.getElementById('bc-note');
+  if(!list||!summary)return;
+  const rows=bcRows();
+  if(!rows.length){summary.textContent='買付候補を読み込んでいます…';list.innerHTML='';return;}
+  const total=rows.reduce((s,r)=>s+r.amount,0), cash=(typeof bpCash==='function'?bpCash():0);
+  const out=rows.map(r=>{
+    const currentPct=total?r.amount/total*100:0;
+    const priceGap=r.targetBuy>0&&r.price>0?(r.price/r.targetBuy-1)*100:null;
+    const pe=r.per; const pb=r.pbr;
+    const epsGrowth=(r.eps1>0&&r.eps2>0)?(r.eps2/r.eps1-1)*100:null;
+    let priceScore=priceGap===null?'—':priceGap<=-15?'◎':priceGap<=0?'○':priceGap<=10?'△':'×';
+    let valueScore='—';
+    if(pe>0||pb>0){ const peGood=pe>0&&pe<=20, pbGood=pb>0&&pb<=2; const good=(peGood?1:0)+(pbGood?1:0); valueScore=good>=2?'◎':good===1?'○':'△'; }
+    let growthScore='—';
+    if(epsGrowth!==null){growthScore=epsGrowth>=20?'◎':epsGrowth>=0?'○':epsGrowth>=-10?'△':'×';}
+    const target=r.targetRatio; const gap=target>0?target-currentPct:null;
+    const allocationScore=gap===null?'—':gap>=5?'◎':gap>0?'○':gap>=-3?'△':'×';
+    return {...r,currentPct,priceGap,epsGrowth,priceScore,valueScore,growthScore,allocationScore};
+  });
+  summary.innerHTML=`候補 <b>${out.length}銘柄</b> ／ 投資可能現金 <b>¥${Math.round(cash).toLocaleString('ja-JP')}</b> ／ 目標買値・PER等の未設定項目は「—」で表示`;
+  list.innerHTML=`<div style="overflow:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:10px"><thead><tr>
+    <th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">銘柄</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">現在値</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">目標買値</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">目標買値との差</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">価格面</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">割安度</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">業績</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">配分不足</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">PER</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">PBR</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">保有比率</th></tr></thead><tbody>
+    ${out.map(r=>`<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>${bcEsc(r.ticker)}</b><div style="color:var(--text3)">${bcEsc(r.name)}</div></td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.price?bcEsc(Math.round(r.price).toLocaleString('ja-JP')):'—'}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.targetBuy?bcEsc(Math.round(r.targetBuy).toLocaleString('ja-JP')):'—'}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.priceGap===null?'—':(r.priceGap>0?'+':'')+r.priceGap.toFixed(1)+'%'}</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${bcBadge(r.priceScore)}</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${bcBadge(r.valueScore)}</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${bcBadge(r.growthScore)}</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">${bcBadge(r.allocationScore)}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.per?r.per.toFixed(1):'—'}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.pbr?r.pbr.toFixed(2):'—'}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.currentPct.toFixed(1)}%</td></tr>`).join('')}
+  </tbody></table></div>`;
+  note.textContent='判定は機械的な目安です。価格面＝目標買値との差、割安度＝PER/PBR、業績＝EPS登録値の前年比、配分不足＝目標保有比率との差。最新株価・最新業績を自動取得する機能ではありません。';
+}
+setTimeout(()=>{try{bcRender();}catch(e){}},1100);
+(function(){const base=window.amRender;if(typeof base==='function'&&!window.__bcRenderWrapped){window.__bcRenderWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{bcRender();}catch(e){}return r;};}[400,1200,2500,4500].forEach(ms=>setTimeout(()=>{try{bcRender();}catch(e){}},ms));})();
+
+</script>
+
+<script>
+// ============================================================
+// 買付判断チェック：戦略・目標株価・予想PER・業績前年比を統合表示
+// ============================================================
+function bc2Render(){
+  const list=document.getElementById('bc2-list'),summary=document.getElementById('bc2-summary'),note=document.getElementById('bc2-note');
+  if(!list||!summary)return;
+  const rows=typeof bcRows==='function'?bcRows():[];
+  if(!rows.length){summary.textContent='銘柄データを読み込んでいます…';list.innerHTML='';return;}
+  const total=rows.reduce((s,r)=>s+Number(r.amount||0),0);
+  const out=rows.map(r=>{
+    const pct=total?Number(r.amount||0)/total*100:0;
+    const analystUpside=r.analystTargetPrice>0&&r.price>0?(r.analystTargetPrice/r.price-1)*100:null;
+    const forward=r.forwardPER>0?r.forwardPER:null;
+    const growths=[r.revenueGrowth,r.opProfitGrowth].filter(v=>Number.isFinite(v));
+    const avgGrowth=growths.length?growths.reduce((a,b)=>a+b,0)/growths.length:null;
+    const targetGap=r.targetBuy>0&&r.price>0?(r.price/r.targetBuy-1)*100:null;
+    return {...r,pct,analystUpside,forward,avgGrowth,targetGap};
+  });
+  summary.innerHTML=`<b>${out.length}銘柄</b> ／ 投資戦略・最新分析値を登録すると判断材料が揃います`;
+  const fmt=(v,d=1)=>Number.isFinite(v)?v.toFixed(d):'—';
+  const money=v=>v?Math.round(v).toLocaleString('ja-JP'):'—';
+  const badge=(label,ok)=>`<span style="display:inline-block;padding:3px 6px;border-radius:5px;background:var(--bg);font-size:10px">${label}${ok?' ✓':''}</span>`;
+  list.innerHTML=`<div style="overflow:auto"><table style="width:100%;min-width:1080px;border-collapse:collapse;font-size:10px"><thead><tr>
+    <th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">銘柄 / 戦略</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">現在値</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">目標買値</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">アナリスト目標</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">上昇余地</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">PER</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">予想PER</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">PBR</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">売上YoY</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">営業利益YoY</th>
+    <th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">保有比率</th>
+    <th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">最終確認</th>
+  </tr></thead><tbody>${out.map(r=>`<tr>
+    <td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>${bcEsc(r.ticker)}</b><div style="color:var(--text3)">${bcEsc(r.name)}</div><div style="margin-top:3px">${r.strategy?bcBadge(r.strategy):'<span style="color:var(--text3)">戦略未設定</span>'}</div></td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${money(r.price)}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${money(r.targetBuy)}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${money(r.analystTargetPrice)}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.analystUpside===null?'—':(r.analystUpside>0?'+':'')+fmt(r.analystUpside)+'%'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.per?fmt(r.per):'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.forwardPER?fmt(r.forwardPER):'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${r.pbr?fmt(r.pbr,2):'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${Number.isFinite(r.revenueGrowth)?(r.revenueGrowth>0?'+':'')+fmt(r.revenueGrowth)+'%':'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${Number.isFinite(r.opProfitGrowth)?(r.opProfitGrowth>0?'+':'')+fmt(r.opProfitGrowth)+'%':'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${fmt(r.pct)+'%'}</td>
+    <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap">${bcEsc(r.lastAnalysisDate||'—')}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+  note.textContent='上昇余地＝アナリスト目標株価÷現在値−1。売上・営業利益は登録した前年比。数値はユーザー登録値であり、ここでは最新情報を自動取得・更新しません。投資判断の順位付けは行いません。';
+}
+// bcRowsに追加項目を保持するための軽い拡張
+(function(){
+  const base=window.bcRows;
+  if(typeof base==='function'&&!window.__bc2RowsWrapped){
+    window.__bc2RowsWrapped=true;
+    window.bcRows=function(){
+      const rows=base.apply(this,arguments);
+      const src=Array.isArray(amAccounts)?amAccounts:[]; const map={};
+      src.forEach(a=>{const k=String(a.ticker||a.code||a.symbol||a.name||'').trim();if(k)map[k]=a;});
+      try{const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');if(Array.isArray(ls))ls.forEach(a=>{const k=String(a.ticker||a.code||a.symbol||a.name||'').trim();if(k&&!map[k])map[k]=a;});}catch(e){}
+      return rows.map(r=>{const a=map[r.ticker]||{};return {...r,strategy:r.strategy||a.strategy||'',analystTargetPrice:r.analystTargetPrice||Number(a.analystTargetPrice||0),forwardPER:r.forwardPER||Number(a.forwardPER||0),revenueGrowth:Number.isFinite(r.revenueGrowth)?r.revenueGrowth:(Number.isFinite(Number(a.revenueGrowth))?Number(a.revenueGrowth):undefined),opProfitGrowth:Number.isFinite(r.opProfitGrowth)?r.opProfitGrowth:(Number.isFinite(Number(a.opProfitGrowth))?Number(a.opProfitGrowth):undefined),lastAnalysisDate:r.lastAnalysisDate||a.lastAnalysisDate||''};});
+    };
+  }
+  [500,1300,2600,5000].forEach(ms=>setTimeout(()=>{try{bc2Render();}catch(e){}},ms));
+  const baseAm=window.amRender;
+  if(typeof baseAm==='function'&&!window.__bc2AmWrapped){window.__bc2AmWrapped=true;window.amRender=function(){const r=baseAm.apply(this,arguments);try{bc2Render();}catch(e){}return r;};}
+})();
+
+// ============================================================
+// 最新情報確認パネル：分析データの鮮度と外部確認先を表示
+// ============================================================
+function latestInfoRender(){
+  const list=document.getElementById('latest-list'),summary=document.getElementById('latest-summary'),note=document.getElementById('latest-note');
+  if(!list||!summary)return;
+  const src=Array.isArray(amAccounts)?amAccounts:[];
+  const rows=src.filter(a=>!a.sold && (Number(a.amount||0)>0 || Number(a.shares||0)>0 || a.code));
+  if(!rows.length){summary.textContent='銘柄データを読み込んでいます…';list.innerHTML='';return;}
+  const today=new Date(); today.setHours(0,0,0,0);
+  const escv=v=>typeof esc==='function'?esc(String(v??'')):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const days=d=>{if(!d)return null;const x=new Date(d);x.setHours(0,0,0,0);return Math.floor((today-x)/86400000);};
+  const items=rows.map(a=>({...a,age:days(a.lastAnalysisDate)})).sort((a,b)=>(b.age??9999)-(a.age??9999));
+  const stale=items.filter(a=>a.age===null||a.age>7).length;
+  summary.innerHTML=`<b>${items.length}銘柄</b> ／ <span style="color:${stale?'var(--accent)':'var(--text2)'}">7日超・未確認 ${stale}銘柄</span>`;
+  const link=(url,label)=>`<a href="${url}" target="_blank" rel="noopener" style="display:inline-block;padding:4px 7px;border:1px solid var(--border);border-radius:6px;color:var(--text2);text-decoration:none;font-size:10px;margin:2px">${label}</a>`;
+  list.innerHTML=`<div style="overflow:auto"><table style="width:100%;min-width:900px;border-collapse:collapse;font-size:10px"><thead><tr>
+    <th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">銘柄</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">現在値</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">目標株価</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">予想PER</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">売上YoY</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">営業利益YoY</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">最終確認</th><th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">確認先</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">操作</th>
+  </tr></thead><tbody>${items.map(a=>{
+    const code=String(a.code||'').trim(),q=encodeURIComponent((code||a.name||'').replace(/\s+/g,' ')),age=a.age,fresh=age!==null&&age<=7,date=a.lastAnalysisDate||'未確認',target=a.analystTargetPrice||0;
+    return `<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>${escv(code||'—')}</b><div style="color:var(--text3)">${escv(a.name||'')}</div></td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${a.price?Math.round(a.price).toLocaleString('ja-JP'):'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${target?Math.round(target).toLocaleString('ja-JP'):'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${a.forwardPER?Number(a.forwardPER).toFixed(1):'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${Number.isFinite(Number(a.revenueGrowth))?(Number(a.revenueGrowth)>0?'+':'')+Number(a.revenueGrowth).toFixed(1)+'%':'—'}</td>
+    <td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${Number.isFinite(Number(a.opProfitGrowth))?(Number(a.opProfitGrowth)>0?'+':'')+Number(a.opProfitGrowth).toFixed(1)+'%':'—'}</td>
+    <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><span style="color:${fresh?'var(--text2)':'var(--accent)'}">${escv(date)}${age!==null?' ('+age+'日)':''}</span></td>
+    <td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap">${a.analysisSource?link(a.analysisSource,'登録URL'):''}${link('https://finance.yahoo.co.jp/search/?query='+q,'Yahoo!ファイナンス')}${link('https://www.google.com/search?q='+encodeURIComponent((a.name||code)+' IR 決算 最新'),'IR・決算検索')}</td>
+    <td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)"><button class="btn-sm" type="button" onclick="latestMarkChecked(${Number(a.id)})">今日確認</button></td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  note.textContent='「今日確認」は分析値を更新する操作ではなく、最新情報を確認した日付を記録します。外部サイトで確認後、資産管理の編集画面に数値を入力してください。';
+}
+async function latestMarkChecked(id){
+  const a=amAccounts.find(x=>String(x.id)===String(id));if(!a)return;
+  a.lastAnalysisDate=todayStr();amSaveToLocal();try{await amSaveToSheet();}catch(e){}
+  try{bc2Render();}catch(e){}latestInfoRender();showToast('✓ 最新情報確認日を更新しました');
+}
+setTimeout(()=>{try{latestInfoRender();}catch(e){}},1200);
+(function(){const base=window.amRender;if(typeof base==='function'&&!window.__latestInfoAmWrapped){window.__latestInfoAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{latestInfoRender();}catch(e){}return r;};}[600,1600,3000,5000].forEach(ms=>setTimeout(()=>{try{latestInfoRender();}catch(e){}},ms));})();
+</script>
+
+<script>
+// ============================================================
+// 投資戦略別ポートフォリオ管理
+// ============================================================
+const STRAT_KEYS=['長期コア','半導体・AI','バリュー','その他'];
+const STRAT_DEFAULT={長期コア:0,'半導体・AI':0,バリュー:0,その他:0};
+function stratEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function stratTargets(){
+  try{const x=JSON.parse(localStorage.getItem('strategyAllocationTargets')||'{}');return {...STRAT_DEFAULT,...x};}catch(e){return {...STRAT_DEFAULT};}
+}
+function stratSaveTargets(){
+  const x={}; STRAT_KEYS.forEach(k=>x[k]=Math.max(0,Number(document.getElementById('strat-t-'+k)?.value||0)));
+  const total=STRAT_KEYS.reduce((s,k)=>s+x[k],0);
+  if(total>100){showToast('⚠ 目標比率の合計は100%以内にしてください');return;}
+  localStorage.setItem('strategyAllocationTargets',JSON.stringify(x));
+  stratRender(); showToast('✓ 投資戦略の目標比率を保存しました');
+}
+function stratAuto(k){
+  const n=String(k||'').toLowerCase();
+  if(/半導体|memory|semiconductor|nvda|nvidia|micron|mu\b|sndk|sandisk|kioxia|キオクシア|sk hynix|hynix|advantest|アドバンテスト|東京エレクトロン|disco|broadcom|amd\b|intel/.test(n))return '半導体・AI';
+  if(/外国株|米国株|service|software|cloud|google|alphabet|microsoft|amazon|meta|apple|crwd|palo alto|panw|pltr/.test(n))return '長期コア';
+  if(/高配当|value|バリュー|銀行|商社|保険|鉄鋼|pbr|低per/.test(n))return 'バリュー';
+  return '';
+}
+function stratRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[], map={};
+  src.filter(a=>!a.sold&&Number(a.amount||0)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim(), name=String(a.name||code).trim(), key=code||name;
+    if(!key)return;
+    if(!map[key])map[key]={ticker:code||key,name,amount:0,strategy:'',sector:String(a.sector||'')};
+    map[key].amount+=Number(a.amount||0);
+    if(a.strategy)map[key].strategy=String(a.strategy);
+    if(a.sector)map[key].sector=String(a.sector);
+  });
+  return Object.values(map).map(r=>({...r,displayStrategy:r.strategy||stratAuto([r.ticker,r.name,r.sector].join(' '))||'未設定'}));
+}
+function stratPurchaseAdds(){
+  const adds={};
+  if(Array.isArray(baState))baState.forEach(x=>{const n=Math.max(0,Number(x.amount||0));if(n)adds[x.ticker]=(adds[x.ticker]||0)+n;});
+  return adds;
+}
+function stratRender(){
+  const sum=document.getElementById('strat-summary'),targets=document.getElementById('strat-targets'),table=document.getElementById('strat-table'),after=document.getElementById('strat-buyafter'),note=document.getElementById('strat-note');
+  if(!sum||!targets||!table)return;
+  const rows=stratRows(), tg=stratTargets(), total=rows.reduce((s,r)=>s+r.amount,0), groups={};
+  STRAT_KEYS.forEach(k=>groups[k]=0); let unset=0;
+  rows.forEach(r=>{if(groups[r.displayStrategy]!==undefined)groups[r.displayStrategy]+=r.amount;else unset+=r.amount;});
+  const totalTarget=STRAT_KEYS.reduce((s,k)=>s+Math.max(0,Number(tg[k]||0)),0);
+  sum.innerHTML=`<b>投資資産 ¥${Math.round(total).toLocaleString('ja-JP')}</b> ／ 目標設定 ${totalTarget.toFixed(1)}%${unset>0?` ／ 自動分類・未設定 ¥${Math.round(unset).toLocaleString('ja-JP')}`:''}`;
+  targets.innerHTML=STRAT_KEYS.map(k=>`<label style="font-size:10px;color:var(--text3)">${k}<div style="display:flex;gap:5px;align-items:center;margin-top:3px"><input id="strat-t-${k}" type="number" min="0" max="100" step="1" value="${Number(tg[k]||0)}" oninput="stratRenderPreview()" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"><span>%</span></div></label>`).join('')+`<button class="btn-sm" type="button" onclick="stratSaveTargets()" style="grid-column:1/-1">目標比率を保存</button>`;
+  table.innerHTML=`<div style="overflow:auto"><table style="width:100%;min-width:650px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">保有額</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">現在比率</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">目標比率</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">目標との差</th><th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">主な銘柄</th></tr></thead><tbody>${STRAT_KEYS.map(k=>{
+    const amt=groups[k], pct=total?amt/total*100:0, diff=pct-Number(tg[k]||0), names=rows.filter(r=>r.displayStrategy===k).sort((a,b)=>b.amount-a.amount).slice(0,3).map(r=>r.ticker||r.name).join('・')||'—';
+    return `<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>${stratEsc(k)}</b></td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">¥${Math.round(amt).toLocaleString('ja-JP')}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${pct.toFixed(1)}%</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${Number(tg[k]||0).toFixed(1)}%</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border);font-weight:700;color:${Math.abs(diff)<0.5?'var(--text2)':diff>0?'var(--red)':'var(--accent)'}">${diff>0?'+':''}${diff.toFixed(1)}pt</td><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap">${stratEsc(names)}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  const adds=stratPurchaseAdds(), afterGroups={};STRAT_KEYS.forEach(k=>afterGroups[k]=groups[k]);
+  rows.forEach(r=>{if(adds[r.ticker]){const k=r.displayStrategy;if(afterGroups[k]!==undefined)afterGroups[k]+=adds[r.ticker];}});
+  const existingTickers=new Set(rows.map(r=>r.ticker));
+  if(adds && Object.keys(adds).length){
+    Object.entries(adds).forEach(([t,n])=>{if(existingTickers.has(t))return;const o=baInvestmentRows().find(x=>x.ticker===t);const k=o?(o.strategy||stratAuto([o.ticker,o.name,o.sector].join(' '))||'未設定'):'';if(afterGroups[k]!==undefined)afterGroups[k]+=n;});
+    const addTotal=Object.values(adds).reduce((s,n)=>s+n,0), afterTotal=total+addTotal;
+    after.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">🛒 現在の買付シミュレーションを反映した場合</div><div style="overflow:auto"><table style="width:100%;min-width:520px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">買付後比率</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標との差</th></tr></thead><tbody>${STRAT_KEYS.map(k=>{const p=afterTotal?afterGroups[k]/afterTotal*100:0,d=p-Number(tg[k]||0);return `<tr><td style="padding:6px;border-bottom:1px solid var(--border)">${stratEsc(k)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">${p.toFixed(1)}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);color:${Math.abs(d)<0.5?'var(--text2)':d>0?'var(--red)':'var(--accent)'}">${d>0?'+':''}${d.toFixed(1)}pt</td></tr>`;}).join('')}</tbody></table></div>`;
+  }else after.innerHTML='<div style="font-size:10px;color:var(--text3)">買付シミュレーターで金額を入力すると、買付後の戦略比率もここに表示します。</div>';
+  note.textContent='戦略は資産管理の「投資戦略」を優先し、未設定銘柄は銘柄名・セクターから機械的に補助分類します。補助分類は保存されません。目標比率はこの端末のローカル設定です。';
+}
+function stratRenderPreview(){
+  // 入力中の値だけを一時反映して、目標との差を即時確認する
+  const old=stratTargets(), tmp={};STRAT_KEYS.forEach(k=>tmp[k]=Math.max(0,Number(document.getElementById('strat-t-'+k)?.value||0)));localStorage.setItem('strategyAllocationTargets',JSON.stringify(tmp));stratRender();
+}
+(function(){
+  [700,1800,3500].forEach(ms=>setTimeout(()=>{try{stratRender();}catch(e){}},ms));
+  const base=window.amRender;if(typeof base==='function'&&!window.__stratAmWrapped){window.__stratAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{stratRender();}catch(e){}return r;};}
+  const baseBa=window.baRender;if(typeof baseBa==='function'&&!window.__stratBaWrapped){window.__stratBaWrapped=true;window.baRender=function(){const r=baseBa.apply(this,arguments);try{stratRender();}catch(e){}return r;};}
+})();
+</script>
+
+
+
+<script>
+// ============================================================
+// 目標配分までの買付額自動配分・暴落用資金分離
+// ============================================================
+const AA_KEY='assetAutoAllocation_v1';
+function aaNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function aaEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function aaSave(){localStorage.setItem(AA_KEY,JSON.stringify({reserve:aaNum(document.getElementById('aa-reserve')?.value),max:aaNum(document.getElementById('aa-max')?.value)}));}
+function aaLoad(){try{return JSON.parse(localStorage.getItem(AA_KEY)||'{}')}catch(e){return {}}}
+function aaInvestmentRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[], map={};
+  src.filter(a=>!a.sold&&aaNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+    const ticker=String(a.ticker||a.code||a.symbol||'').trim(), name=String(a.name||ticker).trim(), key=ticker||name;
+    if(!key)return;
+    if(!map[key])map[key]={ticker:ticker||key,name,amount:0,sector:String(a.sector||''),strategy:String(a.strategy||''),targetRatio:0};
+    map[key].amount+=aaNum(a.amount); if(a.sector)map[key].sector=String(a.sector); if(a.strategy)map[key].strategy=String(a.strategy);
+    if(aaNum(a.targetRatio)>0)map[key].targetRatio=aaNum(a.targetRatio);
+  });
+  return Object.values(map);
+}
+function aaStrategies(){
+  const keys=['長期コア','半導体・AI','バリュー','その他'], out={}; keys.forEach(k=>out[k]={amount:0,target:0});
+  const rows=aaInvestmentRows(), tg=(typeof stratTargets==='function'?stratTargets():{});
+  rows.forEach(r=>{let k=r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):''))||'その他';if(!out[k])k='その他';out[k].amount+=r.amount;});
+  keys.forEach(k=>out[k].target=aaNum(tg[k])); return out;
+}
+function aaCash(){try{return typeof amStage1GetInvestableCashByBank==='function'?aaNum(amStage1GetInvestableCashByBank(amAccounts).total):0}catch(e){return 0}}
+function aaSettings(){const x=aaLoad();const reserve=document.getElementById('aa-reserve');const max=document.getElementById('aa-max');if(reserve&&x.reserve!==undefined)reserve.value=x.reserve||500000;if(max&&x.max!==undefined)max.value=x.max||'';return x;}
+function aaSetMax(rate){const cash=aaCash(), reserve=aaNum(document.getElementById('aa-reserve')?.value);const usable=Math.max(0,cash-reserve);document.getElementById('aa-max').value=Math.floor(usable*rate/10000)*10000;aaRender();}
+function aaResetInputs(){document.getElementById('aa-reserve').value=500000;document.getElementById('aa-max').value='';aaSave();aaRender();}
+function aaPlan(){
+  const rows=aaInvestmentRows(), total=rows.reduce((s,r)=>s+r.amount,0), cash=aaCash(), reserve=Math.max(0,aaNum(document.getElementById('aa-reserve')?.value)), usable=Math.max(0,cash-reserve);
+  const max=aaNum(document.getElementById('aa-max')?.value), deploy=Math.min(usable,max>0?max:usable), postTotal=total+deploy;
+  const groups=aaStrategies(), keys=Object.keys(groups);
+  let deficits=keys.map(k=>({k,amount:groups[k].amount,target:groups[k].target,need:groups[k].target>0?Math.max(0,postTotal*groups[k].target/100-groups[k].amount):0}));
+  const defSum=deficits.reduce((s,x)=>s+x.need,0);
+  let stratAdds={};
+  if(defSum>0){deficits.forEach(x=>stratAdds[x.k]=deploy*x.need/defSum);}
+  else {keys.forEach(k=>stratAdds[k]=deploy*(groups[k].amount/Math.max(1,total)));}
+  const byStrategy={};keys.forEach(k=>byStrategy[k]={...groups[k],add:stratAdds[k]||0,after:groups[k].amount+(stratAdds[k]||0),gap:(groups[k].target?((groups[k].amount+(stratAdds[k]||0))/postTotal*100-groups[k].target):0)});
+  const tickerNeed=rows.map(r=>{const sk=r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):''))||'その他';const pool=stratAdds[sk]||0;const groupRows=rows.filter(x=>(x.strategy||((typeof stratAuto==='function'?stratAuto([x.ticker,x.name,x.sector].join(' ')):''))||'その他')===sk);const targetNeed=r.targetRatio>0?Math.max(0,postTotal*r.targetRatio/100-r.amount):0;return {...r,sk,pool,targetNeed,weight:targetNeed};});
+  const byGroup={};tickerNeed.forEach(r=>{if(!byGroup[r.sk])byGroup[r.sk]=[];byGroup[r.sk].push(r);});
+  const alloc=tickerNeed.map(r=>{const arr=byGroup[r.sk]||[], sum=arr.reduce((s,x)=>s+x.weight,0);const add=sum>0?(r.pool*r.weight/sum):0;return {...r,add};});
+  return {rows,total,cash,reserve,usable,deploy,postTotal,groups:byStrategy,alloc};
+}
+function aaRender(){
+  const sum=document.getElementById('aa-summary'), st=document.getElementById('aa-strategy'), tk=document.getElementById('aa-ticker'), dd=document.getElementById('aa-drawdown');if(!sum||!st||!tk)return;
+  aaSave();const p=aaPlan();
+  sum.innerHTML=`投資可能現金 <b>¥${Math.round(p.cash).toLocaleString('ja-JP')}</b> ／ 最低確保 <b>¥${Math.round(p.reserve).toLocaleString('ja-JP')}</b> ／ 今回投入可能 <b>¥${Math.round(p.usable).toLocaleString('ja-JP')}</b> ／ <span style="font-weight:700">今回配分 ¥${Math.round(p.deploy).toLocaleString('ja-JP')}</span> ／ 買付後現金 <b>¥${Math.round(p.cash-p.deploy).toLocaleString('ja-JP')}</b>`;
+  const keys=Object.keys(p.groups);st.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">🎯 戦略別の配分</div><div style="overflow:auto"><table style="width:100%;min-width:560px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">現在</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">今回追加</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">買付後</th></tr></thead><tbody>${keys.map(k=>{const x=p.groups[k],cur=p.total?x.amount/p.total*100:0,after=p.postTotal?x.after/p.postTotal*100:0;return `<tr><td style="padding:6px;border-bottom:1px solid var(--border)">${aaEsc(k)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${cur.toFixed(1)}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.target?x.target.toFixed(1)+'%':'—'}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">¥${Math.round(x.add).toLocaleString('ja-JP')}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${after.toFixed(1)}%</td></tr>`;}).join('')}</tbody></table></div>`;
+  const valid=p.alloc.filter(x=>x.add>100);tk.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">📌 銘柄別の推奨配分（目標比率が登録されている銘柄を優先）</div>${valid.length?`<div style="overflow:auto"><table style="width:100%;min-width:600px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">銘柄</th><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">現在比率</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">今回追加</th></tr></thead><tbody>${valid.sort((a,b)=>b.add-a.add).map(x=>`<tr><td style="padding:6px;border-bottom:1px solid var(--border)">${aaEsc(x.ticker)}</td><td style="padding:6px;border-bottom:1px solid var(--border)">${aaEsc(x.sk)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${p.total?(x.amount/p.total*100).toFixed(1):'0.0'}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${x.targetRatio.toFixed(1)}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">¥${Math.round(x.add).toLocaleString('ja-JP')}</td></tr>`).join('')}</tbody></table></div>`:'<div style="font-size:10px;color:var(--text3);padding:7px 0">銘柄の「目標保有比率」が登録されていないため、今回は戦略別配分を中心に計算しています。</div>'}`;
+  const levels=[10,20,30,40], semiRx=/半導体|semiconductor|nvda|nvidia|mu|micron|sndk|sandisk|kioxia|キオクシア|sk hynix|hynix|advantest|アドバンテスト|東京エレクトロン|disco|broadcom|amd|intel/i; const semi=p.rows.filter(r=>semiRx.test([r.ticker,r.name,r.sector].join(' '))).reduce((s,r)=>s+r.amount,0); const semiPct=p.total?semi/p.total*100:0;
+  dd.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:6px">📉 暴落用に残す資金の確認</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px"><div style="background:var(--bg);padding:8px;border-radius:8px"><span style="font-size:10px;color:var(--text3)">確保現金</span><div style="font-weight:700">¥${Math.round(p.cash-p.deploy).toLocaleString('ja-JP')}</div></div><div style="background:var(--bg);padding:8px;border-radius:8px"><span style="font-size:10px;color:var(--text3)">半導体比率（買付前）</span><div style="font-weight:700">${semiPct.toFixed(1)}%</div></div></div><div style="margin-top:7px;overflow:auto"><table style="width:100%;min-width:520px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:5px;border-bottom:1px solid var(--border)">下落率</th><th style="text-align:right;padding:5px;border-bottom:1px solid var(--border)">投入率</th><th style="text-align:right;padding:5px;border-bottom:1px solid var(--border)">投入額</th><th style="text-align:right;padding:5px;border-bottom:1px solid var(--border)">投入後残金</th></tr></thead><tbody>${levels.map(l=>{const amount=Math.floor(Math.max(0,p.cash-p.reserve)*l/100/10000)*10000;return `<tr><td style="padding:5px;border-bottom:1px solid var(--border)">−${l}%</td><td style="text-align:right;padding:5px;border-bottom:1px solid var(--border)">${l}%</td><td style="text-align:right;padding:5px;border-bottom:1px solid var(--border)">¥${amount.toLocaleString('ja-JP')}</td><td style="text-align:right;padding:5px;border-bottom:1px solid var(--border)">¥${Math.max(0,p.cash-amount).toLocaleString('ja-JP')}</td></tr>`}).join('')}</tbody></table></div>`;
+}
+(function(){
+  [900,2200,4200].forEach(ms=>setTimeout(()=>{try{aaSettings();aaRender();}catch(e){}},ms));
+  const base=window.amRender;if(typeof base==='function'&&!window.__aaAmWrapped){window.__aaAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{aaRender();}catch(e){}return r;};}
+  const baseBa=window.baRender;if(typeof baseBa==='function'&&!window.__aaBaWrapped){window.__aaBaWrapped=true;window.baRender=function(){const r=baseBa.apply(this,arguments);try{aaRender();}catch(e){}return r;};}
+})();
+</script>
+
+<script>
+// ============================================================
+// 決算・重要イベント管理
+// ============================================================
+const EV_KEY='assetImportantEvents_v1', EV_PLAN_KEY='assetEarningsPlans_v1';
+function evEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function evToday(){const d=new Date();d.setHours(0,0,0,0);return d;}
+function evDays(date){if(!date)return null;const d=new Date(String(date)+'T00:00:00');if(Number.isNaN(d.getTime()))return null;return Math.ceil((d-evToday())/86400000);}
+function evDefaultEvents(){return [
+  {id:'fomc-2026-10',date:'2026-10-27',endDate:'2026-10-28',name:'FOMC（米連邦公開市場委員会）',type:'金融政策',memo:'金利・ドル・米国株、特にグロース株の変動要因',source:'Federal Reserve'},
+  {id:'cpi-2026-10',date:'2026-10-14',endDate:'',name:'米CPI（9月分）',type:'経済指標',memo:'インフレ・金利見通しの確認',source:'BLS'},
+  {id:'jobs-2026-10',date:'2026-10-02',endDate:'',name:'米雇用統計（9月分）',type:'経済指標',memo:'雇用・賃金・金利見通しの確認',source:'BLS'},
+  {id:'boj-2026-10',date:'2026-10-29',endDate:'2026-10-30',name:'日銀金融政策決定会合',type:'金融政策',memo:'金利・円相場・日本株への影響を確認',source:'日本銀行'},
+  {id:'fomc-2026-12',date:'2026-12-08',endDate:'2026-12-09',name:'FOMC（米連邦公開市場委員会）',type:'金融政策',memo:'年末の金利・ドル・米国株の変動要因',source:'Federal Reserve'},
+  {id:'cpi-2026-11',date:'2026-11-10',endDate:'',name:'米CPI（10月分）',type:'経済指標',memo:'インフレ・金利見通しの確認',source:'BLS'},
+  {id:'jobs-2026-11',date:'2026-11-06',endDate:'',name:'米雇用統計（10月分）',type:'経済指標',memo:'雇用・賃金・金利見通しの確認',source:'BLS'},
+  {id:'boj-2026-12',date:'2026-12-17',endDate:'2026-12-18',name:'日銀金融政策決定会合',type:'金融政策',memo:'年末の金利・円相場を確認',source:'日本銀行'},
+  {id:'cpi-2026-12',date:'2026-12-10',endDate:'',name:'米CPI（11月分）',type:'経済指標',memo:'インフレ・金利見通しの確認',source:'BLS'},
+  {id:'jobs-2026-12',date:'2026-12-04',endDate:'',name:'米雇用統計（11月分）',type:'経済指標',memo:'雇用・賃金・金利見通しの確認',source:'BLS'}
+];}
+function evLoad(){try{const x=JSON.parse(localStorage.getItem(EV_KEY)||'null');if(Array.isArray(x)&&x.length)return x;}catch(e){}const d=evDefaultEvents();localStorage.setItem(EV_KEY,JSON.stringify(d));return d;}
+function evSave(a){localStorage.setItem(EV_KEY,JSON.stringify(a));}
+function evLoadPlans(){try{const x=JSON.parse(localStorage.getItem(EV_PLAN_KEY)||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}}
+function evSavePlans(x){localStorage.setItem(EV_PLAN_KEY,JSON.stringify(x));}
+function evBadge(days){if(days===null)return '';if(days<0)return '<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:var(--bg3);color:var(--text3)">終了</span>';if(days===0)return '<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:#C0392B;color:#fff;font-weight:700">今日</span>';if(days<=3)return '<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:#C0392B;color:#fff;font-weight:700">あと'+days+'日</span>';if(days<=7)return '<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:#D68910;color:#fff;font-weight:700">あと'+days+'日</span>';return '<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:var(--bg3);color:var(--text2)">あと'+days+'日</span>';}
+function evRender(){
+ const list=document.getElementById('ev-list'), alert=document.getElementById('ev-alert'), earn=document.getElementById('ev-earnings'); if(!list)return;
+ let events=evLoad().filter(x=>x&&x.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+ const future=events.filter(x=>evDays(x.date)>=0).slice(0,12);
+ const urgent=future.filter(x=>evDays(x.date)<=7);
+ alert.innerHTML=urgent.length?'<div style="background:rgba(192,57,43,.10);border:1px solid rgba(192,57,43,.25);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.6"><b>⚠️ 近7日以内のイベント</b><br>'+urgent.map(x=>evEsc(x.name)+'（'+evEsc(x.date)+(x.endDate?'〜'+evEsc(x.endDate):'')+'）').join('<br>')+'</div>':'';
+ list.innerHTML=future.length?future.map(x=>{const days=evDays(x.date);return '<div style="padding:11px 16px;border-bottom:.5px solid var(--border);display:flex;gap:10px;align-items:flex-start"><div style="min-width:86px"><div style="font-size:12px;font-weight:700">'+evEsc(x.date)+'</div><div style="margin-top:3px">'+evBadge(days)+'</div></div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+evEsc(x.name)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">'+evEsc(x.type||'その他')+(x.endDate?' ・ '+evEsc(x.endDate):'')+(x.source?' ・ '+evEsc(x.source):'')+'</div><div style="font-size:11px;color:var(--text2);margin-top:4px;line-height:1.5">'+evEsc(x.memo||'')+'</div></div><button class="icon-btn" onclick="evEditEvent(\''+evEsc(x.id)+'\')">編集</button><button class="icon-btn" onclick="evDeleteEvent(\''+evEsc(x.id)+'\')" style="color:#C0392B;border-color:#C0392B">削除</button></div>';}).join(''):'<div style="padding:18px 16px;color:var(--text3);font-size:12px">今後の登録イベントはありません。</div>';
+ const plans=evLoadPlans();
+ let src=Array.isArray(window.amAccounts)?window.amAccounts:[]; let seen={};
+ src.filter(a=>a&&!a.sold&&a.earningsDate).forEach(a=>{const key=String(a.code||a.ticker||a.name||'');if(!key||seen[key])return;seen[key]=1;const p=plans[key]||{};const days=evDays(a.earningsDate);earn.innerHTML+=(earn.innerHTML?'':'')+'<div style="padding:11px 16px;border-bottom:.5px solid var(--border)"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:13px;font-weight:700;flex:1">'+evEsc(a.name)+(a.code?' <span style="font-size:10px;color:var(--text3)">'+evEsc(a.code)+'</span>':'')+'</div><b style="font-size:12px">'+evEsc(a.earningsDate)+'</b>'+evBadge(days)+'</div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:8px"><select onchange="evPlanChange(\''+evEsc(key)+'\',this.value)" style="padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px"><option value="未定" '+((p.action||'未定')==='未定'?'selected':'')+'>決算前後：未定</option><option value="保有継続" '+(p.action==='保有継続'?'selected':'')+'>保有継続</option><option value="決算前に一部利益確定" '+(p.action==='決算前に一部利益確定'?'selected':'')+'>決算前に一部利益確定</option><option value="決算後に買い増し検討" '+(p.action==='決算後に買い増し検討'?'selected':'')+'>決算後に買い増し検討</option><option value="決算前は新規買い停止" '+(p.action==='決算前は新規買い停止'?'selected':'')+'>決算前は新規買い停止</option></select><input value="'+evEsc(p.memo||'')+'" placeholder="メモ" onchange="evPlanMemo(\''+evEsc(key)+'\',this.value)" style="flex:1;min-width:130px;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px"><button class="icon-btn" onclick="switchTab(&quot;buysim&quot;)">買付候補</button></div></div>';});
+ if(!earn.innerHTML)earn.innerHTML='<div style="padding:18px 16px;color:var(--text3);font-size:12px">資産管理に決算日が登録されている銘柄はありません。資産管理の「決算日」を登録するとここに表示されます。</div>';
+}
+function evAddEvent(){const name=prompt('イベント名');if(!name)return;const date=prompt('日付（YYYY-MM-DD）');if(!/^\d{4}-\d{2}-\d{2}$/.test(date||''))return alert('日付形式が正しくありません');const a=evLoad();a.push({id:'custom-'+Date.now(),date,name,type:'その他',memo:'',source:'手動登録'});evSave(a);evRender();}
+function evEditEvent(id){const a=evLoad(),x=a.find(v=>v.id===id);if(!x)return;const name=prompt('イベント名',x.name)||x.name;const date=prompt('日付（YYYY-MM-DD）',x.date)||x.date;const end=prompt('終了日（任意）',x.endDate||'')||'';const memo=prompt('メモ',x.memo||'')??x.memo;x.name=name;x.date=date;x.endDate=end;x.memo=memo;evSave(a);evRender();}
+function evDeleteEvent(id){if(!confirm('このイベントを削除しますか？'))return;evSave(evLoad().filter(x=>x.id!==id));evRender();}
+function evResetDefaults(){if(!confirm('初期イベントを再登録します。手動追加したイベントも消えます。よろしいですか？'))return;localStorage.setItem(EV_KEY,JSON.stringify(evDefaultEvents()));evRender();}
+function evPlanChange(key,val){const p=evLoadPlans();p[key]=Object.assign({},p[key]||{},{action:val});evSavePlans(p);}
+function evPlanMemo(key,val){const p=evLoadPlans();p[key]=Object.assign({},p[key]||{},{memo:val});evSavePlans(p);}
+function evRefresh(){if(document.getElementById('tab-events'))evRender();}
+setTimeout(evRefresh,800);
+</script>
