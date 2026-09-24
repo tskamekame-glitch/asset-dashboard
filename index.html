@@ -975,14 +975,73 @@ function amConcRender(){
       </div>
       <div class="account-list" id="amUsFxPanel"></div>
     </div>
-<!-- 米国株：為替感応度シミュレーター -->
-    <div class="section" id="amUsFxSensitivitySection">
-      <div class="section-head" onclick="toggleSection('amUsFxSensitivitySection')">
-        <div class="section-head-left"><span>💱</span><h2>米国株・為替感応度シミュレーター</h2></div>
+    <!-- 月次運用成績 -->
+    <div class="section" id="amMonthlyPerformanceSection">
+      <div class="section-head" onclick="toggleSection('amMonthlyPerformanceSection')">
+        <div class="section-head-left"><span>📅</span><h2>月次運用成績</h2></div>
         <span><span class="chevron">▼</span></span>
       </div>
-      <div class="account-list" id="amUsFxSensitivityPanel"></div>
+      <div class="account-list" id="amMonthlyPerformancePanel"></div>
     </div>
+    <script>
+// 月次運用成績：assetSnapshots の月末スナップショットから表示
+function amMonthlyPerfNum(v){ const n=Number(v||0); return Number.isFinite(n)?n:0; }
+function amMonthlyPerfMoney(v){
+  const n=Math.round(amMonthlyPerfNum(v));
+  return (n<0?'−':'')+'¥'+Math.abs(n).toLocaleString('ja-JP');
+}
+function amMonthlyPerfRender(){
+  const el=document.getElementById('amMonthlyPerformancePanel'); if(!el)return;
+  let snaps=[];
+  try{ snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]'); }catch(e){ snaps=[]; }
+  if(!Array.isArray(snaps)||!snaps.length){
+    el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">月次スナップショットがありません。資産管理の「📈 推移に記録」を実行すると、月次データを蓄積できます。</div>';
+    return;
+  }
+  const byMonth={};
+  snaps.filter(x=>x&&x.date).sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(x=>{
+    const ym=String(x.date).slice(0,7); if(!ym)return;
+    byMonth[ym]=x;
+  });
+  const months=Object.keys(byMonth).sort().slice(-12);
+  const allMonths=Object.keys(byMonth).sort();
+  const rows=months.map((ym,i)=>{
+    const sn=byMonth[ym];
+    const idx=allMonths.indexOf(ym);
+    const prev=idx>0?byMonth[allMonths[idx-1]]:null;
+    const total=amMonthlyPerfNum(sn.total);
+    const prevTotal=prev?amMonthlyPerfNum(prev.total):null;
+    const diff=prevTotal==null?null:total-prevTotal;
+    let snapshotGain=null;
+    try{ if(typeof trCalcSnapshotGain==='function'){ const g=trCalcSnapshotGain(sn); if(g&&Number.isFinite(Number(g.gain))) snapshotGain=Number(g.gain); } }catch(e){}
+    return {ym,sn,total,diff,snapshotGain};
+  });
+  const latest=rows[rows.length-1];
+  const positive=latest&&latest.diff!=null&&latest.diff>=0;
+  let html='<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">毎月のスナップショットから、資産残高と前月からの増減を確認します。入出金データがない月は、増減を純粋な運用損益とはみなしません。</div>';
+  if(latest){
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 16px 10px">';
+    html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--text3)">最新月の総資産</div><div style="font-size:18px;font-weight:750;margin-top:3px">'+amMonthlyPerfMoney(latest.total)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">'+latest.ym.replace('-','/')+'</div></div>';
+    html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--text3)">前月比</div><div style="font-size:18px;font-weight:750;margin-top:3px;color:'+(latest.diff==null?'var(--text)':positive?'var(--green)':'var(--danger)')+'">'+(latest.diff==null?'—':(latest.diff>=0?'＋':'')+amMonthlyPerfMoney(latest.diff))+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">資産残高の増減</div></div>';
+    html+='</div>';
+  }
+  html+='<div style="padding:2px 16px 6px;font-size:12px;font-weight:700">📊 月次推移（直近12か月）</div><div style="padding:0 16px 14px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:430px"><thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">月</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">総資産</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">前月比</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid var(--border);color:var(--text3)">月次評価損益</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const d=r.diff; const g=r.snapshotGain;
+    html+='<tr><td style="padding:7px 4px;border-bottom:1px solid var(--border)">'+r.ym.replace('-','/')+'</td><td style="padding:7px 4px;text-align:right;border-bottom:1px solid var(--border);font-weight:600">'+amMonthlyPerfMoney(r.total)+'</td><td style="padding:7px 4px;text-align:right;border-bottom:1px solid var(--border);color:'+(d==null?'var(--text3)':d>=0?'var(--green)':'var(--danger)')+'">'+(d==null?'—':(d>=0?'＋':'')+amMonthlyPerfMoney(d))+'</td><td style="padding:7px 4px;text-align:right;border-bottom:1px solid var(--border);color:'+(g==null?'var(--text3)':g>=0?'var(--green)':'var(--danger)')+'">'+(g==null?'—':(g>=0?'＋':'')+amMonthlyPerfMoney(g))+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+}
+(function(){
+  const base=window.amRender;
+  if(typeof base==='function'&&!window.__amMonthlyPerfWrapped){
+    window.__amMonthlyPerfWrapped=true;
+    window.amRender=function(){ const r=base.apply(this,arguments); try{amMonthlyPerfRender();}catch(e){console.error('amMonthlyPerfRender',e)} return r; };
+  }
+  [500,1500,3000,5000].forEach(ms=>setTimeout(()=>{try{amMonthlyPerfRender();}catch(e){}},ms));
+})();
+    </script>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
   </div>
@@ -14798,64 +14857,7 @@ function amUsFxRender(){
 }
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__amUsFxWrapped){window.__amUsFxWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amUsFxRender();}catch(e){}return r;};}setTimeout(()=>{try{amUsFxRender();}catch(e){}},700);})();
 </script>
-<script>
-// ── 米国株：為替感応度シミュレーター ──
-function amUsSensIsTarget(a){
-  if(a.sold || Number(a.amount||0)<=0)return false;
-  const cat=String(a.cat||'');
-  if(!/外国株|米国|US|海外/.test(cat))return false;
-  const x=String([a.name,a.ticker,a.code,a.symbol].filter(Boolean).join(' ')).toLowerCase();
-  return !/韓国|korea|hynix|sk hynix|中国|香港|hkex/.test(x);
-}
-function amUsSensRate(){
-  try{const r=Number(typeof amGetFxRate==='function'?amGetFxRate():0);if(r>0)return r;}catch(e){}
-  const rates=(Array.isArray(amAccounts)?amAccounts:[]).filter(amUsSensIsTarget).map(a=>Number(a.fxRate||0)).filter(v=>v>0);
-  return rates.length?rates[rates.length-1]:145;
-}
-function amUsSensRender(){
-  const el=document.getElementById('amUsFxSensitivityPanel');if(!el)return;
-  const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amUsSensIsTarget);
-  if(!rows.length){el.innerHTML='<div style="padding:14px 16px;font-size:12px;color:var(--text3)">米国株として判定できる保有銘柄がありません。</div>';return;}
-  const curFx=amUsSensRate();
-  const by={};
-  rows.forEach(a=>{
-    const key=String(a.ticker||a.code||a.symbol||a.name||'').trim();
-    if(!key)return;
-    const amount=Number(a.amount||0);
-    let usd=Number(a.shares||0)>0&&Number(a.price||0)>0 ? Number(a.shares)*Number(a.price) : amount/curFx;
-    if(!Number.isFinite(usd)||usd<=0)usd=amount/curFx;
-    if(!by[key])by[key]={ticker:key,name:String(a.name||key),usd:0,amount:0};
-    by[key].usd+=usd;by[key].amount+=amount;
-  });
-  const stocks=Object.values(by).sort((a,b)=>b.usd-a.usd);
-  const totalUsd=stocks.reduce((s,x)=>s+x.usd,0);
-  const scenarios=[curFx-10,curFx-5,curFx,curFx+5,curFx+10].map(v=>Math.round(v*10)/10).filter((v,i,a)=>v>0&&a.indexOf(v)===i);
-  const money=v=>'¥'+Math.round(v).toLocaleString('ja-JP');
-  const signMoney=v=>(v>=0?'+':'−')+'¥'+Math.abs(Math.round(v)).toLocaleString('ja-JP');
-  const totalNow=totalUsd*curFx;
-  const card=(label,val,sub)=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:15px;font-weight:700;margin-top:3px">${val}</div><div style="font-size:9px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
-  let html=`<div style="padding:0 16px 9px;font-size:11px;color:var(--text3);line-height:1.5">株価と保有米ドル額が変わらない前提で、ドル円だけが変化した場合の円評価額を試算します。現在の為替レートは <b>${curFx.toFixed(2)}円/USD</b> です。</div>`;
-  html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 16px 10px">${card('米国株評価額',money(totalNow),'現在の円評価額')}${card('保有米ドル額','$'+Math.round(totalUsd).toLocaleString('en-US'),'概算')}</div>`;
-  html+=`<div style="padding:2px 16px 6px;font-size:12px;font-weight:700">📊 ドル円シナリオ</div><div style="padding:0 16px 10px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:360px"><thead><tr><th style="text-align:left;padding:5px;border-bottom:1px solid var(--border);color:var(--text3)">ドル円</th><th style="text-align:right;padding:5px;border-bottom:1px solid var(--border);color:var(--text3)">円評価額</th><th style="text-align:right;padding:5px;border-bottom:1px solid var(--border);color:var(--text3)">為替損益</th></tr></thead><tbody>`;
-  scenarios.forEach(fx=>{const val=totalUsd*fx;const gain=val-totalNow;const col=gain>=0?'var(--green)':'var(--danger)';html+=`<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border)">${fx.toFixed(1)}円</td><td style="padding:7px 5px;text-align:right;border-bottom:1px solid var(--border);font-weight:600">${money(val)}</td><td style="padding:7px 5px;text-align:right;border-bottom:1px solid var(--border);color:${col};font-weight:600">${signMoney(gain)}</td></tr>`;});
-  html+=`</tbody></table></div>`;
-  html+=`<div style="padding:2px 16px 6px;font-size:12px;font-weight:700">📌 銘柄別</div><div style="padding:0 16px 12px">`;
-  stocks.forEach(x=>{
-    const pct=totalUsd?x.usd/totalUsd*100:0;
-    const valNow=x.usd*curFx;
-    const val155=x.usd*155;
-    const gain155=val155-valNow;
-    html+=`<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;margin-bottom:7px"><div style="display:flex;justify-content:space-between;gap:8px"><div style="font-size:12px;font-weight:700">${esc(String(x.name))}</div><div style="font-size:10px;color:var(--text3)">${pct.toFixed(1)}%</div></div><div style="font-size:10px;color:var(--text3);margin-top:3px">現在 ${money(valNow)} ／ 155円なら ${money(val155)} ／ 為替差 ${signMoney(gain155)}</div></div>`;
-  });
-  html+=`</div>`;
-  el.innerHTML=html;
-}
-(function(){
-  const base=window.amRender;
-  if(typeof base==='function'&&!window.__amUsSensWrapped){window.__amUsSensWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{amUsSensRender();}catch(e){console.error('amUsSensRender',e)}return r;};}
-  [700,1500,3000].forEach(ms=>setTimeout(()=>{try{amUsSensRender();}catch(e){}},ms));
-})();
-</script>
+
 <script>
 // ── 買い増し・売却候補：価格管理 ──
 function amPwIsInvestment(a){
