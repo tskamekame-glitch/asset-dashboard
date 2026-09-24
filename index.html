@@ -897,6 +897,7 @@ function amSemiRender(){
  const totalSemiGain=stocks.reduce((x,a)=>x+a.gain,0);
  const gainPctSemi=totalSemi-totalSemiGain!==0?totalSemiGain/(totalSemi-totalSemiGain)*100:0;
  const pct=totalInvest?totalSemi/totalInvest*100:0;
+ const typeCard=(label)=>{const t=types[label], ratio=totalSemi?t.amount/totalSemi*100:0, gp=(t.amount-t.gain)>0?t.gain/(t.amount-t.gain)*100:0; const gc=t.gain>=0?'#16a34a':'#dc2626', gs=t.gain>=0?'+':'−'; return `<div style=\"border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg2)\"><div style=\"font-weight:700;font-size:12px\">${label}</div><div style=\"font-size:16px;font-weight:750;margin-top:4px\">${amSemiMoney(t.amount)}</div><div style=\"font-size:10px;color:var(--text3);margin-top:3px\">半導体内 ${ratio.toFixed(1)}% ・ ${t.count}銘柄</div><div style=\"font-size:10px;margin-top:5px;color:${gc}\">損益 ${gs}¥${Math.abs(Math.round(t.gain)).toLocaleString()} (${gs}${Math.abs(gp).toFixed(1)}%)</div></div>`;};
  if(!rows.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">現在の保有銘柄から半導体関連銘柄を検出できませんでした。銘柄編集の「業種」に半導体関連を設定すると、より正確に集計できます。</div>';return;}
  const metric=(l,v,sub='')=>`<div class="metric"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${sub}</div></div>`;
  const typeCard=(name)=>{const t=types[name],p=totalSemi?t.amount/totalSemi*100:0,gp=t.cost>0?t.gain/t.cost*100:0;const gc=t.gain>=0?'#16a34a':'#dc2626',gs=t.gain>=0?'+':'−';return `<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:11px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:700">${name}</span><span style="font-size:12px;font-weight:700">${p.toFixed(1)}%</span></div><div style="font-size:18px;font-weight:750;margin-top:4px">${amSemiMoney(t.amount)}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">${t.count}件 / 半導体内比率</div><div style="height:7px;background:var(--bg);border-radius:5px;overflow:hidden;margin-top:7px"><div style="height:100%;width:${Math.min(100,p)}%;background:${name==='メモリ'?'#7C3AED':'#0891B2'}"></div></div><div style="margin-top:7px;font-size:10px;color:var(--text3)">損益 <span style="font-weight:700;color:${gc}">${gs}¥${Math.abs(Math.round(t.gain)).toLocaleString()} (${gs}${Math.abs(gp).toFixed(1)}%)</span></div></div>`;};
@@ -14690,8 +14691,10 @@ function amSemiRegion(a){const x=String([a.name,a.ticker,a.code,a.broker].filter
 function amSemiMoney(v){return fmt(Number(v)||0);}
 function amSemiRender(){
  const el=document.getElementById('amSemiconductorPanel');if(!el)return;
- const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&Number(a.amount||0)>0&&amSemiIsSemiconductor(a));
- const all=(Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&Number(a.amount||0)>0);
+ let src=Array.isArray(amAccounts)?amAccounts.slice():[];
+ try{const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]'); if(Array.isArray(ls)&&ls.length){const ids=new Set(src.map(a=>String(a.id))); ls.forEach(a=>{if(!ids.has(String(a.id)))src.push(a);});}}catch(e){}
+ const rows=src.filter(a=>!a.sold&&Number(a.amount||0)>0&&amSemiIsSemiconductor(a));
+ const all=src.filter(a=>!a.sold&&Number(a.amount||0)>0);
  const totalSemi=rows.reduce((x,a)=>x+Number(a.amount||0),0);
  const totalInvest=all.filter(a=>a.cat!=='銀行'&&!/現金|預り|預かり/.test(String(a.name||''))).reduce((x,a)=>x+Number(a.amount||0),0);
  const by={};rows.forEach(a=>{const key=amSemiTicker(a);if(!by[key])by[key]={key,name:a.name||key,amount:0,gain:0,cost:0};by[key].amount+=Number(a.amount||0);
