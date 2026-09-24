@@ -14843,7 +14843,22 @@ function bsRender(){
   </div>
   <div style="font-size:10px;color:${cashAfter<0?'var(--red)':'var(--text3)'};line-height:1.6">${cashAfter<0?'⚠ 買い付け額が投資可能現金を超えています。':'✓ 投資可能現金の範囲内です。'}　※試算のみで、実際の注文・資産データは変更しません。</div>`;
 }
-setTimeout(()=>{try{bsRender();}catch(e){}},1000);
+// Google/ローカルから資産データが読み込まれた後にも、買付銘柄を再構築する。
+// 初回1秒待ちだけではGoogle同期の完了前に「保有銘柄がありません」になるため、
+// 資産管理の再描画(amRender)に連動してシミュレーターも更新する。
+(function(){
+  const base=window.amRender;
+  if(typeof base==='function'&&!window.__bsRenderWrapped){
+    window.__bsRenderWrapped=true;
+    window.amRender=function(){
+      const r=base.apply(this,arguments);
+      try{bsRender();}catch(e){}
+      return r;
+    };
+  }
+  // Google同期などの非同期処理に備えて複数回確認。
+  [300,1000,2000,4000].forEach(ms=>setTimeout(()=>{try{bsRender();}catch(e){}},ms));
+})();
 </script>
 </body>
 </html>
