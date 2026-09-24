@@ -1521,6 +1521,14 @@ function amMonthlyPerfRender(){
       </div>
       <div id="ba-results" style="margin-top:10px"></div>
     </div>
+
+    <!-- 買い増し優先度シミュレーター -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">🎯 買い増し優先度シミュレーター</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">資産管理で設定した「目標保有比率」と「目標買値」を使い、現在の投資可能現金をどの銘柄へ回すと目標に近づくかを試算します。順位は目標比率との差を基準にした機械的な目安で、実際の注文は行いません。</div>
+      <div id="bp-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="bp-list"></div>
+    </div>
   </div>
 </div>
 <div class="panel" id="tab-sell">
@@ -15176,6 +15184,67 @@ function baChangeAmount(el){const i=Number(el.dataset.baI);if(baState[i])baState
 function baRemoveRow(i){baState.splice(i,1);baRender();}
 setTimeout(()=>{try{baRender();}catch(e){}},900);
 
+// ============================================================
+// 買い増し優先度シミュレーター
+// ============================================================
+function bpInvestmentRows(){
+  const map={};
+  const src=Array.isArray(amAccounts)?amAccounts:[];
+  src.filter(a=>{
+    if(a.sold)return false;
+    if(String(a.cat||'')==='銀行')return false;
+    if(/現金|預り|預かり|年金|確定拠出/.test(String(a.name||'')))return false;
+    return Number(a.amount||0)>0;
+  }).forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim();
+    const name=String(a.name||code).trim();
+    const key=code||name; if(!key)return;
+    if(!map[key])map[key]={ticker:code||key,name,amount:0,targetRatio:0,targetBuyPrice:0,sector:String(a.sector||'')};
+    map[key].amount+=Number(a.amount||0);
+    if(Number(a.targetRatio||0)>0)map[key].targetRatio=Number(a.targetRatio);
+    if(Number(a.targetBuyPrice||0)>0)map[key].targetBuyPrice=Number(a.targetBuyPrice);
+    if(a.sector)map[key].sector=String(a.sector);
+  });
+  return Object.values(map);
+}
+function bpCash(){try{if(typeof amStage1GetInvestableCashByBank==='function')return Number(amStage1GetInvestableCashByBank(amAccounts).total||0);}catch(e){}return 0;}
+function bpEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function bpRender(){
+  const summary=document.getElementById('bp-summary'),list=document.getElementById('bp-list');
+  if(!summary||!list)return;
+  const rows=bpInvestmentRows(),cash=bpCash(),total=rows.reduce((s,r)=>s+r.amount,0);
+  if(!rows.length){summary.textContent='保有銘柄を読み込んでいます…';list.innerHTML='';return;}
+  const ranked=rows.map(r=>{
+    const currentPct=total?r.amount/total*100:0;
+    const target=Number(r.targetRatio||0);
+    const gap=Math.max(0,target-currentPct);
+    const need=target>0?Math.max(0,(target/100*total-r.amount)/(1-target/100)):0;
+    const affordable=need>0?Math.min(need,cash):0;
+    const price=r.targetBuyPrice>0?`目標買値 ¥${Math.round(r.targetBuyPrice).toLocaleString('ja-JP')}`:'目標買値未設定';
+    return {...r,currentPct,target,gap,need,affordable,price};
+  }).sort((a,b)=>{
+    if((b.target>0)-(a.target>0))return (b.target>0)-(a.target>0);
+    return b.gap-a.gap;
+  });
+  const targetCount=ranked.filter(r=>r.target>0).length;
+  summary.innerHTML=`投資可能現金 <b>¥${Math.round(cash).toLocaleString('ja-JP')}</b> ／ 保有銘柄 <b>${rows.length}銘柄</b> ／ 目標比率設定 <b>${targetCount}銘柄</b>`;
+  list.innerHTML=ranked.map((r,i)=>{
+    const hasTarget=r.target>0;
+    const bar=Math.min(100,r.gap/(Math.max(r.target,1))*100);
+    const suggested=r.need>0?Math.min(r.need,cash):0;
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+        <div><div style="font-size:12px;font-weight:700">${i+1}. ${bpEsc(r.ticker)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${bpEsc(r.name)}</div></div>
+        <div style="font-size:11px;font-weight:700">${hasTarget?'不足 '+r.gap.toFixed(1)+'pt':'目標未設定'}</div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:7px">現在 ${r.currentPct.toFixed(1)}% ${hasTarget?'→ 目標 '+r.target.toFixed(1)+'%':''} ／ 評価額 ¥${Math.round(r.amount).toLocaleString('ja-JP')}</div>
+      ${hasTarget?`<div style="height:6px;background:var(--border);border-radius:99px;margin-top:7px;overflow:hidden"><div style="width:${bar.toFixed(1)}%;height:100%;background:var(--accent);border-radius:99px"></div></div><div style="display:flex;justify-content:space-between;gap:6px;margin-top:7px;font-size:10px"><span>目標まで必要：約¥${Math.round(r.need).toLocaleString('ja-JP')}</span><span>現金で可能：約¥${Math.round(suggested).toLocaleString('ja-JP')}</span></div>`:''}
+      <div style="font-size:10px;color:var(--text3);margin-top:5px">${r.price}</div>
+    </div>`;
+  }).join('');
+}
+setTimeout(()=>{try{bpRender();}catch(e){}},1000);
+
 // Google/ローカルから資産データが読み込まれた後にも、買付銘柄を再構築する。
 // 初回1秒待ちだけではGoogle同期の完了前に「保有銘柄がありません」になるため、
 // 資産管理の再描画(amRender)に連動してシミュレーターも更新する。
@@ -15186,11 +15255,12 @@ setTimeout(()=>{try{baRender();}catch(e){}},900);
     window.amRender=function(){
       const r=base.apply(this,arguments);
       try{bsRender();}catch(e){}
+      try{bpRender();}catch(e){}
       return r;
     };
   }
   // Google同期などの非同期処理に備えて複数回確認。
-  [300,1000,2000,4000].forEach(ms=>setTimeout(()=>{try{bsRender();}catch(e){}},ms));
+  [300,1000,2000,4000].forEach(ms=>setTimeout(()=>{try{bsRender();}catch(e){}try{bpRender();}catch(e){}},ms));
 })();
 </script>
 </body>
