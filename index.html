@@ -904,6 +904,69 @@ function amSemiRender(){
 }
 (function(){const base=window.amRender;if(typeof base==='function'){window.amRender=function(){const r=base.apply(this,arguments);try{amSemiRender();}catch(e){console.error('amSemiRender',e)}return r;};}setTimeout(()=>{try{amSemiRender();}catch(e){console.error('amSemiRender',e)}},800);})();
 </script>
+<!-- 銘柄 × セクター 二重集中度分析 -->
+<div class="section" id="amConcentrationSection">
+  <div class="section-head" onclick="toggleSection('amConcentrationSection')">
+    <div class="section-head-left"><span>🎯</span><h2>銘柄 × セクター集中度</h2></div>
+    <span><span class="chevron">▼</span></span>
+  </div>
+  <div class="account-list" id="amConcentrationPanel"></div>
+</div>
+<script>
+function amConcNum(v){const n=Number(String(v??'').replace(/[,¥￥\s]/g,''));return Number.isFinite(n)?n:0;}
+function amConcTicker(a){return String(a.ticker||a.code||a.symbol||'').trim()||String(a.name||'').trim();}
+function amConcSector(a){
+  const given=String(a.sector||a.industry||'').trim();
+  if(given)return given;
+  const x=String([a.ticker,a.code,a.symbol,a.name].filter(Boolean).join(' ')).toLowerCase();
+  const rules=[
+    [/nvda|nvidia|mu\b|micron|sndk|sandisk|kioxia|キオクシア|sk hynix|hynix|advantest|アドバンテスト|東京エレクトロン|tel\b|disco|ディスコ|broadcom|ブロードコム|amd\b|intel|asml|tsmc|arm\b|lam research|applied materials|semiconductor|半導体|メモリ/,'半導体'],
+    [/google|alphabet|googl|msft|microsoft|aapl|apple|meta|amazon|amzn|oracle|salesforce|adobe|software|サイバーエージェント|情報通信|通信|ネット|システム|ソフト/,'IT・通信'],
+    [/jpmorgan|jpm|bank|銀行|三菱ufj|三井住友|みずほ|東京海上|保険|証券|オリックス|金融/,'金融'],
+    [/toyota|tesla|honda|nissan|日産|トヨタ|ホンダ|subaru|マツダ|デンソー|自動車|automotive/,'自動車・輸送機'],
+    [/amazon|costco|walmart|nike|mcdonald|starbucks|retail|小売|イオン|ニトリ|サンリオ|食品|飲料/,'消費'],
+    [/pfizer|eli lilly|lilly|merck|abbvie|novo nordisk|pharma|製薬|医薬|ヘルス|health/,'ヘルスケア'],
+    [/exxon|chevron|shell|inpex|eneos|energy|石油|電力|ガス|エネルギー/,'エネルギー'],
+    [/mitsubishi|itochu|marubeni|sumitomo|商社|三菱商事|伊藤忠|丸紅|豊田通商|双日/,'商社'],
+    [/reit|不動産|real estate|三井不動産|三菱地所|住友不動産/,'不動産'],
+    [/rail|airline|ana|jal|海運|鉄道|航空|物流|運輸/,'運輸・物流']
+  ];
+  for(const [re,sec] of rules)if(re.test(x))return sec;
+  return 'その他・未分類';
+}
+function amConcRender(){
+  const el=document.getElementById('amConcentrationPanel');if(!el)return;
+  let src=Array.isArray(amAccounts)?amAccounts.slice():[];
+  try{const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');if(Array.isArray(ls)){const ids=new Set(src.map(a=>String(a.id||'')));ls.forEach(a=>{if(!ids.has(String(a.id||'')))src.push(a);});}}catch(e){}
+  const active=a=>{const sold=String(a.sold??'').toLowerCase();return sold!=='true'&&sold!=='1'&&sold!=='yes'&&!a.sold;};
+  const rows=src.filter(a=>active(a)&&amConcNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||'')));
+  if(!rows.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">投資銘柄がありません。</div>';return;}
+  const total=rows.reduce((s,a)=>s+amConcNum(a.amount),0);
+  const tickerMap={},sectorMap={};
+  rows.forEach(a=>{
+    const t=amConcTicker(a), sec=amConcSector(a), amt=amConcNum(a.amount);
+    if(!tickerMap[t])tickerMap[t]={ticker:t,name:String(a.name||t),amount:0,sector:sec};
+    tickerMap[t].amount+=amt;
+    if(!sectorMap[sec])sectorMap[sec]=0;sectorMap[sec]+=amt;
+  });
+  const tickers=Object.values(tickerMap).sort((a,b)=>b.amount-a.amount);
+  const sectors=Object.entries(sectorMap).sort((a,b)=>b[1]-a[1]);
+  const topPct=n=>tickers.slice(0,n).reduce((s,x)=>s+x.amount,0)/total*100;
+  const maxTicker=tickers[0],maxSector=sectors[0];
+  const esc2=v=>typeof esc==='function'?esc(String(v)):String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const card=(label,val,sub)=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:19px;font-weight:750;margin-top:3px">${val}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
+  let html=`<div style="padding:10px 16px 4px;font-size:11px;color:var(--text3)">銀行・現金等を除く投資資産 ¥${Math.round(total).toLocaleString()}。SBI・moomooの同一銘柄は合算。</div>`;
+  html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:6px 16px 10px">${card('最大銘柄',maxTicker?(maxTicker.amount/total*100).toFixed(1)+'%':'—',maxTicker?esc2(maxTicker.ticker):'—')}${card('TOP3銘柄',topPct(3).toFixed(1)+'%','上位3銘柄の合計')}${card('最大セクター',maxSector?(maxSector[1]/total*100).toFixed(1)+'%':'—',maxSector?esc2(maxSector[0]):'—')}</div>`;
+  html+=`<div style="padding:4px 16px 5px;font-size:12px;font-weight:700">📌 銘柄集中度</div><div style="padding:0 16px 10px">`;
+  tickers.slice(0,10).forEach((x,i)=>{const p=x.amount/total*100;html+=`<div style="display:grid;grid-template-columns:22px minmax(90px,1.3fr) 1fr 55px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3);text-align:right">${i+1}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc2(x.ticker)} <span style="font-size:9px;color:var(--text3)">[${esc2(x.sector)}]</span></span><span style="height:7px;background:var(--bg2);border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(p,100)}%;background:#2563EB"></span></span><b style="text-align:right">${p.toFixed(1)}%</b></div>`;});
+  html+=`</div><div style="padding:4px 16px 5px;font-size:12px;font-weight:700">🏷️ セクター集中度</div><div style="padding:0 16px 10px">`;
+  sectors.slice(0,10).forEach(([sec,amt],i)=>{const p=amt/total*100;html+=`<div style="display:grid;grid-template-columns:minmax(100px,1fr) 1fr 55px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px"><span>${esc2(sec)}</span><span style="height:7px;background:var(--bg2);border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(p,100)}%;background:#16A34A"></span></span><b style="text-align:right">${p.toFixed(1)}%</b></div>`;});
+  html+=`</div>`;
+  html+=`<div style="padding:4px 16px 5px;font-size:12px;font-weight:700">🔎 二重集中</div><div style="padding:0 16px 12px;font-size:10px;color:var(--text3);line-height:1.6">「銘柄」と「セクター」の両方が大きい場合、同じテーマへの集中が強くなります。例えば半導体銘柄を複数保有していても、半導体セクター全体の比率が高ければセクター集中として表示されます。</div>`;
+  el.innerHTML=html;
+}
+(function(){const base=window.amRender;if(typeof base==='function'){window.amRender=function(){const r=base.apply(this,arguments);try{amConcRender();}catch(e){console.error('amConcRender',e)}return r;};}setTimeout(()=>{try{amConcRender();}catch(e){console.error('amConcRender',e)}},1000);})();
+</script>
 <!-- 米国株：株価上昇益 vs 為替益 個別分析 -->
     <div class="section" id="amUsFxSection">
       <div class="section-head" onclick="toggleSection('amUsFxSection')">
