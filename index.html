@@ -1507,6 +1507,20 @@ function amMonthlyPerfRender(){
       </div>
     </div>
     <div id="bs-results"></div>
+
+    <!-- 投資可能現金・複数銘柄配分シミュレーター -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 投資可能現金の配分シミュレーター</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">SBI証券・moomoo証券の投資可能現金を、複数銘柄へ仮想配分した場合のポートフォリオ変化を試算します。実際の資産・注文は変更しません。</div>
+      <div id="ba-cash-summary" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="ba-rows"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn-sm" type="button" onclick="baAddRow()">＋ 銘柄を追加</button>
+        <button class="btn-sm" type="button" onclick="baUseAllCash()">全額を配分</button>
+        <button class="btn-sm" type="button" onclick="baReset()">リセット</button>
+      </div>
+      <div id="ba-results" style="margin-top:10px"></div>
+    </div>
   </div>
 </div>
 <div class="panel" id="tab-sell">
@@ -15089,6 +15103,79 @@ function bsRender(){
   </div>
   <div style="font-size:10px;color:${cashAfter<0?'var(--red)':'var(--text3)'};line-height:1.6">${cashAfter<0?'⚠ 買い付け額が投資可能現金を超えています。':'✓ 投資可能現金の範囲内です。'}　※試算のみで、実際の注文・資産データは変更しません。</div>`;
 }
+// ============================================================
+// 投資可能現金・複数銘柄配分シミュレーター
+// ============================================================
+let baState=[];
+function baRows(){return Array.isArray(amAccounts)?amAccounts.filter(a=>!a.sold&&Number(a.amount||0)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))):[];}
+function baInvestmentRows(){
+  const map={};
+  baRows().forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim();
+    const name=String(a.name||code).trim();
+    const key=code||name; if(!key)return;
+    if(!map[key])map[key]={ticker:code||key,name,amount:0,sector:String(a.sector||'')};
+    map[key].amount+=Number(a.amount||0);
+    if(a.sector)map[key].sector=String(a.sector);
+  });
+  return Object.values(map).sort((a,b)=>b.amount-a.amount);
+}
+function baCash(){try{if(typeof amStage1GetInvestableCashByBank==='function')return Number(amStage1GetInvestableCashByBank(amAccounts).total||0);}catch(e){}return 0;}
+function baEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function baAddRow(){const opts=baInvestmentRows();if(!opts.length)return;const used=new Set(baState.map(x=>x.ticker));const next=opts.find(x=>!used.has(x.ticker))||opts[0];baState.push({ticker:next.ticker,amount:0});baRender();}
+function baReset(){baState=[];baRender();}
+function baUseAllCash(){
+  const cash=baCash();
+  if(!baState.length)baAddRow();
+  if(!baState.length)return;
+  const n=baState.length, base=Math.floor(cash/n/10000)*10000;
+  baState.forEach((x,i)=>x.amount=i===n-1?Math.max(0,cash-base*(n-1)):base);
+  baRender();
+}
+function baRender(){
+  const host=document.getElementById('ba-rows'),summary=document.getElementById('ba-cash-summary'),res=document.getElementById('ba-results');
+  if(!host||!summary||!res)return;
+  const opts=baInvestmentRows(),cash=baCash();
+  const totalAlloc=baState.reduce((s,x)=>s+Math.max(0,Number(x.amount||0)),0),remain=cash-totalAlloc;
+  summary.innerHTML=`投資可能現金 <b>¥${Math.round(cash).toLocaleString('ja-JP')}</b> ／ 配分額 <b>¥${Math.round(totalAlloc).toLocaleString('ja-JP')}</b> ／ 配分後現金 <b style="color:${remain<0?'var(--red)':'inherit'}">¥${Math.round(remain).toLocaleString('ja-JP')}</b>`;
+  if(!opts.length){host.innerHTML='<div style="font-size:11px;color:var(--text3);padding:8px 0">保有銘柄が読み込まれていません。</div>';res.innerHTML='';return;}
+  if(!baState.length)baState=[{ticker:opts[0].ticker,amount:0}];
+  host.innerHTML=baState.map((row,i)=>{
+    const valid=opts.some(o=>o.ticker===row.ticker);
+    return `<div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(110px,1fr) 30px;gap:6px;align-items:center;margin-bottom:7px">
+      <select data-ba-i="${i}" onchange="baChangeTicker(this)" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:12px">${opts.map(o=>`<option value="${baEsc(o.ticker)}" ${o.ticker===(valid?row.ticker:opts[0].ticker)?'selected':''}>${baEsc(o.ticker)}｜${baEsc(o.name)}</option>`).join('')}</select>
+      <input data-ba-i="${i}" type="number" min="0" step="10000" value="${Math.max(0,Number(row.amount||0))}" oninput="baChangeAmount(this)" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;text-align:right">
+      <button type="button" class="btn-sm" onclick="baRemoveRow(${i})" style="padding:7px 8px">✕</button>
+    </div>`;
+  }).join('');
+  baState.forEach((x,i)=>{if(!opts.some(o=>o.ticker===x.ticker))x.ticker=opts[0].ticker;});
+  const inv=opts.reduce((m,o)=>(m[o.ticker]=o.amount,m),{}), totalBefore=opts.reduce((s,o)=>s+o.amount,0), totalAfter=totalBefore+Math.max(0,totalAlloc);
+  const after=opts.map(o=>({ticker:o.ticker,name:o.name,sector:o.sector,before:o.amount,add:baState.filter(x=>x.ticker===o.ticker).reduce((s,x)=>s+Math.max(0,Number(x.amount||0)),0)})).map(x=>({...x,after:x.before+x.add}));
+  const top=after.filter(x=>x.after>0).sort((a,b)=>b.after-a.after);
+  const pct=t=>totalAfter>0?t.after/totalAfter*100:0;
+  const top3=top.slice(0,3).reduce((s,x)=>s+pct(x),0),top5=top.slice(0,5).reduce((s,x)=>s+pct(x),0);
+  const semiRx=/半導体|semiconductor|nvda|nvidia|mu\b|micron|sndk|sandisk|kioxia|キオクシア|sk hynix|hynix|advantest|アドバンテスト|東京エレクトロン|disco|broadcom|amd\b|intel/i;
+  const semi=after.filter(x=>semiRx.test([x.ticker,x.name,x.sector].join(' '))).reduce((s,x)=>s+x.after,0);
+  const us=after.filter(x=>/GOOGL|GOOG|NVDA|MU|SNDK|MSFT|AAPL|AMZN|META|AVGO|AMD|INTC/i.test(x.ticker)).reduce((s,x)=>s+x.after,0);
+  const fmtp=v=>v.toFixed(1)+'%';
+  res.innerHTML=`<div style="background:var(--bg2);border-radius:10px;padding:11px">
+    <div style="font-size:12px;font-weight:650;margin-bottom:8px">📊 買付後のポートフォリオ</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">
+      <div><span style="font-size:10px;color:var(--text3)">半導体比率</span><div style="font-weight:700">${fmtp(totalAfter?semi/totalAfter*100:0)}</div></div>
+      <div><span style="font-size:10px;color:var(--text3)">米国株比率</span><div style="font-weight:700">${fmtp(totalAfter?us/totalAfter*100:0)}</div></div>
+      <div><span style="font-size:10px;color:var(--text3)">TOP3集中度</span><div style="font-weight:700">${fmtp(top3)}</div></div>
+      <div><span style="font-size:10px;color:var(--text3)">TOP5集中度</span><div style="font-weight:700">${fmtp(top5)}</div></div>
+    </div>
+    <div style="margin-top:9px;font-size:11px;font-weight:600">買付後の上位銘柄</div>
+    ${top.slice(0,5).map((x,i)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:10px;border-bottom:1px solid var(--border)"><span>${i+1}. ${baEsc(x.ticker)}</span><span>¥${Math.round(x.after).toLocaleString('ja-JP')}（${fmtp(pct(x))}）</span></div>`).join('')}
+    <div style="margin-top:8px;font-size:10px;color:${remain<0?'var(--red)':'var(--text3)'}">${remain<0?'⚠ 配分額が投資可能現金を超えています。':'✓ 投資可能現金の範囲内です。'} ※現在の保有額を基準にした試算です。</div>
+  </div>`;
+}
+function baChangeTicker(el){const i=Number(el.dataset.baI);if(baState[i])baState[i].ticker=el.value;baRender();}
+function baChangeAmount(el){const i=Number(el.dataset.baI);if(baState[i])baState[i].amount=Math.max(0,Number(el.value||0));baRender();}
+function baRemoveRow(i){baState.splice(i,1);baRender();}
+setTimeout(()=>{try{baRender();}catch(e){}},900);
+
 // Google/ローカルから資産データが読み込まれた後にも、買付銘柄を再構築する。
 // 初回1秒待ちだけではGoogle同期の完了前に「保有銘柄がありません」になるため、
 // 資産管理の再描画(amRender)に連動してシミュレーターも更新する。
