@@ -5658,6 +5658,7 @@ async function amLoadFromSheet(){
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
     amSaveToLocal();amRender();
+    try{if(typeof bsRender==='function')setTimeout(bsRender,50);}catch(e){}
     // 推移グラフの損益除外リストをQ1セルから読み込む（端末間で共有）
     try{
       const exRes=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!Q1'});
@@ -14833,20 +14834,30 @@ function bsSetAmount(v){const e=document.getElementById('bs-amount');if(e){e.val
 function bsRender(){
   const sel=document.getElementById('bs-ticker'), cashEl=document.getElementById('bs-cash'), curEl=document.getElementById('bs-current'), res=document.getElementById('bs-results');
   if(!sel||!res)return;
-  const rows=bsInvestmentRows(), cash=bsCash();
-  cashEl.textContent='¥'+Math.round(cash).toLocaleString('ja-JP');
+  const rows=bsInvestmentRows();
+  const cash=bsCash();
+  if(cashEl)cashEl.textContent='¥'+Math.round(cash).toLocaleString('ja-JP');
   const old=sel.value;
-  sel.innerHTML=rows.length?rows.map(r=>`<option value="${escv(r.ticker)}">${escv(r.ticker)}｜${escv(r.name)}（¥${Math.round(r.amount).toLocaleString('ja-JP')}）</option>`).join(''):'<option value="">保有銘柄がありません</option>';
-  if(rows.some(r=>r.ticker===old))sel.value=old;
+  const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if(rows.length){
+    sel.innerHTML=rows.map(r=>`<option value="${esc(r.ticker)}">${esc(r.ticker)}｜${esc(r.name)}（¥${Math.round(r.amount).toLocaleString('ja-JP')}）</option>`).join('');
+    if(rows.some(r=>r.ticker===old))sel.value=old;
+  }else{
+    sel.innerHTML='<option value="">保有銘柄を取得中…</option>';
+  }
   const row=rows.find(r=>r.ticker===sel.value)||rows[0];
   if(row&&sel.value!==row.ticker)sel.value=row.ticker;
   const amt=Math.max(0,Number(document.getElementById('bs-amount')?.value||0));
-  if(!row){curEl.textContent='';res.innerHTML='<div style="padding:12px;color:var(--text3);font-size:12px">シミュレーションできる保有銘柄がありません。</div>';return;}
+  if(!row){
+    if(curEl)curEl.textContent='資産管理の保有銘柄を読み込んでいます…';
+    res.innerHTML='<div style="padding:12px;color:var(--text3);font-size:12px">保有銘柄データを読み込んでいます。数秒後に自動更新します。</div>';
+    return;
+  }
   const totalBefore=rows.reduce((s,r)=>s+r.amount,0), totalAfter=totalBefore+amt;
   const beforePct=totalBefore?row.amount/totalBefore*100:0, afterPct=totalAfter?(row.amount+amt)/totalAfter*100:0;
-  const cashAfter=cash-amt, cashPct=cash?cashAfter/cash*100:0;
+  const cashAfter=cash-amt;
   const target=row.buyPrice>0?row.buyPrice:null;
-  curEl.innerHTML=`現在評価額 <b>¥${Math.round(row.amount).toLocaleString('ja-JP')}</b> ／ 現在比率 <b>${beforePct.toFixed(1)}%</b>${target?` ／ 目標買値 ¥${Math.round(target).toLocaleString('ja-JP')}`:''}`;
+  if(curEl)curEl.innerHTML=`現在評価額 <b>¥${Math.round(row.amount).toLocaleString('ja-JP')}</b> ／ 現在比率 <b>${beforePct.toFixed(1)}%</b>${target?` ／ 目標買値 ¥${Math.round(target).toLocaleString('ja-JP')}`:''}`;
   const diffPct=afterPct-beforePct;
   const investmentAfter=totalAfter;
   const topRows=rows.map(r=>({name:r.ticker,amount:r.ticker===row.ticker?r.amount+amt:r.amount})).sort((a,b)=>b.amount-a.amount).slice(0,5);
@@ -14855,8 +14866,8 @@ function bsRender(){
     <div style="background:var(--bg2);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">買付後の保有比率</div><div style="font-size:17px;font-weight:700;margin-top:4px">${afterPct.toFixed(1)}%</div><div style="font-size:10px;color:var(--text3)">${beforePct.toFixed(1)}% → ${afterPct.toFixed(1)}%（${diffPct>=0?'+':''}${diffPct.toFixed(1)}pt）</div></div>
   </div>
   <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:10px">
-    <div style="font-size:12px;font-weight:600;margin-bottom:7px">買い付け後の上位5銘柄</div>
-    ${topRows.map((r,i)=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:${i===topRows.length-1?'0':'1px solid var(--border)'}"><span>${i+1}. ${escv(r.name)}</span><span>¥${Math.round(r.amount).toLocaleString('ja-JP')}（${(r.amount/investmentAfter*100).toFixed(1)}%）</span></div>`).join('')}
+    <div style="font-size:12px;font-weight:600;margin-bottom:7px">買付後の上位5銘柄</div>
+    ${topRows.map((r,i)=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:${i===topRows.length-1?'0':'1px solid var(--border)'}"><span>${i+1}. ${esc(r.name)}</span><span>¥${Math.round(r.amount).toLocaleString('ja-JP')}（${investmentAfter? (r.amount/investmentAfter*100).toFixed(1):'0.0'}%）</span></div>`).join('')}
   </div>
   <div style="font-size:10px;color:${cashAfter<0?'var(--red)':'var(--text3)'};line-height:1.6">${cashAfter<0?'⚠ 買い付け額が投資可能現金を超えています。':'✓ 投資可能現金の範囲内です。'}　※試算のみで、実際の注文・資産データは変更しません。</div>`;
 }
