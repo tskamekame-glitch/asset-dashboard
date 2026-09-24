@@ -14792,17 +14792,34 @@ async function amPwSave(id){
 // 買い付けシミュレーター
 // ============================================================
 function bsInvestmentRows(){
-  const rows=Array.isArray(amAccounts)?amAccounts.filter(a=>!a.sold&&Number(a.amount||0)>0):[];
+  // Google同期直後など、amAccountsへの反映が遅れるケースに備えて
+  // localStorageのassetAccountsも候補に加える。重複は銘柄コード/名称で集約。
+  let src=Array.isArray(amAccounts)?amAccounts.slice():[];
+  try{
+    const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    if(Array.isArray(ls)&&ls.length){
+      const ids=new Set(src.map(a=>String(a.id)));
+      ls.forEach(a=>{if(!ids.has(String(a.id)))src.push(a);});
+    }
+  }catch(e){}
   const map={};
-  rows.forEach(a=>{
-    if(a.cat==='銀行'||/現金|預り|預かり/.test(String(a.name||'')))return;
-    const ticker=String(a.ticker||a.code||a.symbol||'').trim()||String(a.name||'').trim();
+  src.filter(a=>{
+    if(a.sold)return false;
+    const cat=String(a.cat||'');
+    if(cat==='銀行'||cat==='FX'||/年金|現金|預り|預かり/.test(String(a.name||'')))return false;
+    // 金額が未設定でも、株数・価格・コードがあれば保有銘柄として扱う
+    return Number(a.amount||0)>0 || Number(a.shares||0)>0 || Number(a.price||0)>0 || !!a.code;
+  }).forEach(a=>{
+    const code=String(a.ticker||a.code||a.symbol||'').trim();
+    const name=String(a.name||code).trim();
+    const ticker=code||name;
     if(!ticker)return;
-    if(!map[ticker])map[ticker]={ticker,name:String(a.name||ticker),amount:0,sector:String(a.sector||''),buyPrice:Number(a.targetBuyPrice||0),sellPrice:Number(a.targetSellPrice||0),status:String(a.watchStatus||'保有')};
-    map[ticker].amount+=Number(a.amount||0);
-    if(Number(a.targetBuyPrice||0)>0)map[ticker].buyPrice=Number(a.targetBuyPrice);
-    if(Number(a.targetSellPrice||0)>0)map[ticker].sellPrice=Number(a.targetSellPrice);
-    if(a.watchStatus)map[ticker].status=a.watchStatus;
+    const key=code||name.replace(/（[^）]*買付[^）]*）$/,'').trim();
+    if(!map[key])map[key]={ticker:code||key,name:name,amount:0,sector:String(a.sector||''),buyPrice:Number(a.targetBuyPrice||0),sellPrice:Number(a.targetSellPrice||0),status:String(a.watchStatus||'保有')};
+    map[key].amount+=Number(a.amount||0);
+    if(Number(a.targetBuyPrice||0)>0)map[key].buyPrice=Number(a.targetBuyPrice);
+    if(Number(a.targetSellPrice||0)>0)map[key].sellPrice=Number(a.targetSellPrice);
+    if(a.watchStatus)map[key].status=a.watchStatus;
   });
   return Object.values(map).sort((a,b)=>b.amount-a.amount);
 }
