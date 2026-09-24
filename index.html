@@ -1270,6 +1270,13 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div id="bs-current" style="font-size:11px;color:var(--text3);margin-top:7px;line-height:1.5"></div>
       <label style="display:block;font-size:12px;color:var(--text2);margin-top:12px;margin-bottom:5px">買い付け金額</label>
       <input id="bs-amount" type="number" inputmode="numeric" min="0" step="10000" value="100000" oninput="bsRender()" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:16px;text-align:right">
+      <label style="display:block;font-size:12px;color:var(--text2);margin-top:12px;margin-bottom:5px">目標保有比率（買付額を自動計算）</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="bs-target-ratio" type="number" inputmode="decimal" min="0" max="99.9" step="0.5" placeholder="例：10" oninput="bsRender()" style="flex:1;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font-size:15px;text-align:right">
+        <span style="font-size:13px">%</span>
+        <button class="btn-sm" onclick="bsApplyTargetAmount()">目標額を反映</button>
+      </div>
+      <div id="bs-target-hint" style="font-size:10px;color:var(--text3);margin-top:5px"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="btn-sm" onclick="bsSetAmount(50000)">5万円</button><button class="btn-sm" onclick="bsSetAmount(100000)">10万円</button><button class="btn-sm" onclick="bsSetAmount(300000)">30万円</button><button class="btn-sm" onclick="bsSetAmount(500000)">50万円</button>
       </div>
@@ -14816,10 +14823,11 @@ function bsInvestmentRows(){
     const ticker=code||name;
     if(!ticker)return;
     const key=code||name.replace(/（[^）]*買付[^）]*）$/,'').trim();
-    if(!map[key])map[key]={ticker:code||key,name:name,amount:0,sector:String(a.sector||''),buyPrice:Number(a.targetBuyPrice||0),sellPrice:Number(a.targetSellPrice||0),status:String(a.watchStatus||'保有')};
+    if(!map[key])map[key]={ticker:code||key,name:name,amount:0,sector:String(a.sector||''),buyPrice:Number(a.targetBuyPrice||0),sellPrice:Number(a.targetSellPrice||0),targetRatio:Number(a.targetRatio||0),status:String(a.watchStatus||'保有')};
     map[key].amount+=Number(a.amount||0);
     if(Number(a.targetBuyPrice||0)>0)map[key].buyPrice=Number(a.targetBuyPrice);
     if(Number(a.targetSellPrice||0)>0)map[key].sellPrice=Number(a.targetSellPrice);
+    if(Number(a.targetRatio||0)>0)map[key].targetRatio=Number(a.targetRatio);
     if(a.watchStatus)map[key].status=a.watchStatus;
   });
   return Object.values(map).sort((a,b)=>b.amount-a.amount);
@@ -14831,6 +14839,25 @@ function bsCash(){
   return (Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&a.cat==='銀行').reduce((s,a)=>s+Number(a.amount||0),0);
 }
 function bsSetAmount(v){const e=document.getElementById('bs-amount');if(e){e.value=v;bsRender();}}
+function bsTargetAmount(row, totalBefore){
+  const el=document.getElementById('bs-target-ratio');
+  const target=Number(el?.value||row?.targetRatio||0)/100;
+  if(!row||!target||target>=1)return 0;
+  const need=(target*totalBefore-row.amount)/(1-target);
+  return Math.max(0,need);
+}
+function bsApplyTargetAmount(){
+  const sel=document.getElementById('bs-ticker');
+  const rows=bsInvestmentRows();
+  const row=rows.find(r=>r.ticker===sel?.value)||rows[0];
+  if(!row)return;
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  const need=bsTargetAmount(row,total);
+  const cash=bsCash();
+  const amountEl=document.getElementById('bs-amount');
+  if(amountEl)amountEl.value=Math.max(0,Math.floor(Math.min(need,cash)/10000)*10000);
+  bsRender();
+}
 function bsRender(){
   const sel=document.getElementById('bs-ticker'), cashEl=document.getElementById('bs-cash'), curEl=document.getElementById('bs-current'), res=document.getElementById('bs-results');
   if(!sel||!res)return;
@@ -14848,6 +14875,8 @@ function bsRender(){
   const row=rows.find(r=>r.ticker===sel.value)||rows[0];
   if(row&&sel.value!==row.ticker)sel.value=row.ticker;
   const amt=Math.max(0,Number(document.getElementById('bs-amount')?.value||0));
+  const targetInput=document.getElementById('bs-target-ratio');
+  if(targetInput && row && !targetInput.value && row.targetRatio>0) targetInput.value=row.targetRatio;
   if(!row){
     if(curEl)curEl.textContent='資産管理の保有銘柄を読み込んでいます…';
     res.innerHTML='<div style="padding:12px;color:var(--text3);font-size:12px">保有銘柄データを読み込んでいます。数秒後に自動更新します。</div>';
@@ -14859,9 +14888,13 @@ function bsRender(){
   const target=row.buyPrice>0?row.buyPrice:null;
   if(curEl)curEl.innerHTML=`現在評価額 <b>¥${Math.round(row.amount).toLocaleString('ja-JP')}</b> ／ 現在比率 <b>${beforePct.toFixed(1)}%</b>${target?` ／ 目標買値 ¥${Math.round(target).toLocaleString('ja-JP')}`:''}`;
   const diffPct=afterPct-beforePct;
+  const targetNeed=bsTargetAmount(row,totalBefore);
+  const targetVal=Number(document.getElementById('bs-target-ratio')?.value||row.targetRatio||0);
+  const hint=document.getElementById('bs-target-hint');
+  if(hint) hint.textContent=targetVal>0 ? `目標${targetVal.toFixed(1)}%にするには約¥${Math.round(targetNeed).toLocaleString('ja-JP')}の追加買付が必要です。${targetNeed>cash?'（投資可能現金を超えています）':''}` : '目標比率を入力すると、必要な買付額を自動計算します。';
   const investmentAfter=totalAfter;
   const topRows=rows.map(r=>({name:r.ticker,amount:r.ticker===row.ticker?r.amount+amt:r.amount})).sort((a,b)=>b.amount-a.amount).slice(0,5);
-  res.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+  res.innerHTML=`<div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:10px"><div style="font-size:11px;color:var(--text3)">目標保有比率</div><div style="font-size:18px;font-weight:700;margin-top:4px">${targetVal>0?targetVal.toFixed(1)+'%':'未設定'}</div><div style="font-size:11px;margin-top:4px">必要買付額：約¥${Math.round(targetNeed).toLocaleString('ja-JP')} ／ 現金で可能：${targetNeed<=cash?'○':'×'}</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
     <div style="background:var(--bg2);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">買付後の現金</div><div style="font-size:17px;font-weight:700;margin-top:4px;${cashAfter<0?'color:var(--red)':''}">¥${Math.round(cashAfter).toLocaleString('ja-JP')}</div></div>
     <div style="background:var(--bg2);border-radius:10px;padding:11px"><div style="font-size:10px;color:var(--text3)">買付後の保有比率</div><div style="font-size:17px;font-weight:700;margin-top:4px">${afterPct.toFixed(1)}%</div><div style="font-size:10px;color:var(--text3)">${beforePct.toFixed(1)}% → ${afterPct.toFixed(1)}%（${diffPct>=0?'+':''}${diffPct.toFixed(1)}pt）</div></div>
   </div>
