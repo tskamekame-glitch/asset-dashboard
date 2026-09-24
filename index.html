@@ -614,6 +614,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><span class="ni">🏠</span>ホーム</button>
   <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
+  <button class="nav-btn" data-tab="pricewatch" onclick="switchTab('pricewatch')"><span class="ni">🎯</span>価格管理</button>
   <button class="nav-btn" data-tab="buysim" onclick="switchTab('buysim')"><span class="ni">🧮</span>買付シミュ</button>
   <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
   <button class="nav-btn" data-tab="pnl" onclick="switchTab('pnl')"><span class="ni">📊</span>損益</button>
@@ -866,14 +867,6 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
         <span><span class="chevron">▼</span></span>
       </div>
       <div class="account-list" id="amUsFxPanel"></div>
-    </div>
-    <!-- 買い増し・売却候補：価格管理 -->
-    <div class="section" id="amPriceWatchSection">
-      <div class="section-head" onclick="toggleSection('amPriceWatchSection')">
-        <div class="section-head-left"><span>🎯</span><h2>買い増し・売却候補の価格管理</h2></div>
-        <span><span class="chevron">▼</span></span>
-      </div>
-      <div class="account-list" id="amPriceWatchPanel"></div>
     </div>
     <div id="accountSections"></div>
     <div id="soldAccountSections" style="display:none"></div>
@@ -1252,6 +1245,17 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 </div>
 
 <!-- ========== SELL ========== -->
+<div class="panel" id="tab-pricewatch">
+  <div class="section" id="amPriceWatchSectionStandalone">
+    <div class="section-head" onclick="toggleSection('amPriceWatchSectionStandalone')">
+      <div class="section-head-left"><span>🎯</span><h2>買い増し・売却候補の価格管理</h2></div>
+      <span><span class="chevron">▼</span></span>
+    </div>
+    <div style="padding:0 16px 10px;color:var(--text2);font-size:12px;line-height:1.6">資産管理に登録されている投資銘柄を自動表示します。新しい銘柄を資産管理へ追加すると、この画面にも自動反映されます。</div>
+    <div class="account-list" id="amPriceWatchPanel"></div>
+  </div>
+</div>
+
 <div class="panel" id="tab-buysim">
   <div style="padding:16px">
     <div style="font-size:18px;font-weight:700;margin-bottom:4px">🧮 買い付けシミュレーター</div>
