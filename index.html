@@ -3416,11 +3416,13 @@ function amMergeLots(entries){
     if(e.gain!=null&&e.base>0){m.gain+=e.gain;m.base+=e.base;m.any=true;}
     else m.partial=true;
   });
-  return Object.values(g).filter(m=>m.any).map(m=>({
+  return Object.values(g).map(m=>({
     name:m.name+(m.partial?'†':''),
     amount:m.amount,
-    pct:m.gain/m.base*100,
-    gain:m.gain,base:m.base,id:m.id,lots:m.lots
+    pct:m.any&&m.base>0?(m.gain/m.base*100):null,
+    gain:m.any?m.gain:null,
+    base:m.any?m.base:0,
+    id:m.id,lots:m.lots
   }));
 }
 
@@ -3702,9 +3704,17 @@ function amBuildHeatmapItems(accounts){
       const isMoomoo=String(a.broker||'')==='moomoo証券';
       const prev=isMoomoo?Number(a.prevMoomooAmount||0):Number(a.prevSBIAmount||0);
       if(prev>0&&a.amount>0){
-        return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-prev,base:prev,id:a.id};
+        // 前回CSV比較は「同じ証券会社・同じ銘柄」の評価額だけを比較。
+        // 極端な差は旧データ/口座統合ミスの可能性があるため色付けせず「—」とする。
+        const pct=(a.amount-prev)/prev*100;
+        if(Math.abs(pct)>50){
+          return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:null,base:0,pct:null,id:a.id};
+        }
+        return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-prev,base:prev,pct:pct,id:a.id};
       }
-      return null;
+      // 初回CSV取込など、前回評価額が存在しない銘柄も消さない。
+      // 「前回比」は表示できないが、保有銘柄として面積には反映する。
+      return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:null,base:0,pct:null,id:a.id};
     }).filter(Boolean);
     items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
   }
@@ -3766,6 +3776,7 @@ function amRenderHeatmapSectionHtml(sec,items,T,containerW,secAccounts){
   }
 
   const pctToColor=pct=>{
+    if(pct==null||!isFinite(pct))return'#8b8b86';
     if(pct>=T[2])return'#0a5e3f';
     if(pct>=T[1])return'#0f7a50';
     if(pct>=T[0])return'#1a9e6a';
@@ -3864,8 +3875,8 @@ function amRenderHeatmapSectionHtml(sec,items,T,containerW,secAccounts){
   rects.forEach(({node,x,y,w,h},idx)=>{
     const rx=x+GAP/2,ry=y+GAP/2,rw=Math.max(w-GAP,1),rh=Math.max(h-GAP,1);
     const color=pctToColor(node.pct);
-    const sign=node.pct>=0?'+':'';
-    const pctStr=sign+node.pct.toFixed(2)+'%';
+    const sign=node.pct!=null&&node.pct>=0?'+':'';
+    const pctStr=node.pct!=null&&isFinite(node.pct)?sign+node.pct.toFixed(2)+'%':'—';
     const area=rw*rh;
     const cpId='cp_'+sec.key+'_'+idx;
 
