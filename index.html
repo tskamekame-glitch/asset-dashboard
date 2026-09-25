@@ -855,7 +855,25 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div id="amHeatmapTotal" style="padding:0 16px 6px;font-size:13px"></div>
       <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
+
+    <!-- 銘柄変動分析 -->
+    <div class="section" id="amMovementSection">
+      <div class="section-head" onclick="toggleSection('amMovementSection')">
+        <div class="section-head-left"><span>📊</span><h2>銘柄変動分析</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amMovementPanel"></div>
+    </div>
     <div id="amDupResults" style="display:none"></div>
+    <!-- 銘柄コンディション判定 -->
+    <div class="section" id="amConditionSection">
+      <div class="section-head" onclick="toggleSection('amConditionSection')">
+        <div class="section-head-left"><span>📈</span><h2>銘柄コンディション判定</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amConditionPanel"></div>
+    </div>
+
     <!-- 半導体ポートフォリオ専用分析 -->
     <div class="section" id="amSemiconductorSection">
       <div class="section-head" onclick="toggleSection('amSemiconductorSection')">
@@ -865,6 +883,83 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <div class="account-list" id="amSemiconductorPanel"></div>
     </div>
     <script>
+/* 銘柄コンディション判定：現在値・買値・目標価格・PER・業績を横断表示 */
+let amConditionMode=localStorage.getItem('amConditionMode')||'semi';
+function amSetConditionMode(m){
+  amConditionMode=(m==='all'?'all':'semi');
+  try{localStorage.setItem('amConditionMode',amConditionMode);}catch(e){}
+  try{amRenderConditionAnalysis(amAccounts.filter(a=>!a.sold));}catch(e){}
+}
+function amConditionEsc(v){return typeof esc==='function'?esc(String(v??'')):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function amConditionNum(v){const n=Number(v);return Number.isFinite(n)?n:null;}
+function amConditionPrice(a){const n=amConditionNum(a.price||a.marketPrice);return n&&n>0?n:null;}
+function amConditionCost(a){const n=amConditionNum(a.costPrice);return n&&n>0?n:null;}
+function amConditionPct(v){return v==null||!Number.isFinite(v)?'—':`${v>=0?'+':''}${v.toFixed(1)}%`;}
+function amConditionMoney(v,a){if(v==null||!Number.isFinite(v))return '—';const cur=String(a.priceCurrency||'JPY').toUpperCase();if(cur==='USD')return '$'+v.toLocaleString('en-US',{maximumFractionDigits:2});return '¥'+Math.round(v).toLocaleString('ja-JP');}
+function amConditionStatus(a){
+  const p=amConditionPrice(a), buy=amConditionNum(a.targetBuyPrice), sell=amConditionNum(a.targetSellPrice), at=amConditionNum(a.analystTargetPrice);
+  const flags=[];
+  if(p&&buy&&p<=buy)flags.push({t:'買値到達',c:'var(--green)'});
+  if(p&&sell&&p>=sell)flags.push({t:'売値到達',c:'#e67e22'});
+  if(p&&at&&at>p){const up=(at/p-1)*100;if(up>=15)flags.push({t:'目標上昇余地 '+up.toFixed(0)+'%',c:'var(--accent,#185FA5)'});}
+  if(a.earningsDate){const d=Math.ceil((new Date(a.earningsDate+'T00:00:00')-new Date(new Date().toDateString()))/864e5);if(d>=0&&d<=14)flags.push({t:'決算 '+d+'日',c:'#b7791f'});}
+  if(a.lastAnalysisDate){const age=Math.floor((new Date()-new Date(a.lastAnalysisDate))/864e5);if(age>30)flags.push({t:'分析 '+age+'日前',c:'var(--danger)'});}
+  return flags;
+}
+function amRenderConditionAnalysis(accounts){
+  const el=document.getElementById('amConditionPanel');if(!el)return;
+  const invest=(accounts||[]).filter(a=>!a.sold&&Number(a.amount||0)>0&&['個別株','高配当','外国株式'].includes(a.cat));
+  const rows=invest.filter(a=>amConditionMode==='all'||amSemiIsSemiconductor(a));
+  const esc=amConditionEsc;
+  const priceRows=rows.map(a=>{
+    const p=amConditionPrice(a), cost=amConditionCost(a), at=amConditionNum(a.analystTargetPrice), buy=amConditionNum(a.targetBuyPrice);
+    const pnl=cost&&a.shares?((p||0)-cost)*Number(a.shares||0):null;
+    const pnlPct=cost&&p?(p/cost-1)*100:null;
+    const upside=p&&at?(at/p-1)*100:null;
+    const rev=amConditionNum(a.revenueGrowth), op=amConditionNum(a.opProfitGrowth);
+    return {...a,p,cost,at,buy,pnl,pnlPct,upside,rev,op,flags:amConditionStatus(a)};
+  }).sort((a,b)=>Number(b.amount||0)-Number(a.amount||0));
+  const metricColor=v=>v==null?'var(--text3)':v>=0?'var(--green)':'var(--danger)';
+  const cell=(v,cls='')=>`<td style="padding:8px 7px;border-bottom:0.5px solid var(--border);font-size:11px;white-space:nowrap;${cls}">${v}</td>`;
+  const table=priceRows.length?`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="border-collapse:collapse;width:max-content;min-width:100%;font-variant-numeric:tabular-nums">
+    <thead><tr style="color:var(--text3);font-size:9px;text-align:right"><th style="padding:6px 7px;text-align:left;position:sticky;left:0;background:var(--bg);z-index:1">銘柄</th><th>現在値</th><th>平均取得</th><th>含み損益</th><th>含み損益率</th><th>目標買値</th><th>アナリスト目標</th><th>上昇余地</th><th>PER</th><th>予想PER</th><th>PBR</th><th>売上成長</th><th>営業利益成長</th><th>判定材料</th></tr></thead>
+    <tbody>${priceRows.map(r=>{
+      const flags=r.flags.map(f=>`<span style="display:inline-block;margin:1px 2px;padding:2px 5px;border-radius:5px;background:${f.c};color:#fff;font-size:9px">${esc(f.t)}</span>`).join('');
+      return `<tr onclick="openEditModal(${Number(r.id)})" style="cursor:pointer">
+        ${cell(`<div style="font-weight:700">${esc(amLotBaseName(r.name))}</div><div style="font-size:9px;color:var(--text3)">${esc(r.code||r.ticker||r.strategy||'')}</div>`, 'text-align:left;position:sticky;left:0;background:var(--bg);z-index:1')}
+        ${cell(r.p==null?'—':amConditionMoney(r.p,r))}
+        ${cell(r.cost==null?'—':amConditionMoney(r.cost,r))}
+        ${cell(r.pnl==null?'—':amConditionMoney(r.pnl,r),`color:${metricColor(r.pnl)}`)}
+        ${cell(amConditionPct(r.pnlPct),`color:${metricColor(r.pnlPct)}`)}
+        ${cell(r.buy==null?'—':amConditionMoney(r.buy,r))}
+        ${cell(r.at==null?'—':amConditionMoney(r.at,r))}
+        ${cell(amConditionPct(r.upside),`color:${metricColor(r.upside)}`)}
+        ${cell(r.per?Number(r.per).toFixed(1)+'倍':'—')}
+        ${cell(r.forwardPER?Number(r.forwardPER).toFixed(1)+'倍':'—')}
+        ${cell(r.pbr?Number(r.pbr).toFixed(2)+'倍':'—')}
+        ${cell(r.rev==null?'—':amConditionPct(r.rev),`color:${metricColor(r.rev)}`)}
+        ${cell(r.op==null?'—':amConditionPct(r.op),`color:${metricColor(r.op)}`)}
+        ${cell(flags||'—','text-align:left;white-space:normal;max-width:190px')}
+      </tr>`;
+    }).join('')}</tbody></table></div>`:'<div style="padding:14px;color:var(--text3);font-size:11px">対象銘柄がありません。資産管理に保有銘柄を登録してください。</div>';
+  const withTarget=priceRows.filter(r=>r.at&&r.p), avgUpside=withTarget.length?withTarget.reduce((s,r)=>s+r.upside,0)/withTarget.length:null;
+  const semiCount=priceRows.filter(amSemiIsSemiconductor).length;
+  el.innerHTML=`<div style="padding:10px 16px 14px">
+    <div style="display:flex;gap:4px;background:rgba(128,128,128,.1);border-radius:9px;padding:3px;margin-bottom:9px">
+      <button onclick="amSetConditionMode('semi')" style="flex:1;border:0;border-radius:7px;padding:7px;font-size:11px;background:${amConditionMode==='semi'?'var(--accent,#185FA5)':'transparent'};color:${amConditionMode==='semi'?'#fff':'var(--text3)'};font-weight:${amConditionMode==='semi'?'700':'400'}">🧠 半導体・AI</button>
+      <button onclick="amSetConditionMode('all')" style="flex:1;border:0;border-radius:7px;padding:7px;font-size:11px;background:${amConditionMode==='all'?'var(--accent,#185FA5)':'transparent'};color:${amConditionMode==='all'?'#fff':'var(--text3)'};font-weight:${amConditionMode==='all'?'700':'400'}">📊 全保有株</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:8px">現在値・平均取得・目標価格・PER・業績を横並び比較。値は資産管理／CSVに登録されたデータを使用し、Webから株価を上書きしません。行をタップすると銘柄編集画面を開きます。</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">
+      <div style="padding:7px 9px;border-radius:8px;background:var(--bg2);font-size:10px">対象 <b>${priceRows.length}</b>銘柄</div>
+      <div style="padding:7px 9px;border-radius:8px;background:var(--bg2);font-size:10px">半導体・AI <b>${semiCount}</b>銘柄</div>
+      <div style="padding:7px 9px;border-radius:8px;background:var(--bg2);font-size:10px">目標株価登録 <b>${withTarget.length}</b>銘柄</div>
+      <div style="padding:7px 9px;border-radius:8px;background:var(--bg2);font-size:10px">目標上昇余地平均 <b>${avgUpside==null?'—':amConditionPct(avgUpside)}</b></div>
+    </div>
+    ${table}
+  </div>`;
+}
+
 /* SEMICONDUCTOR PORTFOLIO: memory / non-memory */
 function amSemiNum(v){
   if(typeof v==='number') return Number.isFinite(v)?v:0;
@@ -3244,6 +3339,9 @@ function amRender(){
   amRenderSoldSection(soldAccounts);
   // ヒートマップ
   amRenderHeatmap(activeAccounts,total);
+  // 銘柄変動分析
+  try{amRenderMovementAnalysis(activeAccounts);}catch(e){console.warn('movement analysis',e);}
+  try{amRenderConditionAnalysis(activeAccounts);}catch(e){console.warn('condition analysis',e);}
 
   // PFパネルが表示中なら現状配分グラフも自動更新
   if(currentTab==='portfolio'&&typeof pfRenderDonutCharts==='function'){
@@ -3285,6 +3383,33 @@ function amIndexProxyCode(name){
 
 function amLoadDailyQuotes(){
   try{return JSON.parse(localStorage.getItem(AM_QUOTE_KEY)||'null');}catch(e){return null;}
+}
+// ヒートマップ「前回取込比」専用スナップショット。
+// 旧prevSBIAmount/prevMoomooAmountは古い値が残る可能性があるため、以後は直前CSV取込時点の
+// 評価額だけを比較元として使用する。初回移行時は現在値を保存するだけで、比較は表示しない。
+const AM_IMPORT_SNAPSHOT_PREFIX='amImportSnapshot_v1_';
+function amImportSnapshotKey(a,broker){
+  const b=String(broker||a?.broker||'').trim();
+  const code=String(a?.code||'').trim().toUpperCase();
+  const name=String(a?.name||'').trim();
+  const nisa=String(a?.nisaType||'none').trim();
+  return b+'|'+(code||name)+'|'+nisa;
+}
+function amLoadImportSnapshot(broker){
+  try{return JSON.parse(localStorage.getItem(AM_IMPORT_SNAPSHOT_PREFIX+broker)||'null');}catch(e){return null;}
+}
+function amCaptureImportSnapshot(broker,accounts){
+  const snap={ts:new Date().toISOString(),items:{}};
+  (accounts||[]).filter(a=>!a.sold&&Number(a.amount||0)>0&&String(a.broker||'')===broker).forEach(a=>{
+    snap.items[amImportSnapshotKey(a,broker)]={amount:Number(a.amount||0),name:amLotBaseName(a.name),code:String(a.code||'')};
+  });
+  try{localStorage.setItem(AM_IMPORT_SNAPSHOT_PREFIX+broker,JSON.stringify(snap));}catch(e){}
+  return snap;
+}
+function amEnsureImportSnapshot(broker,accounts){
+  const cur=amLoadImportSnapshot(broker);
+  if(cur&&cur.items&&Object.keys(cur.items).length)return cur;
+  return amCaptureImportSnapshot(broker,accounts);
 }
 function amSetHeatmapMode(m){
   // 株価のWeb自動取得は停止。ヒートマップはCSV取込値のみを正とする。
@@ -3571,6 +3696,87 @@ const AM_HM_SECTIONS=[
   {key:'combined',title:'🔗 株式＋インデックス 合算',cats:AM_HM_STOCK_CATS},
 ];
 
+// ── 銘柄変動分析 ──
+let amMovementMode=localStorage.getItem('amMovementMode')||'daily';
+function amSetMovementMode(m){
+  if(!['daily','import','pnl'].includes(m))m='daily';
+  amMovementMode=m;
+  try{localStorage.setItem('amMovementMode',m);}catch(e){}
+  try{amRenderMovementAnalysis(amAccounts.filter(a=>!a.sold));}catch(e){}
+}
+function amMovementEscape(v){return typeof esc==='function'?esc(String(v??'')):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));}
+function amMovementPctColor(v){return v>0?'var(--green)':v<0?'var(--danger)':'var(--text2)';}
+function amMovementRows(accounts){
+  const INVEST=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
+  const groups={};
+  (accounts||[]).filter(a=>!a.sold&&Number(a.amount||0)>0&&INVEST.includes(a.cat)).forEach(a=>{
+    const k=amLotKey(a);
+    if(!groups[k])groups[k]={name:amLotBaseName(a.name),amount:0,shares:0,rows:[],ids:[]};
+    groups[k].amount+=Number(a.amount||0);groups[k].shares+=Number(a.shares||0);groups[k].rows.push(a);groups[k].ids.push(a.id);
+  });
+  const snaps={'SBI証券':amEnsureImportSnapshot('SBI証券',accounts),'moomoo証券':amEnsureImportSnapshot('moomoo証券',accounts)};
+  return Object.values(groups).map(g=>{
+    let prev=0,base=0,pnl=0,prevClose=0,price=0,priceWeight=0;
+    g.rows.forEach(a=>{
+      const broker=String(a.broker||'SBI証券').trim()||'SBI証券';
+      const snap=snaps[broker];
+      const sv=snap?.items?.[amImportSnapshotKey(a,broker)];
+      if(sv&&Number(sv.amount)>0)prev+=Number(sv.amount);
+      const c=Number(a.costPrice||0),sh=Number(a.shares||0);
+      if(c>0&&sh>0){base+=c*sh*(a.priceCurrency&&a.priceCurrency!=='JPY'?Number(a.fxRate||1):1);}
+      if(Number.isFinite(Number(a.amount)))pnl+=Number(a.amount||0)-(c>0&&sh>0?c*sh*(a.priceCurrency&&a.priceCurrency!=='JPY'?Number(a.fxRate||1):1):0);
+      const pr=Number(a.price||a.marketPrice||0);
+      const csvPrev=(String(a.marketSource||'').includes('CSV')?Number(a.prevClose||0):0);
+      if(pr>0&&csvPrev>0){price+=pr*Number(a.shares||0);priceWeight+=Number(a.shares||0);prevClose+=csvPrev*Number(a.shares||0);}
+    });
+    const importPct=prev>0?(g.amount-prev)/prev*100:null;
+    const dailyPct=prevClose>0&&priceWeight>0?(price/prevClose-1)*100:null;
+    const pnlPct=base>0?pnl/base*100:null;
+    return {...g,importPct,dailyPct,pnlPct,pnl,base,prev};
+  }).filter(g=>g.amount>0);
+}
+function amRenderMovementAnalysis(accounts){
+  const el=document.getElementById('amMovementPanel');if(!el)return;
+  const rows=amMovementRows(accounts);
+  const mode=amMovementMode;
+  const metric=mode==='daily'?'dailyPct':mode==='import'?'importPct':'pnlPct';
+  const label=mode==='daily'?'今日':mode==='import'?'前回取込':'含み損益';
+  const valid=rows.filter(r=>r[metric]!=null&&Number.isFinite(r[metric]));
+  const rises=[...valid].sort((a,b)=>b[metric]-a[metric]).slice(0,5);
+  const falls=[...valid].sort((a,b)=>a[metric]-b[metric]).slice(0,5);
+  const pnlRows=rows.filter(r=>r.pnlPct!=null&&Number.isFinite(r.pnlPct));
+  const pnlTop=[...pnlRows].sort((a,b)=>b.pnlPct-a.pnlPct).slice(0,5);
+  const pnlBottom=[...pnlRows].sort((a,b)=>a.pnlPct-b.pnlPct).slice(0,5);
+  const fmtPct=v=>v==null?'—':`${v>=0?'+':''}${v.toFixed(2)}%`;
+  const rowHtml=(r,kind)=>{
+    const v=r[metric];
+    const color=amMovementPctColor(v);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="openEditModal(${Number(r.ids[0])})">
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${amMovementEscape(r.name)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">¥${fmt(Math.round(r.amount))}</div></div>
+      <div style="font-size:12px;font-weight:800;color:${color};min-width:66px;text-align:right">${fmtPct(v)}</div>
+    </div>`;
+  };
+  const pnlHtml=(r)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="openEditModal(${Number(r.ids[0])})"><div style="flex:1;min-width:0;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${amMovementEscape(r.name)}</div><div style="font-size:11px;font-weight:800;color:${amMovementPctColor(r.pnlPct)}">${fmtPct(r.pnlPct)}</div></div>`;
+  const list=(title,arr,fn)=>`<div style="flex:1;min-width:230px"><div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:3px">${title}</div>${arr.length?arr.map(fn).join(''):'<div style="font-size:11px;color:var(--text3);padding:8px 0">比較データなし</div>'}</div>`;
+  el.innerHTML=`<div style="padding:10px 16px 14px">
+    <div style="display:flex;gap:4px;background:rgba(128,128,128,.1);border-radius:9px;padding:3px;margin-bottom:10px">
+      ${[['daily','今日'],['import','前回取込'],['pnl','含み損益']].map(([k,t])=>`<button onclick="amSetMovementMode('${k}')" style="flex:1;border:none;border-radius:7px;padding:6px 4px;font-size:11px;font-family:inherit;cursor:pointer;background:${mode===k?'var(--accent,#185FA5)':'transparent'};color:${mode===k?'#fff':'var(--text3)'};font-weight:${mode===k?'700':'400'}">${t}</button>`).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:9px">${mode==='daily'?'CSV等で保存された前日終値がある銘柄のみ。Web自動取得値は使いません。':mode==='import'?'直前CSV取込時の評価額との比較。新規銘柄は「—」。':'平均取得価額ベースの含み損益率。'}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      ${list(`📈 ${label} 上昇`,rises,rowHtml)}
+      ${list(`📉 ${label} 下落`,falls,rowHtml)}
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:0.5px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">💰 含み益率の大きい銘柄 / 含み損率の大きい銘柄</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${list('含み益率 TOP5',pnlTop,pnlHtml)}
+        ${list('含み損率 TOP5',pnlBottom,pnlHtml)}
+      </div>
+    </div>
+  </div>`;
+}
+
 function amRenderHeatmap(accounts,total){
   const el=document.getElementById('amHeatmap');
   if(!el)return;
@@ -3695,25 +3901,21 @@ function amBuildHeatmapItems(accounts){
     }).filter(Boolean);
     items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
   }else{
-    // 前回比モード：SBI CSV由来のprevSBIAmountで比較。
-    // moomoo証券等SBI CSVを経由しない銘柄（prevSBIAmount未設定）は、
-    // 株価キャッシュ（当日/月間/年間モードで取得済みの前日終値）があればそちらで代替する。
-    const q=amLoadDailyQuotes();
+    // 前回比モード：各証券会社の「直前CSV取込時点」のスナップショットだけで比較。
+    // 旧prevSBIAmount/prevMoomooAmountは使用しないため、古い値による誤った騰落率を防止する。
+    const snapshots={
+      'moomoo証券':amEnsureImportSnapshot('moomoo証券',accounts),
+      'SBI証券':amEnsureImportSnapshot('SBI証券',accounts)
+    };
     const entries=accounts.filter(a=>a.amount>0).map(a=>{
-      // SBI/moomooそれぞれのCSV取込時に保存した前回評価額を使用。
-      const isMoomoo=String(a.broker||'')==='moomoo証券';
-      const prev=isMoomoo?Number(a.prevMoomooAmount||0):Number(a.prevSBIAmount||0);
-      if(prev>0&&a.amount>0){
-        // 前回CSV比較は「同じ証券会社・同じ銘柄」の評価額だけを比較。
-        // 極端な差は旧データ/口座統合ミスの可能性があるため色付けせず「—」とする。
+      const broker=String(a.broker||'SBI証券').trim()||'SBI証券';
+      const snap=snapshots[broker];
+      const prev=snap?.items?.[amImportSnapshotKey(a,broker)]?.amount||0;
+      if(prev>0){
         const pct=(a.amount-prev)/prev*100;
-        if(Math.abs(pct)>50){
-          return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:null,base:0,pct:null,id:a.id};
-        }
-        return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-prev,base:prev,pct:pct,id:a.id};
+        return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:a.amount-prev,base:prev,pct,id:a.id};
       }
-      // 初回CSV取込など、前回評価額が存在しない銘柄も消さない。
-      // 「前回比」は表示できないが、保有銘柄として面積には反映する。
+      // 直前CSVに存在しなかった新規銘柄は「—」だが、面積には残す。
       return{key:amLotKey(a),name:amLotBaseName(a.name),amount:a.amount,gain:null,base:0,pct:null,id:a.id};
     }).filter(Boolean);
     items=amMergeLots(entries).sort((a,b)=>b.amount-a.amount);
@@ -5327,7 +5529,7 @@ function amParseMoomooCSV(text){
   }
   const headers=parseLine(lines[0]).map(x=>x.replace(/^\uFEFF/,'').trim());
   const idx=n=>headers.findIndex(h=>h===n);
-  const ci={code:idx('コード'),name:idx('銘柄名'),acct:idx('口座区分'),shares:idx('数量'),price:idx('現在値'),cost:idx('平均取得価額'),value:idx('評価額'),pnlPct:idx('評価損益率'),pnl:idx('損益合計'),currency:idx('通貨')};
+  const ci={code:idx('コード'),name:idx('銘柄名'),acct:idx('口座区分'),shares:idx('数量'),price:idx('現在値'),cost:idx('平均取得価額'),value:idx('評価額'),pnlPct:idx('評価損益率'),pnl:idx('損益合計'),currency:idx('通貨'),daily:idx('前日比')};
   if(ci.code<0||ci.name<0||ci.shares<0||ci.price<0||ci.cost<0||ci.value<0)return [];
   const num=v=>{const x=parseFloat(String(v??'').replace(/[,，]/g,'').replace(/[%＋+]/g,''));return Number.isFinite(x)?x:0;};
   return lines.slice(1).map(line=>{
@@ -5336,7 +5538,7 @@ function amParseMoomooCSV(text){
     const acct=String(c[ci.acct]||'特定').trim();
     const shares=num(c[ci.shares]),price=num(c[ci.price]),cost=num(c[ci.cost]),value=num(c[ci.value]);
     if(!code||!name||shares<=0||value<=0)return null;
-    return{code,name,acct,shares,price,cost,value,currency,pnlPct:num(c[ci.pnlPct]),pnl:num(c[ci.pnl])};
+    const dailyPct=ci.daily>=0?num(c[ci.daily]):0; return{code,name,acct,shares,price,cost,value,currency,pnlPct:num(c[ci.pnlPct]),pnl:num(c[ci.pnl]),dailyPct};
   }).filter(Boolean);
 }
 
@@ -5356,6 +5558,8 @@ async function amMoomooImport(event){
   const totalBefore=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+Number(a.amount||0),0);
   const seen=new Set();
   const normCode=v=>String(v||'').replace(/[^0-9A-Za-z.]/g,'').toUpperCase();
+  // 直前moomoo CSVの状態を比較元として固定してから今回CSVを反映する。
+  amCaptureImportSnapshot('moomoo証券',amAccounts);
   const normName=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase();
 
   rows.forEach(row=>{
@@ -5379,10 +5583,10 @@ async function amMoomooImport(event){
     if(existing){
       const old=Number(existing.amount||0);
       existing.prevMoomooAmount=old;
-      existing.amount=jpyValue;existing.shares=row.shares;existing.price=row.price;existing.costPrice=row.cost;existing.fxRate=fx||existing.fxRate||0;existing.code=row.code;existing.broker='moomoo証券';existing.updated=today;existing.marketPrice=row.price;existing.priceCurrency=row.currency;existing.marketUpdated=new Date().toISOString();existing.marketSource='moomoo CSV';existing.marketError='';existing.note=String(existing.note||'').replace(/\s*\[moomoo.*?\]$/,'')+` [moomoo ${today}]`;updated++;log.push({name:existing.name,val:jpyValue,oldVal:old});
+      existing.amount=jpyValue;existing.shares=row.shares;existing.price=row.price;existing.costPrice=row.cost;existing.fxRate=fx||existing.fxRate||0;existing.code=row.code;existing.broker='moomoo証券';existing.updated=today;existing.marketPrice=row.price;existing.priceCurrency=row.currency;existing.marketUpdated=new Date().toISOString();existing.marketSource='moomoo CSV';existing.marketError='';existing.prevClose=(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):existing.prevClose||0;existing.note=String(existing.note||'').replace(/\s*\[moomoo.*?\]$/,'')+` [moomoo ${today}]`;updated++;log.push({name:existing.name,val:jpyValue,oldVal:old});
     }else{
       const maxId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0);
-      const newAcc={id:maxId+added+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:fx||undefined,sold:false,nisaType:'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:''};
+      const newAcc={id:maxId+added+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:fx||undefined,sold:false,nisaType:'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',prevClose:(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):0};
       amAccounts.push(newAcc);added++;log.push({name:row.name,val:jpyValue,oldVal:0});
     }
   });
@@ -5429,7 +5633,7 @@ function amSBIImport(event){
       }
       pending--;
       if(pending===0){
-        if(allRows.length)amApplySBIRows(allRows);
+        if(allRows.length)amCaptureImportSnapshot('SBI証券',amAccounts),amApplySBIRows(allRows);
         if(fxRows.length)fxApplyHistoryRows(fxRows);
         if(!allRows.length&&!fxRows.length)showToast('⚠️ 有効な行が見つかりませんでした',3000);
       }
