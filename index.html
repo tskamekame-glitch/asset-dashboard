@@ -1889,6 +1889,24 @@ function ruleCurrentPrice(r){
       <div id="latest-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
     </div>
 
+    <!-- 市場データ自動更新 -->
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📡 市場データ自動更新</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">Yahoo Financeの公開チャートAPIから現在値・前日終値を取得します。取得した値は資産管理に保存し、更新日時と取得元を記録します。PER・PBR・業績・アナリスト目標株価などのファンダメンタルズは既存の分析入力欄で管理します。</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+        <button class="btn-sm" type="button" onclick="marketSyncAll()">🔄 全銘柄を更新</button>
+        <button class="btn-sm" type="button" onclick="marketSyncSelected()">選択銘柄を更新</button>
+        <button class="btn-sm" type="button" onclick="marketSyncClearStatus()">履歴をリセット</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
+        <label style="font-size:10px;color:var(--text3)">対象銘柄<select id="market-ticker" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></select></label>
+        <label style="font-size:10px;color:var(--text3)">更新間隔（分）<input id="market-interval" type="number" min="1" max="1440" step="1" value="30" onchange="marketSaveSettings()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
+      </div>
+      <div id="market-summary" style="font-size:12px;margin-bottom:8px"></div>
+      <div id="market-list"></div>
+      <div id="market-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
+    </div>
+
     <!-- 利益確定シミュレーター -->
     <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
       <div style="font-size:15px;font-weight:700;margin-bottom:4px">💰 利益確定シミュレーター</div>
@@ -6271,13 +6289,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AN${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AN1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AU${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AU1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -6366,7 +6384,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AN1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AU1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>({
       id:parseInt(r[0])||Date.now(),
@@ -6409,6 +6427,12 @@ async function amLoadFromSheet(){
       opProfitGrowth:r[37]!==undefined&&r[37]!==''?parseFloat(r[37])||0:undefined,
       lastAnalysisDate:r[38]||'',
       analysisSource:r[39]||'',
+      marketUpdated:r[40]||'',
+      marketSource:r[41]||'',
+      prevClose:r[42]?parseFloat(r[42])||0:0,
+      priceCurrency:r[43]||'',
+      marketError:r[44]||'',
+      marketPrice:r[45]?parseFloat(r[45])||0:0,
     }));
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
@@ -16303,6 +16327,90 @@ function bc2Render(){
   const baseAm=window.amRender;
   if(typeof baseAm==='function'&&!window.__bc2AmWrapped){window.__bc2AmWrapped=true;window.amRender=function(){const r=baseAm.apply(this,arguments);try{bc2Render();}catch(e){}return r;};}
 })();
+
+// ============================================================
+// 市場データ自動更新：Yahoo Finance公開チャートAPI
+// ============================================================
+const MARKET_SETTINGS_KEY='marketDataSettingsV1';
+function marketEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function marketNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function marketTicker(a){
+  const raw=String(a.code||a.ticker||a.symbol||'').trim();
+  if(!raw)return '';
+  if(/^\d{4}$/.test(raw))return raw+'.T';
+  if(/^\d{6}$/.test(raw))return raw+'.KS';
+  return raw;
+}
+function marketDisplayCode(a){return String(a.code||a.ticker||a.symbol||'').trim();}
+function marketRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[];
+  const map={};
+  src.filter(a=>!a.sold && (Number(a.amount||0)>0||Number(a.shares||0)>0||a.code)).forEach(a=>{
+    const c=marketDisplayCode(a); if(!c)return;
+    if(!map[c])map[c]={...a};
+    else {map[c].amount+=marketNum(a.amount); if(marketNum(a.price)>marketNum(map[c].price))map[c].price=a.price;}
+  });
+  return Object.values(map);
+}
+function marketLoadSettings(){try{return JSON.parse(localStorage.getItem(MARKET_SETTINGS_KEY)||'{}')}catch(e){return {}}}
+function marketSaveSettings(){
+  const x=marketLoadSettings();x.interval=Math.max(1,Math.min(1440,marketNum(document.getElementById('market-interval')?.value)||30));localStorage.setItem(MARKET_SETTINGS_KEY,JSON.stringify(x));marketRender();
+}
+function marketFmt(n){return n>0?Number(n).toLocaleString('ja-JP',{maximumFractionDigits:4}):'—';}
+function marketAge(d){if(!d)return null;const x=new Date(d),t=new Date();return Math.floor((t-x)/60000);}
+async function marketFetchQuote(a){
+  const symbol=marketTicker(a); if(!symbol)throw new Error('tickerなし');
+  const url='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?range=1d&interval=1m&events=history';
+  const res=await fetch(url,{cache:'no-store'}); if(!res.ok)throw new Error('HTTP '+res.status);
+  const j=await res.json(); const r=j?.chart?.result?.[0]; if(!r)throw new Error('データなし');
+  const meta=r.meta||{}; const closes=r.indicators?.quote?.[0]?.close||[]; let price=marketNum(meta.regularMarketPrice);
+  if(!price){for(let i=closes.length-1;i>=0;i--){if(marketNum(closes[i])>0){price=marketNum(closes[i]);break;}}}
+  if(!price)throw new Error('現在値なし');
+  const prev=marketNum(meta.previousClose||meta.chartPreviousClose); const currency=meta.currency||'';
+  return {price,prev,currency,symbol};
+}
+async function marketUpdateOne(id){
+  const a=amAccounts.find(x=>String(x.id)===String(id)); if(!a)return false;
+  try{
+    const q=await marketFetchQuote(a); const now=new Date().toISOString();
+    a.price=q.price;a.marketPrice=q.price;a.prevClose=q.prev;a.priceCurrency=q.currency;a.marketUpdated=now;a.marketSource='Yahoo Finance Chart API';a.marketError='';a.updated=todayStr();
+    return true;
+  }catch(e){a.marketError=String(e?.message||e);a.marketUpdated=new Date().toISOString();a.marketSource='Yahoo Finance Chart API';return false;}
+}
+async function marketSyncSelected(){
+  const code=document.getElementById('market-ticker')?.value;const a=marketRows().find(x=>marketDisplayCode(x)===code);if(!a){showToast('⚠ 対象銘柄がありません');return;}
+  setSyncStatus('syncing','市場データ更新中...');const ok=await marketUpdateOne(a.id);amSaveToLocal();try{await amSaveToSheet();}catch(e){};marketRender();latestInfoRender();try{amRender();}catch(e){};showToast(ok?'✓ 現在値を更新しました':'⚠ 取得できませんでした');
+}
+async function marketSyncAll(){
+  const rows=marketRows();if(!rows.length){showToast('⚠ 更新対象がありません');return;}
+  setSyncStatus('syncing','市場データ更新中...');let ok=0;
+  for(const a of rows){if(await marketUpdateOne(a.id))ok++;await new Promise(r=>setTimeout(r,180));}
+  amSaveToLocal();try{await amSaveToSheet();}catch(e){};marketRender();latestInfoRender();try{amRender();}catch(e){};showToast('✓ '+ok+'/'+rows.length+'銘柄を更新しました');
+}
+function marketSyncClearStatus(){
+  marketRows().forEach(x=>{const a=amAccounts.find(a=>String(a.id)===String(x.id));if(a){a.marketUpdated='';a.marketSource='';a.marketError='';}});amSaveToLocal();try{amSaveToSheet();}catch(e){}marketRender();showToast('✓ 市場データ更新履歴をリセットしました');
+}
+function marketRender(){
+  const list=document.getElementById('market-list'),sum=document.getElementById('market-summary'),note=document.getElementById('market-note'),sel=document.getElementById('market-ticker');if(!list||!sum)return;
+  const rows=marketRows();const settings=marketLoadSettings();if(document.getElementById('market-interval'))document.getElementById('market-interval').value=settings.interval||30;
+  if(sel){const cur=sel.value;sel.innerHTML=rows.map(a=>`<option value="${marketEsc(marketDisplayCode(a))}">${marketEsc(marketDisplayCode(a))} ${marketEsc(a.name||'')}</option>`).join('');if(rows.some(a=>marketDisplayCode(a)===cur))sel.value=cur;}
+  const fresh=rows.filter(a=>{const m=marketAge(a.marketUpdated);return m!==null&&m<=(settings.interval||30)*1.5;}).length;
+  const failed=rows.filter(a=>a.marketError).length;
+  sum.innerHTML=`<b>${rows.length}銘柄</b> ／ 更新済み ${fresh} ／ エラー ${failed} ／ 最終更新基準 ${settings.interval||30}分`;
+  list.innerHTML=`<div style="overflow:auto"><table style="width:100%;min-width:780px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">銘柄</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">現在値</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">前日終値</th><th style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">前日比</th><th style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">更新</th><th style="text-align:left;padding:7px 5px;border-bottom:1px solid var(--border)">状態</th></tr></thead><tbody>${rows.map(a=>{
+    const p=marketNum(a.price),prev=marketNum(a.prevClose),chg=prev?(p/prev-1)*100:null,age=marketAge(a.marketUpdated),err=a.marketError;
+    return `<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>${marketEsc(marketDisplayCode(a)||'—')}</b><div style="color:var(--text3)">${marketEsc(a.name||'')}</div></td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${marketFmt(p)} ${marketEsc(a.priceCurrency||'')}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border)">${marketFmt(prev)}</td><td style="text-align:right;padding:7px 5px;border-bottom:1px solid var(--border);color:${chg>0?'var(--green)':chg<0?'var(--accent)':'var(--text2)'}">${chg===null?'—':(chg>0?'+':'')+chg.toFixed(2)+'%'}</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)"><button class="btn-sm" type="button" onclick="marketUpdateOne('${String(a.id).replace(/'/g,'')}').then(()=>{amSaveToLocal();try{amSaveToSheet()}catch(e){}marketRender();latestInfoRender();try{amRender()}catch(e){}})">更新</button></td><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap">${err?'<span style="color:var(--accent)">⚠ '+marketEsc(err)+'</span>':(age===null?'未更新':('✓ '+age+'分前'))}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  note.textContent='自動取得対象は現在値・前日終値です。Yahoo Financeの公開チャートAPIを利用するため、通信制限・銘柄コード差異などで取得できない場合があります。PER・PBR・業績・目標株価は既存の分析データを使用し、更新日時を別管理します。';
+}
+let marketAutoTimer=null;
+function marketStartAuto(){
+  if(marketAutoTimer)clearInterval(marketAutoTimer);
+  const mins=Math.max(1,Math.min(1440,marketNum(marketLoadSettings().interval)||30));
+  marketAutoTimer=setInterval(()=>{if(document.visibilityState==='visible'){marketSyncAll();}},mins*60000);
+}
+setTimeout(()=>{try{marketRender()}catch(e){};marketStartAuto();},900);
+(function(){const base=window.amRender;if(typeof base==='function'&&!window.__marketAmWrapped){window.__marketAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{marketRender()}catch(e){}return r;};}})();
 
 // ============================================================
 // 最新情報確認パネル：分析データの鮮度と外部確認先を表示
