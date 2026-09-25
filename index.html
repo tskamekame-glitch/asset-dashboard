@@ -809,11 +809,13 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div id="reminderBanner"></div>
     <div id="soldSummaryBanner"></div>
     <div id="totalCard"></div>
+    <div id="dailyPnlPanel"></div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" onclick="triggerImport()">↑ CSV読み込み</button>
       <button class="btn-sm" style="color:#e6931a;border-color:#e6931a;font-weight:600" onclick="document.getElementById('amSBIInput').click()">📥 SBI読込</button>
+      <button class="btn-sm" style="color:#FF6A13;border-color:#FF6A13;font-weight:600" onclick="document.getElementById('amMoomooInput').click()">📥 moomoo読込</button>
       <button class="btn-sm" onclick="amFetchAllForeignQuotes()" style="color:#2980b9;border-color:#2980b9;font-weight:600" title="保有中の外国株式（ティッカー登録済み）の株価とドル円レートを一括取得">🌐 外国株更新</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
@@ -823,6 +825,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="btn-sm" onclick="amMigrateConfirmedContribution()" style="color:#0F6E56;border-color:#0F6E56" title="確定拠出年金口座を残高入力方式に変換">🔄 DC年金データ移行</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
       <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
+      <input type="file" id="amMoomooInput" accept=".csv" multiple style="display:none" onchange="amMoomooImport(event)">
     </div>
     <div class="section" id="chartSection">
       <div class="section-head" onclick="toggleSection('chartSection')">
@@ -1891,8 +1894,8 @@ function ruleCurrentPrice(r){
 
     <!-- 市場データ自動更新 -->
     <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📡 市場データ自動更新</div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">Yahoo Financeの公開チャートAPIから現在値・前日終値を取得します。取得した値は資産管理に保存し、更新日時と取得元を記録します。PER・PBR・業績・アナリスト目標株価などのファンダメンタルズは既存の分析入力欄で管理します。</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📡 市場データ更新（自動取得停止）</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">現在値の自動取得は停止しています。保有株価はSBI証券CSV・moomoo証券CSVの取込値を正として反映します。必要な場合のみ下の手動更新ボタンを使用してください。PER・PBR・業績・アナリスト目標株価などのファンダメンタルズは既存の分析入力欄で管理します。</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
         <button class="btn-sm" type="button" onclick="marketSyncAll()">🔄 全銘柄を更新</button>
         <button class="btn-sm" type="button" onclick="marketSyncSelected()">選択銘柄を更新</button>
@@ -3195,6 +3198,7 @@ function amRender(){
   amRenderSoldBanner(soldAccounts);
 
   document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}口座${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
+  try{dailyPnlRender();}catch(e){}
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
   const maxAmt=Math.max(...Object.values(cats),1);
   const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
@@ -5319,6 +5323,103 @@ async function amInlineSaveFx(id){
   showToast('✓ 更新しました');
 }
 function amSaveToLocal(){try{localStorage.setItem('assetAccounts',JSON.stringify(amAccounts));}catch(e){}}
+
+// ============================================================
+// moomoo証券「保有銘柄-現物口座」CSV取込
+// 例: GOOGL / MU / NVDA / SNDK、評価額はCSV記載通貨建て。
+// 資産管理では円換算額を保存し、broker=moomoo証券としてSBIと分離管理する。
+// ============================================================
+function amParseMoomooCSV(text){
+  text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=text.split('\n').filter(l=>l.trim());
+  if(!lines.length)return [];
+  function parseLine(line){
+    const out=[];let cur='',q=false;
+    for(const ch of line){
+      if(ch==='"'){q=!q;continue;}
+      if(ch===','&&!q){out.push(cur.trim());cur='';continue;}
+      cur+=ch;
+    }
+    out.push(cur.trim());return out;
+  }
+  const headers=parseLine(lines[0]).map(x=>x.replace(/^\uFEFF/,'').trim());
+  const idx=n=>headers.findIndex(h=>h===n);
+  const ci={code:idx('コード'),name:idx('銘柄名'),acct:idx('口座区分'),shares:idx('数量'),price:idx('現在値'),cost:idx('平均取得価額'),value:idx('評価額'),pnlPct:idx('評価損益率'),pnl:idx('損益合計'),currency:idx('通貨')};
+  if(ci.code<0||ci.name<0||ci.shares<0||ci.price<0||ci.cost<0||ci.value<0)return [];
+  const num=v=>{const x=parseFloat(String(v??'').replace(/[,，]/g,'').replace(/[%＋+]/g,''));return Number.isFinite(x)?x:0;};
+  return lines.slice(1).map(line=>{
+    const c=parseLine(line);const currency=String(c[ci.currency]||'USD').trim().toUpperCase();
+    const code=String(c[ci.code]||'').trim();const name=String(c[ci.name]||'').trim();
+    const acct=String(c[ci.acct]||'特定').trim();
+    const shares=num(c[ci.shares]),price=num(c[ci.price]),cost=num(c[ci.cost]),value=num(c[ci.value]);
+    if(!code||!name||shares<=0||value<=0)return null;
+    return{code,name,acct,shares,price,cost,value,currency,pnlPct:num(c[ci.pnlPct]),pnl:num(c[ci.pnl])};
+  }).filter(Boolean);
+}
+
+async function amMoomooImport(event){
+  const files=Array.from(event.target.files||[]);event.target.value='';if(!files.length)return;
+  let rows=[];
+  for(const file of files){
+    try{
+      const text=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsText(file,'UTF-8');});
+      const parsed=amParseMoomooCSV(text);rows.push(...parsed);
+    }catch(e){console.error('moomoo CSV read',e);}
+  }
+  if(!rows.length){showToast('⚠️ moomoo CSVから有効な保有銘柄を読み取れませんでした',4000);return;}
+
+  const fxDefault=(typeof amGetFxRate==='function'?Number(amGetFxRate()):0)||0;
+  let updated=0,added=0;const log=[];const today=todayStr();
+  const totalBefore=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+Number(a.amount||0),0);
+  const seen=new Set();
+  const normCode=v=>String(v||'').replace(/[^0-9A-Za-z.]/g,'').toUpperCase();
+  const normName=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase();
+
+  rows.forEach(row=>{
+    const key=normCode(row.code)+'|'+row.acct;
+    if(seen.has(key))return;seen.add(key);
+    const isUsd=row.currency==='USD';
+    const fx=isUsd?fxDefault:(row.currency==='JPY'?1:0);
+    // 円換算できない通貨は既存口座のFXレートがあればそれを利用。なければCSV評価額をそのまま保存せずスキップ。
+    let jpyValue=0;
+    if(row.currency==='JPY')jpyValue=row.value;
+    else if(fx>0)jpyValue=row.value*fx;
+    else{
+      const prior=amAccounts.find(a=>!a.sold&&String(a.broker||'')==='moomoo証券'&&normCode(a.code)===normCode(row.code));
+      const priorFx=Number(prior?.fxRate||0);
+      if(priorFx>0)jpyValue=row.value*priorFx;
+      else{log.push({name:row.name,skip:true,reason:`${row.currency}/円レート未設定`});return;}
+    }
+    jpyValue=Math.round(jpyValue);
+    const existing=amAccounts.find(a=>!a.sold&&String(a.broker||'')==='moomoo証券'&&normCode(a.code)===normCode(row.code)&&String(a.nisaType||'none')==='none');
+    const cat=(row.currency==='USD'||/^[A-Z]/.test(row.code))?'外国株式':(typeof amGuessCat==='function'?(amGuessCat(row.name)||'個別株'):'個別株');
+    if(existing){
+      const old=Number(existing.amount||0);existing.amount=jpyValue;existing.shares=row.shares;existing.price=row.price;existing.costPrice=row.cost;existing.fxRate=fx||existing.fxRate||0;existing.code=row.code;existing.broker='moomoo証券';existing.updated=today;existing.marketPrice=row.price;existing.priceCurrency=row.currency;existing.marketUpdated=new Date().toISOString();existing.marketSource='moomoo CSV';existing.marketError='';existing.note=String(existing.note||'').replace(/\s*\[moomoo.*?\]$/,'')+` [moomoo ${today}]`;updated++;log.push({name:existing.name,val:jpyValue,oldVal:old});
+    }else{
+      const maxId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0);
+      const newAcc={id:maxId+added+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:fx||undefined,sold:false,nisaType:'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:''};
+      amAccounts.push(newAcc);added++;log.push({name:row.name,val:jpyValue,oldVal:0});
+    }
+  });
+
+  if(!updated&&!added){
+    const skipped=log.filter(x=>x.skip).length;
+    showToast(skipped?`⚠️ ${skipped}件は円換算できず未反映です。USD/JPYの為替レートを設定してください。`:'ℹ️ moomooの更新対象はありませんでした',5000);return;
+  }
+  amRender();refreshHome();await amSaveToSheet();dailySnapSave();
+  const totalAfter=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+Number(a.amount||0),0);
+  const diff=totalAfter-totalBefore;
+  const skipped=log.filter(x=>x.skip).length;
+  showToast(`✅ moomoo CSV: ${updated}件更新 / ${added}件新規追加${skipped?` / ${skipped}件未反映`:''}（USDは${fxDefault?fxDefault.toFixed(2):'—'}円/USDで換算）`,6000);
+  amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,fxDefault);
+}
+
+function amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,fx){
+  const diff=totalAfter-totalBefore;const sign=diff>=0?'+':'';const col=diff>=0?'var(--green)':'var(--danger)';
+  const items=log.filter(x=>!x.skip&&x.oldVal>0&&x.val!==x.oldVal).sort((a,b)=>Math.abs(b.val-b.oldVal)-Math.abs(a.val-a.oldVal)).slice(0,6);
+  const html=`<div id="moomooDiffBanner" style="margin:8px 0 4px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden"><div style="padding:12px 14px;cursor:pointer" onclick="const x=document.getElementById('moomooDiffDetail');x.style.display=x.style.display==='none'?'block':'none'"><div style="font-size:12px;color:var(--text3)">📥 moomoo CSV取り込み完了</div><div style="font-size:18px;font-weight:800;color:${col}">${sign}${fmt(Math.round(diff))}</div><div style="font-size:11px;color:var(--text3)">総資産 ${fmt(Math.round(totalBefore))} → ${fmt(Math.round(totalAfter))} ／ 為替 ${fx?fx.toFixed(2)+'円/USD':'既存レート'}</div></div><div id="moomooDiffDetail" style="display:none;padding:4px 14px 10px">${items.length?items.map(x=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:11px"><span>${esc(x.name)}</span><span style="color:${x.val-x.oldVal>=0?'var(--green)':'var(--danger)'}">${x.val-x.oldVal>=0?'+':''}${fmt(Math.round(x.val-x.oldVal))}</span></div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">既存moomoo銘柄の評価額変化なし</div>'}</div></div>`;
+  const banner=document.getElementById('soldSummaryBanner');if(!banner)return;const old=document.getElementById('moomooDiffBanner');if(old)old.remove();banner.insertAdjacentHTML('afterend',html);setTimeout(()=>{const d=document.getElementById('moomooDiffDetail');if(d)d.style.display='block';},300);
+}
 
 function amSBIImport(event){
   const files=Array.from(event.target.files);
@@ -16360,6 +16461,48 @@ function marketSaveSettings(){
   const x=marketLoadSettings();x.interval=Math.max(1,Math.min(1440,marketNum(document.getElementById('market-interval')?.value)||30));localStorage.setItem(MARKET_SETTINGS_KEY,JSON.stringify(x));marketRender();
 }
 function marketFmt(n){return n>0?Number(n).toLocaleString('ja-JP',{maximumFractionDigits:4}):'—';}
+function dailyPnlNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+function dailyPnlRows(){
+  const src=Array.isArray(amAccounts)?amAccounts:[], map={};
+  src.filter(a=>!a.sold && Number(a.shares||0)>0 && Number(a.amount||0)>0).forEach(a=>{
+    const code=marketDisplayCode(a)||String(a.name||'');
+    if(!code)return;
+    if(!map[code])map[code]={...a,shares:0,amount:0};
+    map[code].shares+=dailyPnlNum(a.shares); map[code].amount+=dailyPnlNum(a.amount);
+    if(dailyPnlNum(a.price)>dailyPnlNum(map[code].price))map[code].price=dailyPnlNum(a.price);
+    if(!map[code].prevClose&&dailyPnlNum(a.prevClose))map[code].prevClose=dailyPnlNum(a.prevClose);
+    if(!map[code].fxRate&&dailyPnlNum(a.fxRate))map[code].fxRate=dailyPnlNum(a.fxRate);
+    if(!map[code].priceCcy&&a.priceCcy)map[code].priceCcy=a.priceCcy;
+  });
+  return Object.values(map).map(a=>{
+    const p=dailyPnlNum(a.price), prev=dailyPnlNum(a.prevClose), sh=dailyPnlNum(a.shares);
+    const ccy=String(a.priceCcy||a.priceCurrency||'JPY').toUpperCase();
+    let pnl=prev>0?(p-prev)*sh:null, pct=prev>0?(p/prev-1)*100:null, fxPnl=0, stockPnl=pnl||0;
+    let fxNow=dailyPnlNum(a.fxRate), fxPrev=dailyPnlNum(a.prevFxRate);
+    if(ccy!=='JPY' && fxNow>0 && prev>0){
+      const oldFx=fxPrev>0?fxPrev:fxNow;
+      const prevYen=prev*sh*oldFx, nowYen=p*sh*fxNow;
+      pnl=nowYen-prevYen; pct=prevYen?((nowYen/prevYen)-1)*100:null;
+      stockPnl=(p-prev)*sh*oldFx; fxPnl=nowYen-(prev*sh*oldFx);
+    }
+    return {...a,pnl, pct, stockPnl, fxPnl, ccy};
+  }).filter(a=>Number.isFinite(a.pnl));
+}
+function dailyPnlRender(){
+  const el=document.getElementById('dailyPnlPanel'); if(!el)return;
+  const rows=dailyPnlRows();
+  if(!rows.length){el.innerHTML='';return;}
+  const total=rows.reduce((s,a)=>s+a.pnl,0), base=rows.reduce((s,a)=>{const p=dailyPnlNum(a.prevClose),sh=dailyPnlNum(a.shares),fx=a.ccy==='JPY'?1:(dailyPnlNum(a.prevFxRate)||dailyPnlNum(a.fxRate)||1);return s+p*sh*fx;},0);
+  const pct=base?total/base*100:0;
+  const gains=[...rows].sort((a,b)=>b.pnl-a.pnl), sectors={};
+  rows.forEach(a=>{const sec=String(a.sector||'その他');sectors[sec]=(sectors[sec]||0)+a.pnl;});
+  const secRows=Object.entries(sectors).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const fmtPnl=v=>`${v>=0?'+':''}${Math.round(v).toLocaleString('ja-JP')}円`;
+  const color=v=>v>=0?'var(--green)':'var(--accent)';
+  const item=rows.length?gains.slice(0,6).map(a=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${marketEsc(a.name||a.code)} <span style="color:var(--text3)">${marketEsc(a.code||'')}</span></span><span style="font-weight:700;color:${color(a.pnl)};white-space:nowrap">${fmtPnl(a.pnl)}</span></div>`).join(''):'—';
+  const secHtml=secRows.map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0"><span>${marketEsc(k)}</span><span style="font-weight:700;color:${color(v)}">${fmtPnl(v)}</span></div>`).join('');
+  el.innerHTML=`<div style="margin:0 0 12px;background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--text2);font-weight:700">📈 本日の評価損益</div><div style="font-size:21px;font-weight:800;color:${color(total)};margin-top:2px">${fmtPnl(total)} <span style="font-size:12px">(${pct>=0?'+':''}${pct.toFixed(2)}%)</span></div></div><div style="font-size:10px;color:var(--text3);text-align:right">株価変動＋為替影響<br>最終更新：${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div></div><div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-top:10px"><div><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">主な増減</div>${item}</div><div><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">セクター別</div>${secHtml||'—'}</div></div><div style="font-size:9px;color:var(--text3);margin-top:8px">※市場データが取得できた銘柄のみ。米国株等は株価変動と為替変動を概算分離しています。</div></div>`;
+}
 function marketAge(d){if(!d)return null;const x=new Date(d),t=new Date();return Math.floor((t-x)/60000);}
 async function marketFetchQuote(a){
   const symbol=marketTicker(a); if(!symbol)throw new Error('tickerなし');
@@ -16376,7 +16519,7 @@ async function marketUpdateOne(id){
   const a=amAccounts.find(x=>String(x.id)===String(id)); if(!a)return false;
   try{
     const q=await marketFetchQuote(a); const now=new Date().toISOString();
-    a.price=q.price;a.marketPrice=q.price;a.prevClose=q.prev;a.priceCurrency=q.currency;a.marketUpdated=now;a.marketSource='Yahoo Finance Chart API';a.marketError='';a.updated=todayStr();
+    a.price=q.price;a.marketPrice=q.price;a.prevClose=q.prev;a.priceCurrency=q.currency;a.prevFxRate=Number(a.fxRate||0);a.marketUpdated=now;a.marketSource='Yahoo Finance Chart API';a.marketError='';a.updated=todayStr();
     return true;
   }catch(e){a.marketError=String(e?.message||e);a.marketUpdated=new Date().toISOString();a.marketSource='Yahoo Finance Chart API';return false;}
 }
@@ -16388,7 +16531,7 @@ async function marketSyncAll(){
   const rows=marketRows();if(!rows.length){showToast('⚠ 更新対象がありません');return;}
   setSyncStatus('syncing','市場データ更新中...');let ok=0;
   for(const a of rows){if(await marketUpdateOne(a.id))ok++;await new Promise(r=>setTimeout(r,180));}
-  amSaveToLocal();try{await amSaveToSheet();}catch(e){};marketRender();latestInfoRender();try{amRender();}catch(e){};showToast('✓ '+ok+'/'+rows.length+'銘柄を更新しました');
+  amSaveToLocal();try{await amSaveToSheet();}catch(e){};marketRender();latestInfoRender();try{amRender();}catch(e){};try{dailyPnlRender();}catch(e){};showToast('✓ '+ok+'/'+rows.length+'銘柄を更新しました');
 }
 function marketSyncClearStatus(){
   marketRows().forEach(x=>{const a=amAccounts.find(a=>String(a.id)===String(x.id));if(a){a.marketUpdated='';a.marketSource='';a.marketError='';}});amSaveToLocal();try{amSaveToSheet();}catch(e){}marketRender();showToast('✓ 市場データ更新履歴をリセットしました');
@@ -16424,10 +16567,11 @@ async function marketBootSync(){
     return true;
   }catch(e){return false;}
 }
-setTimeout(()=>{marketStartAuto();marketBootSync();},1200);
-[3000,7000,15000].forEach(ms=>setTimeout(()=>{
-  if(!marketBootSynced && document.visibilityState==='visible')marketBootSync();
-},ms));
+// 市場データの自動取得は停止。現在値はSBI/moomooのCSV取込を正とし、手動更新ボタンのみ利用します。
+// 以前の自動タイマーが残っている場合も停止。
+if(marketAutoTimer)clearInterval(marketAutoTimer);
+marketAutoTimer=null;
+marketBootSynced=true;
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__marketAmWrapped){window.__marketAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{marketRender()}catch(e){}return r;};}})();
 
 // ============================================================
