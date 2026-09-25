@@ -16409,7 +16409,7 @@ function marketStartAuto(){
   const mins=Math.max(1,Math.min(1440,marketNum(marketLoadSettings().interval)||30));
   marketAutoTimer=setInterval(()=>{if(document.visibilityState==='visible'){marketSyncAll();}},mins*60000);
 }
-setTimeout(()=>{try{marketRender()}catch(e){};marketStartAuto();},900);
+setTimeout(()=>{try{marketRender()}catch(e){};marketStartAuto();try{if(marketRows().length)marketSyncAll();}catch(e){}},1200);
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__marketAmWrapped){window.__marketAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{marketRender()}catch(e){}return r;};}})();
 
 // ============================================================
