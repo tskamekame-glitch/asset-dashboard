@@ -16335,9 +16335,12 @@ const MARKET_SETTINGS_KEY='marketDataSettingsV1';
 function marketEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function marketNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
 function marketTicker(a){
-  const raw=String(a.code||a.ticker||a.symbol||'').trim();
+  let raw=String(a.marketSymbol||a.code||a.ticker||a.symbol||'').trim().toUpperCase();
   if(!raw)return '';
+  // 日本株：4桁コード、または既に .T が付いているコード
   if(/^\d{4}$/.test(raw))return raw+'.T';
+  if(/^\d{4}\.T$/.test(raw))return raw;
+  // 韓国株：6桁コードはKOSPIとして扱う（必要なら .KQ を marketSymbol で指定可能）
   if(/^\d{6}$/.test(raw))return raw+'.KS';
   return raw;
 }
@@ -16409,7 +16412,22 @@ function marketStartAuto(){
   const mins=Math.max(1,Math.min(1440,marketNum(marketLoadSettings().interval)||30));
   marketAutoTimer=setInterval(()=>{if(document.visibilityState==='visible'){marketSyncAll();}},mins*60000);
 }
-setTimeout(()=>{try{marketRender()}catch(e){};marketStartAuto();try{if(marketRows().length)marketSyncAll();}catch(e){}},1200);
+// ページ起動直後のデータ読込タイミング差を吸収して、日本株・米国株を確実に初回更新する
+let marketBootSynced=false;
+async function marketBootSync(){
+  try{
+    marketRender();
+    const rows=marketRows();
+    if(!rows.length)return false;
+    await marketSyncAll();
+    marketBootSynced=true;
+    return true;
+  }catch(e){return false;}
+}
+setTimeout(()=>{marketStartAuto();marketBootSync();},1200);
+[3000,7000,15000].forEach(ms=>setTimeout(()=>{
+  if(!marketBootSynced && document.visibilityState==='visible')marketBootSync();
+},ms));
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__marketAmWrapped){window.__marketAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{marketRender()}catch(e){}return r;};}})();
 
 // ============================================================
