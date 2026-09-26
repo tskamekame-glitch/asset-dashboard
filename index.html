@@ -795,6 +795,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 <div class="panel" id="tab-opscenter">
   <div class="panel-head"><div><div class="panel-title">🧭 投資運用センター</div><div class="panel-sub">今日確認すべき資産・銘柄・資金・リスク・Side-FIREを1画面に集約</div></div><button class="icon-btn" onclick="opsRender()">↻ 更新</button></div>
   <div id="ops-summary" class="kpi-grid"></div>
+  <div id="sbiSyncAudit" style="margin-top:10px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;display:none"></div>
   <div class="section-title" style="margin-top:18px">🔎 今日確認すべき銘柄</div>
   <div class="card" id="ops-actions" style="padding:0;overflow:hidden"></div>
   <div class="grid2" style="margin-top:14px">
@@ -7121,14 +7122,9 @@ async function importCSV(e){
         const codeN=normCode(g.code);
         const nameN=normName(g.name);
         // 同一コード＋NISA区分を最優先。投信は名称＋NISA区分。
-        let candidates=amAccounts.filter(a=>!a.sold && (codeN ? normCode(a.code)===codeN : normName(a.name)===nameN));
-        if(nisa){
-          const exact=candidates.filter(a=>String(a.nisaType||'')===nisa);
-          if(exact.length)candidates=exact;
-        }
-        // SBI取込行を優先。既存の手入力行を消さず、可能ならそれを更新する。
-        candidates.sort((a,b)=>(String(b.broker||'')==='SBI証券'?1:0)-(String(a.broker||'')==='SBI証券'?1:0));
-        let acc=candidates[0];
+        let candidates=amAccounts.filter(a=>!a.sold && String(a.broker||'')==='SBI証券' && (codeN ? normCode(a.code)===codeN : normName(a.name)===nameN));
+       if(nisa){ const exact=candidates.filter(a=>String(a.nisaType||'')===nisa); if(exact.length)candidates=exact; }
+       let acc=candidates[0];
         // 過去のSBI専用取込で同一銘柄が複数生成されている場合は、SBI印の重複だけ整理する。
         // 手入力・他社ブローカーの行は残す。
         if(candidates.length>1){
@@ -7164,7 +7160,7 @@ async function importCSV(e){
       try{await amSaveToSheet();}catch(_e){console.warn('[SBI exact] sheet save failed',_e);}
       const after=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
       const csvTotal=exactRows.reduce((a,r)=>a+r.evalAmt,0);
-      const bankNow=amAccounts.filter(a=>!a.sold&&a.cat==='銀行').reduce((s,a)=>s+Number(a.amount||0),0); const moomooNow=amAccounts.filter(a=>!a.sold&&String(a.broker||'')==='moomoo証券').reduce((s,a)=>s+Number(a.amount||0),0); const totalNow=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+Number(a.amount||0),0); showToast(`✅ SBI同期完了：${added}件追加・${updated}件更新 / SBI CSV ¥${Math.round(csvTotal).toLocaleString()} / 現在総資産 ¥${Math.round(totalNow).toLocaleString()}（SBI銀行 ¥${Math.round(bankNow).toLocaleString()}・moomoo ¥${Math.round(moomooNow).toLocaleString()}・その他含む）`,9000);
+       const activeNow=amAccounts.filter(a=>!a.sold); const bankNow=activeNow.filter(a=>a.cat==='銀行').reduce((s,a)=>s+Number(a.amount||0),0); const sbiSecNow=activeNow.filter(a=>String(a.broker||'')==='SBI証券'&&a.cat!=='銀行').reduce((s,a)=>s+Number(a.amount||0),0); const moomooNow=activeNow.filter(a=>String(a.broker||'')==='moomoo証券').reduce((s,a)=>s+Number(a.amount||0),0); const otherNow=activeNow.filter(a=>String(a.broker||'')!=='SBI証券'&&String(a.broker||'')!=='moomoo証券').reduce((s,a)=>s+Number(a.amount||0),0); const totalNow=activeNow.reduce((s,a)=>s+Number(a.amount||0),0); const auditText=`SBI CSV ${Math.round(csvTotal).toLocaleString()}円\nSBI証券（投資） ${Math.round(sbiSecNow).toLocaleString()}円\nSBI銀行 ${Math.round(bankNow).toLocaleString()}円\nmoomoo ${Math.round(moomooNow).toLocaleString()}円\nその他 ${Math.round(otherNow).toLocaleString()}円\n総資産 ${Math.round(totalNow).toLocaleString()}円`; const audit=document.getElementById('sbiSyncAudit'); if(audit){audit.style.display='block'; audit.innerHTML=`<div style="font-size:12px;font-weight:800;margin-bottom:6px">📋 SBI取込後の総資産内訳</div><pre style="white-space:pre-wrap;font:12px/1.6 inherit;margin:0">${auditText}</pre><button type="button" id="sbiAuditCopy" style="margin-top:8px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);cursor:pointer">📋 内訳をコピー</button>`; document.getElementById('sbiAuditCopy')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(auditText);showToast('📋 総資産内訳をコピーしました',2500);}catch(e){showToast('コピーできません。内訳を選択してコピーしてください',3000);}}); } showToast(`✅ SBI同期完了：${added}件追加・${updated}件更新 / SBI CSV ¥${Math.round(csvTotal).toLocaleString()} / 現在総資産 ¥${Math.round(totalNow).toLocaleString()}`,9000);
       return;
     }
 
