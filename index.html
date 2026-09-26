@@ -613,6 +613,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 <nav class="bottom-nav">
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><span class="ni">🏠</span>ホーム</button>
   <button class="nav-btn" data-tab="opscenter" onclick="switchTab('opscenter')"><span class="ni">🧭</span>運用センター</button>
+  <button class="nav-btn" data-tab="market" onclick="switchTab('market')"><span class="ni">🌐</span>市場環境</button>
   <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
   <button class="nav-btn" data-tab="pricewatch" onclick="switchTab('pricewatch')"><span class="ni">🎯</span>価格管理</button>
@@ -803,6 +804,55 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <div class="section-title" style="margin-top:14px">🔥 Side-FIRE進捗</div>
   <div class="card" id="ops-fire"></div>
   <div style="font-size:10px;color:var(--text3);margin-top:10px;line-height:1.6">※この画面は既存のCSV・設定・保存データを集約して確認するためのものです。自動で売買判断を行ったり、Webから株価を上書きしたりしません。</div>
+</div>
+
+<!-- ========== MARKET ENVIRONMENT ========== -->
+<div class="panel" id="tab-market">
+  <div class="panel-head"><div><div class="panel-title">🌐 市場環境チェック</div><div class="panel-sub">市場全体 → セクター → 個別銘柄 → バリュエーション → 買付タイミングをつなげて確認します。市場データは手入力・保存し、株価の自動上書きは行いません。</div></div><button class="icon-btn" onclick="marketRender()">↻ 更新</button></div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">📊 市場全体</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">確認日時点の指数・金利・為替を入力します。前回値があれば変化率も表示します。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <label style="font-size:10px;color:var(--text3)">S&P 500<input id="mkt-spx" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">NASDAQ<input id="mkt-nasdaq" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">日経平均<input id="mkt-nikkei" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">TOPIX<input id="mkt-topix" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">VIX<input id="mkt-vix" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">米10年債利回り（%）<input id="mkt-us10y" type="number" step="0.01" placeholder="例：4.0" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">USD/JPY<input id="mkt-usdjpy" type="number" step="0.01" placeholder="例：150" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">確認日<input id="mkt-date" type="date" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+    </div>
+    <button class="btn-sm" type="button" onclick="marketSave()" style="margin-top:9px;width:100%">💾 市場環境を保存</button>
+    <div id="mkt-save-note" style="font-size:10px;color:var(--text3);margin-top:6px"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🧠 半導体・AIセクター環境</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">半導体指数や主要銘柄の値動きを確認し、ユーザーの「半導体・AI」投資方針との整合性を確認します。順位付けはしません。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <label style="font-size:10px;color:var(--text3)">半導体指数 / ETF<input id="mkt-semi" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">メモリ指標<input id="mkt-memory" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">NVDA<input id="mkt-nvda" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">AVGO<input id="mkt-avgo" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">AMD<input id="mkt-amd" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">セクター確認日<input id="mkt-sector-date" type="date" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+    </div>
+    <div id="mkt-sector-status" style="margin-top:9px"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🎯 市場環境 → 買付タイミング</div>
+    <div id="mkt-market-status" style="margin-bottom:9px"></div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:8px">下記は予測ではなく、入力した市場環境と既存の銘柄データから機械的に確認する項目です。</div>
+    <div id="mkt-buy-context"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🔎 保有銘柄の相対チェック</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">CSVの現在値を基準に、目標買値・アナリスト目標・予想PER・業績成長率・市場環境を同時確認します。</div>
+    <div id="mkt-stock-table"></div>
+  </div>
 </div>
 
 <div class="panel" id="tab-manager">
@@ -2046,6 +2096,90 @@ function amMonthlyPerfRender(){
     <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">候補を選んだら、最新株価・目標価格・PER・業績・決算日を確認し、確認日と情報源を銘柄ごとに残します。外部サイトから数値を自動取得・上書きしません。</div>
     <div id="sel-monitor-summary" style="font-size:12px;margin-bottom:8px"></div>
     <div id="sel-monitor-list"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🧪 投資方針別スクリーニング</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">既存・新規候補を、成長性・バリュエーション・目標価格余地・配分余地で機械的に絞り込みます。順位付けはしません。</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+      <button class="btn-sm" type="button" onclick="selectorPreset('semi')">🧠 半導体・AI</button><button class="btn-sm" type="button" onclick="selectorPreset('core')">🇺🇸 長期コア</button><button class="btn-sm" type="button" onclick="selectorPreset('value')">💰 バリュー</button><button class="btn-sm" type="button" onclick="selectorPreset('reset')">リセット</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <label style="font-size:10px;color:var(--text3)">予想PER 上限<input id="sel-screen-fper" type="number" step="0.1" placeholder="例：30" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">売上成長率 下限<input id="sel-screen-rev" type="number" step="0.1" placeholder="例：10" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">EPS成長率 下限<input id="sel-screen-eps" type="number" step="0.1" placeholder="例：15" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">目標価格余地 下限<input id="sel-screen-up" type="number" step="0.1" placeholder="例：15" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+    </div>
+    <label style="display:flex;align-items:center;gap:7px;font-size:11px;margin-top:9px"><input id="sel-screen-gap" type="checkbox"> 目標保有比率を下回る銘柄だけ表示</label>
+    <button class="btn-sm" type="button" onclick="selectorRunScreen()" style="margin-top:9px;width:100%">🔍 条件で絞り込む</button>
+    <div id="sel-screen-summary" style="font-size:10px;color:var(--text3);margin-top:7px"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🧮 購入後ポートフォリオへの影響</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">候補銘柄と購入額を指定すると、購入後の投資可能現金・半導体比率・米国株比率・最大銘柄比率を概算します。</div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:7px"><select id="sel-sim-ticker" onchange="selectorSimRender()" style="padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></select><input id="sel-sim-amount" type="number" min="0" step="1000" value="100000" oninput="selectorSimRender()" placeholder="購入額（円）" style="padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></div>
+    <div id="sel-sim-result" style="margin-top:9px"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">📊 「買うならどれ？」比較シミュレーター</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">候補を最大5銘柄選択し、既存銘柄の買い増しと新規購入を同じ条件で横比較します。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px">
+      <label style="font-size:10px;color:var(--text3)">1銘柄の購入額（円）<input id="sel-compare-amount" type="number" min="0" step="10000" value="100000" oninput="selectorCompareRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <div style="display:flex;align-items:end"><button class="btn-sm" type="button" onclick="selectorCompareClear()" style="width:100%">選択をクリア</button></div>
+    </div>
+    <div id="sel-compare-summary" style="font-size:10px;color:var(--text3);margin-bottom:7px"></div>
+    <div id="sel-compare-picker"></div>
+    <div id="sel-compare-list" style="margin-top:9px"></div>
+    <div id="sel-compare-checklist" style="margin-top:9px"></div>
+    <div id="sel-compare-result" style="margin-top:9px"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🎯 買付タイミング・指値シミュレーター</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">銘柄カルテの情報を使って、価格・決算接近・情報鮮度・保有比率を確認します。判定は登録した条件に基づく機械的な状態表示で、外部データを自動取得したり注文したりしません。</div>
+    <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:7px">
+      <label style="font-size:10px;color:var(--text3)">銘柄<select id="sel-timing-ticker" onchange="selectorTimingRender()" style="width:100%;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></select></label>
+      <label style="font-size:10px;color:var(--text3)">購入予定額（円）<input id="sel-timing-budget" type="number" min="0" step="10000" value="100000" oninput="selectorTimingRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+    </div>
+    <div id="sel-timing-state" style="margin-top:9px"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:9px">
+      <label style="font-size:10px;color:var(--text3)">第1指値<input id="sel-timing-p1" type="number" min="0" step="0.01" oninput="selectorTimingRender()" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">第2指値<input id="sel-timing-p2" type="number" min="0" step="0.01" oninput="selectorTimingRender()" placeholder="押し目" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">第3指値<input id="sel-timing-p3" type="number" min="0" step="0.01" oninput="selectorTimingRender()" placeholder="深押し" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:7px">
+      <label style="font-size:10px;color:var(--text3)">第1投入率<input id="sel-timing-a1" type="number" min="0" max="100" step="5" value="40" oninput="selectorTimingRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">第2投入率<input id="sel-timing-a2" type="number" min="0" max="100" step="5" value="30" oninput="selectorTimingRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">第3投入率<input id="sel-timing-a3" type="number" min="0" max="100" step="5" value="30" oninput="selectorTimingRender()" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+    </div>
+    <div id="sel-timing-stages" style="margin-top:9px"></div>
+    <div id="sel-timing-impact" style="margin-top:9px"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn-sm" type="button" onclick="selectorTimingSetTarget()">🎯 目標買値を第1指値へ</button><button class="btn-sm" type="button" onclick="selectorTimingSetPullbacks()">📉 10/20/30%押し目を設定</button><button class="btn-sm" type="button" onclick="selectorTimingToBuySim()">🧮 買付シミュレーターへ</button></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🧠 投資仮説・検証</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">なぜ買うのか、何が上昇材料か、何が起きたら仮説が崩れるかを銘柄ごとに保存します。決算後の検証履歴も残せます。</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+      <label style="font-size:10px;color:var(--text3)">銘柄<select id="sel-hyp-ticker" onchange="selectorHypothesisLoad()" style="width:100%;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></select></label>
+      <label style="font-size:10px;color:var(--text3)">状態<select id="sel-hyp-status" style="width:100%;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"><option>買付候補</option><option>監視</option><option>保有継続</option><option>買い増し検討</option><option>再確認</option><option>仮説崩れ</option><option>売却検討</option></select></label>
+      <label style="font-size:10px;color:var(--text3);grid-column:1/-1">投資仮説<textarea id="sel-hyp-thesis" rows="2" placeholder="なぜこの銘柄の価値・利益が伸びると考えるか" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></textarea></label>
+      <label style="font-size:10px;color:var(--text3)">上昇材料<textarea id="sel-hyp-catalysts" rows="2" placeholder="AI需要、価格上昇、シェア拡大など" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></textarea></label>
+      <label style="font-size:10px;color:var(--text3)">確認ポイント<textarea id="sel-hyp-checks" rows="2" placeholder="決算・利益率・受注など" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></textarea></label>
+      <label style="font-size:10px;color:var(--text3)">仮説が崩れる条件<textarea id="sel-hyp-invalid" rows="2" placeholder="利益成長停止、需要減速など" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></textarea></label>
+      <label style="font-size:10px;color:var(--text3)">想定保有期間<input id="sel-hyp-horizon" placeholder="例：2〜3年" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">目標価格<input id="sel-hyp-target" type="number" step="0.0001" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3);grid-column:1/-1">今回の検証メモ<textarea id="sel-hyp-review" rows="2" placeholder="決算後に仮説が維持されたか、変化した点など" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></textarea></label>
+    </div>
+    <div id="sel-hyp-metrics" style="margin-top:8px"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn-sm" type="button" onclick="selectorHypothesisSave()">💾 仮説を保存</button>
+      <button class="btn-sm" type="button" onclick="selectorHypothesisReview()">🔄 検証履歴を追加</button>
+      <button class="btn-sm" type="button" onclick="selectorHypothesisToDecision()">📝 判断ログへ反映</button>
+    </div>
+    <div id="sel-hyp-history" style="margin-top:10px"></div>
   </div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
@@ -3392,6 +3526,7 @@ function switchTab(tab){
   const fab=document.getElementById('fab');
   fab.classList.toggle('hidden',tab!=='manager');
   if(tab==='opscenter')setTimeout(()=>{if(typeof opsRender==='function')opsRender();},20);
+  if(tab==='market')setTimeout(()=>{if(typeof marketRender==='function')marketRender();},20);
   if(tab==='home')refreshHome();
   if(tab==='portfolio')pfRender();
   if(tab==='trend')trRenderAll();
@@ -16365,12 +16500,123 @@ function selectorMonitorRender(){
 function selectorGap(r){return r.targetRatio>0&&r.amount>0? r.targetRatio-(r.amount/selectorTotalInvest()*100):r.targetRatio>0?r.targetRatio:null;}
 function selectorTotalInvest(){return selectorInvestmentRows().reduce((s,r)=>s+selectorNum(r.amount),0);}
 function selectorPill(label,value,cls){return '<span style="display:inline-block;padding:3px 6px;border-radius:999px;background:var(--bg);font-size:10px;margin:2px 3px 2px 0;'+(cls?'color:'+cls+';':'')+'">'+selectorEsc(label)+' '+selectorEsc(value)+'</span>';}
+let selectorScreen={fper:0,rev:0,eps:0,up:0,gap:false,active:false};
+function selectorPreset(type){const v={semi:[30,10,15,15],core:[35,8,10,10],value:[18,0,0,10],reset:[0,0,0,0]}[type]||[0,0,0,0];['sel-screen-fper','sel-screen-rev','sel-screen-eps','sel-screen-up'].forEach((id,i)=>{const e=document.getElementById(id);if(e)e.value=v[i]||'';});const g=document.getElementById('sel-screen-gap');if(g)g.checked=type==='value';selectorRunScreen();}
+function selectorRunScreen(){selectorScreen={fper:selectorNum(document.getElementById('sel-screen-fper')?.value),rev:selectorNum(document.getElementById('sel-screen-rev')?.value),eps:selectorNum(document.getElementById('sel-screen-eps')?.value),up:selectorNum(document.getElementById('sel-screen-up')?.value),gap:!!document.getElementById('sel-screen-gap')?.checked,active:true};selectorRender();}
+function selectorScreenRows(rows){if(!selectorScreen.active)return rows;return rows.filter(r=>{const price=selectorNum(r.currentPrice),up=price>0&&selectorNum(r.analystTarget)>0?(r.analystTarget/price-1)*100:null,gap=selectorGap(r);if(selectorScreen.fper>0&&!(selectorNum(r.forwardPER)>0&&r.forwardPER<=selectorScreen.fper))return false;if(selectorScreen.rev>0&&!(selectorNum(r.revenueGrowth)>=selectorScreen.rev))return false;if(selectorScreen.eps>0&&!(selectorNum(r.epsGrowth)>=selectorScreen.eps))return false;if(selectorScreen.up>0&&!(up!==null&&up>=selectorScreen.up))return false;if(selectorScreen.gap&&!(gap!==null&&gap>0))return false;return true;});}
+function selectorSimRender(){const sel=document.getElementById('sel-sim-ticker'),out=document.getElementById('sel-sim-result');if(!sel||!out)return;const rows=selectorAllRows(),old=sel.value;sel.innerHTML=rows.map(r=>'<option value="'+selectorEsc(r.ticker)+'">'+selectorEsc(r.ticker)+'｜'+selectorEsc(r.name)+(r.held?'（保有）':'（新規）')+'</option>').join('');if(rows.some(r=>r.ticker===old))sel.value=old;const r=rows.find(x=>x.ticker===sel.value)||rows[0];if(!r){out.innerHTML='';return;}const add=Math.max(0,selectorNum(document.getElementById('sel-sim-amount')?.value)),base=selectorInvestmentRows(),total=base.reduce((s,x)=>s+selectorNum(x.amount),0),semi=base.filter(x=>selectorTheme(x)==='半導体・AI').reduce((s,x)=>s+selectorNum(x.amount),0),us=base.filter(x=>/USD|米国|外国/.test(String(x.currency||''))||/米国/.test(String(x.region||''))).reduce((s,x)=>s+selectorNum(x.amount),0),cash=typeof bsCash==='function'?bsCash():0,afterTotal=total+add,same=base.find(x=>String(x.ticker).toUpperCase()===String(r.ticker).toUpperCase()),afterTicker=(same?.amount||0)+add,semiPct=afterTotal?(semi+(selectorTheme(r)==='半導体・AI'?add:0))/afterTotal*100:0,usPct=afterTotal?(us+((/USD|米国|外国/.test(String(r.currency||''))||/米国/.test(String(r.region||'')))?add:0))/afterTotal*100:0,maxAfter=afterTotal?Math.max(afterTicker,...base.filter(x=>String(x.ticker).toUpperCase()!==String(r.ticker).toUpperCase()).map(x=>x.amount))/afterTotal*100:0,fmt=n=>Math.round(n).toLocaleString('ja-JP');out.innerHTML='<div>'+selectorPill('購入前現金','¥'+fmt(cash))+selectorPill('購入後現金','¥'+fmt(Math.max(0,cash-add)))+selectorPill('半導体比率',semiPct.toFixed(1)+'%')+selectorPill('米国・外国株比率',usPct.toFixed(1)+'%')+selectorPill('最大銘柄比率',maxAfter.toFixed(1)+'%')+selectorPill('追加後投資資産','¥'+fmt(afterTotal))+'</div><div style="font-size:10px;color:var(--text3);margin-top:7px">'+(add>cash?'⚠ 購入額が投資可能現金を超えています。':'✓ 投資可能現金の範囲内です。')+' ／ '+selectorEsc(r.ticker)+' を '+fmt(add)+'円購入した概算</div>';}
+
+function selectorCompareKey(){return 'stockSelectionCompare';}
+function selectorCompareLoad(){try{const x=JSON.parse(localStorage.getItem(selectorCompareKey())||'[]');return Array.isArray(x)?x.map(v=>String(v).toUpperCase()).slice(0,5):[]}catch(e){return[];}}
+function selectorCompareSave(x){try{localStorage.setItem(selectorCompareKey(),JSON.stringify([...new Set(x.map(v=>String(v).toUpperCase()))].slice(0,5)));}catch(e){}}
+function selectorCompareToggle(ticker){const t=String(ticker||'').toUpperCase(),x=selectorCompareLoad(),i=x.indexOf(t);if(i>=0)x.splice(i,1);else{if(x.length>=5){showToast('比較は最大5銘柄までです');return;}x.push(t);}selectorCompareSave(x);selectorRender();}
+function selectorCompareClear(){selectorCompareSave([]);selectorRender();}
+function selectorCompareRows(){const chosen=selectorCompareLoad(),all=selectorAllRows();return chosen.map(t=>all.find(r=>String(r.ticker||'').toUpperCase()===t)).filter(Boolean);}
+function selectorCompareRender(){
+  const host=document.getElementById('sel-compare-list'),picker=document.getElementById('sel-compare-picker'),sum=document.getElementById('sel-compare-summary'),check=document.getElementById('sel-compare-checklist'),out=document.getElementById('sel-compare-result');if(!host)return;
+  const all=selectorAllRows(),chosen=selectorCompareLoad(),rows=selectorCompareRows(),amt=Math.max(0,selectorNum(document.getElementById('sel-compare-amount')?.value));
+  if(picker)picker.innerHTML=all.length?'<div style="display:flex;gap:5px;flex-wrap:wrap">'+all.map(r=>{const on=chosen.includes(String(r.ticker||'').toUpperCase());return '<button class="btn-sm" type="button" onclick="selectorCompareToggle(\''+selectorEsc(r.ticker).replace(/'/g,"\\'")+'\')">'+(on?'✓ ':'＋ ')+selectorEsc(r.ticker)+(r.held?'（保有）':'（新規）')+'</button>';}).join('')+'</div>':'<div style="font-size:10px;color:var(--text3)">比較できる銘柄がありません。</div>';
+  if(sum)sum.textContent='選択 '+rows.length+'/5銘柄'+(rows.length?' ／ '+rows.map(r=>r.ticker).join('・'):'');
+  if(!rows.length){host.innerHTML='<div style="padding:10px;color:var(--text3);font-size:10px">上の候補から比較する銘柄を選択してください。</div>';if(check)check.innerHTML='';if(out)out.innerHTML='';return;}
+  const total=selectorTotalInvest(),base=selectorInvestmentRows(),cash=typeof bsCash==='function'?bsCash():0;
+  const cell=(v,fmt)=>v===null||v===undefined||v===''||!Number.isFinite(Number(v))||Number(v)===0?'—':fmt(Number(v));
+  const fields=[['区分',r=>r.held?'保有':'新規'],['テーマ',r=>selectorTheme(r)],['現在値',r=>cell(r.currentPrice,n=>(r.currency==='USD'?'$':'¥')+n.toLocaleString('ja-JP',{maximumFractionDigits:2}))],['目標株価余地',r=>{const p=selectorNum(r.currentPrice),t=selectorNum(r.analystTarget);return p>0&&t>0?((t/p-1)*100).toFixed(1)+'%':'—';}],['PER',r=>cell(r.per,n=>n.toFixed(1)+'倍')],['予想PER',r=>cell(r.forwardPER,n=>n.toFixed(1)+'倍')],['PBR',r=>cell(r.pbr,n=>n.toFixed(1)+'倍')],['売上YoY',r=>cell(r.revenueGrowth,n=>n.toFixed(1)+'%')],['営業利益YoY',r=>cell(r.opProfitGrowth,n=>n.toFixed(1)+'%')],['EPS成長',r=>cell(r.epsGrowth,n=>n.toFixed(1)+'%')],['現在保有比率',r=>r.amount&&total?(r.amount/total*100).toFixed(1)+'%':'—'],['目標比率との差',r=>{const g=selectorGap(r);return g===null?'—':(g>=0?'+':'')+g.toFixed(1)+'pt';}],['決算',r=>{const d=selectorDaysToEarnings(r.earningsDate);return r.earningsDate?(d===null?'登録済':d<0?'終了':d+'日後'):'—'}]];
+  host.innerHTML='<div style="overflow:auto"><table style="width:100%;min-width:680px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border);position:sticky;left:0;background:var(--bg2)">指標</th>'+rows.map(r=>'<th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">'+selectorEsc(r.ticker)+'</th>').join('')+'</tr></thead><tbody>'+fields.map(([label,fn])=>'<tr><td style="padding:6px;border-bottom:1px solid var(--border);font-weight:650;position:sticky;left:0;background:var(--bg2)">'+label+'</td>'+rows.map(r=>'<td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">'+selectorEsc(fn(r))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  const sims=rows.map(r=>{const same=base.find(x=>String(x.ticker).toUpperCase()===String(r.ticker).toUpperCase()),afterTicker=(same?.amount||0)+amt,afterTotal=total+amt,semi=base.filter(x=>selectorTheme(x)==='半導体・AI').reduce((z,x)=>z+x.amount,0)+(selectorTheme(r)==='半導体・AI'?amt:0),us=base.filter(x=>/USD|米国|外国/.test(String(x.currency||''))||/米国/.test(String(x.region||''))).reduce((z,x)=>z+x.amount,0)+((/USD|米国|外国/.test(String(r.currency||''))||/米国/.test(String(r.region||'')))?amt:0);return {r,afterCash:Math.max(0,cash-amt),semiPct:afterTotal?semi/afterTotal*100:0,usPct:afterTotal?us/afterTotal*100:0,maxPct:afterTotal?Math.max(afterTicker,...base.filter(x=>String(x.ticker).toUpperCase()!==String(r.ticker).toUpperCase()).map(x=>x.amount))/afterTotal*100:0};});
+  if(out)out.innerHTML='<div style="overflow:auto"><table style="width:100%;min-width:680px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">購入後</th>'+sims.map(x=>'<th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">'+selectorEsc(x.r.ticker)+'</th>').join('')+'</tr></thead><tbody><tr><td style="padding:6px;border-bottom:1px solid var(--border)">現金残高</td>'+sims.map(x=>'<td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">¥'+Math.round(x.afterCash).toLocaleString('ja-JP')+'</td>').join('')+'</tr><tr><td style="padding:6px;border-bottom:1px solid var(--border)">半導体比率</td>'+sims.map(x=>'<td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">'+x.semiPct.toFixed(1)+'%</td>').join('')+'</tr><tr><td style="padding:6px;border-bottom:1px solid var(--border)">米国・外国株比率</td>'+sims.map(x=>'<td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">'+x.usPct.toFixed(1)+'%</td>').join('')+'</tr><tr><td style="padding:6px;border-bottom:1px solid var(--border)">最大銘柄比率</td>'+sims.map(x=>'<td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">'+x.maxPct.toFixed(1)+'%</td>').join('')+'</tr></tbody></table></div>'+(amt>cash?'<div style="font-size:10px;color:#b7791f;margin-top:6px">⚠ 1銘柄あたりの購入額が投資可能現金を超えています。</div>':'');
+  if(check){const items=[];rows.forEach(r=>{const p=selectorNum(r.currentPrice),t=selectorNum(r.analystTarget),d=selectorDaysToEarnings(r.earningsDate),age=r.lastAnalysisDate?Math.floor((new Date()-new Date(String(r.lastAnalysisDate)+'T00:00:00'))/86400000):null;items.push({name:r.ticker+' 最新株価',ok:p>0});items.push({name:r.ticker+' PER・予想PER・PBR',ok:r.per>0&&r.forwardPER>0&&r.pbr>0});items.push({name:r.ticker+' 業績確認',ok:r.revenueGrowth!==0||r.opProfitGrowth!==0||r.epsGrowth!==0});items.push({name:r.ticker+' 目標株価',ok:t>0});items.push({name:r.ticker+' 決算・最新情報',ok:!!r.earningsDate&&age!==null&&age<=30&&!(d!==null&&d>=0&&d<=7)});});const ok=items.filter(x=>x.ok).length;check.innerHTML='<div style="font-size:12px;font-weight:650;margin-bottom:5px">📝 買付前チェック '+ok+'/'+items.length+'</div>'+items.map(x=>'<span style="display:inline-block;margin:2px 4px 2px 0;padding:4px 6px;border-radius:6px;background:var(--bg);font-size:10px">'+(x.ok?'☑':'☐')+' '+selectorEsc(x.name)+'</span>').join('')+'<div style="margin-top:8px"><button class="btn-sm" type="button" onclick="selectorSendToBuySim()">💰 買付シミュレーターへ</button></div>';}
+}
+function selectorSendToBuySim(){const rows=selectorCompareRows();if(!rows.length){showToast('比較銘柄を1つ以上選択してください');return;}const amt=Math.max(0,selectorNum(document.getElementById('sel-compare-amount')?.value)),ticker=rows[0].ticker;switchTab('buysim');setTimeout(()=>{const e=document.getElementById('bs-amount');if(e)e.value=amt;bsRender();const sel=document.getElementById('bs-ticker');if(sel&&[...sel.options].some(o=>o.value===ticker)){sel.value=ticker;bsRender();}},150);}
+
+const SELECTOR_HYP_KEY='stockSelectionHypotheses_v1';
+// ── 買付タイミング・指値シミュレーター ──
+function selectorTimingRows(){return selectorAllRows();}
+function selectorTimingSelected(){const sel=document.getElementById('sel-timing-ticker'),rows=selectorTimingRows();return rows.find(r=>String(r.ticker||'').toUpperCase()===String(sel?.value||'').toUpperCase())||rows[0];}
+function selectorTimingForeign(r){return /USD|ドル|米国|外国|KRW|ウォン|HKD|EUR|GBP|CNY|AUD/i.test(String(r?.currency||''))||/^[A-Z]{1,5}(\.[A-Z]{1,3})?$/.test(String(r?.ticker||''));}
+function selectorTimingFx(r){const f=Number(r?.fxRate||0);return f>0?f:1;}
+function selectorTimingUnitYen(r,price){return selectorTimingForeign(r)?Number(price||0)*selectorTimingFx(r):Number(price||0);}
+function selectorTimingDays(v){return selectorDaysToEarnings(v);}
+function selectorTimingState(r){
+  if(!r)return {label:'未選択',icon:'⚪',color:'var(--text3)',reason:'銘柄を選択してください。'};
+  const p=selectorNum(r.currentPrice),tb=selectorNum(r.targetBuy),d=selectorTimingDays(r.earningsDate);
+  const age=r.lastAnalysisDate?Math.floor((Date.now()-new Date(String(r.lastAnalysisDate)+'T00:00:00').getTime())/86400000):null;
+  const stale=age===null||!Number.isFinite(age)||age>30;
+  if(d!==null&&d>=0&&d<=7)return {label:'イベント待ち',icon:'🔵',color:'#2563eb',reason:'決算が7日以内です。決算内容を確認してから再判定します。'};
+  if(stale)return {label:'再確認待ち',icon:'🟡',color:'#b7791f',reason:'最新情報の確認日が古いか未登録です。'};
+  if(tb>0&&p>0&&p<=tb)return {label:'買付候補',icon:'🟢',color:'#16803c',reason:'現在値が登録した目標買値以下です。'};
+  return {label:'指値待ち',icon:'⚪',color:'var(--text2)',reason:tb>0&&p>0?'現在値が目標買値を上回っています。':'目標買値が未設定です。'};
+}
+function selectorTimingRender(){
+  const sel=document.getElementById('sel-timing-ticker'),state=document.getElementById('sel-timing-state'),stages=document.getElementById('sel-timing-stages'),impact=document.getElementById('sel-timing-impact');
+  if(!sel||!state)return;
+  const rows=selectorTimingRows(),old=sel.value;
+  sel.innerHTML=rows.map(r=>`<option value="${selectorEsc(r.ticker)}">${selectorEsc(r.ticker)}｜${selectorEsc(r.name)}${r.held?'（保有）':'（新規）'}</option>`).join('');
+  if(rows.some(r=>String(r.ticker).toUpperCase()===String(old).toUpperCase()))sel.value=old;
+  const r=selectorTimingSelected(); if(!r){state.innerHTML='';if(stages)stages.innerHTML='';if(impact)impact.innerHTML='';return;}
+  const st=selectorTimingState(r),p=selectorNum(r.currentPrice),tb=selectorNum(r.targetBuy),target=selectorNum(r.analystTarget),d=selectorTimingDays(r.earningsDate),budget=Math.max(0,selectorNum(document.getElementById('sel-timing-budget')?.value));
+  const age=r.lastAnalysisDate?Math.floor((Date.now()-new Date(String(r.lastAnalysisDate)+'T00:00:00').getTime())/86400000):null;
+  const up=p>0&&target>0?(target/p-1)*100:null;
+  state.innerHTML=`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">${st.icon}</span><b style="font-size:16px;color:${st.color}">${st.label}</b><span style="font-size:10px;color:var(--text3)">${selectorEsc(st.reason)}</span></div><div style="margin-top:7px">${selectorPill('現在値',p?(selectorTimingForeign(r)?'$':'¥')+p.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未登録')}${selectorPill('目標買値',tb?(selectorTimingForeign(r)?'$':'¥')+tb.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未設定')}${selectorPill('目標価格余地',up!==null?(up>=0?'+':'')+up.toFixed(1)+'%':'—')}${selectorPill('決算',r.earningsDate?(d===null?'登録済':d<0?'終了':d+'日後'):'未登録')}${selectorPill('情報鮮度',age===null?'未確認':age+'日前')}</div></div>`;
+  const prices=[1,2,3].map(i=>selectorNum(document.getElementById('sel-timing-p'+i)?.value));
+  const rates=[1,2,3].map(i=>Math.max(0,Math.min(100,selectorNum(document.getElementById('sel-timing-a'+i)?.value))));
+  const sumRate=rates.reduce((a,b)=>a+b,0),cash=typeof bsCash==='function'?bsCash():0;
+  if(stages){stages.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:12px;font-weight:700;margin-bottom:7px">段階買付</div>${prices.map((pr,i)=>{const amt=budget*rates[i]/100, unit=selectorTimingUnitYen(r,pr||p),shares=unit>0?amt/unit:0;return `<div style="display:grid;grid-template-columns:.7fr 1fr 1fr 1fr;gap:6px;font-size:10px;padding:6px 0;border-bottom:${i===2?'0':'1px solid var(--border)'}"><b>第${i+1}段</b><span>${pr>0?(selectorTimingForeign(r)?'$':'¥')+pr.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未設定'}</span><span>¥${Math.round(amt).toLocaleString('ja-JP')}（${rates[i]}%）</span><span>約${shares.toLocaleString('ja-JP',{maximumFractionDigits:3})}株</span></div>`}).join('')}<div style="font-size:10px;color:${sumRate===100?'var(--text3)':'#b7791f'};margin-top:7px">投入率合計 ${sumRate}% ／ 予定額 ¥${Math.round(budget).toLocaleString('ja-JP')} ／ 最大使用額 ¥${Math.round(Math.min(budget,cash)).toLocaleString('ja-JP')}（現金 ¥${Math.round(cash).toLocaleString('ja-JP')}）</div></div>`;}
+  const avgPrices=prices.map((x,i)=>({p:x,a:budget*rates[i]/100})).filter(x=>x.p>0&&x.a>0);const totalA=avgPrices.reduce((s,x)=>s+x.a,0),avg=totalA?avgPrices.reduce((s,x)=>s+x.p*x.a,0)/totalA:0;const afterCash=cash-budget;const base=selectorInvestmentRows(),total=base.reduce((s,x)=>s+selectorNum(x.amount),0),same=base.find(x=>String(x.ticker).toUpperCase()===String(r.ticker).toUpperCase()),afterTicker=selectorNum(same?.amount)+Math.max(0,Math.min(budget,cash));const afterTotal=total+Math.max(0,Math.min(budget,cash));const afterPct=afterTotal?afterTicker/afterTotal*100:0;
+  if(impact){impact.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:12px;font-weight:700;margin-bottom:7px">買付後の概算</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><div>${selectorPill('段階平均価格',avg?(selectorTimingForeign(r)?'$':'¥')+avg.toLocaleString('ja-JP',{maximumFractionDigits:2}):'—')}</div><div>${selectorPill('買付後現金','¥'+Math.round(afterCash).toLocaleString('ja-JP'),afterCash<0?'var(--red)':'')}</div><div>${selectorPill('買付後保有比率',afterPct.toFixed(1)+'%')}</div><div>${selectorPill('購入予定額','¥'+Math.round(Math.min(budget,cash)).toLocaleString('ja-JP'))}</div></div><div style="font-size:10px;color:${sumRate===100&&budget<=cash?'var(--text3)':'#b7791f'};margin-top:7px">${sumRate!==100?'⚠ 投入率を合計100%にしてください。 ':''}${budget>cash?'⚠ 予定額が投資可能現金を超えています。 ':''}※株数は概算。実際の最低取引単位・手数料・為替手数料は含みません。</div></div>`;}
+}
+function selectorTimingSetTarget(){const r=selectorTimingSelected();const e=document.getElementById('sel-timing-p1');if(r&&e&&Number(r.targetBuy)>0){e.value=r.targetBuy;selectorTimingRender();}}
+function selectorTimingSetPullbacks(){const r=selectorTimingSelected();if(!r||Number(r.currentPrice)<=0)return;[1,2,3].forEach((i)=>{const e=document.getElementById('sel-timing-p'+i);if(e)e.value=(r.currentPrice*(1-(i-1)*0.1)).toFixed(2);});selectorTimingRender();}
+function selectorTimingToBuySim(){const r=selectorTimingSelected(),amt=Math.max(0,selectorNum(document.getElementById('sel-timing-budget')?.value));if(!r){showToast('銘柄を選択してください');return;}switchTab('buysim');setTimeout(()=>{const e=document.getElementById('bs-amount');if(e)e.value=amt;const sel=document.getElementById('bs-ticker');if(sel&&[...sel.options].some(o=>String(o.value).toUpperCase()===String(r.ticker).toUpperCase()))sel.value=r.ticker;try{bsRender();}catch(e){}},150);}
+
+function selectorHypLoad(){try{const x=JSON.parse(localStorage.getItem(SELECTOR_HYP_KEY)||'{}');return x&&typeof x==='object'?x:{};}catch(e){return{};}}
+function selectorHypSaveAll(x){try{localStorage.setItem(SELECTOR_HYP_KEY,JSON.stringify(x));}catch(e){}}
+function selectorHypTicker(){return String(document.getElementById('sel-hyp-ticker')?.value||'').toUpperCase();}
+function selectorHypLoad(){const t=selectorHypTicker(),all=selectorHypLoadAll=selectorHypLoad;}
+function selectorHypothesisLoad(){
+  const t=selectorHypTicker(),all=selectorHypLoad(),h=all[t]||{};
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v??'';};
+  set('sel-hyp-status',h.status||'買付候補');set('sel-hyp-thesis',h.thesis);set('sel-hyp-catalysts',h.catalysts);set('sel-hyp-checks',h.checks);set('sel-hyp-invalid',h.invalid);set('sel-hyp-horizon',h.horizon);set('sel-hyp-target',h.target||'');set('sel-hyp-review','');
+  selectorHypothesisMetrics();selectorHypothesisHistory();
+}
+function selectorHypothesisMetrics(){
+  const host=document.getElementById('sel-hyp-metrics');if(!host)return;const t=selectorHypTicker(),r=selectorAllRows().find(x=>String(x.ticker||'').toUpperCase()===t);
+  if(!r){host.innerHTML='';return;}
+  const p=selectorNum(r.currentPrice),tar=selectorNum(r.analystTarget),up=p&&tar?(tar/p-1)*100:null,d=selectorDaysToEarnings(r.earningsDate);
+  host.innerHTML='<div style="background:var(--bg);border-radius:9px;padding:9px;font-size:10px">'+selectorPill('現在値',p?((r.currency==='USD'?'$':'¥')+p.toLocaleString('ja-JP',{maximumFractionDigits:2})):'—')+selectorPill('目標株価余地',up!==null?(up>=0?'+':'')+up.toFixed(1)+'%':'—')+selectorPill('予想PER',r.forwardPER?r.forwardPER.toFixed(1)+'倍':'—')+selectorPill('売上YoY',r.revenueGrowth?r.revenueGrowth.toFixed(1)+'%':'—')+selectorPill('EPS成長',r.epsGrowth?r.epsGrowth.toFixed(1)+'%':'—')+selectorPill('決算',d===null?'—':(d<0?'終了':d+'日後'))+'</div>';
+}
+function selectorHypothesisSave(){
+  const t=selectorHypTicker();if(!t){showToast('銘柄を選択してください');return;}
+  const all=selectorHypLoad(),old=all[t]||{};
+  all[t]={...old,ticker:t,status:document.getElementById('sel-hyp-status')?.value||'買付候補',thesis:document.getElementById('sel-hyp-thesis')?.value||'',catalysts:document.getElementById('sel-hyp-catalysts')?.value||'',checks:document.getElementById('sel-hyp-checks')?.value||'',invalid:document.getElementById('sel-hyp-invalid')?.value||'',horizon:document.getElementById('sel-hyp-horizon')?.value||'',target:selectorNum(document.getElementById('sel-hyp-target')?.value),updatedAt:todayStr(),history:old.history||[]};
+  selectorHypSaveAll(all);selectorHypothesisHistory();showToast('✓ '+t+' の投資仮説を保存しました');
+}
+function selectorHypothesisReview(){
+  const t=selectorHypTicker();if(!t){showToast('銘柄を選択してください');return;}
+  const all=selectorHypLoad(),h=all[t]||{};if(!h.thesis){showToast('先に投資仮説を保存してください');return;}
+  const review=document.getElementById('sel-hyp-review')?.value||'';if(!review.trim()){showToast('検証メモを入力してください');return;}
+  h.history=Array.isArray(h.history)?h.history:[];h.history.unshift({date:todayStr(),status:document.getElementById('sel-hyp-status')?.value||h.status||'再確認',review,price:selectorAllRows().find(x=>String(x.ticker||'').toUpperCase()===t)?.currentPrice||0});h.history=h.history.slice(0,30);h.updatedAt=todayStr();all[t]=h;selectorHypSaveAll(all);document.getElementById('sel-hyp-review').value='';selectorHypothesisHistory();showToast('✓ '+t+' の検証履歴を追加しました');
+}
+function selectorHypothesisHistory(){
+  const host=document.getElementById('sel-hyp-history');if(!host)return;const t=selectorHypTicker(),h=selectorHypLoad()[t];if(!h){host.innerHTML='<div style="font-size:10px;color:var(--text3)">この銘柄の仮説はまだ保存されていません。</div>';return;}
+  const hist=Array.isArray(h.history)?h.history:[];host.innerHTML='<div style="font-size:11px;font-weight:700;margin-bottom:5px">検証履歴 '+hist.length+'件</div>'+(hist.length?hist.map(x=>'<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:10px"><b>'+selectorEsc(x.date||'')+'</b> ・ '+selectorEsc(x.status||'')+(x.price?' ・ 株価 '+selectorEsc(String(x.price)):'')+'<div style="margin-top:3px;color:var(--text2);line-height:1.5">'+selectorEsc(x.review||'')+'</div></div>').join(''):'<div style="font-size:10px;color:var(--text3)">まだ検証履歴がありません。</div>');
+}
+function selectorHypothesisToDecision(){
+  const t=selectorHypTicker();if(!t){showToast('銘柄を選択してください');return;}const h=selectorHypLoad()[t];if(!h){showToast('先に投資仮説を保存してください');return;}
+  try{localStorage.setItem('amDecisionDraft',JSON.stringify({ticker:t,type:'buy',date:todayStr(),price:selectorAllRows().find(x=>String(x.ticker||'').toUpperCase()===t)?.currentPrice||'',thesis:h.thesis||'',reason:h.catalysts||'',risk:h.invalid||'',target:h.target||'',sellRule:h.invalid||''}));}catch(e){}
+  const sec=document.getElementById('amDecisionLogSection');if(sec){sec.style.display='block';sec.scrollIntoView({behavior:'smooth',block:'start'});}showToast('✓ 判断ログ用の下書きを保存しました。売買判断ログで確認してください。');
+}
+function selectorHypothesisRender(){
+  const sel=document.getElementById('sel-hyp-ticker');if(!sel)return;const rows=selectorAllRows(),old=sel.value;
+  sel.innerHTML=rows.map(r=>'<option value="'+selectorEsc(r.ticker)+'">'+selectorEsc(r.ticker)+'｜'+selectorEsc(r.name)+(r.held?'（保有）':'（新規）')+'</option>').join('');if(rows.some(r=>r.ticker===old))sel.value=old;selectorHypothesisLoad();
+}
 function selectorRender(){
   const host=document.getElementById('sel-list'),sum=document.getElementById('sel-summary'),note=document.getElementById('sel-note');if(!host)return;
-  let rows=selectorAllRows();
+  let rows=selectorScreenRows(selectorAllRows());
   rows=rows.filter(r=>{const f=selectorFilter,t=selectorTheme(r);if(f==='held')return r.held;if(f==='new')return !r.held;if(f==='semi')return t==='半導体・AI';if(f==='value')return t==='バリュー';return true;});
   const total=selectorTotalInvest();
   sum.innerHTML='候補 <b>'+rows.length+'件</b> ／ 保有 '+rows.filter(r=>r.held).length+'件 ／ 新規 '+rows.filter(r=>!r.held).length+'件'+(total?' ／ 投資資産 ¥'+Math.round(total).toLocaleString('ja-JP'):'');
+  const ss=document.getElementById('sel-screen-summary');if(ss)ss.textContent=selectorScreen.active?'スクリーニング適用中：'+rows.length+'件表示':'スクリーニング未適用';
+  try{selectorSimRender();}catch(e){}
   if(!rows.length){host.innerHTML='<div style="padding:14px;color:var(--text3);font-size:11px">条件に該当する銘柄がありません。</div>';return;}
   host.innerHTML=rows.map(r=>{
     const price=selectorNum(r.currentPrice),up=price>0&&selectorNum(r.analystTarget)>0?(r.analystTarget/price-1)*100:null,gap=selectorGap(r),theme=selectorTheme(r),growth=[r.revenueGrowth,r.opProfitGrowth,r.epsGrowth].filter(x=>Number.isFinite(x)&&x!==0);const growthAvg=growth.length?growth.reduce((a,b)=>a+b,0)/growth.length:null;
@@ -16380,6 +16626,9 @@ function selectorRender(){
   }).join('');
   if(note)note.textContent='※既存保有銘柄は資産管理のCSV取込値を使用。新規候補のファンダメンタルズは手入力です。外部データを自動取得・上書きしません。';
   try{selectorMonitorRender();}catch(e){}
+  try{selectorCompareRender();}catch(e){}
+  try{selectorHypothesisRender();}catch(e){}
+  try{selectorTimingRender();}catch(e){}
 }
 (function(){[800,1800,3500].forEach(ms=>setTimeout(()=>{try{selectorRender();}catch(e){}},ms));const base=window.amRender;if(typeof base==='function'&&!window.__selectorAmWrapped){window.__selectorAmWrapped=true;window.amRender=function(){const x=base.apply(this,arguments);try{selectorRender();}catch(e){}return x;};}})();
 
@@ -16574,6 +16823,15 @@ function bsInvestmentRows(){
     if(Number(a.targetRatio||0)>0)map[key].targetRatio=Number(a.targetRatio);
     if(a.watchStatus)map[key].status=a.watchStatus;
   });
+  // 銘柄選定センターの新規候補も買付シミュレーターへ引き継ぐ
+  try{
+    const cands=typeof selectorLoadCandidates==='function'?selectorLoadCandidates():[];
+    cands.forEach(c=>{
+      const code=String(c.ticker||'').trim(); if(!code)return;
+      const key=code;
+      if(!map[key]) map[key]={ticker:code,name:String(c.name||code),amount:0,sector:String(c.theme||''),buyPrice:Number(c.targetBuy||0),sellPrice:Number(c.targetSell||0),targetRatio:Number(c.targetRatio||0),status:'新規候補',currentPrice:Number(c.currentPrice||0),fxRate:Number(c.fxRate||0),shares:0,currency:String(c.currency||(/^[A-Z]/.test(code)?'USD':''))};
+    });
+  }catch(e){}
   return Object.values(map).sort((a,b)=>b.amount-a.amount);
 }
 function bsCash(){
@@ -17673,6 +17931,52 @@ setTimeout(()=>{try{monitorRender()}catch(e){}},1300);
 </script>\n
 <script>
 // ============================================================
+// 市場環境チェック
+// ============================================================
+function marketNum(v){const n=Number(v);return Number.isFinite(n)?n:null;}
+function marketEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function marketLoad(){try{const x=JSON.parse(localStorage.getItem('marketEnvironment_v1')||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}}
+function marketSave(){
+ const ids=['spx','nasdaq','nikkei','topix','vix','us10y','usdjpy','date','semi','memory','nvda','avgo','amd','sector-date'];
+ const old=marketLoad(),x=Object.assign({},old);x.prev=x.prev||{};['spx','nasdaq','nikkei','topix','vix','us10y','usdjpy','semi','memory','nvda','avgo','amd'].forEach(k=>{if(old[k]!==''&&old[k]!=null)x.prev[k]=old[k];});
+ ids.forEach(k=>{const el=document.getElementById('mkt-'+k);if(el)x[k]=el.value;});
+ x.savedAt=new Date().toISOString();
+ try{localStorage.setItem('marketEnvironment_v1',JSON.stringify(x));}catch(e){}
+ const n=document.getElementById('mkt-save-note');if(n)n.textContent='✓ '+(x.date||todayStr())+' の市場環境を保存しました。';
+ marketRender();
+}
+function marketFill(){const x=marketLoad();['spx','nasdaq','nikkei','topix','vix','us10y','usdjpy','date','semi','memory','nvda','avgo','amd','sector-date'].forEach(k=>{const e=document.getElementById('mkt-'+k);if(e&&x[k]!=null)e.value=x[k];});}
+function marketBadge(label,detail,kind){return '<div style="padding:10px 12px;border-radius:9px;background:var(--bg3);border-left:4px solid '+(kind==='ok'?'var(--green)':kind==='warn'?'#d99b2b':'#888')+'"><b style="font-size:12px">'+marketEsc(label)+'</b><div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.5">'+marketEsc(detail)+'</div></div>';}
+function marketRender(){
+ marketFill();
+ const x=marketLoad(), v=id=>marketNum(document.getElementById('mkt-'+id)?.value), vix=v('vix'), us10y=v('us10y'), usd=v('usdjpy'), spx=v('spx'), nas=v('nasdaq'), nik=v('nikkei'), top=v('topix');
+ let marketKind='neutral',marketLabel='市場環境：確認中',marketDetail='VIX・金利・主要指数を入力すると機械判定します。';
+ if(vix!==null){if(vix>=30){marketKind='warn';marketLabel='市場環境：慎重確認';marketDetail='VIXが30以上。新規買付は一括投入より分割投入・決算確認を優先する条件です。';}else if(vix>=20){marketKind='warn';marketLabel='市場環境：変動大';marketDetail='VIXが20以上。価格だけでなく決算・目標買値・現金余力を併せて確認します。'}else{marketKind='ok';marketLabel='市場環境：通常確認';marketDetail='VIXは20未満。市場全体の急変シグナルは入力値上では強くありません。';}}
+ if(us10y!==null&&us10y>=5){marketKind='warn';marketLabel='市場環境：金利確認';marketDetail='米10年債利回りが5%以上。高PER銘柄ではバリュエーション確認を強めます。';}
+ const ms=document.getElementById('mkt-market-status');if(ms){const metric=[['S&P 500','spx'],['NASDAQ','nasdaq'],['日経平均','nikkei'],['TOPIX','topix'],['VIX','vix'],['米10年債','us10y'],['USD/JPY','usdjpy']];const cards=metric.filter(q=>v(q[1])!==null).map(q=>{const cur=v(q[1]),pr=marketNum(x.prev?.[q[1]]),chg=pr!==null&&pr!==0?(cur/pr-1)*100:null;return '<div style="padding:7px 8px;background:var(--bg);border-radius:7px"><div style="font-size:9px;color:var(--text3)">'+q[0]+'</div><b style="font-size:12px">'+cur.toLocaleString('ja-JP',{maximumFractionDigits:2})+'</b><div style="font-size:9px;color:var(--text3)">'+(chg!==null?(chg>=0?'+':'')+chg.toFixed(2)+'% 前回保存比':'前回値なし')+'</div></div>';}).join('');ms.innerHTML=marketBadge(marketLabel,marketDetail,marketKind)+'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:7px">'+cards+'</div>'; }
+ const ss=document.getElementById('mkt-sector-status');
+ const vals=[v('semi'),v('memory'),v('nvda'),v('avgo'),v('amd')].filter(z=>z!==null);let sectorKind='neutral',sectorLabel='セクター環境：確認中',sectorDetail='半導体指数・主要銘柄を入力すると確認できます。';
+ if(vals.length>=2){sectorLabel='セクター環境：値動き確認済み';sectorDetail='入力した半導体関連指標を個別銘柄の買付判断と併せて確認します。';sectorKind='ok';}
+ if(ss)ss.innerHTML=marketBadge(sectorLabel,sectorDetail,sectorKind);
+ const rows=(()=>{try{return typeof opsInvestmentRows==='function'?opsInvestmentRows():[];}catch(e){return [];}})();
+ const buy=document.getElementById('mkt-buy-context');
+ const cash=(()=>{try{return typeof opsInvestableCash==='function'?opsInvestableCash().total:0}catch(e){return 0}})();
+ const fire=(()=>{try{return marketNum(localStorage.getItem('fireTargetAssets'))||0}catch(e){return 0}})();
+ let notes=[];
+ if(cash>0)notes.push('投資可能現金：¥'+Math.round(cash).toLocaleString('ja-JP'));
+ if(vix!==null&&vix>=20)notes.push('市場変動が大きいため、買付タイミングは分割投入を検討する条件');
+ if(vix!==null&&vix<20)notes.push('市場全体の変動指標は比較的低い入力値');
+ if(usd!==null)notes.push('USD/JPY：'+usd.toFixed(2)+'（米国資産の円換算額に影響）');
+ if(fire>0)notes.push('Side-FIRE目標：¥'+Math.round(fire).toLocaleString('ja-JP'));
+ if(buy)buy.innerHTML='<div style="font-size:11px;line-height:1.7">'+(notes.length?notes.map(n=>'<div style="padding:6px 0;border-bottom:.5px solid var(--border)">• '+marketEsc(n)+'</div>').join(''):'市場環境を入力すると、ここに買付時の確認事項が表示されます。')+'</div><div style="font-size:10px;color:var(--text3);margin-top:7px">※「買う／買わない」の自動判断ではなく、買付前に確認すべき条件を表示します。</div>';
+ const tbl=document.getElementById('mkt-stock-table');
+ if(!tbl)return;
+ const list=rows.filter(r=>r.amount>0).sort((a,b)=>b.amount-a.amount).slice(0,20);
+ tbl.innerHTML=list.length?'<div style="overflow:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">銘柄</th><th style="padding:6px;border-bottom:1px solid var(--border)">現在値</th><th style="padding:6px;border-bottom:1px solid var(--border)">目標買値</th><th style="padding:6px;border-bottom:1px solid var(--border)">目標価格余地</th><th style="padding:6px;border-bottom:1px solid var(--border)">予想PER</th><th style="padding:6px;border-bottom:1px solid var(--border)">売上成長</th><th style="padding:6px;border-bottom:1px solid var(--border)">営業利益成長</th><th style="padding:6px;border-bottom:1px solid var(--border)">保有比率</th></tr></thead><tbody>'+list.map(r=>{const target=r.analyst>0&&r.price>0?(r.analyst/r.price-1)*100:null;const total=list.reduce((s,z)=>s+z.amount,0)||1;const ratio=r.amount/total*100;return '<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)"><b>'+marketEsc(r.code||r.key)+'</b><div style="color:var(--text3)">'+marketEsc(r.name)+'</div></td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.price?'¥'+Number(r.price).toLocaleString('ja-JP'):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.targetBuy?'¥'+Number(r.targetBuy).toLocaleString('ja-JP'):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(target!==null?(target>=0?'+':'')+target.toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.forwardPER?Number(r.forwardPER).toFixed(1):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.revenueGrowth!=null&&r.revenueGrowth!==''?Number(r.revenueGrowth).toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.opProfitGrowth!=null&&r.opProfitGrowth!==''?Number(r.opProfitGrowth).toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+ratio.toFixed(1)+'%</td></tr>';}).join('')+'</tbody></table></div>':'<div style="padding:15px;color:var(--text3);font-size:11px">保有銘柄をSBI/moomoo CSVから取り込むと、ここに表示されます。</div>';
+}
+setTimeout(()=>{try{marketRender()}catch(e){}},1400);
+
+// ============================================================
 // 投資運用センター
 // ============================================================
 function opsEsc(v){return String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));}
@@ -17684,7 +17988,7 @@ function opsInvestmentRows(){
   const map={};
   opsAccounts().filter(a=>a.cat!=='銀行'&&opsN(a.amount)>0&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
     const key=String(a.code||a.ticker||a.symbol||a.name||'').trim(); if(!key)return;
-    if(!map[key])map[key]={key,name:String(a.name||key),code:String(a.code||a.ticker||''),amount:0,pnl:0,pnlPct:null,prev:0,price:opsN(a.price),targetBuy:opsN(a.targetBuyPrice),targetSell:opsN(a.targetSellPrice),analyst:opsN(a.analystTargetPrice),earningsDate:a.earningsDate||'',strategy:a.strategy||'',sector:a.sector||'',cat:a.cat||'',broker:a.broker||'',currency:a.priceCurrency||a.currency||''};
+    if(!map[key])map[key]={key,name:String(a.name||key),code:String(a.code||a.ticker||''),amount:0,pnl:0,pnlPct:null,prev:0,price:opsN(a.price),targetBuy:opsN(a.targetBuyPrice),targetSell:opsN(a.targetSellPrice),analyst:opsN(a.analystTargetPrice),forwardPER:opsN(a.forwardPER),revenueGrowth:a.revenueGrowth,opProfitGrowth:a.opProfitGrowth,earningsDate:a.earningsDate||'',strategy:a.strategy||'',sector:a.sector||'',cat:a.cat||'',broker:a.broker||'',currency:a.priceCurrency||a.currency||''};
     map[key].amount+=opsN(a.amount); map[key].pnl+=opsN(a.amount)-opsN(a.costPrice)*opsN(a.shares);
     const cost=opsN(a.costPrice)*opsN(a.shares); if(cost>0)map[key].pnlPct=(map[key].pnl/cost)*100;
     const prev=String(a.broker||'')==='moomoo証券'?opsN(a.prevMoomooAmount):opsN(a.prevSBIAmount); if(prev>0)map[key].prev+=prev;
