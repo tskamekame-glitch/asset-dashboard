@@ -6158,7 +6158,7 @@ function amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,fx){
   const banner=document.getElementById('soldSummaryBanner');if(!banner)return;const old=document.getElementById('moomooDiffBanner');if(old)old.remove();banner.insertAdjacentHTML('afterend',html);setTimeout(()=>{const d=document.getElementById('moomooDiffDetail');if(d)d.style.display='block';},300);
 }
 
-function amSBIImport(event){
+async function amSBIImport(event){
   const files=Array.from(event.target.files);
   event.target.value='';
   if(!files.length)return;
@@ -6167,7 +6167,7 @@ function amSBIImport(event){
   const fxRows=[];
   files.forEach(f=>{
     const reader=new FileReader();
-    reader.onload=ev=>{
+    reader.onload=async ev=>{
       const text=ev.target.result;
       // フォーマット判定:
       //  「建玉番号」+「通貨ペア」→ SBI FX取引履歴CSV
@@ -6181,9 +6181,19 @@ function amSBIImport(event){
       }
       pending--;
       if(pending===0){
-        if(allRows.length)amCaptureImportSnapshot('SBI証券',amAccounts),amApplySBIRows(allRows);
-        if(fxRows.length)fxApplyHistoryRows(fxRows);
-        if(!allRows.length&&!fxRows.length)showToast('⚠️ 有効な行が見つかりませんでした',3000);
+        if(allRows.length){
+          try{
+            amCaptureImportSnapshot('SBI証券',amAccounts);
+            await amApplySBIRows(allRows);
+          }catch(err){
+            console.error('[amSBI] apply error',err);
+            showToast('❌ SBI CSVの反映中にエラーが発生しました：'+(err?.message||err),6000);
+          }
+        }
+        if(fxRows.length){
+          try{await fxApplyHistoryRows(fxRows);}catch(err){console.error('[amSBI] FX apply error',err);}
+        }
+        if(!allRows.length&&!fxRows.length)showToast('⚠️ CSVから有効な保有銘柄を読み取れませんでした。SBIの「保有証券」CSVかポートフォリオCSVを選択してください。',5000);
       }
     };
     reader.readAsText(f,'Shift-JIS');
@@ -6566,7 +6576,7 @@ function amFindDuplicates(){
 
 async function amApplySBIRows(rows){
   if(!rows.length){showToast('⚠️ 有効な行が見つかりませんでした',3000);return;}
-  if(!amAccounts||!amAccounts.length){showToast('⚠️ 資産管理にデータがありません',3000);return;}
+  if(!amAccounts) amAccounts=[];
 
   let updated=0;
   const log=[];
@@ -16536,6 +16546,24 @@ function selectorTimingForeign(r){return /USD|ドル|米国|外国|KRW|ウォン
 function selectorTimingFx(r){const f=Number(r?.fxRate||0);return f>0?f:1;}
 function selectorTimingUnitYen(r,price){return selectorTimingForeign(r)?Number(price||0)*selectorTimingFx(r):Number(price||0);}
 function selectorTimingDays(v){return selectorDaysToEarnings(v);}
+function selectorTimingMarketContext(r){
+  let x={}; try{x=marketLoad?marketLoad():{}}catch(e){}
+  const num=k=>{const n=Number(x?.[k]);return Number.isFinite(n)?n:null;};
+  const prev=k=>{const n=Number(x?.prev?.[k]);return Number.isFinite(n)&&n!==0?n:null;};
+  const chg=k=>{const c=num(k),p=prev(k);return c!==null&&p!==null?(c/p-1)*100:null;};
+  const vix=num('vix'), us10y=num('us10y'), semi=chg('semi'), memory=chg('memory');
+  const semiTicker=/半導体|メモリ|semiconductor|memory|MU|NVDA|AVGO|AMD|SNDK|KIOXIA|キオクシア|SK.?hynix|Micron/i.test([r?.ticker,r?.name,r?.sector,r?.strategy].join(' '));
+  let level='normal',label='通常配分',detail='市場環境による追加調整なし。設定した3段階の指値を基本に確認します。',rates=[40,30,30];
+  if(vix!==null&&vix>=30){level='severe';label='慎重配分';detail='VIX 30以上。第1投入を抑え、深い押し目側に資金を残す条件です。';rates=[20,30,50];}
+  else if(vix!==null&&vix>=20){level='volatile';label='分割配分';detail='VIX 20以上。初回投入を抑え、分割買付を優先する条件です。';rates=[30,30,40];}
+  if(us10y!==null&&us10y>=5){level='rate';label='金利確認';detail='米10年債5%以上。特に高PER銘柄は第1投入を抑えてバリュエーションを再確認します。';rates=[25,30,45];}
+  if(semiTicker && semi!==null && semi<=-5){level='semi-weak';label='半導体調整確認';detail='登録した半導体指標が前回保存比5%以上下落。半導体銘柄は段階投入を厚めにします。';rates=[25,30,45];}
+  if(semiTicker && memory!==null && memory<=-5){level='memory-weak';label='メモリ調整確認';detail='登録したメモリ指標が前回保存比5%以上下落。メモリ銘柄は第2・第3段を重視します。';rates=[20,30,50];}
+  if(semiTicker && semi!==null && semi>=5 && (vix===null||vix<20)){level='semi-strong';label='半導体上昇確認';detail='半導体指標が前回保存比5%以上上昇。上昇局面での追いかけ買いを避け、目標買値を優先します。';rates=[25,35,40];}
+  const highVal=Number(r?.forwardPER)>35 || Number(r?.per)>45;
+  if(highVal && us10y!==null&&us10y>=4.5){label='高PER・金利確認';detail='高PERかつ米金利が高めのため、指値到達まで待つ比重を高めます。';rates=[20,30,50];level='valuation';}
+  return {level,label,detail,rates,vix,us10y,semi,memory,semiTicker};
+}
 function selectorTimingState(r){
   if(!r)return {label:'未選択',icon:'⚪',color:'var(--text3)',reason:'銘柄を選択してください。'};
   const p=selectorNum(r.currentPrice),tb=selectorNum(r.targetBuy),d=selectorTimingDays(r.earningsDate);
@@ -16553,14 +16581,14 @@ function selectorTimingRender(){
   sel.innerHTML=rows.map(r=>`<option value="${selectorEsc(r.ticker)}">${selectorEsc(r.ticker)}｜${selectorEsc(r.name)}${r.held?'（保有）':'（新規）'}</option>`).join('');
   if(rows.some(r=>String(r.ticker).toUpperCase()===String(old).toUpperCase()))sel.value=old;
   const r=selectorTimingSelected(); if(!r){state.innerHTML='';if(stages)stages.innerHTML='';if(impact)impact.innerHTML='';return;}
-  const st=selectorTimingState(r),p=selectorNum(r.currentPrice),tb=selectorNum(r.targetBuy),target=selectorNum(r.analystTarget),d=selectorTimingDays(r.earningsDate),budget=Math.max(0,selectorNum(document.getElementById('sel-timing-budget')?.value));
+  const st=selectorTimingState(r),mkt=selectorTimingMarketContext(r),p=selectorNum(r.currentPrice),tb=selectorNum(r.targetBuy),target=selectorNum(r.analystTarget),d=selectorTimingDays(r.earningsDate),budget=Math.max(0,selectorNum(document.getElementById('sel-timing-budget')?.value));
   const age=r.lastAnalysisDate?Math.floor((Date.now()-new Date(String(r.lastAnalysisDate)+'T00:00:00').getTime())/86400000):null;
   const up=p>0&&target>0?(target/p-1)*100:null;
-  state.innerHTML=`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">${st.icon}</span><b style="font-size:16px;color:${st.color}">${st.label}</b><span style="font-size:10px;color:var(--text3)">${selectorEsc(st.reason)}</span></div><div style="margin-top:7px">${selectorPill('現在値',p?(selectorTimingForeign(r)?'$':'¥')+p.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未登録')}${selectorPill('目標買値',tb?(selectorTimingForeign(r)?'$':'¥')+tb.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未設定')}${selectorPill('目標価格余地',up!==null?(up>=0?'+':'')+up.toFixed(1)+'%':'—')}${selectorPill('決算',r.earningsDate?(d===null?'登録済':d<0?'終了':d+'日後'):'未登録')}${selectorPill('情報鮮度',age===null?'未確認':age+'日前')}</div></div>`;
+  state.innerHTML=`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">${st.icon}</span><b style="font-size:16px;color:${st.color}">${st.label}</b><span style="font-size:10px;color:var(--text3)">${selectorEsc(st.reason)}</span></div><div style="margin-top:7px">${selectorPill('現在値',p?(selectorTimingForeign(r)?'$':'¥')+p.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未登録')}${selectorPill('目標買値',tb?(selectorTimingForeign(r)?'$':'¥')+tb.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未設定')}${selectorPill('目標価格余地',up!==null?(up>=0?'+':'')+up.toFixed(1)+'%':'—')}${selectorPill('決算',r.earningsDate?(d===null?'登録済':d<0?'終了':d+'日後'):'未登録')}${selectorPill('情報鮮度',age===null?'未確認':age+'日前')}</div><div style="margin-top:9px;padding:9px;background:var(--bg2);border-radius:8px;border-left:3px solid var(--accent)"><div style="font-size:10px;color:var(--text3)">🌐 市場環境を反映した買付条件</div><b style="font-size:12px">${selectorEsc(mkt.label)}</b><div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.5">${selectorEsc(mkt.detail)}</div><div style="margin-top:5px;font-size:10px">推奨投入率：第1 <b>${mkt.rates[0]}%</b> ／ 第2 <b>${mkt.rates[1]}%</b> ／ 第3 <b>${mkt.rates[2]}%</b>${mkt.vix!==null?' ／ VIX '+mkt.vix.toFixed(1):''}</div></div></div>`;
   const prices=[1,2,3].map(i=>selectorNum(document.getElementById('sel-timing-p'+i)?.value));
   const rates=[1,2,3].map(i=>Math.max(0,Math.min(100,selectorNum(document.getElementById('sel-timing-a'+i)?.value))));
   const sumRate=rates.reduce((a,b)=>a+b,0),cash=typeof bsCash==='function'?bsCash():0;
-  if(stages){stages.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:12px;font-weight:700;margin-bottom:7px">段階買付</div>${prices.map((pr,i)=>{const amt=budget*rates[i]/100, unit=selectorTimingUnitYen(r,pr||p),shares=unit>0?amt/unit:0;return `<div style="display:grid;grid-template-columns:.7fr 1fr 1fr 1fr;gap:6px;font-size:10px;padding:6px 0;border-bottom:${i===2?'0':'1px solid var(--border)'}"><b>第${i+1}段</b><span>${pr>0?(selectorTimingForeign(r)?'$':'¥')+pr.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未設定'}</span><span>¥${Math.round(amt).toLocaleString('ja-JP')}（${rates[i]}%）</span><span>約${shares.toLocaleString('ja-JP',{maximumFractionDigits:3})}株</span></div>`}).join('')}<div style="font-size:10px;color:${sumRate===100?'var(--text3)':'#b7791f'};margin-top:7px">投入率合計 ${sumRate}% ／ 予定額 ¥${Math.round(budget).toLocaleString('ja-JP')} ／ 最大使用額 ¥${Math.round(Math.min(budget,cash)).toLocaleString('ja-JP')}（現金 ¥${Math.round(cash).toLocaleString('ja-JP')}）</div></div>`;}
+  if(stages){stages.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:12px;font-weight:700;margin-bottom:7px">段階買付</div><div style="font-size:10px;color:var(--text3);margin-bottom:7px">🌐 ${selectorEsc(mkt.label)}：推奨 ${mkt.rates[0]}% / ${mkt.rates[1]}% / ${mkt.rates[2]}%　｜　現在設定 ${rates[0]}% / ${rates[1]}% / ${rates[2]}%</div>${prices.map((pr,i)=>{const amt=budget*rates[i]/100, unit=selectorTimingUnitYen(r,pr||p),shares=unit>0?amt/unit:0;return `<div style="display:grid;grid-template-columns:.7fr 1fr 1fr 1fr;gap:6px;font-size:10px;padding:6px 0;border-bottom:${i===2?'0':'1px solid var(--border)'}"><b>第${i+1}段</b><span>${pr>0?(selectorTimingForeign(r)?'$':'¥')+pr.toLocaleString('ja-JP',{maximumFractionDigits:2}):'未設定'}</span><span>¥${Math.round(amt).toLocaleString('ja-JP')}（${rates[i]}%）</span><span>約${shares.toLocaleString('ja-JP',{maximumFractionDigits:3})}株</span></div>`}).join('')}<div style="font-size:10px;color:${sumRate===100?'var(--text3)':'#b7791f'};margin-top:7px">投入率合計 ${sumRate}% ／ 予定額 ¥${Math.round(budget).toLocaleString('ja-JP')} ／ 最大使用額 ¥${Math.round(Math.min(budget,cash)).toLocaleString('ja-JP')}（現金 ¥${Math.round(cash).toLocaleString('ja-JP')}）</div></div>`;}
   const avgPrices=prices.map((x,i)=>({p:x,a:budget*rates[i]/100})).filter(x=>x.p>0&&x.a>0);const totalA=avgPrices.reduce((s,x)=>s+x.a,0),avg=totalA?avgPrices.reduce((s,x)=>s+x.p*x.a,0)/totalA:0;const afterCash=cash-budget;const base=selectorInvestmentRows(),total=base.reduce((s,x)=>s+selectorNum(x.amount),0),same=base.find(x=>String(x.ticker).toUpperCase()===String(r.ticker).toUpperCase()),afterTicker=selectorNum(same?.amount)+Math.max(0,Math.min(budget,cash));const afterTotal=total+Math.max(0,Math.min(budget,cash));const afterPct=afterTotal?afterTicker/afterTotal*100:0;
   if(impact){impact.innerHTML=`<div style="background:var(--bg);border-radius:10px;padding:11px"><div style="font-size:12px;font-weight:700;margin-bottom:7px">買付後の概算</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><div>${selectorPill('段階平均価格',avg?(selectorTimingForeign(r)?'$':'¥')+avg.toLocaleString('ja-JP',{maximumFractionDigits:2}):'—')}</div><div>${selectorPill('買付後現金','¥'+Math.round(afterCash).toLocaleString('ja-JP'),afterCash<0?'var(--red)':'')}</div><div>${selectorPill('買付後保有比率',afterPct.toFixed(1)+'%')}</div><div>${selectorPill('購入予定額','¥'+Math.round(Math.min(budget,cash)).toLocaleString('ja-JP'))}</div></div><div style="font-size:10px;color:${sumRate===100&&budget<=cash?'var(--text3)':'#b7791f'};margin-top:7px">${sumRate!==100?'⚠ 投入率を合計100%にしてください。 ':''}${budget>cash?'⚠ 予定額が投資可能現金を超えています。 ':''}※株数は概算。実際の最低取引単位・手数料・為替手数料は含みません。</div></div>`;}
 }
