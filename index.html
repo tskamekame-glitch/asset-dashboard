@@ -3807,7 +3807,41 @@ function amRenderReminder(){
   const stale=amAccounts.filter(a=>!a.sold&&daysSince(a.updated)>=30);
   el.innerHTML=stale.length?`<div class="reminder-banner"><span class="reminder-icon">🔔</span><div><div class="reminder-title">残高の更新をお忘れなく！</div><div class="reminder-text">${stale.map(a=>a.name+'（'+daysSince(a.updated)+'日未更新）').join('<br>')}</div></div></div>`:'';
 }
+function amNormalizeLedger(){
+  if(!Array.isArray(amAccounts)||!amAccounts.length)return;
+  const validCats=new Set(['銀行','預り金','全世界インデックス','日本インデックス','インドインデックス','高配当','個別株','外国株式','FX','年金','その他']);
+  const clean=[];
+  const groups=new Map();
+  const norm=s=>String(s||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\s/g,'').toLowerCase();
+  const nisa=a=>String(a.nisaType||'').toLowerCase();
+  for(const a of amAccounts){
+    if(!a||a.sold){clean.push(a);continue;}
+    const name=String(a.name||'').trim();
+    const cat=String(a.cat||'');
+    // SBI CSVの別セクションを誤って資産として取り込んだ異常行を除外
+    if(!validCats.has(cat) && (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(name)||/^[+\-]?\d[\d,]*(?:\.\d+)?$/.test(name))){continue;}
+    // SWCCは国内株なので海外株式から個別株へ補正
+    if(/^SWCC$/i.test(name) && cat==='外国株式')a.cat='個別株';
+    const broker=String(a.broker||'').trim();
+    const code=norm(a.code||'');
+    const key=[broker,code?'c:'+code:'n:'+norm(name),nisa(a),String(a.cat||'')].join('|');
+    // 同一証券会社・同一銘柄・同一NISA区分は1行に集約（ロット分割は評価額・株数を合算）
+    if(!groups.has(key)){groups.set(key,a);clean.push(a);}
+    else{
+      const g=groups.get(key);
+      g.amount=Number(g.amount||0)+Number(a.amount||0);
+      if(Number(a.shares||0))g.shares=Number(g.shares||0)+Number(a.shares||0);
+      if(Number(a.costPrice||0)&&!Number(g.costPrice||0))g.costPrice=Number(a.costPrice);
+      if(a.updated&&(!g.updated||String(a.updated)>String(g.updated)))g.updated=a.updated;
+      if(!g.note&&a.note)g.note=a.note;
+    }
+  }
+  amAccounts=clean;
+  window.amAccounts=amAccounts;
+}
+
 function amRender(){
+  try{amNormalizeLedger();}catch(e){console.warn('amNormalizeLedger',e);}
   // 移行: 旧コードで売却済みFXロットに残っていた評価額をゼロ化（CSV書き出し・Sheetsに残さない）
   try{
     let fxMig=false;
@@ -3845,17 +3879,19 @@ function amRender(){
   // 銘柄表示順：①海外株式 → ②個別株 → ③NISA成長 → ④NISA積立 → ⑤インデックス
   // NISA区分を最優先し、NISA銘柄は専用セクションへ集約する。
   const displayGroups={
-    foreign:{label:'🌍 海外株式',order:1,items:[]},
-    individual:{label:'📈 個別株',order:2,items:[]},
-    growth:{label:'📈 NISA成長投資枠',order:3,items:[]},
-    tsumitate:{label:'📅 NISAつみたて投資枠',order:4,items:[]},
-    index:{label:'🌐 インデックス',order:5,items:[]},
-    other:{label:'📦 その他',order:6,items:[]}
+    bank:{label:'🏦 銀行',order:1,items:[]},
+    foreign:{label:'🌍 海外株式',order:2,items:[]},
+    individual:{label:'📈 個別株',order:3,items:[]},
+    growth:{label:'📈 NISA成長投資枠',order:4,items:[]},
+    tsumitate:{label:'📅 NISAつみたて投資枠',order:5,items:[]},
+    index:{label:'🌐 インデックス',order:6,items:[]},
+    other:{label:'📦 その他',order:7,items:[]}
   };
   activeAccounts.forEach(a=>{
     const nisa=amNisaGroupInfo(a).key;
     const isIndex=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
-    if(nisa==='growth') displayGroups.growth.items.push(a);
+    if(a.cat==='銀行') displayGroups.bank.items.push(a);
+    else if(nisa==='growth') displayGroups.growth.items.push(a);
     else if(nisa==='tsumitate') displayGroups.tsumitate.items.push(a);
     else if(a.cat==='外国株式') displayGroups.foreign.items.push(a);
     else if(a.cat==='個別株'||a.cat==='高配当') displayGroups.individual.items.push(a);
