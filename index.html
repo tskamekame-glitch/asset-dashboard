@@ -18038,8 +18038,10 @@ async function marketFetchEnvQuote(symbol){
   ];
   let lastErr=null;
   for(const url of urls){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),5000);
     try{
-      const res=await fetch(url,{cache:'no-store'});
+      const res=await fetch(url,{cache:'no-store',signal:controller.signal});
       if(!res.ok)throw new Error('HTTP '+res.status);
       const j=await res.json();
       const r=j&&j.chart&&j.chart.result&&j.chart.result[0];
@@ -18051,32 +18053,40 @@ async function marketFetchEnvQuote(symbol){
       if(price===null)throw new Error('現在値なし');
       let prev=marketNum(meta.previousClose||meta.chartPreviousClose);
       if(prev===null)for(let i=closes.length-2;i>=0;i--){const n=marketNum(closes[i]);if(n!==null){prev=n;break;}}
+      clearTimeout(timer);
       return {price,prev,currency:meta.currency||''};
-    }catch(e){lastErr=e;}
+    }catch(e){lastErr=e;clearTimeout(timer);}
   }
   throw lastErr||new Error('取得失敗');
 }
+
 const MARKET_ENV_SYMBOLS={spx:'^GSPC',nasdaq:'^IXIC',nikkei:'^N225',topix:'^TOPX',vix:'^VIX',us10y:'^TNX',usdjpy:'JPY=X',semi:'^SOX',memory:'MU',nvda:'NVDA',avgo:'AVGO',amd:'AMD'};
 async function marketSyncEnvironment(){
   const note=document.getElementById('mkt-save-note');
-  if(note)note.textContent='⏳ 最新の市場データを取得中...';
-  const old=marketLoad(), next={...old,prev:{...(old.prev||{})}};
+  if(note)note.textContent='⏳ 最新の市場データを一括取得中...';
+  const old=marketLoad(), next={...old,prev:{...(old.prev||{})},prevDay:{...(old.prevDay||{})}};
+  const entries=Object.entries(MARKET_ENV_SYMBOLS);
   let ok=0,fail=0;const errors=[];
-  for(const [key,symbol] of Object.entries(MARKET_ENV_SYMBOLS)){
-    try{
-      const q=await marketFetchEnvQuote(symbol);
-      const el=document.getElementById('mkt-'+key);
-      if(el)el.value=(key==='us10y'?(q.price/10):q.price).toFixed(2);
-      // Yahoo Financeが返す「前日終値」を、そのまま前日比較用に保存
-      next.prevDay=next.prevDay||{};
-      next.prevDay[key]=(key==='us10y'?(q.prev/10):q.prev);
-      // 旧バージョンの「前回保存比」も残して互換性を維持
+
+  // 12項目を直列ではなく並列取得。1項目の失敗で全体が遅くならないよう各項目を独立処理。
+  const results=await Promise.all(entries.map(async ([key,symbol])=>{
+    try{return {key,q:await marketFetchEnvQuote(symbol)};}
+    catch(e){return {key,error:e&&e.message?e.message:'取得失敗'};}
+  }));
+
+  results.forEach(r=>{
+    if(r.q){
+      const key=r.key,q=r.q,el=document.getElementById('mkt-'+key);
+      const value=key==='us10y'?(q.price/10):q.price;
+      const prev=key==='us10y'?(q.prev/10):q.prev;
+      if(el)el.value=Number(value).toFixed(2);
+      next.prevDay[key]=prev;
       if(old[key]!==''&&old[key]!=null)next.prev[key]=old[key];
-      next[key]=el?el.value:String(q.price);
+      next[key]=el?el.value:String(value);
       ok++;
-    }catch(e){fail++;errors.push(key+': '+(e&&e.message?e.message:'取得失敗'));}
-    await new Promise(r=>setTimeout(r,80));
-  }
+    }else{fail++;errors.push(r.key+': '+r.error);}
+  });
+
   const today=todayStr();
   const dateEl=document.getElementById('mkt-date'), sectorDateEl=document.getElementById('mkt-sector-date');
   if(dateEl)dateEl.value=today;
@@ -18084,7 +18094,9 @@ async function marketSyncEnvironment(){
   next.date=today;next['sector-date']=today;next.savedAt=new Date().toISOString();
   try{localStorage.setItem('marketEnvironment_v1',JSON.stringify(next));}catch(e){}
   marketRender();
-  if(note)note.textContent=fail===0?'✓ '+today+' の市場環境を更新しました（'+ok+'項目）':'⚠ '+ok+'項目取得 / '+fail+'項目失敗。もう一度お試しください。';
+  if(note){
+    note.textContent=fail===0?'✓ '+today+' の市場環境を更新しました（'+ok+'/'+entries.length+'項目）':'⚠ '+ok+'/'+entries.length+'項目取得。失敗項目は再取得できます。';
+  }
   if(fail>0)console.warn('marketSyncEnvironment',errors);
   return {ok,fail,errors};
 }
