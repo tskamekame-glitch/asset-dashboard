@@ -795,11 +795,11 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
 <!-- ========== MARKET ENVIRONMENT ========== -->
 <div class="panel" id="tab-market">
-  <div class="panel-head"><div><div class="panel-title">🌐 市場環境 → 今日の買付判断</div><div class="panel-sub">市場全体 → 半導体・AI → 個別銘柄 → 買付判断の順に確認します。ここでは買い／売りを自動決定せず、確認材料を整理します。</div></div><button class="icon-btn" onclick="marketRender()">↻ 更新</button></div>
+  <div class="panel-head"><div><div class="panel-title">🌐 市場環境 → 今日の買付判断</div><div class="panel-sub">市場全体 → 半導体・AI → 個別銘柄 → 買付判断の順に確認します。ここでは買い／売りを自動決定せず、確認材料を整理します。</div></div><button class="icon-btn" onclick="marketSyncEnvironment()">↻ 最新データ取得</button></div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
     <div style="font-size:15px;font-weight:700;margin-bottom:5px">① 市場全体</div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">VIX・米金利・主要指数・ドル円を入力して、市場全体の確認状態を見ます。</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">VIX・米金利・主要指数・ドル円を自動取得して、市場全体の確認状態を見ます。</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
       <label style="font-size:10px;color:var(--text3)">S&P 500<input id="mkt-spx" type="number" step="0.01" placeholder="現在値"></label>
       <label style="font-size:10px;color:var(--text3)">NASDAQ<input id="mkt-nasdaq" type="number" step="0.01" placeholder="現在値"></label>
@@ -817,7 +817,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
     <div style="font-size:15px;font-weight:700;margin-bottom:5px">② 半導体・AIセクター</div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">半導体指数・メモリ指標・主要AI銘柄を確認します。あなたの半導体投資の判断材料に使います。</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">半導体指数・メモリ関連株・主要AI銘柄を自動取得します。あなたの半導体投資の判断材料に使います。</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
       <label style="font-size:10px;color:var(--text3)">半導体指数 / ETF<input id="mkt-semi" type="number" step="0.01" placeholder="現在値"></label>
       <label style="font-size:10px;color:var(--text3)">メモリ指標<input id="mkt-memory" type="number" step="0.01" placeholder="現在値"></label>
@@ -17652,10 +17652,15 @@ async function marketBootSync(){
     return true;
   }catch(e){return false;}
 }
-// 市場データの自動取得は停止。現在値はSBI/moomooのCSV取込を正とし、手動更新ボタンのみ利用します。
-// 以前の自動タイマーが残っている場合も停止。
-if(marketAutoTimer)clearInterval(marketAutoTimer);
-marketAutoTimer=null;
+// 市場環境は自動取得。保有銘柄の現在値はSBI/moomoo CSVを正とし、こちらでは変更しない。
+let marketEnvAutoTimer=null;
+function marketStartEnvironmentAuto(){
+  if(marketEnvAutoTimer)clearInterval(marketEnvAutoTimer);
+  const mins=Math.max(5,Math.min(1440,marketNum(marketLoadSettings().interval)||30));
+  marketEnvAutoTimer=setInterval(()=>{if(document.visibilityState==='visible'){marketSyncEnvironment().catch(()=>{});}},mins*60000);
+}
+setTimeout(()=>{marketSyncEnvironment().catch(()=>{});},1800);
+marketStartEnvironmentAuto();
 marketBootSynced=true;
 (function(){const base=window.amRender;if(typeof base==='function'&&!window.__marketAmWrapped){window.__marketAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{marketRender()}catch(e){}return r;};}})();
 
@@ -17988,6 +17993,48 @@ setTimeout(()=>{try{monitorRender()}catch(e){}},1300);
 function marketNum(v){const n=Number(v);return Number.isFinite(n)?n:null;}
 function marketEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function marketLoad(){try{const x=JSON.parse(localStorage.getItem('marketEnvironment_v1')||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}}
+async function marketFetchEnvQuote(symbol){
+  const url='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?range=1d&interval=1d&events=history';
+  const res=await fetch(url,{cache:'no-store'});
+  if(!res.ok)throw new Error(symbol+' HTTP '+res.status);
+  const j=await res.json(), r=j?.chart?.result?.[0];
+  if(!r)throw new Error(symbol+' データなし');
+  const meta=r.meta||{}, q=r.indicators?.quote?.[0]||{}, closes=q.close||[];
+  let price=marketNum(meta.regularMarketPrice);
+  if(price===null){for(let i=closes.length-1;i>=0;i--){const n=marketNum(closes[i]);if(n!==null){price=n;break;}}}
+  if(price===null)throw new Error(symbol+' 現在値なし');
+  let prev=marketNum(meta.previousClose||meta.chartPreviousClose);
+  if(prev===null){for(let i=closes.length-2;i>=0;i--){const n=marketNum(closes[i]);if(n!==null){prev=n;break;}}}
+  return {price,prev,currency:meta.currency||''};
+}
+const MARKET_ENV_SYMBOLS={spx:'^GSPC',nasdaq:'^IXIC',nikkei:'^N225',topix:'^TOPX',vix:'^VIX',us10y:'^TNX',usdjpy:'JPY=X',semi:'^SOX',memory:'MU',nvda:'NVDA',avgo:'AVGO',amd:'AMD'};
+async function marketSyncEnvironment(){
+  const note=document.getElementById('mkt-save-note');
+  if(note)note.textContent='⏳ 市場環境を取得中...';
+  let ok=0,fail=0; const errors=[];
+  const old=marketLoad(), next={...old,prev:{...(old.prev||{})}};
+  for(const [key,symbol] of Object.entries(MARKET_ENV_SYMBOLS)){
+    try{
+      const q=await marketFetchEnvQuote(symbol);
+      const el=document.getElementById('mkt-'+key);
+      if(el)el.value=(key==='us10y'?(q.price/10):q.price).toFixed(2);
+      if(old[key]!==''&&old[key]!=null)next.prev[key]=old[key];
+      next[key]=el?.value??q.price;
+      ok++;
+    }catch(e){fail++;errors.push(key+': '+String(e?.message||e));}
+    await new Promise(r=>setTimeout(r,120));
+  }
+  const dateEl=document.getElementById('mkt-date'), sectorDateEl=document.getElementById('mkt-sector-date');
+  const today=todayStr();
+  if(dateEl&&!dateEl.value)dateEl.value=today;
+  if(sectorDateEl&&!sectorDateEl.value)sectorDateEl.value=today;
+  next.date=dateEl?.value||today; next['sector-date']=sectorDateEl?.value||today;
+  next.savedAt=new Date().toISOString();
+  try{localStorage.setItem('marketEnvironment_v1',JSON.stringify(next));}catch(e){}
+  if(note)note.textContent=fail?'⚠ '+ok+'項目を取得、'+fail+'項目は未取得。再度「更新」を押してください。':'✓ '+today+' の市場環境を自動更新しました。';
+  marketRender();
+  return {ok,fail,errors};
+}
 function marketSave(){
  const ids=['spx','nasdaq','nikkei','topix','vix','us10y','usdjpy','date','semi','memory','nvda','avgo','amd','sector-date'];
  const old=marketLoad(),x=Object.assign({},old);x.prev=x.prev||{};['spx','nasdaq','nikkei','topix','vix','us10y','usdjpy','semi','memory','nvda','avgo','amd'].forEach(k=>{if(old[k]!==''&&old[k]!=null)x.prev[k]=old[k];});
