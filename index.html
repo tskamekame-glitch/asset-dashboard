@@ -7102,10 +7102,13 @@ async function importCSV(e){
       // 重要: SBI CSV取込で既存のSBI行を丸ごと削除して作り直すと、
       // 旧データのbroker属性がない場合に二重計上するため、今回から「同一銘柄を更新」を基本にする。
       // 既にこの機能で作成した行（memo/importSource付き）は今回のCSVから再生成する。
-      const generatedOld=amAccounts.filter(a=>!a.sold && (a.importSource==='sbi_csv' || /\[SBIポートフォリオCSV\]/.test(String(a.memo||''))));
-      const generatedIds=new Set(generatedOld.map(a=>Number(a.id)));
-      if(generatedOld.length){
-        amAccounts=amAccounts.filter(a=>!generatedIds.has(Number(a.id)));
+      // SBI証券の現物・投信は、このCSVを唯一の正本として同期する。
+      // 過去版でbroker/importSourceが付かなかったSBI行も残すと二重計上するため、
+      // SBIの投資資産だけをいったん除去し、今回CSVから再構築する。銀行・預り金・FX・moomoo・手入力の他社資産は触らない。
+      const SBI_INV_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
+      const beforeSbiInv=amAccounts.filter(a=>!a.sold && (String(a.broker||'')==='SBI証券' || a.importSource==='sbi_csv' || /\[SBI(?:ポートフォリオCSV|自動追加)/.test(String(a.memo||''))) && SBI_INV_CATS.includes(String(a.cat||'')));
+      if(beforeSbiInv.length){
+        amAccounts=amAccounts.filter(a=>!beforeSbiInv.some(x=>Number(x.id)===Number(a.id)));
         window.amAccounts=amAccounts;
       }
       let added=0,updated=0;
@@ -7161,7 +7164,7 @@ async function importCSV(e){
       try{await amSaveToSheet();}catch(_e){console.warn('[SBI exact] sheet save failed',_e);}
       const after=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
       const csvTotal=exactRows.reduce((a,r)=>a+r.evalAmt,0);
-      showToast(`✅ SBIポートフォリオCSVを正規取込：${added}銘柄 / CSV証券評価額 ¥${Math.round(csvTotal).toLocaleString()} / 総資産 ${Math.round(before).toLocaleString()}→${Math.round(after).toLocaleString()}`,7000);
+      const bankNow=amAccounts.filter(a=>!a.sold&&a.cat==='銀行').reduce((s,a)=>s+Number(a.amount||0),0); const moomooNow=amAccounts.filter(a=>!a.sold&&String(a.broker||'')==='moomoo証券').reduce((s,a)=>s+Number(a.amount||0),0); const totalNow=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+Number(a.amount||0),0); showToast(`✅ SBI同期完了：${added}件追加・${updated}件更新 / SBI CSV ¥${Math.round(csvTotal).toLocaleString()} / 現在総資産 ¥${Math.round(totalNow).toLocaleString()}（SBI銀行 ¥${Math.round(bankNow).toLocaleString()}・moomoo ¥${Math.round(moomooNow).toLocaleString()}・その他含む）`,9000);
       return;
     }
 
