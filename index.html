@@ -8033,7 +8033,13 @@ async function trSaveToSheet(){
       s.date||'', s.filename||'', s.total||0,
       JSON.stringify(s.cats||{}), JSON.stringify(s.accounts||[]), s.netFlow===undefined?'':s.netFlow, s.flowSource||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:E${values.length+50}`,valueInputOption:'RAW',resource:{values}});
+    // trendシートが旧データ/旧構成でも確実に存在することを確認してから7列すべてを書き込む
+    try{
+      const meta=await gapi.client.sheets.spreadsheets.get({spreadsheetId:amSpreadsheetId});
+      const hasTrend=meta.result.sheets.some(sh=>sh.properties.title==='trend');
+      if(!hasTrend)await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:[{addSheet:{properties:{title:'trend'}}}]}});
+    }catch(e){console.warn('trend sheet ensure failed',e);}
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:G${values.length+50}`,valueInputOption:'RAW',resource:{values}});
     if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:G5000`});
     try{localStorage.removeItem('trendSyncPending');}catch(e){}
     setSyncStatus('ok','同期済み✓');
@@ -8628,7 +8634,12 @@ function trParseCSV(text,filename){
   snapshots.sort((a,b)=>a.date.localeCompare(b.date));
   // 追加したスナップショットを含めて正規化（trLoadFromStorageは使わない＝新規データを破棄しない）
   trNormalizeSnapshots(snapshots);
-  trSaveToStorage();try{if(typeof amMonthlyPerfRender==='function')amMonthlyPerfRender();}catch(e){};trRenderAll();refreshHome();
+  trSaveToStorage();
+  // CSV取込直後は、Googleログイン中ならクラウド保存完了まで明示的に同期を開始する。
+  if(amIsOnline&&amSpreadsheetId){
+    trSaveToSheet().then(()=>{try{showToast('✓ 推移データをGoogleに同期しました');}catch(e){}}).catch(e=>console.warn('trend CSV sync',e));
+  }
+  try{if(typeof amMonthlyPerfRender==='function')amMonthlyPerfRender();}catch(e){};trRenderAll();refreshHome();
 }
 function removeSnapshot(date){snapshots=snapshots.filter(s=>s.date!==date);trSaveToStorage();try{if(typeof amMonthlyPerfRender==='function')amMonthlyPerfRender();}catch(e){};trRenderAll();refreshHome();}
 function trRenderAll(){
