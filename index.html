@@ -3867,10 +3867,11 @@ function amRender(){
     bank:{label:'🏦 銀行',order:1,items:[]},
     foreign:{label:'🌍 海外株式',order:2,items:[]},
     individual:{label:'📈 個別株',order:3,items:[]},
-    growth:{label:'📈 NISA成長投資枠',order:4,items:[]},
-    tsumitate:{label:'📅 NISAつみたて投資枠',order:5,items:[]},
-    index:{label:'🌐 インデックス',order:6,items:[]},
-    other:{label:'📦 その他',order:7,items:[]}
+    dividend:{label:'💎 高配当枠',order:4,items:[]},
+    growth:{label:'📈 NISA成長投資枠',order:5,items:[]},
+    tsumitate:{label:'📅 NISAつみたて投資枠',order:6,items:[]},
+    index:{label:'🌐 インデックス',order:7,items:[]},
+    other:{label:'📦 その他',order:8,items:[]}
   };
   activeAccounts.forEach(a=>{
     const nisa=amNisaGroupInfo(a).key;
@@ -3879,7 +3880,13 @@ function amRender(){
     else if(nisa==='growth') displayGroups.growth.items.push(a);
     else if(nisa==='tsumitate') displayGroups.tsumitate.items.push(a);
     else if(a.cat==='外国株式') displayGroups.foreign.items.push(a);
-    else if(a.cat==='個別株'||a.cat==='高配当') displayGroups.individual.items.push(a);
+    else if(a.cat==='個別株') displayGroups.individual.items.push(a);
+    else if(a.cat==='高配当'){
+      const code=String(a.code||'').trim().toUpperCase();
+      const name=String(a.name||'');
+      if(code==='9434'||code==='9984'||/ソフトバンク株式会社|ソフトバンクグループ/.test(name)) displayGroups.dividend.items.push(a);
+      else displayGroups.individual.items.push(a);
+    }
     else if(isIndex) displayGroups.index.items.push(a);
     else displayGroups.other.items.push(a);
   });
