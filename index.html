@@ -5522,9 +5522,11 @@ async function amCopyAccount(id){
   delete copy.prevSBIAmount;
   copy.memo='';
   amAccounts.splice(idx+1,0,copy);// コピー元の直後に挿入
+  amSaveToLocal();
   amRender();
   refreshHome();
   try{if(typeof opsRender==='function')opsRender();}catch(_e){}
+  try{if(typeof amOpsRender==='function')amOpsRender();}catch(_e){}
   await amSaveToSheet();
   showToast('📋 銘柄をコピーしました。数量・買付日等を編集してください');
   openEditModal(newId);
@@ -6353,7 +6355,7 @@ function amParseSBIHoldingsCSV(text){
     if(!c0)continue;
 
     // セクション見出し（"株式（...）" / "投資信託（...）" / "外国株式（...）"、"合計"を含まない、列数1）
-    if(/^(株式|投資信託|外国株式)（/.test(c0)&&cols.length<=1&&!/合計/.test(c0)){
+    if(/^(株式|投資信託|外国株式)[（(]/.test(c0)&&cols.length<=1&&!/合計/.test(c0)){
       currentSection=c0;
       mode=null;
       continue;
@@ -7009,49 +7011,152 @@ function amExportCSV(){
   a.href=url;a.download=`資産管理_${todayStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 function triggerImport(){
+  // 「↑ CSV読み込み」は証券会社CSVを最優先で専用処理へ渡す。
+  // 汎用CSV処理との分岐でSBI CSVが取りこぼされることを防ぐ。
   const el=document.getElementById('importInput');
-  if(el)el.click();
+  if(el){ el.value=''; el.click(); }
 }
 
-// 共通CSV読込：証券会社CSVは必ず専用パーサーへ渡し、未知のCSVを資産として誤登録しない。
 async function importCSV(e){
   const file=e?.target?.files?.[0];
   if(!file)return;
   try{
-    const bytes=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=ev=>resolve(ev.target.result);r.onerror=reject;r.readAsArrayBuffer(file);});
-    let text='';
-    try{text=new TextDecoder('utf-8',{fatal:false}).decode(bytes);}catch(_){text='';}
-    if(!/銘柄コード|銘柄名|口座区分|評価額|コード|ファンド名/.test(text)||text.includes('�')){
-      try{text=new TextDecoder('shift-jis',{fatal:false}).decode(bytes);}catch(_){/* keep UTF-8 */}
-    }
-    text=String(text||'').replace(/^\uFEFF/,'');
+    const bytes=await new Promise((resolve,reject)=>{
+      const r=new FileReader();
+      r.onload=ev=>resolve(ev.target.result);
+      r.onerror=reject;
+      r.readAsArrayBuffer(file);
+    });
+    const decode=(label)=>{try{return new TextDecoder(label,{fatal:false}).decode(bytes);}catch(_){return '';}};
+    const utf=decode('utf-8');
+    const sjis=decode('shift-jis');
+    // 文字化けが少ない方を採用。ただしSBI固有語がある方を優先する。
+    const score=t=>{
+      let n=0;
+      ['保有証券一覧','銘柄コード','銘柄名称','評価額','評価損益','株式（','投資信託（','特定預り','NISA預り'].forEach(k=>{if(String(t).includes(k))n+=10;});
+      if(String(t).includes('�'))n-=50;
+      return n;
+    };
+    let text=score(sjis)>score(utf)?sjis:utf;
+    if(!text || text.includes('�'))text=sjis||utf;
+    text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
 
-    // 1) SBI保有証券CSV：ヘッダーが先頭行にない形式にも対応して全文判定。
-    if(/銘柄コード/.test(text)&&/(評価額|評価損益)/.test(text)){
-      const rows=amParseSBIHoldingsCSV(text);
-      if(!rows.length){showToast('⚠️ SBI保有証券CSVを認識しましたが、保有銘柄を読み取れませんでした。',5000);return;}
+    // ── SBI「ポートフォリオ一覧」実形式専用処理 ──
+    // SBIの実ファイルは「銘柄（コード）/買付日/数量/.../評価額」のロット一覧。
+    // ロットをそのまま資産管理へ追加すると二重計上しやすいため、銘柄×口座区分で集約する。
+    const isSBIPortfolio=/^"?ポートフォリオ一覧"?/m.test(text)&&/銘柄（コード）/.test(text)&&/株式（現物\//.test(text)&&/総合計/.test(text);
+    if(isSBIPortfolio){
+      const parseExact=(txt)=>{
+        const out=[]; let section='';
+        const lines=txt.split('\n');
+        for(let i=0;i<lines.length;i++){
+          const line=lines[i]; if(!line.trim())continue;
+          let cols=[]; let cur='',q=false;
+          for(const ch of line){ if(ch==='"')q=!q; else if(ch===','&&!q){cols.push(cur.trim());cur='';} else cur+=ch; }
+          cols.push(cur.trim());
+          const c0=(cols[0]||'').replace(/^"|"$/g,'').trim();
+          if(/^(株式|投資信託)（/.test(c0)){section=c0;continue;}
+          if(/合計|評価額|総合計|銘柄（コード）|ファンド名|ポートフォリオ|個別表示|PTS|総件数|選択範囲|ページ/.test(c0))continue;
+          const isStock=/^株式（/.test(section);
+          const isFund=/^投資信託（/.test(section);
+          if(!isStock&&!isFund)continue;
+          const num=v=>parseFloat(String(v||'').replace(/[",＋+]/g,'').replace(/口$/,''))||0;
+          if(isStock && cols.length>=11){
+            const m=c0.match(/^([0-9A-Za-z]{3,6})\s+(.+)$/); if(!m)continue;
+            const evalAmt=num(cols[10]); if(evalAmt<=0)continue;
+            out.push({type:'stock',code:m[1].toUpperCase(),name:m[2].trim(),buyDate:String(cols[1]||'').replace(/"/g,''),shares:num(cols[2]),costPrice:num(cols[4]),price:num(cols[5]),evalAmt,section,acctSuffix:/NISA.*成長|成長.*NISA/.test(section)?'NISA成長':/特定/.test(section)?'特定':'一般'});
+          }else if(isFund && cols.length>=11){
+            const evalAmt=num(cols[10]); if(evalAmt<=0)continue;
+            out.push({type:'fund',code:'',name:c0,buyDate:'',shares:num(cols[2])/10000,costPrice:num(cols[4]),price:num(cols[5]),evalAmt,section,acctSuffix:/NISA.*成長|成長.*NISA/.test(section)?'NISA成長':/NISA.*つみたて|つみたて.*NISA/.test(section)?'NISAつみたて':/特定/.test(section)?'特定':'一般'});
+          }
+        }
+        return out;
+      };
+      const exactRows=parseExact(text);
+      if(!exactRows.length){showToast('⚠️ SBIポートフォリオCSVを認識しましたが、保有行が0件です。資産は変更していません。',6000);return;}
+      const catFor=(r)=>{
+        if(r.type==='stock'){
+          const g=(typeof amGuessCat==='function'?amGuessCat(r.name):'');
+          return (g&&g!=='銀行'&&AM_VALID_CATS.includes(g))?g:'個別株';
+        }
+        const g=(typeof amGuessCat==='function'?amGuessCat(r.name):'');
+        if(g&&AM_VALID_CATS.includes(g))return g;
+        if(/FANG|米国|S\.P|S&P/i.test(r.name))return '外国株式';
+        if(/中国|日本|TOPIX|日経/i.test(r.name))return '日本インデックス';
+        return '全世界インデックス';
+      };
+      const keyNorm=x=>String(x||'').replace(/[！-～]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim().toLowerCase();
+      const groups=new Map();
+      exactRows.forEach(r=>{
+        const key=r.type==='stock'?'S|'+r.code+'|'+r.acctSuffix:'F|'+keyNorm(r.name)+'|'+r.acctSuffix;
+        if(!groups.has(key))groups.set(key,{...r,cat:catFor(r),rows:[]});
+        groups.get(key).rows.push(r);
+      });
+      groups.forEach(g=>{
+        const totalShares=g.rows.reduce((a,r)=>a+r.shares,0);
+        const totalAmt=g.rows.reduce((a,r)=>a+r.evalAmt,0);
+        const weightedCost=totalShares>0?g.rows.reduce((a,r)=>a+r.costPrice*r.shares,0)/totalShares:(g.rows[0].costPrice||0);
+        g.shares=totalShares;g.evalAmt=totalAmt;g.costPrice=weightedCost;g.price=g.rows[0].price||0;
+      });
+      const before=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
+      // 以前のSBI自動取込行だけを対象に一旦除去。銀行/moomoo/手入力行は触らない。
+      const old=amAccounts.slice();
+      const keep=old.filter(a=>!(String(a.broker||'')==='SBI証券'||/\[SBI(?: |自動追加)/.test(String(a.memo||''))));
+      amAccounts.length=0; amAccounts.push(...keep);
+      let added=0;
+      groups.forEach(g=>{
+        const display=g.type==='stock'?`${g.code} ${g.name}`:g.name;
+        const nisa=g.acctSuffix==='NISA成長'?'growth':g.acctSuffix==='NISAつみたて'?'tsumitate':g.acctSuffix==='特定'?'none':'';
+        const id=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0)+1;
+        amAccounts.push({id,name:display,cat:g.cat,code:g.code||'',amount:Math.round(g.evalAmt*100)/100,shares:Math.round(g.shares*10000)/10000,price:g.price||0,costPrice:Math.round(g.costPrice*100)/100,note:'',nisaType:nisa,updated:todayStr(),broker:'SBI証券',memo:'[SBIポートフォリオCSV]',buyDate:g.rows.length===1&&g.rows[0].buyDate?g.rows[0].buyDate:undefined});
+        added++;
+      });
+      amSaveToLocal(); amRender(); refreshHome(); try{if(typeof opsRender==='function')opsRender();}catch(_e){}
+      try{await amSaveToSheet();}catch(_e){console.warn('[SBI exact] sheet save failed',_e);}
+      const after=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
+      const csvTotal=exactRows.reduce((a,r)=>a+r.evalAmt,0);
+      showToast(`✅ SBIポートフォリオCSVを正規取込：${added}銘柄 / CSV証券評価額 ¥${Math.round(csvTotal).toLocaleString()} / 総資産 ${Math.round(before).toLocaleString()}→${Math.round(after).toLocaleString()}`,7000);
+      return;
+    }
+
+    // ── SBI保有証券CSVを最優先 ──
+    const isSBI=/(保有証券一覧|銘柄コード|銘柄名称|特定預り|NISA預り)/.test(text) && /(評価額|評価損益)/.test(text);
+    if(isSBI){
+      let rows=amParseSBIHoldingsCSV(text);
+      // 旧形式（SaveFile以外）の可能性もあるため、0件なら旧パーサーを試す。
+      if(!rows.length)rows=amParseSBICSV(text);
+      if(!rows.length){
+        console.warn('[unified CSV] SBI detected but no rows', text.slice(0,1500));
+        showToast('⚠️ SBI CSVは認識しましたが、保有銘柄を読み取れませんでした。CSV形式を確認してください。',6000);
+        return;
+      }
       amCaptureImportSnapshot('SBI証券',amAccounts);
       await amApplySBIRows(rows);
       e.target.value='';
       return;
     }
 
-    // 2) moomoo保有CSV：専用取込関数をそのまま使う。USD評価額を円として誤登録しない。
-    if(/(^|[\r\n])\s*"?コード"?\s*,\s*"?銘柄名"?/.test(text)&&/評価額/.test(text)&&/通貨/.test(text)){
+    // ── moomoo保有CSV ──
+    const isMoomoo=/(^|[\n])\s*"?コード"?\s*,\s*"?銘柄名"?/.test(text)&&/評価額/.test(text)&&/通貨/.test(text);
+    if(isMoomoo){
       const fakeEvent={target:{files:[file],value:''}};
       await amMoomooImport(fakeEvent);
       e.target.value='';
       return;
     }
 
-    // 3) 既存の資産管理CSVは、明示的なヘッダーを確認した場合だけ取り込む。
-    const firstLine=(text.split(/\r?\n/).find(l=>l.trim())||'');
+    // ── 資産管理から書き出したCSV ──
+    const firstLine=(text.split('\n').find(l=>l.trim())||'');
     if(/口座名/.test(firstLine)&&/カテゴリ/.test(firstLine)&&/残高/.test(firstLine)){
-      const lines=text.split(/\r?\n/).filter(l=>l.trim());
+      const lines=text.split('\n').filter(l=>l.trim());
       const imported=[];
       for(let i=1;i<lines.length;i++){
         const cols=[];let cur='',inQ=false;
-        for(const ch of lines[i]){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur);cur='';}else cur+=ch;}
+        for(const ch of lines[i]){
+          if(ch==='"')inQ=!inQ;
+          else if(ch===','&&!inQ){cols.push(cur);cur='';}
+          else cur+=ch;
+        }
         cols.push(cur);
         if(cols.length>=4&&cols[1])imported.push({name:cols[1],cat:cols[2]||'その他',amount:parseFloat(String(cols[3]).replace(/[,，]/g,''))||0,note:cols[4]||'',updated:cols[5]||todayStr()});
       }
@@ -7062,15 +7167,14 @@ async function importCSV(e){
         if(ex){ex.amount=imp.amount;ex.cat=imp.cat;if(imp.note)ex.note=imp.note;ex.updated=imp.updated||todayStr();updated++;}
         else{const maxId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0);amAccounts.push({id:maxId+added+1,...imp,sold:false});added++;}
       });
-      amSaveToLocal();amRender();refreshHome();try{opsRender();}catch(_e){};await amSaveToSheet();dailySnapSave();
+      amSaveToLocal();amRender();refreshHome();try{opsRender();}catch(_e){};dailySnapSave();
       showToast(`✓ 資産管理CSV: ${updated}件更新 / ${added}件追加`,4000);
-      e.target.value='';return;
+      return;
     }
 
-    // 未知のCSVは絶対に資産へ流し込まない。
-    showToast('⚠️ このCSV形式は認識できませんでした。資産は変更していません。専用の「SBI読込」または「moomoo読込」を使用してください。',6000);
+    showToast('⚠️ CSV形式を判定できませんでした。資産は変更していません。',6000);
   }catch(err){
-    console.error('[generic CSV] import error',err);
+    console.error('[unified CSV] import error',err);
     showToast('❌ CSV読込エラー：'+(err?.message||err),6000);
   }finally{
     if(e?.target)e.target.value='';
