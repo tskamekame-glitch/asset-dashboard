@@ -7099,19 +7099,65 @@ async function importCSV(e){
         g.shares=totalShares;g.evalAmt=totalAmt;g.costPrice=weightedCost;g.price=g.rows[0].price||0;
       });
       const before=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
-      // 以前のSBI自動取込行だけを対象に一旦除去。銀行/moomoo/手入力行は触らない。
-      const old=amAccounts.slice();
-      const keep=old.filter(a=>!(String(a.broker||'')==='SBI証券'||/\[SBI(?: |自動追加)/.test(String(a.memo||''))));
-      amAccounts.length=0; amAccounts.push(...keep);
-      let added=0;
+      // 重要: SBI CSV取込で既存のSBI行を丸ごと削除して作り直すと、
+      // 旧データのbroker属性がない場合に二重計上するため、今回から「同一銘柄を更新」を基本にする。
+      // 既にこの機能で作成した行（memo/importSource付き）は今回のCSVから再生成する。
+      const generatedOld=amAccounts.filter(a=>!a.sold && (a.importSource==='sbi_csv' || /\[SBIポートフォリオCSV\]/.test(String(a.memo||''))));
+      const generatedIds=new Set(generatedOld.map(a=>Number(a.id)));
+      if(generatedOld.length){
+        amAccounts=amAccounts.filter(a=>!generatedIds.has(Number(a.id)));
+        window.amAccounts=amAccounts;
+      }
+      let added=0,updated=0;
+      const normCode=v=>String(v||'').replace(/[^0-9A-Za-z.]/g,'').toUpperCase();
+      const normName=v=>String(v||'').replace(/（[^）]*）/g,'').replace(/\([^)]*\)/g,'').replace(/\s+/g,'').trim().toLowerCase();
+      const nextId=()=>amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0)+1;
       groups.forEach(g=>{
         const display=g.type==='stock'?`${g.code} ${g.name}`:g.name;
         const nisa=g.acctSuffix==='NISA成長'?'growth':g.acctSuffix==='NISAつみたて'?'tsumitate':g.acctSuffix==='特定'?'none':'';
-        const id=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0)+1;
-        amAccounts.push({id,name:display,cat:g.cat,code:g.code||'',amount:Math.round(g.evalAmt*100)/100,shares:Math.round(g.shares*10000)/10000,price:g.price||0,costPrice:Math.round(g.costPrice*100)/100,note:'',nisaType:nisa,updated:todayStr(),broker:'SBI証券',memo:'[SBIポートフォリオCSV]',buyDate:g.rows.length===1&&g.rows[0].buyDate?g.rows[0].buyDate:undefined});
-        added++;
+        const codeN=normCode(g.code);
+        const nameN=normName(g.name);
+        // 同一コード＋NISA区分を最優先。投信は名称＋NISA区分。
+        let candidates=amAccounts.filter(a=>!a.sold && (codeN ? normCode(a.code)===codeN : normName(a.name)===nameN));
+        if(nisa){
+          const exact=candidates.filter(a=>String(a.nisaType||'')===nisa);
+          if(exact.length)candidates=exact;
+        }
+        // SBI取込行を優先。既存の手入力行を消さず、可能ならそれを更新する。
+        candidates.sort((a,b)=>(String(b.broker||'')==='SBI証券'?1:0)-(String(a.broker||'')==='SBI証券'?1:0));
+        let acc=candidates[0];
+        // 過去のSBI専用取込で同一銘柄が複数生成されている場合は、SBI印の重複だけ整理する。
+        // 手入力・他社ブローカーの行は残す。
+        if(candidates.length>1){
+          const dup=candidates.slice(1).filter(a=>String(a.broker||'')==='SBI証券' || a.importSource==='sbi_csv' || /\[SBI(?:ポートフォリオCSV|自動追加)/.test(String(a.memo||'')));
+          if(dup.length){
+            const ids=new Set(dup.map(a=>Number(a.id)));
+            amAccounts=amAccounts.filter(a=>!ids.has(Number(a.id)));
+            window.amAccounts=amAccounts;
+            candidates=[acc];
+          }
+        }
+        const amount=Math.round(g.evalAmt*100)/100;
+        const shares=Math.round(g.shares*10000)/10000;
+        const costPrice=Math.round(g.costPrice*100)/100;
+        if(acc){
+          const oldAmount=Number(acc.amount||0);
+          acc.prevSBIAmount=oldAmount>0?oldAmount:undefined;
+          acc.name=display; acc.code=g.code||acc.code||''; acc.cat=g.cat; acc.amount=amount; acc.shares=shares;
+          acc.price=g.price||0; acc.costPrice=costPrice; acc.nisaType=nisa||acc.nisaType||''; acc.broker='SBI証券';
+          acc.importSource='sbi_csv'; acc.memo='[SBIポートフォリオCSV]'; acc.updated=todayStr();
+          if(g.rows.length===1&&g.rows[0].buyDate)acc.buyDate=g.rows[0].buyDate;
+          updated++;
+        }else{
+          amAccounts.push({id:nextId(),name:display,cat:g.cat,code:g.code||'',amount:amount,shares:shares,price:g.price||0,costPrice:costPrice,note:'',nisaType:nisa,updated:todayStr(),broker:'SBI証券',memo:'[SBIポートフォリオCSV]',importSource:'sbi_csv',buyDate:g.rows.length===1&&g.rows[0].buyDate?g.rows[0].buyDate:undefined});
+          added++;
+        }
       });
-      amSaveToLocal(); amRender(); refreshHome(); try{if(typeof opsRender==='function')opsRender();}catch(_e){}
+      // 取込後は必ず同一データを使って3画面を再描画する。
+      window.amAccounts=amAccounts;
+      amSaveToLocal(); amRender(); refreshHome();
+      try{if(typeof opsRender==='function')opsRender();}catch(e){console.warn('[SBI exact] opsRender failed',e);}
+      try{if(typeof switchTab==='function' && document.getElementById('tab-opscenter')?.classList.contains('active'))opsRender();}catch(_e){}
       try{await amSaveToSheet();}catch(_e){console.warn('[SBI exact] sheet save failed',_e);}
       const after=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
       const csvTotal=exactRows.reduce((a,r)=>a+r.evalAmt,0);
