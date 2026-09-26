@@ -3306,7 +3306,7 @@ function ruleCurrentPrice(r){
       <div class="field"><label>NISA区分（任意・積立タブの枠管理に使用）</label><select id="fNisa" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定（名称・メモから自動判定） —</option><option value="growth">📈 NISA成長投資枠</option><option value="tsumitate">📅 NISAつみたて投資枠</option><option value="none">課税口座（NISA対象外）</option></select></div>
       <div class="field"><label>決算発表日（任意）</label><input type="text" id="fEarningsDate" placeholder="例: 7月24日確定、8月上旬予測" autocomplete="off"></div>
       <div class="field"><label>セクター（TOPIX-17・任意）</label><select id="fSector" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 未設定 —</option></select></div>
-      <div class="field"><label>金融機関（未設定なら名前から自動判定）</label><select id="fBroker" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 自動判定 —</option><option>SBI証券</option><option>moomoo証券</option><option>PayPay証券</option><option>野村證券</option><option>みずほ証券</option><option>iDeCo・DC</option><option>銀行</option><option>その他</option></select></div>
+      <div class="field"><label>金融機関（未設定なら名前から自動判定）</label><select id="fBroker" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"><option value="">— 自動判定 —</option><option>SBI証券</option><option>moomoo証券</option><option>PayPay証券</option><option>野村證券</option><option>みずほ証券</option><option>iDeCo・DC</option><option>銀行</option><option>その他</option><option>その他証券会社（手入力）</option></select></div>
       <div class="field"><label>取得日（任意・全期間表示や保有期間に使用）</label><input type="date" id="fBuyDate" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none"></div>
 
       <!-- 📊 分析フィールド（個別株・高配当・外国株のみ） -->
@@ -3842,31 +3842,32 @@ function amRender(){
     if(cls==='ambiguous')return{key:'ambiguous',label:'❓ NISA区分未確定',order:3};
     return{key:'taxable',label:'💴 特定・その他（課税口座）',order:4};
   }
-  const catGroups={};activeAccounts.forEach(a=>{if(!catGroups[a.cat])catGroups[a.cat]=[];catGroups[a.cat].push(a);});
-  const sortedCatEntries=[...CAT_ORDER.filter(c=>catGroups[c]),...Object.keys(catGroups).filter(c=>!CAT_ORDER.includes(c))].map(c=>[c,catGroups[c]]);
-  document.getElementById('accountSections').innerHTML=sortedCatEntries.map(([cat,accts])=>{
-    const catTotal=accts.reduce((s,a)=>s+a.amount,0);
-    // NISA区分ごとにサブグループ化。区分が複数混在する場合のみ見出し・小計を表示する
-    // （全件が同じ区分＝分ける意味がない場合は、従来通りフラットに一覧表示する）
-    const subMap={};
-    accts.forEach(a=>{
-      const g=amNisaGroupInfo(a);
-      if(!subMap[g.key])subMap[g.key]={label:g.label,order:g.order,items:[]};
-      subMap[g.key].items.push(a);
-    });
-    const subGroups=Object.values(subMap).sort((x,y)=>x.order-y.order);
-    const listHtml=subGroups.length>1
-      ?subGroups.map(g=>{
-          const gTotal=g.items.reduce((s,a)=>s+a.amount,0);
-          return`<div class="nisa-subgroup">
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--bg2);font-size:12px;font-weight:700;color:var(--text2)">
-              <span>${g.label}</span><span style="font-variant-numeric:tabular-nums">${fmt(gTotal)}</span>
-            </div>
-            ${g.items.map(a=>amRenderCard(a)).join('')}
-          </div>`;
-        }).join('')
-      :accts.map(a=>amRenderCard(a)).join('');
-    return`<div class="section" id="sec-${encodeURIComponent(cat)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(cat)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[cat]||'#888'}"></span><h2>${esc(cat)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${listHtml}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(cat)}')">＋ ${esc(cat)}の口座を追加</button></div></div></div>`;
+  // 銘柄表示順：①海外株式 → ②個別株 → ③NISA成長 → ④NISA積立 → ⑤インデックス
+  // NISA区分を最優先し、NISA銘柄は専用セクションへ集約する。
+  const displayGroups={
+    foreign:{label:'🌍 海外株式',order:1,items:[]},
+    individual:{label:'📈 個別株',order:2,items:[]},
+    growth:{label:'📈 NISA成長投資枠',order:3,items:[]},
+    tsumitate:{label:'📅 NISAつみたて投資枠',order:4,items:[]},
+    index:{label:'🌐 インデックス',order:5,items:[]},
+    other:{label:'📦 その他',order:6,items:[]}
+  };
+  activeAccounts.forEach(a=>{
+    const nisa=amNisaGroupInfo(a).key;
+    const isIndex=['全世界インデックス','日本インデックス','インドインデックス'].includes(a.cat);
+    if(nisa==='growth') displayGroups.growth.items.push(a);
+    else if(nisa==='tsumitate') displayGroups.tsumitate.items.push(a);
+    else if(a.cat==='外国株式') displayGroups.foreign.items.push(a);
+    else if(a.cat==='個別株'||a.cat==='高配当') displayGroups.individual.items.push(a);
+    else if(isIndex) displayGroups.index.items.push(a);
+    else displayGroups.other.items.push(a);
+  });
+  const sortedCatEntries=Object.values(displayGroups).filter(g=>g.items.length).sort((a,b)=>a.order-b.order);
+  document.getElementById('accountSections').innerHTML=sortedCatEntries.map(g=>{
+    const catTotal=g.items.reduce((s,a)=>s+a.amount,0);
+    const items=[...g.items].sort((a,b)=>Number(b.amount||0)-Number(a.amount||0));
+    const listHtml=items.map(a=>amRenderCard(a)).join('');
+    return`<div class="section" id="sec-${encodeURIComponent(g.label)}"><div class="section-head" onclick="toggleSection('sec-${encodeURIComponent(g.label)}')"><div class="section-head-left"><span class="cat-dot" style="background:${AM_CAT_COLORS[g.label]||'#888'}"></span><h2>${esc(g.label)}</h2></div><span style="display:flex;align-items:center"><span style="font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums">${fmt(catTotal)}</span><span class="chevron">▼</span></span></div><div class="account-list">${listHtml}<div class="add-row"><button class="add-btn-inline" onclick="openAddModalCat('${esc(g.items[0]?.cat||'個別株')}')">＋ 銘柄を追加</button></div></div></div>`;
   }).join('')||'<div class="empty-msg">「＋」ボタンから口座を追加してください</div>';
 
 
@@ -5329,7 +5330,7 @@ function openAddModalCat(cat){openAddModal(cat)}
 const AM_NON_SBI_PAT=/野村|みずほ|持ち株|PayPay|ペイペイ|iDeCo|イデコ|確定拠出|DC年金|ＤＣ年金|ゆうちょ|三井住友|三菱|UFJ|りそな|楽天|松井|大和|au|マネックス|moomoo|ムームー/i;
 const AM_NAME_TO_CAT_RULES=[
   {pat:/SBG|ソフトバンクグループ|9984/,           cat:'個別株'},
-  {pat:/SBKK|みずほストック|野村持ち株.*SBKK|9434/,cat:'高配当'},
+  {pat:/SBKK|ソフトバンク株式会社|ソフトバンク(?!グループ)|みずほストック|野村持ち株.*SBKK|9434/,cat:'高配当'},
   {pat:/^[A-Z]{1,5}$|^[A-Z]{1,5}\s(?!.*(ファンド|インデックス|モメンタム))/, cat:'外国株式'},
   {pat:/NYSE|NASDAQ|外国株|米国株|ADR/i,            cat:'外国株式'},
   {pat:/Apple|Microsoft|Alphabet|Amazon|Nvidia|Meta|Tesla|Berkshire|Johnson|Exxon/i, cat:'外国株式'},
@@ -6665,6 +6666,21 @@ async function amApplySBIRows(rows){
   const importedFunds=[...fundMap.values()];
   // 同じファンド名＋NISA区分の既存行だけ除去（CSVにない他のインデックスは維持）。
   const importedFundKeys=new Set(importedFunds.map(r=>normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r)));
+  // SMT 米国株式モメンタムファンドは旧基準CSVに broker 情報がない行が残りやすいため、
+  // SBI CSVに存在する場合は「SBI CSVを正本」として旧行を必ず除去する。
+  // moomoo証券の行は対象外（証券会社ごとの保有を分離するため）。
+  const isSmtUsMomentumFund=v=>{
+    const n=normName(v).replace(/ファンド/g,'');
+    return /smt.*米国株式モメンタム|米国株式モメンタム.*smt/.test(n);
+  };
+  const sbiHasSmtUsMomentum=importedFunds.some(r=>isSmtUsMomentumFund(r.nameNorm||r.nameRaw));
+  if(sbiHasSmtUsMomentum){
+    amAccounts=amAccounts.filter(a=>{
+      if(a.sold || String(a.broker||'')==='moomoo証券') return true;
+      return !isSmtUsMomentumFund(a.name);
+    });
+    window.amAccounts=amAccounts;
+  }
   amAccounts=amAccounts.filter(a=>{
     if(a.sold||existingCatIsStock(a)||String(a.broker||'')==='moomoo証券')return true;
     const key=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
