@@ -5526,6 +5526,7 @@ async function amCopyAccount(id){
   amAccounts.splice(idx+1,0,copy);// コピー元の直後に挿入
   amRender();
   refreshHome();
+  try{if(typeof opsRender==='function')opsRender();}catch(_e){}
   await amSaveToSheet();
   showToast('📋 銘柄をコピーしました。数量・買付日等を編集してください');
   openEditModal(newId);
@@ -6923,6 +6924,7 @@ async function amApplySBIRows(rows){
   }
   amRender();
   refreshHome();
+  try{if(typeof opsRender==='function')opsRender();}catch(_e){}
   await amSaveToSheet();
 
 
@@ -7054,7 +7056,7 @@ function importCSV(e){
               amAccounts.push({id:newId,name,code,cat:'外国株式',amount,shares:Number(row.shares||0),price:Number(row.price||0),costPrice:Number(row.costPrice||0),fxRate:fx||undefined,broker:'moomoo証券',updated:todayStr(),memo:'[moomoo自動追加]'});added++;
             }
           }
-          amRender();refreshHome();await amSaveToSheet();dailySnapSave();
+          amRender();refreshHome();try{if(typeof opsRender==='function')opsRender();}catch(_e){};await amSaveToSheet();dailySnapSave();
           showToast(`✅ moomoo CSV: ${updated}件更新 / ${added}件新規追加`,5000);
         }else showToast('⚠️ moomoo CSVを読み取れませんでした。');
         e.target.value='';return;
