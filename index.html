@@ -3814,10 +3814,8 @@ function amRender(){
     amAccounts.forEach(a=>{if(a.cat==='FX'&&a.sold&&a.amount){a.amount=0;fxMig=true;}});
     if(fxMig){try{amSaveToLocal();}catch(e){}setTimeout(()=>{try{amSaveToSheet();}catch(e){}},0);}
   }catch(e){}
-  // FXロットがあればドル円レートを自動更新（15分キャッシュ・非同期）
-  try{setTimeout(()=>fxLotRefresh(false),0);}catch(e){}
-  // 外国株式があればティッカーをキーに株価・為替レートを自動更新（15分キャッシュ・非同期・ボタン操作不要）
-  try{setTimeout(()=>amAutoFetchForeignQuotesIfStale(),0);}catch(e){}
+  // 重要: 資産管理の再描画では株価・為替を自動取得して金額を書き換えない。
+  // 現在値・評価額の基準はSBI/moomooのCSV取込値とする。必要な更新は専用ボタンで行う。
   // 売却済みと保有中を分離
   const activeAccounts=amAccounts.filter(a=>!a.sold);
   const soldAccounts=amAccounts.filter(a=>a.sold);
