@@ -795,50 +795,50 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
 <!-- ========== MARKET ENVIRONMENT ========== -->
 <div class="panel" id="tab-market">
-  <div class="panel-head"><div><div class="panel-title">🌐 市場環境チェック</div><div class="panel-sub">市場全体 → セクター → 個別銘柄 → バリュエーション → 買付タイミングをつなげて確認します。市場データは手入力・保存し、株価の自動上書きは行いません。</div></div><button class="icon-btn" onclick="marketRender()">↻ 更新</button></div>
+  <div class="panel-head"><div><div class="panel-title">🌐 市場環境 → 今日の買付判断</div><div class="panel-sub">市場全体 → 半導体・AI → 個別銘柄 → 買付判断の順に確認します。ここでは買い／売りを自動決定せず、確認材料を整理します。</div></div><button class="icon-btn" onclick="marketRender()">↻ 更新</button></div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-    <div style="font-size:15px;font-weight:700;margin-bottom:5px">📊 市場全体</div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">確認日時点の指数・金利・為替を入力します。前回値があれば変化率も表示します。</div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">① 市場全体</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">VIX・米金利・主要指数・ドル円を入力して、市場全体の確認状態を見ます。</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
-      <label style="font-size:10px;color:var(--text3)">S&P 500<input id="mkt-spx" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">NASDAQ<input id="mkt-nasdaq" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">日経平均<input id="mkt-nikkei" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">TOPIX<input id="mkt-topix" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">VIX<input id="mkt-vix" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">米10年債利回り（%）<input id="mkt-us10y" type="number" step="0.01" placeholder="例：4.0" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">USD/JPY<input id="mkt-usdjpy" type="number" step="0.01" placeholder="例：150" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">確認日<input id="mkt-date" type="date" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">S&P 500<input id="mkt-spx" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">NASDAQ<input id="mkt-nasdaq" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">日経平均<input id="mkt-nikkei" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">TOPIX<input id="mkt-topix" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">VIX<input id="mkt-vix" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">米10年債利回り（%）<input id="mkt-us10y" type="number" step="0.01" placeholder="例：4.0"></label>
+      <label style="font-size:10px;color:var(--text3)">USD/JPY<input id="mkt-usdjpy" type="number" step="0.01" placeholder="例：150"></label>
+      <label style="font-size:10px;color:var(--text3)">確認日<input id="mkt-date" type="date"></label>
     </div>
     <button class="btn-sm" type="button" onclick="marketSave()" style="margin-top:9px;width:100%">💾 市場環境を保存</button>
     <div id="mkt-save-note" style="font-size:10px;color:var(--text3);margin-top:6px"></div>
+    <div id="mkt-market-status" style="margin-top:9px"></div>
   </div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🧠 半導体・AIセクター環境</div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">半導体指数や主要銘柄の値動きを確認し、ユーザーの「半導体・AI」投資方針との整合性を確認します。順位付けはしません。</div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">② 半導体・AIセクター</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">半導体指数・メモリ指標・主要AI銘柄を確認します。あなたの半導体投資の判断材料に使います。</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
-      <label style="font-size:10px;color:var(--text3)">半導体指数 / ETF<input id="mkt-semi" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">メモリ指標<input id="mkt-memory" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">NVDA<input id="mkt-nvda" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">AVGO<input id="mkt-avgo" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">AMD<input id="mkt-amd" type="number" step="0.01" placeholder="現在値" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:10px;color:var(--text3)">セクター確認日<input id="mkt-sector-date" type="date" style="width:100%;box-sizing:border-box;margin-top:3px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"></label>
+      <label style="font-size:10px;color:var(--text3)">半導体指数 / ETF<input id="mkt-semi" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">メモリ指標<input id="mkt-memory" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">NVDA<input id="mkt-nvda" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">AVGO<input id="mkt-avgo" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">AMD<input id="mkt-amd" type="number" step="0.01" placeholder="現在値"></label>
+      <label style="font-size:10px;color:var(--text3)">セクター確認日<input id="mkt-sector-date" type="date"></label>
     </div>
     <div id="mkt-sector-status" style="margin-top:9px"></div>
   </div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🎯 市場環境 → 買付タイミング</div>
-    <div id="mkt-market-status" style="margin-bottom:9px"></div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:8px">下記は予測ではなく、入力した市場環境と既存の銘柄データから機械的に確認する項目です。</div>
-    <div id="mkt-buy-context"></div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">③ 個別銘柄</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">CSVの現在値を基準に、目標買値・アナリスト目標・予想PER・業績・保有比率を確認します。</div>
+    <div id="mkt-stock-table"></div>
   </div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px">
-    <div style="font-size:15px;font-weight:700;margin-bottom:5px">🔎 保有銘柄の相対チェック</div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">CSVの現在値を基準に、目標買値・アナリスト目標・予想PER・業績成長率・市場環境を同時確認します。</div>
-    <div id="mkt-stock-table"></div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:5px">④ 今日の買付判断</div>
+    <div id="mkt-buy-context"></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6">🟢 通常買付：市場・セクターに強い警戒材料なし ／ 🟡 指値待ち：価格条件を優先 ／ 🟠 イベント待ち：決算など直近イベントあり ／ 🔴 リスク確認：市場・セクターの警戒材料が強い、の4分類です。</div>
   </div>
 </div>
 
@@ -3514,7 +3514,7 @@ function switchTab(tab){
   if(tab==='market')setTimeout(()=>{if(typeof marketRender==='function')marketRender();},20);
   if(tab==='home')refreshHome();
   if(tab==='portfolio')pfRender();
-  if(tab==='trend')trRenderAll();
+  if(tab==='trend'){trRenderAll(); if(amIsOnline&&amSpreadsheetId&&typeof trLoadFromSheet==='function'){setTimeout(async()=>{try{await trLoadFromSheet();trRenderAll();}catch(e){console.warn('trend auto sync',e);}},30);}}
   if(tab==='buysim')bsRender();
   if(tab==='returns')retRender();
   if(tab==='pnl')pnlRender();
@@ -7309,7 +7309,10 @@ async function amLoadFromSheet(){
 async function onSignedIn(){
   amIsOnline=true;localStorage.setItem('assetGoogleMode','online');
   amShowMain();setSyncStatus('syncing','同期中...');
-  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();setSyncStatus('ok','同期済み✓');refreshHome();
+  await amFindOrCreateSheet();await amLoadFromSheet();await slLoadFromSheet();await cfLoadFromSheet();await trLoadFromSheet();
+  // この端末でCSV取込後に未同期データが残っていた場合は、Google Sheetsへ反映して他端末と共有する。
+  try{if(localStorage.getItem('trendSyncPending')==='1')await trSaveToSheet();}catch(e){console.warn('pending trend sync',e);}
+  setSyncStatus('ok','同期済み✓');refreshHome();
   try{trRenderAll();}catch(e){}
   try{if(typeof wlAutoSync==='function')wlAutoSync(true);}catch(e){}
 }
@@ -8009,7 +8012,12 @@ function trFmt(n){
   return'¥'+v.toLocaleString('ja-JP');
 }
 function trFmtDiff(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP')}
-function trSaveToStorage(){try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}trSaveToSheet();}
+function trSaveToStorage(){
+  try{localStorage.setItem('assetSnapshots',JSON.stringify(snapshots));}catch(e){}
+  try{localStorage.setItem('trendSyncPending','1');}catch(e){}
+  // Googleログイン中は即時同期。未ログインでも後でログインした際に同期する。
+  if(typeof trSaveToSheet==='function')trSaveToSheet();
+}
 
 // ============================================================
 // 推移グラフ（assetSnapshots） Google Sheets 同期
@@ -8027,6 +8035,7 @@ async function trSaveToSheet(){
     ])];
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`trend!A1:E${values.length+50}`,valueInputOption:'RAW',resource:{values}});
     if(snapshots.length+1<2000)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`trend!A${snapshots.length+2}:G5000`});
+    try{localStorage.removeItem('trendSyncPending');}catch(e){}
     setSyncStatus('ok','同期済み✓');
   }catch(e){console.warn('trSaveToSheet error',e);setSyncStatus('err','同期失敗');}
 }
@@ -17981,31 +17990,27 @@ function marketFill(){const x=marketLoad();['spx','nasdaq','nikkei','topix','vix
 function marketBadge(label,detail,kind){return '<div style="padding:10px 12px;border-radius:9px;background:var(--bg3);border-left:4px solid '+(kind==='ok'?'var(--green)':kind==='warn'?'#d99b2b':'#888')+'"><b style="font-size:12px">'+marketEsc(label)+'</b><div style="font-size:10px;color:var(--text3);margin-top:3px;line-height:1.5">'+marketEsc(detail)+'</div></div>';}
 function marketRender(){
  marketFill();
- const x=marketLoad(), v=id=>marketNum(document.getElementById('mkt-'+id)?.value), vix=v('vix'), us10y=v('us10y'), usd=v('usdjpy'), spx=v('spx'), nas=v('nasdaq'), nik=v('nikkei'), top=v('topix');
- let marketKind='neutral',marketLabel='市場環境：確認中',marketDetail='VIX・金利・主要指数を入力すると機械判定します。';
- if(vix!==null){if(vix>=30){marketKind='warn';marketLabel='市場環境：慎重確認';marketDetail='VIXが30以上。新規買付は一括投入より分割投入・決算確認を優先する条件です。';}else if(vix>=20){marketKind='warn';marketLabel='市場環境：変動大';marketDetail='VIXが20以上。価格だけでなく決算・目標買値・現金余力を併せて確認します。'}else{marketKind='ok';marketLabel='市場環境：通常確認';marketDetail='VIXは20未満。市場全体の急変シグナルは入力値上では強くありません。';}}
- if(us10y!==null&&us10y>=5){marketKind='warn';marketLabel='市場環境：金利確認';marketDetail='米10年債利回りが5%以上。高PER銘柄ではバリュエーション確認を強めます。';}
- const ms=document.getElementById('mkt-market-status');if(ms){const metric=[['S&P 500','spx'],['NASDAQ','nasdaq'],['日経平均','nikkei'],['TOPIX','topix'],['VIX','vix'],['米10年債','us10y'],['USD/JPY','usdjpy']];const cards=metric.filter(q=>v(q[1])!==null).map(q=>{const cur=v(q[1]),pr=marketNum(x.prev?.[q[1]]),chg=pr!==null&&pr!==0?(cur/pr-1)*100:null;return '<div style="padding:7px 8px;background:var(--bg);border-radius:7px"><div style="font-size:9px;color:var(--text3)">'+q[0]+'</div><b style="font-size:12px">'+cur.toLocaleString('ja-JP',{maximumFractionDigits:2})+'</b><div style="font-size:9px;color:var(--text3)">'+(chg!==null?(chg>=0?'+':'')+chg.toFixed(2)+'% 前回保存比':'前回値なし')+'</div></div>';}).join('');ms.innerHTML=marketBadge(marketLabel,marketDetail,marketKind)+'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:7px">'+cards+'</div>'; }
- const ss=document.getElementById('mkt-sector-status');
- const vals=[v('semi'),v('memory'),v('nvda'),v('avgo'),v('amd')].filter(z=>z!==null);let sectorKind='neutral',sectorLabel='セクター環境：確認中',sectorDetail='半導体指数・主要銘柄を入力すると確認できます。';
- if(vals.length>=2){sectorLabel='セクター環境：値動き確認済み';sectorDetail='入力した半導体関連指標を個別銘柄の買付判断と併せて確認します。';sectorKind='ok';}
- if(ss)ss.innerHTML=marketBadge(sectorLabel,sectorDetail,sectorKind);
- const rows=(()=>{try{return typeof opsInvestmentRows==='function'?opsInvestmentRows():[];}catch(e){return [];}})();
- const buy=document.getElementById('mkt-buy-context');
- const cash=(()=>{try{return typeof opsInvestableCash==='function'?opsInvestableCash().total:0}catch(e){return 0}})();
- const fire=(()=>{try{return marketNum(localStorage.getItem('fireTargetAssets'))||0}catch(e){return 0}})();
- let notes=[];
- if(cash>0)notes.push('投資可能現金：¥'+Math.round(cash).toLocaleString('ja-JP'));
- if(vix!==null&&vix>=20)notes.push('市場変動が大きいため、買付タイミングは分割投入を検討する条件');
- if(vix!==null&&vix<20)notes.push('市場全体の変動指標は比較的低い入力値');
- if(usd!==null)notes.push('USD/JPY：'+usd.toFixed(2)+'（米国資産の円換算額に影響）');
- if(fire>0)notes.push('Side-FIRE目標：¥'+Math.round(fire).toLocaleString('ja-JP'));
- if(buy)buy.innerHTML='<div style="font-size:11px;line-height:1.7">'+(notes.length?notes.map(n=>'<div style="padding:6px 0;border-bottom:.5px solid var(--border)">• '+marketEsc(n)+'</div>').join(''):'市場環境を入力すると、ここに買付時の確認事項が表示されます。')+'</div><div style="font-size:10px;color:var(--text3);margin-top:7px">※「買う／買わない」の自動判断ではなく、買付前に確認すべき条件を表示します。</div>';
+ const x=marketLoad(), v=id=>marketNum(document.getElementById('mkt-'+id)?.value), vix=v('vix'), us10y=v('us10y'), usd=v('usdjpy');
+ let marketKind='neutral', marketLabel='🟡 市場環境：確認中', marketDetail='VIX・米金利・主要指数を入力すると買付判断に反映します。';
+ if(vix!==null || us10y!==null){
+   if((vix!==null&&vix>=30)||(us10y!==null&&us10y>=5)){marketKind='warn';marketLabel='🔴 市場環境：リスク確認';marketDetail='VIXまたは米10年債利回りが高い水準。新規買付は一括投入せず、指値・分割投入・決算確認を優先する条件です。';}
+   else if((vix!==null&&vix>=20)||(us10y!==null&&us10y>=4.5)){marketKind='warn';marketLabel='🟡 市場環境：指値待ち';marketDetail='市場変動または金利を確認。現在値で急いで買わず、目標買値と現金余力を確認します。';}
+   else{marketKind='ok';marketLabel='🟢 市場環境：通常確認';marketDetail='入力値では強い警戒シグナルはありません。個別銘柄の価格・決算・バリュエーションを確認します。';}
+ }
+ const metric=[['S&P 500','spx'],['NASDAQ','nasdaq'],['日経平均','nikkei'],['TOPIX','topix'],['VIX','vix'],['米10年債','us10y'],['USD/JPY','usdjpy']];
+ const cards=metric.filter(q=>v(q[1])!==null).map(q=>{const cur=v(q[1]),pr=marketNum(x.prev?.[q[1]]),chg=pr!==null&&pr!==0?(cur/pr-1)*100:null;return '<div style="padding:7px 8px;background:var(--bg);border-radius:7px"><div style="font-size:9px;color:var(--text3)">'+q[0]+'</div><b style="font-size:12px">'+cur.toLocaleString('ja-JP',{maximumFractionDigits:2})+'</b><div style="font-size:9px;color:var(--text3)">'+(chg!==null?(chg>=0?'+':'')+chg.toFixed(2)+'% 前回保存比':'前回値なし')+'</div></div>';}).join('');
+ const ms=document.getElementById('mkt-market-status'); if(ms)ms.innerHTML=marketBadge(marketLabel,marketDetail,marketKind)+'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:7px">'+cards+'</div>';
+ const vals=[v('semi'),v('memory'),v('nvda'),v('avgo'),v('amd')].filter(z=>z!==null); let sectorKind='neutral',sectorLabel='🟡 セクター：確認中',sectorDetail='半導体指数・メモリ指標・主要AI銘柄を入力してください。';
+ if(vals.length>=2){sectorKind='ok';sectorLabel='🟢 セクター：確認済み';sectorDetail='複数の半導体・AI指標が入力されています。個別銘柄の現在値・目標買値と合わせて確認します。';}
+ const ss=document.getElementById('mkt-sector-status');if(ss)ss.innerHTML=marketBadge(sectorLabel,sectorDetail,sectorKind);
+ let rows=[];try{rows=typeof selectorAllRows==='function'?selectorAllRows():[];}catch(e){rows=[];}
+ rows=rows.filter(r=>Number(r.amount||0)>0).sort((a,b)=>Number(b.amount||0)-Number(a.amount||0)).slice(0,20);
  const tbl=document.getElementById('mkt-stock-table');
- if(!tbl)return;
- const list=rows.filter(r=>r.amount>0).sort((a,b)=>b.amount-a.amount).slice(0,20);
- tbl.innerHTML=list.length?'<div style="overflow:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">銘柄</th><th style="padding:6px;border-bottom:1px solid var(--border)">現在値</th><th style="padding:6px;border-bottom:1px solid var(--border)">目標買値</th><th style="padding:6px;border-bottom:1px solid var(--border)">目標価格余地</th><th style="padding:6px;border-bottom:1px solid var(--border)">予想PER</th><th style="padding:6px;border-bottom:1px solid var(--border)">売上成長</th><th style="padding:6px;border-bottom:1px solid var(--border)">営業利益成長</th><th style="padding:6px;border-bottom:1px solid var(--border)">保有比率</th></tr></thead><tbody>'+list.map(r=>{const target=r.analyst>0&&r.price>0?(r.analyst/r.price-1)*100:null;const total=list.reduce((s,z)=>s+z.amount,0)||1;const ratio=r.amount/total*100;return '<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)"><b>'+marketEsc(r.code||r.key)+'</b><div style="color:var(--text3)">'+marketEsc(r.name)+'</div></td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.price?'¥'+Number(r.price).toLocaleString('ja-JP'):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.targetBuy?'¥'+Number(r.targetBuy).toLocaleString('ja-JP'):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(target!==null?(target>=0?'+':'')+target.toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.forwardPER?Number(r.forwardPER).toFixed(1):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.revenueGrowth!=null&&r.revenueGrowth!==''?Number(r.revenueGrowth).toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.opProfitGrowth!=null&&r.opProfitGrowth!==''?Number(r.opProfitGrowth).toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+ratio.toFixed(1)+'%</td></tr>';}).join('')+'</tbody></table></div>':'<div style="padding:15px;color:var(--text3);font-size:11px">保有銘柄をSBI/moomoo CSVから取り込むと、ここに表示されます。</div>';
+ if(tbl){tbl.innerHTML=rows.length?'<div style="overflow:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">銘柄</th><th style="padding:6px;border-bottom:1px solid var(--border)">現在値</th><th style="padding:6px;border-bottom:1px solid var(--border)">目標買値</th><th style="padding:6px;border-bottom:1px solid var(--border)">目標価格余地</th><th style="padding:6px;border-bottom:1px solid var(--border)">予想PER</th><th style="padding:6px;border-bottom:1px solid var(--border)">業績</th><th style="padding:6px;border-bottom:1px solid var(--border)">保有比率</th></tr></thead><tbody>'+rows.map(r=>{const price=Number(r.currentPrice||r.price||0),tb=Number(r.targetBuy||0),target=Number(r.analystTarget||0),up=price>0&&target>0?(target/price-1)*100:null,total=rows.reduce((s,z)=>s+Number(z.amount||0),0)||1,ratio=Number(r.amount||0)/total*100,earn=selectorDaysToEarnings(r.earningsDate);let st=marketKind==='warn'?'🟡 指値待ち':'🟢 通常買付';if(earn!==null&&earn>=0&&earn<=7)st='🟠 イベント待ち';if(marketKind==='warn'&&vix!==null&&vix>=30)st='🔴 リスク確認';return '<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)"><b>'+marketEsc(r.ticker||r.code||'—')+'</b><div style="color:var(--text3)">'+marketEsc(r.name||'')+'</div></td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(price?Number(price).toLocaleString('ja-JP',{maximumFractionDigits:2}):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(tb?Number(tb).toLocaleString('ja-JP',{maximumFractionDigits:2}):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(up!==null?(up>=0?'+':'')+up.toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+(r.forwardPER?Number(r.forwardPER).toFixed(1):'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+((r.revenueGrowth!=null&&r.revenueGrowth!=='')?'売上 '+Number(r.revenueGrowth).toFixed(1)+'%':'—')+'</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">'+ratio.toFixed(1)+'%</td></tr>';}).join('')+'</tbody></table></div>':'<div style="padding:15px;color:var(--text3);font-size:11px">SBI/moomoo CSVを読み込むと保有銘柄が表示されます。</div>';}
+ const buy=document.getElementById('mkt-buy-context');
+ if(buy){let label=marketKind==='warn'?'🟡 指値待ち':'🟢 通常買付',detail=marketDetail;let reason=[];if(vix!==null&&vix>=30){label='🔴 リスク確認';reason.push('VIX 30以上');}else if(vix!==null&&vix>=20){reason.push('VIX 20以上');}if(us10y!==null&&us10y>=5)reason.push('米10年債5%以上');if(rows.some(r=>{const d=selectorDaysToEarnings(r.earningsDate);return d!==null&&d>=0&&d<=7;})){label='🟠 イベント待ち';reason.push('7日以内に決算予定の銘柄あり');}if(usd!==null)reason.push('USD/JPY '+usd.toFixed(2));buy.innerHTML='<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><b style="font-size:18px">'+label+'</b><span style="font-size:10px;color:var(--text3)">'+marketEsc(reason.join(' ／ ')||'市場環境入力待ち')+'</span></div><div style="font-size:11px;line-height:1.7;margin-top:7px">'+marketEsc(detail)+'</div><div style="margin-top:9px;padding:9px;background:var(--bg);border-radius:8px;font-size:10px;line-height:1.7">買付前に <b>①現在値 → ②目標買値 → ③予想PER → ④業績 → ⑤決算日 → ⑥保有比率</b> の順で確認してください。</div>';}
 }
+
 setTimeout(()=>{try{marketRender()}catch(e){}},1400);
 
 // ============================================================
