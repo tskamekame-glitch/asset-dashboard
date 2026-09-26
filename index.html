@@ -6594,15 +6594,42 @@ async function amApplySBIRows(rows){
   const nisaType=s=>s==='NISA成長'?'growth':s==='NISAつみたて'?'tsumitate':'none';
   const existingCatIsStock=a=>['個別株','高配当','外国株式'].includes(String(a.cat||''));
 
-  // ★重要：SBI CSVを正本にする。
-  // 個別株は過去の手入力・旧取込ロットを残さず、moomoo行だけ保持する。
-  // これにより「同じ100株をロット別に登録した旧行＋CSV合算」の二重計上を防止する。
+  // ★重要：SBI CSVを正本にするが、CSVに存在しない既存資産は消さない。
+  // CSVに載っている同一銘柄だけ旧SBI/手入力行を置換する。
+  // これにより、旧ロットの二重計上を防ぎつつ、CSV対象外の資産を誤って減額しない。
   const beforeRows=amAccounts.slice();
+
+  // まずCSVに含まれる個別株の識別子を作る（コード優先、コードが無い場合は正規化名）。
+  const incomingStockKeys=new Set();
+  rows.filter(r=>!r.isFund&&r.code&&Number(r.evalAmt)>0).forEach(r=>{
+    incomingStockKeys.add('c:'+normCode(r.code));
+    incomingStockKeys.add('n:'+normName(r.bareName||r.nameRaw||''));
+  });
+  // CSVに含まれる投信の「名称＋口座区分」も作る。
+  const incomingFundKeys=new Set();
+  rows.filter(r=>(r.isFund||!r.code)&&Number(r.evalAmt)>0).forEach(r=>{
+    incomingFundKeys.add(normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r));
+  });
+
   amAccounts=amAccounts.filter(a=>{
     if(a.sold)return true;
+    // moomooは独立した証券会社なので絶対に削除しない。
     if(String(a.broker||'')==='moomoo証券')return true;
-    if(existingCatIsStock(a))return false;
-    if(String(a.broker||'')==='SBI証券')return false;
+    // 明示的なSBI行は、CSVに同じ銘柄がある場合だけ置換対象。
+    if(String(a.broker||'')==='SBI証券'){
+      const kCode=a.code?('c:'+normCode(a.code)):'';
+      const kName='n:'+normName(a.name);
+      const sameStock=!!(kCode&&incomingStockKeys.has(kCode))||incomingStockKeys.has(kName);
+      const fundKey=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
+      return !(sameStock||incomingFundKeys.has(fundKey));
+    }
+    // broker未設定の旧手入力行は、CSVに同じコード/名称がある場合だけ置換対象。
+    const kCode=a.code?('c:'+normCode(a.code)):'';
+    const kName='n:'+normName(a.name);
+    const sameStock=!!(kCode&&incomingStockKeys.has(kCode))||incomingStockKeys.has(kName);
+    const fundKey=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
+    if(existingCatIsStock(a)&&sameStock)return false;
+    if(!existingCatIsStock(a)&&incomingFundKeys.has(fundKey))return false;
     return true;
   });
 
