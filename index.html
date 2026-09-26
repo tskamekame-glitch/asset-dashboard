@@ -6619,7 +6619,12 @@ async function amApplySBIRows(rows){
   amAccounts=amAccounts.filter(a=>{
     if(a.sold)return true;
     if(String(a.broker||'')==='moomoo証券')return true;
-    // 銀行・年金・FX・その他の手入力資産は保持。
+    // SBI CSVはSBI証券の証券・投信の唯一の正本。
+    // 旧インポートでカテゴリや銘柄コードが変わっていても、SBI証券の証券行は全て置換する。
+    // 銀行・預り金・FX等の非証券行は残す。
+    const broker=String(a.broker||'');
+    const isSbiSecurity=broker==='SBI証券' && !['銀行','現金','FX','暗号資産'].includes(String(a.cat||''));
+    if(isSbiSecurity)return false;
     if(!existingCatIsStock(a) && !incomingFundKeys.has(fundKeyForAccount(a)))return true;
     // SBI CSVに今回存在する個別株は、旧SBI/手入力ロットをすべて除去。
     if(existingCatIsStock(a)){
