@@ -612,7 +612,6 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 ============================================================ -->
 <nav class="bottom-nav">
   <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><span class="ni">🏠</span>ホーム</button>
-  <button class="nav-btn" data-tab="opscenter" onclick="switchTab('opscenter')"><span class="ni">🧭</span>運用センター</button>
   <button class="nav-btn" data-tab="market" onclick="switchTab('market')"><span class="ni">🌐</span>市場環境</button>
   <button class="nav-btn" data-tab="manager" onclick="switchTab('manager')"><span class="ni">💰</span>資産管理</button>
   <button class="nav-btn" data-tab="trend" onclick="switchTab('trend')"><span class="ni">📈</span>推移</button>
@@ -792,20 +791,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 </div>
 
 <!-- ========== ASSET MANAGER ========== -->
-<div class="panel" id="tab-opscenter">
-  <div class="panel-head"><div><div class="panel-title">🧭 投資運用センター</div><div class="panel-sub">今日確認すべき資産・銘柄・資金・リスク・Side-FIREを1画面に集約</div></div><button class="icon-btn" onclick="opsRender()">↻ 更新</button></div>
-  <div id="ops-summary" class="kpi-grid"></div>
-  <div id="sbiSyncAudit" style="margin-top:10px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;display:none"></div>
-  <div class="section-title" style="margin-top:18px">🔎 今日確認すべき銘柄</div>
-  <div class="card" id="ops-actions" style="padding:0;overflow:hidden"></div>
-  <div class="grid2" style="margin-top:14px">
-    <div><div class="section-title">💰 資金状況</div><div class="card" id="ops-cash"></div></div>
-    <div><div class="section-title">⚠️ ポートフォリオ警告</div><div class="card" id="ops-risks"></div></div>
-  </div>
-  <div class="section-title" style="margin-top:14px">🔥 Side-FIRE進捗</div>
-  <div class="card" id="ops-fire"></div>
-  <div style="font-size:10px;color:var(--text3);margin-top:10px;line-height:1.6">※この画面は既存のCSV・設定・保存データを集約して確認するためのものです。自動で売買判断を行ったり、Webから株価を上書きしたりしません。</div>
-</div>
+
 
 <!-- ========== MARKET ENVIRONMENT ========== -->
 <div class="panel" id="tab-market">
@@ -3525,7 +3511,6 @@ function switchTab(tab){
   if(tab==='fire'){if(typeof fireAutoLink==='function')setTimeout(fireAutoLink,100);if(typeof fireRenderProgressDashboard==='function')setTimeout(fireRenderProgressDashboard,180);}
   const fab=document.getElementById('fab');
   fab.classList.toggle('hidden',tab!=='manager');
-  if(tab==='opscenter')setTimeout(()=>{if(typeof opsRender==='function')opsRender();},20);
   if(tab==='market')setTimeout(()=>{if(typeof marketRender==='function')marketRender();},20);
   if(tab==='home')refreshHome();
   if(tab==='portfolio')pfRender();
@@ -6971,7 +6956,7 @@ async function importCSV(e){
       window.amAccounts=amAccounts;
       amSaveToLocal(); amRender(); refreshHome();
       try{if(typeof opsRender==='function')opsRender();}catch(e){console.warn('[SBI exact] opsRender failed',e);}
-      try{if(typeof switchTab==='function' && document.getElementById('tab-opscenter')?.classList.contains('active'))opsRender();}catch(_e){}
+      
       try{await amSaveToSheet();}catch(_e){console.warn('[SBI exact] sheet save failed',_e);}
       const after=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
       const csvTotal=exactRows.reduce((a,r)=>a+r.evalAmt,0);
