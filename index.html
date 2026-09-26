@@ -6099,7 +6099,7 @@ async function amMoomooImport(event){
   const normCode=v=>String(v||'').replace(/[^0-9A-Za-z.]/g,'').toUpperCase();
   // 直前moomoo CSVの状態を比較元として固定してから今回CSVを反映する。
   amCaptureImportSnapshot('moomoo証券',amAccounts);
-  const normName=v=>String(v||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const normName=v=>String(v||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
 
   rows.forEach(row=>{
     const key=normCode(row.code)+'|'+row.acct;
@@ -6120,7 +6120,13 @@ async function amMoomooImport(event){
     const codeKey=normCode(row.code);
     // 同一ティッカーの既存行を優先順位付きで突合する。
     // 1) 既存moomoo行、2) 金融機関未設定の手入力行。SBI等の別証券会社行は残す。
-    const candidates=amAccounts.filter(a=>!a.sold&&codeKey&&normCode(a.code)===codeKey&&String(a.nisaType||'none')==='none');
+    const nameKey=normName(row.name);
+    const candidates=amAccounts.filter(a=>{
+      if(a.sold||String(a.nisaType||'none')!=='none')return false;
+      const sameCode=!!codeKey&&normCode(a.code)===codeKey;
+      const sameName=!!nameKey&&normName(a.name)===nameKey;
+      return sameCode||sameName;
+    });
     let existing=candidates.find(a=>String(a.broker||'')==='moomoo証券');
     if(!existing) existing=candidates.find(a=>!String(a.broker||'').trim());
     const cat=(row.currency==='USD'||/^[A-Z]/.test(row.code))?'外国株式':(typeof amGuessCat==='function'?(amGuessCat(row.name)||'個別株'):'個別株');
@@ -6129,7 +6135,7 @@ async function amMoomooImport(event){
       existing.prevMoomooAmount=old;
       existing.amount=jpyValue;existing.shares=row.shares;existing.price=row.price;existing.costPrice=row.cost;existing.fxRate=fx||existing.fxRate||0;existing.code=row.code;existing.broker='moomoo証券';existing.updated=today;existing.marketPrice=row.price;existing.priceCurrency=row.currency;existing.marketUpdated=new Date().toISOString();existing.marketSource='moomoo CSV';existing.marketError='';existing.prevClose=(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):existing.prevClose||0;existing.note=String(existing.note||'').replace(/\s*\[moomoo.*?\]$/,'')+` [moomoo ${today}]`;updated++;log.push({name:existing.name,val:jpyValue,oldVal:old});
       // 既に同じティッカーのmoomoo行が複数ある場合は、今回更新した1行に統合して重複を除去する。
-      const dupes=candidates.filter(a=>a!==existing&&String(a.broker||'')==='moomoo証券');
+      const dupes=candidates.filter(a=>a!==existing&&(String(a.broker||'')==='moomoo証券'||!String(a.broker||'').trim()));
       if(dupes.length){
         dupes.forEach(d=>{const ix=amAccounts.indexOf(d);if(ix>=0)amAccounts.splice(ix,1);});
       }
@@ -6594,43 +6600,35 @@ async function amApplySBIRows(rows){
   const nisaType=s=>s==='NISA成長'?'growth':s==='NISAつみたて'?'tsumitate':'none';
   const existingCatIsStock=a=>['個別株','高配当','外国株式'].includes(String(a.cat||''));
 
-  // ★重要：SBI CSVを正本にするが、CSVに存在しない既存資産は消さない。
-  // CSVに載っている同一銘柄だけ旧SBI/手入力行を置換する。
-  // これにより、旧ロットの二重計上を防ぎつつ、CSV対象外の資産を誤って減額しない。
+  // ★再構築モード：SBI CSVをSBI保有資産の唯一の正本として扱う。
+  // 旧バージョンで broker/importSource が付いていなかった手入力・旧ロットも、
+  // 今回のCSVと同一銘柄なら一旦除去してから、CSVの集約値を1行だけ作る。
+  // ただし moomoo証券の行、CSVに存在しない他社資産、銀行・年金・FX等は残す。
   const beforeRows=amAccounts.slice();
-
-  // まずCSVに含まれる個別株の識別子を作る（コード優先、コードが無い場合は正規化名）。
   const incomingStockKeys=new Set();
   rows.filter(r=>!r.isFund&&r.code&&Number(r.evalAmt)>0).forEach(r=>{
     incomingStockKeys.add('c:'+normCode(r.code));
     incomingStockKeys.add('n:'+normName(r.bareName||r.nameRaw||''));
   });
-  // CSVに含まれる投信の「名称＋口座区分」も作る。
   const incomingFundKeys=new Set();
   rows.filter(r=>(r.isFund||!r.code)&&Number(r.evalAmt)>0).forEach(r=>{
     incomingFundKeys.add(normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r));
   });
+  const fundKeyForAccount=a=>normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
 
   amAccounts=amAccounts.filter(a=>{
     if(a.sold)return true;
-    // moomooは独立した証券会社なので絶対に削除しない。
     if(String(a.broker||'')==='moomoo証券')return true;
-    // 明示的なSBI行は、CSVに同じ銘柄がある場合だけ置換対象。
-    if(String(a.broker||'')==='SBI証券'){
+    // 銀行・年金・FX・その他の手入力資産は保持。
+    if(!existingCatIsStock(a) && !incomingFundKeys.has(fundKeyForAccount(a)))return true;
+    // SBI CSVに今回存在する個別株は、旧SBI/手入力ロットをすべて除去。
+    if(existingCatIsStock(a)){
       const kCode=a.code?('c:'+normCode(a.code)):'';
       const kName='n:'+normName(a.name);
-      const sameStock=!!(kCode&&incomingStockKeys.has(kCode))||incomingStockKeys.has(kName);
-      const fundKey=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
-      return !(sameStock||incomingFundKeys.has(fundKey));
+      return !(!!(kCode&&incomingStockKeys.has(kCode))||incomingStockKeys.has(kName));
     }
-    // broker未設定の旧手入力行は、CSVに同じコード/名称がある場合だけ置換対象。
-    const kCode=a.code?('c:'+normCode(a.code)):'';
-    const kName='n:'+normName(a.name);
-    const sameStock=!!(kCode&&incomingStockKeys.has(kCode))||incomingStockKeys.has(kName);
-    const fundKey=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
-    if(existingCatIsStock(a)&&sameStock)return false;
-    if(!existingCatIsStock(a)&&incomingFundKeys.has(fundKey))return false;
-    return true;
+    // SBI CSVに今回存在する投信は、同じファンド＋NISA区分を除去。
+    return !incomingFundKeys.has(fundKeyForAccount(a));
   });
 
   // 個別株：コード＋口座区分単位でCSVの複数ロットを1行へ集約。
