@@ -3818,6 +3818,8 @@ function amNormalizeLedger(){
     const cat=String(a.cat||'');
     // SBI CSVの別セクションを誤って資産として取り込んだ異常行を除外
     if(!validCats.has(cat) && (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(name)||/^[+\-]?\d[\d,]*(?:\.\d+)?$/.test(name))){continue;}
+    // 既存データの補正：FANG+は投信/インデックスなので外国株式にはしない
+    if(/FANG|iFreeNEXT|ファング/i.test(name) && ['外国株式','個別株'].includes(a.cat))a.cat='全世界インデックス';
     // SWCCは国内株なので海外株式から個別株へ補正
     if(/^SWCC$/i.test(name) && cat==='外国株式')a.cat='個別株';
     const broker=String(a.broker||'').trim();
@@ -5675,10 +5677,14 @@ function amCalcAmount(){
   const result=document.getElementById('fCalcResult');
   const gainResult=document.getElementById('fGainResult');
   let amount=parseFloat(document.getElementById('fAmount').value)||0;
-  if(shares>0&&price>0){
+  // インデックス投信はSBI CSVの「評価額（円）」を正本とし、
+  // 口数×基準価額では再計算しない（基準価額の単位・口数換算で誤差/桁ズレが出るため）。
+  if(!isIndexFund && shares>0&&price>0){
     amount=isForeignStock?Math.round(shares*price*fxRate):Math.round(shares*price);
     document.getElementById('fAmount').value=amount;
     if(result)result.textContent='¥'+amount.toLocaleString('ja-JP')+(isForeignStock&&fxRate>1?` (${fxRate}円/USD)`:'');
+  }else if(isIndexFund){
+    if(result)result.textContent='SBI CSVの評価額を使用';
   }else{
     if(result)result.textContent='';
   }
@@ -6634,8 +6640,9 @@ async function amApplySBIRows(rows){
   const catForStock=r=>r.isForeignStock?'外国株式':(typeof amGuessCat==='function'?(amGuessCat(r.bareName||r.nameRaw)||'個別株'):'個別株');
   const catForFund=r=>{
     const n=String(r.nameNorm||r.nameRaw||'');
-    if(/S&P|米国|FANG|全米|米国株/i.test(n))return '外国株式';
+    if(/FANG|iFreeNEXT|ファング/i.test(n))return '全世界インデックス';
     if(/インド/i.test(n))return 'インドインデックス';
+    if(/S&P|米国|全米|米国株/i.test(n))return '全世界インデックス';
     if(/日本|TOPIX|日経/i.test(n))return '日本インデックス';
     return '全世界インデックス';
   };
@@ -6902,8 +6909,9 @@ async function importCSV(e){
         }
         const g=(typeof amGuessCat==='function'?amGuessCat(r.name):'');
         if(g&&AM_VALID_CATS.includes(g))return g;
-        if(/FANG|米国|S\.P|S&P/i.test(r.name))return '外国株式';
+        if(/FANG|iFreeNEXT|ファング/i.test(r.name))return '全世界インデックス';
         if(/中国|日本|TOPIX|日経/i.test(r.name))return '日本インデックス';
+        if(/S\.P|S&P|米国|全米|米国株/i.test(r.name))return '全世界インデックス';
         return '全世界インデックス';
       };
       const keyNorm=x=>String(x||'').replace(/[！-～]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').trim().toLowerCase();
@@ -7058,7 +7066,7 @@ function sendToTrend(){
   const PENSION_PATS2=[/iDeCo/i,/イデコ/,/確定拠出/,/DC.*年金/i,/ＤＣ.*年金/,/企業年金/,/確定給付/];
   const BALANCE_BASED_PAT2=/PayPay|paypay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
   const TOUSHI_NAMES2=['オルカンPayPay','全世界PayPay','全世界インデックス','eMAXIS','オルカン','iTrust','インド(SBI)','FANG','iFreeNEXT'];
-  const TO_GRAPH_CAT2={'全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株','外国株式':'外国株式','銀行':'銀行','預り金':'銀行','年金':'年金','その他':'銀行'};
+  const TO_GRAPH_CAT2={'全世界インデックス':'全世界インデックス','日本インデックス':'日本インデックス','インドインデックス':'インドインデックス','高配当':'高配当','個別株':'個別株','外国株式':'外国株式','銀行':'銀行','預り金':'銀行','年金':'年金','その他':'その他'};
   const normCat2=a=>{
     if(PENSION_PATS2.some(p=>p.test(a.name)))return'年金';
     if((a.cat==='証券'||a.cat==='個別株'||a.cat==='高配当'||a.cat==='その他')&&TOUSHI_NAMES2.some(n=>a.name.includes(n)))return'投信';
@@ -8097,7 +8105,7 @@ function trNormalizeSnapshots(snaps){
     '外国株式':'外国株式',
     '銀行':'銀行','預り金':'銀行',
     '年金':'年金',
-    'その他':'銀行',
+    'その他':'その他',
     // 旧フォーマット（統合名）→新フォーマットへの変換
     '投信':'全世界インデックス',
     '証券':'個別株',
@@ -8586,7 +8594,7 @@ function trParseCSV(text,filename){
     '全世界インデックス':'全世界インデックス', '日本インデックス':'日本インデックス',
     'インドインデックス':'インドインデックス', '高配当':'高配当', '個別株':'個別株', '外国株式':'外国株式',
     '銀行':'銀行', '年金':'年金', '預り金':'銀行',
-    '証券':'個別株', '投信':'全世界インデックス', '銀行キープ':'銀行', 'その他':'銀行',
+    '証券':'個別株', '投信':'全世界インデックス', '銀行キープ':'銀行', 'その他':'その他',
   };
   const CAT_NORM_BY_NAME=[
     {pat:/iDeCo|イデコ|確定拠出|DC.*年金|ＤＣ.*年金|企業年金|確定給付/i, cat:'年金'},
