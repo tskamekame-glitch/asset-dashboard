@@ -3356,11 +3356,11 @@ function ruleCurrentPrice(r){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
           <div class="field" style="margin:0">
-            <label>投資戦略（①〜④を手動設定）</label>
+            <label>投資戦略（①〜⑦を手動設定）</label>
             <select id="fStrategy" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
-              <option value="">— ①〜④から選択 —</option><option value="長期コア">① 長期コア：5年以上の長期成長を狙う</option><option value="半導体・AI">② 半導体・AI：AI/半導体需要による値上がりを狙う</option><option value="バリュー">③ バリュー：割安修正・再評価を狙う</option><option value="その他">④ その他：上記以外・短期売買など</option>
+              <option value="">— ①〜⑦から選択 —</option><option value="長期コア">① 長期コア：5年以上の長期成長を狙う</option><option value="半導体・AI">② 半導体・AI：AI/半導体需要による値上がりを狙う</option><option value="バリュー">③ バリュー：割安修正・再評価を狙う</option><option value="その他">④ その他：上記以外・短期売買など</option><option value="インデックス">⑤ インデックス：指数連動で長期運用</option><option value="銀行">⑥ 銀行：銀行・預金などの資産</option><option value="年金">⑦ 年金：iDeCo・企業年金・確定拠出年金など</option>
             </select>
-            <div style="font-size:9px;color:var(--text3);line-height:1.45;margin-top:4px">※ 銘柄の業種ではなく「この銘柄を何の目的で保有するか」で1〜4を選択。未設定の場合は④その他として集計します。</div>
+            <div style="font-size:9px;color:var(--text3);line-height:1.45;margin-top:4px">※ 銘柄・資産の種類ではなく「この資産を何の目的で保有するか」で①〜⑦を選択。未設定の場合は④その他として集計します。</div>
           </div>
           <div class="field" style="margin:0">
             <label>アナリスト目標株価</label>
@@ -17751,7 +17751,7 @@ function stratAuto(k){
 }
 function stratRows(){
   const src=Array.isArray(amAccounts)?amAccounts:[], map={};
-  src.filter(a=>!a.sold&&Number(a.amount||0)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
+  src.filter(a=>!a.sold&&Number(a.amount||0)>0).forEach(a=>{
     const code=String(a.ticker||a.code||a.symbol||'').trim(), name=String(a.name||code).trim(), key=code||name;
     if(!key)return;
     if(!map[key])map[key]={ticker:code||key,name,amount:0,strategy:'',sector:String(a.sector||'')};
@@ -17822,11 +17822,11 @@ function stratRender(){
   rows.forEach(r=>{if(adds[r.ticker]){const k=r.displayStrategy;if(afterGroups[k]!==undefined)afterGroups[k]+=adds[r.ticker];}});
   const existingTickers=new Set(rows.map(r=>r.ticker));
   if(adds && Object.keys(adds).length){
-    Object.entries(adds).forEach(([t,n])=>{if(existingTickers.has(t))return;const o=baInvestmentRows().find(x=>x.ticker===t);const k=o?(o.strategy||stratAuto([o.ticker,o.name,o.sector].join(' '))||'その他'):'その他';if(afterGroups[k]!==undefined)afterGroups[k]+=n;});
+    Object.entries(adds).forEach(([t,n])=>{if(existingTickers.has(t))return;const o=baInvestmentRows().find(x=>x.ticker===t);const k=o?(o.strategy||'その他'):'その他';if(afterGroups[k]!==undefined)afterGroups[k]+=n;});
     const addTotal=Object.values(adds).reduce((s,n)=>s+n,0), afterTotal=total+addTotal;
     after.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">🛒 現在の買付シミュレーションを反映した場合</div><div style="overflow:auto"><table style="width:100%;min-width:650px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">買付後比率</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標との差</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標との差額</th></tr></thead><tbody>${STRAT_KEYS.map(k=>{const p=afterTotal?afterGroups[k]/afterTotal*100:0,d=p-Number(tg[k]||0),gap=afterTotal*Number(tg[k]||0)/100-afterGroups[k];return `<tr><td style="padding:6px;border-bottom:1px solid var(--border)">${stratEsc(k)}</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);font-weight:700">${p.toFixed(1)}%</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border);color:${Math.abs(d)<0.5?'var(--text2)':d>0?'var(--red)':'var(--accent)'}">${d>0?'+':''}${d.toFixed(1)}pt</td><td style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">${gap>0?'+':''}¥${Math.round(gap).toLocaleString('ja-JP')}</td></tr>`;}).join('')}</tbody></table></div>`;
   }else after.innerHTML='<div style="font-size:10px;color:var(--text3)">買付シミュレーターで金額を入力すると、買付後の戦略比率もここに表示します。</div>';
-  note.textContent='目標比率は4戦略それぞれ入力できます。長期コアも目標比率を設定可能です。過不足は「現在比率−目標比率」、目標との差額は「目標額−現在保有額」です。未設定銘柄は銘柄名・セクターから補助分類します。';
+  note.textContent='目標比率は①〜⑦の7分類それぞれ入力できます。過不足は「現在比率−目標比率」、目標との差額は「目標額−現在保有額」です。未設定の資産は④その他として集計します。';
 }
 function stratRenderPreview(){
   // 旧仕様では入力のたびに再描画していたため、カーソルが外れて入力できなかった。
