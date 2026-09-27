@@ -840,7 +840,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
         <div class="section-head-left"><span>📊</span><h2>カテゴリ別内訳</h2></div>
         <span><span class="chevron">▼</span></span>
       </div>
-      <div class="account-list"><div class="chart-wrap"><div class="bar-chart" id="amBarChart"></div></div></div>
+      <div class="account-list"><div class="chart-wrap" style="height:280px;display:flex;align-items:center;justify-content:center"><canvas id="amBarChart"></canvas></div></div>
       <!-- ヒートマップ -->
       <div style="padding:8px 16px 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
         <div style="font-size:13px;font-weight:600;color:var(--text2)">🟥 保有銘柄ヒートマップ</div>
@@ -3864,10 +3864,22 @@ function amRender(){
   document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}口座${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
   try{dailyPnlRender();}catch(e){}
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
-  const maxAmt=Math.max(...Object.values(cats),1);
-  const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
-  const orderedCatsForBar=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
-  document.getElementById('amBarChart').innerHTML=orderedCatsForBar.map(cat=>{const amt=cats[cat];return`<div class="bar-row"><span class="bar-label">${cat}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(amt/maxAmt*100)}%;background:${AM_CAT_COLORS[cat]||'#888'}"></div></div><span class="bar-val">${fmt(amt)}</span></div>`;}).join('')||'<p style="text-align:center;color:var(--text3);font-size:13px">口座を追加してください</p>';
+  // カテゴリ内訳：棒グラフではなく円グラフで表示
+  try{
+    if(typeof chartInstances==='undefined')window.chartInstances={};
+    if(chartInstances.amCategory)chartInstances.amCategory.destroy();
+    const CAT_ORDER=['銀行','外国株式','個別株','高配当','全世界インデックス','日本インデックス','年金','インドインデックス','FX','その他'];
+    const orderedCats=[...CAT_ORDER.filter(c=>cats[c]>0),...Object.keys(cats).filter(c=>!CAT_ORDER.includes(c)&&cats[c]>0)];
+    const el=document.getElementById('amBarChart');
+    if(el){
+      const entries=orderedCats.map(cat=>({cat,amt:Number(cats[cat]||0)})).filter(x=>x.amt>0);
+      const totalCat=entries.reduce((sum,x)=>sum+x.amt,0);
+      const isDark=document.documentElement.classList.contains('dark')||document.body.classList.contains('dark');
+      const colors=entries.map(x=>AM_CAT_COLORS[x.cat]||'#888');
+      chartInstances.amCategory=new Chart(el,{type:'doughnut',data:{labels:entries.map(x=>x.cat),datasets:[{data:entries.map(x=>x.amt),backgroundColor:colors,borderWidth:2,borderColor:isDark?'#1c1c1e':'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8,boxWidth:10}},tooltip:{callbacks:{label:ctx=>{const pct=totalCat>0?(ctx.raw/totalCat*100).toFixed(1):'0.0';return ctx.label+': '+fmt(ctx.raw)+' ('+pct+'%)';}}},datalabels:{color:'#fff',font:{size:10,weight:'600'},formatter:(v)=>{const pct=totalCat>0?v/totalCat*100:0;return pct>=5?pct.toFixed(1)+'%':'';}}}},plugins:(typeof ChartDataLabels!=='undefined'?[ChartDataLabels]:[])});
+    }
+  }catch(e){console.warn('amCategoryPie error',e);}
+
   // 口座のNISA区分を判定（表示グルーピング用）。tqClassify（NISA区分フィールド優先→名前/メモ判定）を再利用。
   function amNisaGroupInfo(a){
     const cls=(typeof tqClassify==='function')?tqClassify(a):null;
