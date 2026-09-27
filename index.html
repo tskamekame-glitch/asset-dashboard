@@ -17746,28 +17746,23 @@ function stratPurchaseAdds(){
 
 function stratOpenTargetEditor(){
   const tg=stratTargets();
-  const vals={};
-  for(const k of STRAT_KEYS){
-    const current=Number(tg[k]||0);
-    const v=window.prompt(`${k} の目標比率を入力してください（0〜100%）`,String(current));
-    if(v===null)return;
-    const n=Number(String(v).replace(/,/g,''));
-    if(!Number.isFinite(n)||n<0||n>100){showToast(`⚠ ${k} は0〜100の数値で入力してください`);return;}
-    vals[k]=n;
-  }
-  const total=STRAT_KEYS.reduce((s,k)=>s+vals[k],0);
-  if(Math.abs(total-100)>0.0001){showToast(`⚠ 目標比率の合計は100%にしてください（現在 ${total}%）`);return;}
-  localStorage.setItem('strategyAllocationTargets',JSON.stringify(vals));
-  stratRender();
-  try{amRender();}catch(e){}
-  showToast('✓ 目標比率を保存しました');
+  const el=document.getElementById('strat-target-editor-inline');
+  if(el){el.scrollIntoView({behavior:'smooth',block:'center'}); const f=el.querySelector('input'); if(f)f.focus(); return;}
+  const targets=document.getElementById('strat-targets'); if(!targets)return;
+  const wrap=document.createElement('div'); wrap.id='strat-target-editor-inline';
+  wrap.style.cssText='grid-column:1/-1;padding:12px;border:2px solid var(--accent);border-radius:10px;background:var(--card);position:relative;z-index:20;pointer-events:auto;';
+  wrap.innerHTML=`<div style="font-size:12px;font-weight:700;margin-bottom:10px">🎯 戦略別の目標比率を入力</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">${STRAT_KEYS.map(k=>`<label style="display:block;font-size:10px;color:var(--text2);pointer-events:auto">${stratEsc(k)}<div style="display:flex;align-items:center;gap:4px;margin-top:4px"><input type="number" min="0" max="100" step="0.1" inputmode="decimal" autocomplete="off" data-strat-target="${stratEsc(k)}" value="${Number(tg[k]||0)}" style="width:100%;min-width:0;padding:9px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:16px;pointer-events:auto;user-select:text;-webkit-user-select:text" /><span>%</span></div></label>`).join('')}</div><div id="strat-target-total" style="font-size:10px;margin-top:10px;color:var(--text2)">合計 0.0%</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn-sm" type="button" onclick="stratCloseTargetEditor()">キャンセル</button><button class="btn-sm primary" type="button" onclick="stratSaveTargetEditor()">保存</button></div>`;
+  targets.appendChild(wrap);
+  const updateTotal=()=>{const vals=STRAT_KEYS.map(k=>Number(wrap.querySelector('[data-strat-target="'+k+'"]')?.value||0));const total=vals.reduce((a,b)=>a+b,0);const t=wrap.querySelector('#strat-target-total');if(t){t.textContent='合計 '+total.toFixed(1)+'%'+(Math.abs(total-100)<0.001?' ✓':'（100%にしてください）');t.style.color=Math.abs(total-100)<0.001?'var(--green)':'var(--text2)';}};
+  wrap.querySelectorAll('input').forEach(i=>i.addEventListener('input',updateTotal)); updateTotal();
+  const first=wrap.querySelector('input'); if(first){first.focus();first.select();}
 }
-function stratCloseTargetEditor(){const el=document.getElementById('strat-target-editor');if(el)el.remove();}
+function stratCloseTargetEditor(){const el=document.getElementById('strat-target-editor-inline');if(el)el.remove();}
 function stratSaveTargetEditor(){
-  const bg=document.getElementById('strat-target-editor');if(!bg)return;
-  const x={}; STRAT_KEYS.forEach(k=>{const e=bg.querySelector('[data-strat-target=\"'+k+'\"]');x[k]=Math.max(0,Number(e?.value||0));});
+  const bg=document.getElementById('strat-target-editor-inline');if(!bg)return;
+  const x={}; STRAT_KEYS.forEach(k=>{const e=bg.querySelector('[data-strat-target="'+k+'"]');x[k]=Math.max(0,Math.min(100,Number(e?.value||0)));});
   const total=STRAT_KEYS.reduce((s,k)=>s+x[k],0);
-  if(total!==100){showToast('⚠ 目標比率の合計を100%にしてください');return;}
+  if(Math.abs(total-100)>0.0001){showToast('⚠ 目標比率の合計を100%にしてください（現在 '+total.toFixed(1)+'%）');return;}
   localStorage.setItem('strategyAllocationTargets',JSON.stringify(x));
   stratCloseTargetEditor(); stratRender(); showToast('✓ 目標比率を保存しました');
 }
