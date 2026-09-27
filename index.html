@@ -17745,17 +17745,22 @@ function stratPurchaseAdds(){
 }
 
 function stratOpenTargetEditor(){
-  const old=document.getElementById('strat-target-editor'); if(old)old.remove();
   const tg=stratTargets();
-  const bg=document.createElement('div'); bg.id='strat-target-editor';
-  bg.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
-  bg.innerHTML=`<div style="width:min(420px,100%);background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:14px;padding:16px;box-sizing:border-box;box-shadow:0 12px 40px rgba(0,0,0,.35)"><div style="font-size:16px;font-weight:700;margin-bottom:5px">🎯 戦略別の目標比率</div><div style="font-size:10px;color:var(--text3);margin-bottom:12px">4戦略の合計を100%にしてください。</div><div style="display:grid;grid-template-columns:1fr 100px;gap:9px;align-items:center">${STRAT_KEYS.map(k=>`<label style="font-size:12px;font-weight:600">${stratEsc(k)}</label><input data-strat-target="${stratEsc(k)}" type="number" min="0" max="100" step="1" inputmode="decimal" value="${Number(tg[k]||0)}" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:16px;text-align:right">`).join('')}</div><div id="strat-target-total" style="font-size:11px;margin-top:10px;text-align:right"></div><div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="btn-sm" style="flex:1;padding:10px" onclick="stratCloseTargetEditor()">キャンセル</button><button type="button" class="btn-sm" style="flex:1;padding:10px;font-weight:700" onclick="stratSaveTargetEditor()">保存</button></div></div>`;
-  document.body.appendChild(bg);
-  const update=()=>{const total=Array.from(bg.querySelectorAll('[data-strat-target]')).reduce((s,e)=>s+Math.max(0,Number(e.value||0)),0);const el=bg.querySelector('#strat-target-total');el.textContent=`合計 ${total.toFixed(0)}%`+(total===100?' ✓':' ／ 100%にしてください');el.style.color=total===100?'var(--green)':'var(--red)';};
-  bg.querySelectorAll('[data-strat-target]').forEach(e=>e.addEventListener('input',update));
-  bg.addEventListener('click',e=>{if(e.target===bg)stratCloseTargetEditor();});
-  update();
-  setTimeout(()=>{const first=bg.querySelector('[data-strat-target]');if(first){first.focus();first.select();}},50);
+  const vals={};
+  for(const k of STRAT_KEYS){
+    const current=Number(tg[k]||0);
+    const v=window.prompt(`${k} の目標比率を入力してください（0〜100%）`,String(current));
+    if(v===null)return;
+    const n=Number(String(v).replace(/,/g,''));
+    if(!Number.isFinite(n)||n<0||n>100){showToast(`⚠ ${k} は0〜100の数値で入力してください`);return;}
+    vals[k]=n;
+  }
+  const total=STRAT_KEYS.reduce((s,k)=>s+vals[k],0);
+  if(Math.abs(total-100)>0.0001){showToast(`⚠ 目標比率の合計は100%にしてください（現在 ${total}%）`);return;}
+  localStorage.setItem('strategyAllocationTargets',JSON.stringify(vals));
+  stratRender();
+  try{amRender();}catch(e){}
+  showToast('✓ 目標比率を保存しました');
 }
 function stratCloseTargetEditor(){const el=document.getElementById('strat-target-editor');if(el)el.remove();}
 function stratSaveTargetEditor(){
