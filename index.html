@@ -1101,7 +1101,7 @@ function amDiagInvestmentRows(){
     map[key].amount+=amDiagNum(a.amount);map[key].shares+=amDiagNum(a.shares);map[key].rows.push(a);
     if(a.sector)map[key].sector=String(a.sector); if(a.strategy)map[key].strategy=String(a.strategy); if(a.priceCurrency||a.currency)map[key].currency=String(a.priceCurrency||a.currency).toUpperCase();
   });
-  return Object.values(map).map(x=>({...x,strategy:x.strategy||((typeof stratAuto==='function')?stratAuto(x):'その他')||'その他'}));
+  return Object.values(map).map(x=>({...x,strategy:x.strategy||'その他'}));
 }
 function amDiagRegion(r){
   const s=[r.ticker,r.name,r.currency,r.cat].join(' ').toLowerCase();
@@ -1171,7 +1171,7 @@ function amPerfAccounts(){
   }catch(e){return Array.isArray(window.amAccounts)?window.amAccounts:[];}
 }
 function amPerfTicker(a){return String(a?.ticker||a?.code||a?.symbol||'').trim()||amLotBaseName(a?.name||'');}
-function amPerfStrategy(a){return String(a?.strategy||'').trim()||((typeof stratAuto==='function')?stratAuto(a):'その他');}
+function amPerfStrategy(a){return String(a?.strategy||'').trim()||'その他';}
 function amPerfCurrentRows(){
   const accs=amPerfAccounts().filter(a=>!a.sold&&Number(a.amount||0)>0&&['個別株','高配当','外国株式'].includes(a.cat));
   const g={};
@@ -2364,7 +2364,7 @@ function crashBuyRows(){
     if(!map[key])map[key]={ticker:ticker||key,name,amount:0,strategy:'',sector:String(a.sector||'')};
     map[key].amount+=crashBuyNum(a.amount); if(a.strategy)map[key].strategy=String(a.strategy); if(a.sector)map[key].sector=String(a.sector);
   });
-  return Object.values(map).map(r=>({...r,strategy:r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):'')||'その他')}));
+  return Object.values(map).map(r=>({...r,strategy:r.strategy||'その他'}));
 }
 function crashBuyCash(){try{return typeof amStage1GetInvestableCashByBank==='function'?crashBuyNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}}
 function crashBuySemi(r){return r.strategy==='半導体・AI'||/半導体|メモリ|AI|GPU|HDD|データセンター/i.test([r.name,r.ticker,r.sector].join(' '));}
@@ -3356,10 +3356,11 @@ function ruleCurrentPrice(r){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
           <div class="field" style="margin:0">
-            <label>投資戦略</label>
+            <label>投資戦略（①〜④を手動設定）</label>
             <select id="fStrategy" style="width:100%;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">
-              <option value="">— 未設定 —</option><option value="長期コア">🟦 長期コア</option><option value="半導体・AI">🟥 半導体・AI</option><option value="バリュー">🟨 バリュー</option><option value="その他">⬜ その他</option>
+              <option value="">— ①〜④から選択 —</option><option value="長期コア">① 長期コア：5年以上の長期成長を狙う</option><option value="半導体・AI">② 半導体・AI：AI/半導体需要による値上がりを狙う</option><option value="バリュー">③ バリュー：割安修正・再評価を狙う</option><option value="その他">④ その他：上記以外・短期売買など</option>
             </select>
+            <div style="font-size:9px;color:var(--text3);line-height:1.45;margin-top:4px">※ 銘柄の業種ではなく「この銘柄を何の目的で保有するか」で1〜4を選択。未設定の場合は④その他として集計します。</div>
           </div>
           <div class="field" style="margin:0">
             <label>アナリスト目標株価</label>
