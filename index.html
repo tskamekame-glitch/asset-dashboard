@@ -16650,37 +16650,32 @@ function amPwMoney(v){return Number(v||0).toLocaleString('ja-JP',{maximumFractio
 function amPwPriceGap(current,target){return current>0&&target>0?(current-target)/target*100:null;}
 function amPwRender(){
   const el=document.getElementById('amPriceWatchPanel'); if(!el)return;
-  const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amPwIsInvestment);
+  const rows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amPwIsInvestment).sort((a,b)=>Number(b.amount||0)-Number(a.amount||0));
   if(!rows.length){el.innerHTML='<div style="padding:14px 16px;font-size:12px;color:var(--text3)">投資銘柄がありません。</div>';return;}
-  rows.sort((a,b)=>Number(b.amount||0)-Number(a.amount||0));
   const total=rows.reduce((s,a)=>s+Number(a.amount||0),0);
   const escv=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const cards=rows.map(a=>{
-    const cur=amPwCurrentPrice(a), buy=Number(a.targetBuyPrice||0), sell=Number(a.targetSellPrice||0), ratio=total?Number(a.amount||0)/total*100:0;
-    const buyGap=amPwPriceGap(cur,buy), sellGap=amPwPriceGap(cur,sell);
-    const status=a.watchStatus||'保有';
-    const statusColor=status==='買い増し候補'?'#16a34a':status==='売却候補'?'#dc2626':'var(--text2)';
-    const buyState=buy>0&&cur>0?(cur<=buy?'🟢 目標買値以下':'⚪ 目標買値より上'):'';
-    const sellState=sell>0&&cur>0?(cur>=sell?'🔴 目標売値以上':'⚪ 目標売値より下'):'';
+  const cellInput=(id,val,ph,step='any')=>`<input id="${id}" type="number" inputmode="decimal" step="${step}" value="${val||''}" placeholder="${ph||''}" style="width:100%;box-sizing:border-box;padding:6px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px">`;
+  const body=rows.map(a=>{
+    const cur=amPwCurrentPrice(a),buy=Number(a.targetBuyPrice||0),sell=Number(a.targetSellPrice||0),ratio=total?Number(a.amount||0)/total*100:0,status=a.watchStatus||'保有';
+    const buyGap=amPwPriceGap(cur,buy),sellGap=amPwPriceGap(cur,sell);
     const unit=(a.cat==='外国株式'||a.cat==='外国株')?'$':'¥';
-    return `<div style="border-bottom:1px solid var(--border);padding:10px 0">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-        <div style="min-width:0"><div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escv(amPwTicker(a))}${amPwTicker(a)!==a.name?' <span style="color:var(--text3);font-weight:400">'+escv(a.name)+'</span>':''}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">評価額 ¥${amPwMoney(a.amount)} ・ 保有比率 ${ratio.toFixed(1)}%</div></div>
-        <div style="text-align:right;white-space:nowrap"><div style="font-size:10px;color:var(--text3)">現在値</div><div style="font-size:14px;font-weight:700">${cur>0?unit+amPwMoney(cur):'未登録'}</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px">
-        <label style="font-size:10px;color:var(--text3)">目標買値${buyGap!==null?'（'+(buyGap>=0?'+':'')+buyGap.toFixed(1)+'%）':''}<input id="pw-buy-${a.id}" type="number" inputmode="decimal" value="${buy||''}" placeholder="例：${cur?Math.round(cur*0.9):''}" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
-        <label style="font-size:10px;color:var(--text3)">目標売値${sellGap!==null?'（'+(sellGap>=0?'+':'')+sellGap.toFixed(1)+'%）':''}<input id="pw-sell-${a.id}" type="number" inputmode="decimal" value="${sell||''}" placeholder="例：${cur?Math.round(cur*1.15):''}" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px">
-        <label style="font-size:10px;color:var(--text3)">目標保有比率（%）<input id="pw-ratio-${a.id}" type="number" step="0.1" value="${a.targetRatio||''}" placeholder="例：10" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"></label>
-        <label style="font-size:10px;color:var(--text3)">管理区分<select id="pw-status-${a.id}" style="width:100%;box-sizing:border-box;margin-top:3px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px"><option ${status==='買い増し候補'?'selected':''}>買い増し候補</option><option ${status==='保有'?'selected':''}>保有</option><option ${status==='売却候補'?'selected':''}>売却候補</option></select></label>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px"><div style="font-size:10px;color:${statusColor};font-weight:700">${status}${buyState?' ・ '+buyState:''}${sellState?' ・ '+sellState:''}</div><button class="btn-sm" onclick="amPwSave(${a.id})">保存</button></div>
-      <input id="pw-memo-${a.id}" value="${escv(a.watchMemo||'')}" placeholder="メモ（任意）" style="width:100%;box-sizing:border-box;margin-top:6px;padding:6px 7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:11px">
-    </div>`;
+    const statusColor=status==='買い増し候補'?'#16a34a':status==='売却候補'?'#dc2626':'var(--text2)';
+    const buyState=buy>0&&cur>0?(cur<=buy?'🟢買値以下':'⚪買値以上'):'';
+    const sellState=sell>0&&cur>0?(cur>=sell?'🔴売値以上':'⚪売値未達'):'';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 6px;position:sticky;left:0;background:var(--bg);z-index:1;min-width:150px"><div style="font-weight:700;font-size:11px">${escv(amPwTicker(a))}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escv(a.name||'')}</div></td>
+      <td style="padding:8px 6px;text-align:right;white-space:nowrap"><b>${cur>0?unit+amPwMoney(cur):'—'}</b><div style="font-size:9px;color:var(--text3)">¥${amPwMoney(a.amount)}</div></td>
+      <td style="padding:6px;min-width:105px">${cellInput('pw-buy-'+a.id,buy,cur?Math.round(cur*.9):'')}</td>
+      <td style="padding:6px;min-width:105px"><div>${cellInput('pw-sell-'+a.id,sell,cur?Math.round(cur*1.15):'')}</div><div style="font-size:9px;margin-top:2px;color:${sellGap!==null&&sellGap<=0?'#16a34a':'var(--text3)'}">${sellGap!==null?(sellGap>=0?'+':'')+sellGap.toFixed(1)+'%':''}</div></td>
+      <td style="padding:6px;min-width:90px">${cellInput('pw-ratio-'+a.id,a.targetRatio,'10','0.1')}<div style="font-size:9px;color:var(--text3);margin-top:2px">現在 ${ratio.toFixed(1)}%</div></td>
+      <td style="padding:6px;min-width:115px"><select id="pw-status-${a.id}" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:${statusColor};font-size:11px"><option ${status==='買い増し候補'?'selected':''}>買い増し候補</option><option ${status==='保有'?'selected':''}>保有</option><option ${status==='売却候補'?'selected':''}>売却候補</option></select></td>
+      <td style="padding:6px;min-width:180px"><input id="pw-memo-${a.id}" value="${escv(a.watchMemo||'')}" placeholder="メモ" style="width:100%;box-sizing:border-box;padding:6px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px"></td>
+      <td style="padding:6px;min-width:105px"><div style="font-size:9px;margin-bottom:4px;white-space:nowrap">${buyState||sellState||'—'}</div><button class="btn-sm" onclick="amPwSave(${a.id})">保存</button></td>
+    </tr>`;
   }).join('');
-  el.innerHTML=`<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">資産管理に登録されている投資銘柄を自動表示します。新しい銘柄を資産管理へ追加すると、この画面にも自動反映されます。現在値・評価額・保有比率も資産管理の最新データを使用し、目標買値・目標売値・目標保有比率・管理区分・メモだけをここで設定します。</div><div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資銘柄 ${rows.length}件</span><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div><div style="padding:0 16px 14px">${cards}</div>`;
+  el.innerHTML=`<div style="padding:0 16px 8px;font-size:11px;color:var(--text3);line-height:1.5">投資銘柄を1行ずつ表示。横スクロールでExcelのように確認・編集できます。現在値・評価額・保有比率は資産管理のデータを使用します。</div>
+  <div style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap"><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資銘柄 ${rows.length}件</span><span style="font-size:11px;padding:5px 8px;border-radius:6px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div>
+  <div style="margin:0 16px 14px;border:1px solid var(--border);border-radius:10px;overflow:auto;background:var(--bg)"><table style="border-collapse:separate;border-spacing:0;width:100%;min-width:900px;font-size:11px"><thead><tr style="background:var(--bg2);position:sticky;top:0;z-index:2"><th style="padding:8px 6px;text-align:left;position:sticky;left:0;background:var(--bg2);z-index:3">銘柄</th><th style="padding:8px 6px;text-align:right">現在値／評価額</th><th style="padding:8px 6px">目標買値</th><th style="padding:8px 6px">目標売値</th><th style="padding:8px 6px">目標比率</th><th style="padding:8px 6px">管理区分</th><th style="padding:8px 6px">メモ</th><th style="padding:8px 6px">状態／保存</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 async function amPwSave(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
