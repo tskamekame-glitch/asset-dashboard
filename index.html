@@ -2189,8 +2189,13 @@ function amMonthlyPerfRender(){
     <div style="font-size:18px;font-weight:700;margin-bottom:4px">🧮 買い付けシミュレーター</div>
     <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:14px">投資可能現金から、保有中の銘柄へいくら買い付けるとポートフォリオ比率がどう変わるかを保存せずに試算します。実際の資産データは変更しません。</div>
     <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:4px">現在の投資可能現金</div>
-      <div id="bs-cash" style="font-size:22px;font-weight:700">—</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:7px">現在の買い付け可能額</div>
+      <div id="bs-cash-breakdown" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text3)">合計</span>
+        <b id="bs-cash" style="font-size:20px">—</b>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">※資産管理の「銀行」欄に登録されたSBI預かり金＋moomoo証券を使用</div>
     </div>
     <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
       <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:5px">買い付け銘柄</label>
@@ -16890,11 +16895,25 @@ function bsInvestmentRows(){
   }catch(e){}
   return Object.values(map).sort((a,b)=>b.amount-a.amount);
 }
-function bsCash(){
-  try{
-    if(typeof amStage1GetInvestableCashByBank==='function')return Number(amStage1GetInvestableCashByBank(amAccounts).total||0);
-  }catch(e){}
-  return (Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&a.cat==='銀行').reduce((s,a)=>s+Number(a.amount||0),0);
+function bsCashBreakdown(){
+  const rows=Array.isArray(amAccounts)?amAccounts:[];
+  let sbi=0,moomoo=0;
+  rows.filter(a=>!a.sold&&String(a.cat||'')==='銀行').forEach(a=>{
+    const name=String(a.name||'');
+    const broker=String(a.broker||'');
+    const amount=Number(a.amount||0);
+    if(/SBI.*(?:預り|預かり)|(?:預り|預かり).*SBI/i.test(name)||/SBI証券/i.test(broker)&&/(預り|預かり)/i.test(name))sbi+=amount;
+    else if(/moomoo|ムームー/i.test(name)||/moomoo証券|ムームー証券/i.test(broker))moomoo+=amount;
+  });
+  return {SBI証券:sbi,moomoo証券:moomoo,total:sbi+moomoo};
+}
+function bsCash(){return bsCashBreakdown().total;}
+function bsRenderCashBreakdown(){
+  const el=document.getElementById('bs-cash-breakdown');
+  if(!el)return;
+  const c=bsCashBreakdown();
+  const fmt=v=>'¥'+Math.round(v).toLocaleString('ja-JP');
+  el.innerHTML=`<div style="background:var(--bg);border-radius:9px;padding:9px"><div style="font-size:10px;color:var(--text3)">SBI預かり金</div><div style="font-size:16px;font-weight:700;margin-top:3px">${fmt(c.SBI証券)}</div></div><div style="background:var(--bg);border-radius:9px;padding:9px"><div style="font-size:10px;color:var(--text3)">moomoo証券</div><div style="font-size:16px;font-weight:700;margin-top:3px">${fmt(c.moomoo証券)}</div></div>`;
 }
 function bsSetAmount(v){const e=document.getElementById('bs-amount');if(e){e.value=v;bsRender();}}
 function bsUnitYen(row){
@@ -16937,6 +16956,7 @@ function bsRender(){
   if(!sel||!res)return;
   const rows=bsInvestmentRows();
   const cash=bsCash();
+  bsRenderCashBreakdown();
   if(cashEl)cashEl.textContent='¥'+Math.round(cash).toLocaleString('ja-JP');
   const old=sel.value;
   const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
