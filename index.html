@@ -1255,11 +1255,36 @@ function amConcRender(){
   const card=(label,val,sub)=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:10px;color:var(--text3)">${label}</div><div style="font-size:19px;font-weight:750;margin-top:3px">${val}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div></div>`;
   let html=`<div style="padding:10px 16px 4px;font-size:11px;color:var(--text3)">銀行・現金等を除く投資資産 ¥${Math.round(total).toLocaleString()}。SBI・moomooの同一銘柄は合算。</div>`;
   html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:6px 16px 10px">${card('最大銘柄',maxTicker?(maxTicker.amount/total*100).toFixed(1)+'%':'—',maxTicker?esc2(maxTicker.name):'—')}${card('TOP3銘柄',topPct(3).toFixed(1)+'%','上位3銘柄の合計')}${card('最大セクター',maxSector?(maxSector[1]/total*100).toFixed(1)+'%':'—',maxSector?esc2(maxSector[0]):'—')}</div>`;
-  html+=`<div style="padding:4px 16px 5px;font-size:12px;font-weight:700">📌 銘柄集中度</div><div style="padding:0 16px 10px">`;
-  tickers.slice(0,10).forEach((x,i)=>{const p=x.amount/total*100;html+=`<div style="display:grid;grid-template-columns:22px minmax(90px,1.3fr) 1fr 55px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--text3);text-align:right">${i+1}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc2(x.name)} <span style="font-size:9px;color:var(--text3)">[${esc2(x.sector)}]</span></span><span style="height:7px;background:var(--bg2);border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(p,100)}%;background:#2563EB"></span></span><b style="text-align:right">${p.toFixed(1)}%</b></div>`;});
-  html+=`</div><div style="padding:4px 16px 5px;font-size:12px;font-weight:700">🏷️ セクター集中度</div><div style="padding:0 16px 10px">`;
-  sectors.slice(0,10).forEach(([sec,amt],i)=>{const p=amt/total*100;html+=`<div style="display:grid;grid-template-columns:minmax(100px,1fr) 1fr 55px;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px"><span>${esc2(sec)}</span><span style="height:7px;background:var(--bg2);border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(p,100)}%;background:#16A34A"></span></span><b style="text-align:right">${p.toFixed(1)}%</b></div>`;});
+  const chartIds=['amConcStockChart','amConcSectorChart'];
+  const palette=['#2563EB','#7C3AED','#0891B2','#059669','#D97706','#DC2626','#DB2777','#64748B','#0F766E','#9333EA'];
+  const stockEntries=tickers.slice(0,10), sectorEntries=sectors.slice(0,10);
+  const chartBlock=(canvasId,legendId,entries,nameKey)=>{
+    const vals=entries.map(x=>nameKey==='stock'?x.amount:x[1]);
+    const labels=entries.map(x=>nameKey==='stock'?x.name:x[0]);
+    const colors=entries.map((_,i)=>palette[i%palette.length]);
+    const sum=vals.reduce((a,b)=>a+b,0);
+    return `<div style="padding:0 16px 12px"><div style="height:250px;position:relative"><canvas id="${canvasId}"></canvas></div><div id="${legendId}" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;margin-top:10px"></div></div>`;
+  };
+  html+=`<div style="padding:4px 16px 5px;font-size:12px;font-weight:700">📌 銘柄集中度</div>${chartBlock('amConcStockChart','amConcStockLegend',stockEntries,'stock')}`;
+  html+=`<div style="padding:8px 16px 5px;border-top:1px solid var(--border);font-size:12px;font-weight:700">🏷️ セクター集中度</div>${chartBlock('amConcSectorChart','amConcSectorLegend',sectorEntries,'sector')}`;
   html+=`</div>`;
+  setTimeout(()=>{
+    try{
+      if(typeof chartInstances==='undefined')window.chartInstances={};
+      ['amConcStock','amConcSector'].forEach(k=>{if(chartInstances[k])chartInstances[k].destroy();});
+      const makeChart=(canvasId,legendId,entries,isStock,key)=>{
+        const canvas=document.getElementById(canvasId),legend=document.getElementById(legendId);if(!canvas)return;
+        const vals=entries.map(x=>isStock?x.amount:x[1]);
+        const labels=entries.map(x=>isStock?x.name:x[0]);
+        const colors=entries.map((_,i)=>palette[i%palette.length]);
+        const sum=vals.reduce((a,b)=>a+b,0);
+        chartInstances[key]=new Chart(canvas,{type:'doughnut',data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:2,borderColor:getComputedStyle(document.documentElement).getPropertyValue('--bg')||'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const pct=sum>0?ctx.raw/sum*100:0;return ctx.label+': ¥'+Math.round(ctx.raw).toLocaleString('ja-JP')+' ('+pct.toFixed(1)+'%)';}}},datalabels:{color:'#fff',font:{size:10,weight:'700'},formatter:(v,ctx)=>{const pct=sum>0?v/sum*100:0;return pct>=5?[(ctx.chart.data.labels[ctx.dataIndex]||''),pct.toFixed(1)+'%']:'';},textAlign:'center',lineHeight:1.2}}},plugins:(typeof ChartDataLabels!=='undefined'?[ChartDataLabels]:[])});
+        if(legend)legend.innerHTML=entries.map((x,i)=>{const amt=isStock?x.amount:x[1],label=isStock?x.name:x[0],pct=sum>0?amt/sum*100:0;return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="display:flex;align-items:center;gap:5px;min-width:0"><span style="width:9px;height:9px;border-radius:50%;background:${colors[i]};flex:none"></span><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc2(label)}</b></span><span style="font-weight:700;white-space:nowrap">¥${Math.round(amt).toLocaleString('ja-JP')} <small style="font-weight:500;color:var(--text3)">(${pct.toFixed(1)}%)</small></span></div>`;}).join('');
+      };
+      makeChart('amConcStockChart','amConcStockLegend',stockEntries,true,'amConcStock');
+      makeChart('amConcSectorChart','amConcSectorLegend',sectorEntries,false,'amConcSector');
+    }catch(e){console.warn('amConcentrationCharts error',e);}
+  },0);
   html+=`<div style="padding:4px 16px 5px;font-size:12px;font-weight:700">🔎 二重集中</div><div style="padding:0 16px 12px;font-size:10px;color:var(--text3);line-height:1.6">「銘柄」と「セクター」の両方が大きい場合、同じテーマへの集中が強くなります。例えば半導体銘柄を複数保有していても、半導体セクター全体の比率が高ければセクター集中として表示されます。</div>`;
   el.innerHTML=html;
 }
