@@ -6717,15 +6717,18 @@ async function amApplySBIRows(rows){
   // SMT 米国株式モメンタムファンドは旧基準CSVに broker 情報がない行が残りやすいため、
   // SBI CSVに存在する場合は「SBI CSVを正本」として旧行を必ず除去する。
   // moomoo証券の行は対象外（証券会社ごとの保有を分離するため）。
-  const isSmtUsMomentumFund=v=>{
+  const isSmtMomentumFund=v=>{
     const n=normName(v).replace(/ファンド/g,'');
-    return /smt.*米国株式モメンタム|米国株式モメンタム.*smt/.test(n);
+    return /smt.*(?:米国|日本)株式モメンタム|(?:米国|日本)株式モメンタム.*smt/.test(n);
   };
-  const sbiHasSmtUsMomentum=importedFunds.some(r=>isSmtUsMomentumFund(r.nameNorm||r.nameRaw));
-  if(sbiHasSmtUsMomentum){
+  // SMTモメンタムファンドは過去のCSV再取込で同一銘柄が複数行残ることがある。
+  // SBI CSVに存在する場合、SBI証券の既存行をいったん全削除し、今回のCSVから1行だけ再生成する。
+  const sbiHasSmtMomentum=importedFunds.some(r=>isSmtMomentumFund(r.nameNorm||r.nameRaw));
+  if(sbiHasSmtMomentum){
     amAccounts=amAccounts.filter(a=>{
       if(a.sold || String(a.broker||'')==='moomoo証券') return true;
-      return !isSmtUsMomentumFund(a.name);
+      const isSbi=String(a.broker||'')==='SBI証券' || !a.broker;
+      return !(isSbi && isSmtMomentumFund(a.name));
     });
     window.amAccounts=amAccounts;
   }
