@@ -2014,6 +2014,17 @@ function amMonthlyPerfRender(){
 <div class="panel" id="tab-selector">
   <div class="panel-head"><div><div class="panel-title">🔎 銘柄選定センター</div><div class="panel-sub">既存銘柄の買い増しと新規銘柄を、株価・バリュエーション・成長性・目標価格・ポートフォリオ適合性で同じ画面から比較します。順位付けは行いません。</div></div><button class="icon-btn" onclick="selectorRender()">↻ 更新</button></div>
 
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px;border:1px solid var(--border)">
+    <div style="font-size:15px;font-weight:700;margin-bottom:7px">🧭 銘柄選定センターの使い方</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:10px;line-height:1.45">
+      <div style="padding:8px;border-radius:8px;background:var(--bg)"><b>① 候補を追加</b><br><span style="color:var(--text3)">コード・銘柄名を登録</span></div>
+      <div style="padding:8px;border-radius:8px;background:var(--bg)"><b>② 最新情報を確認</b><br><span style="color:var(--text3)">株価・PER・業績・目標価格を確認</span></div>
+      <div style="padding:8px;border-radius:8px;background:var(--bg)"><b>③ 比較・絞り込み</b><br><span style="color:var(--text3)">成長性・割安度・目標価格余地を比較</span></div>
+      <div style="padding:8px;border-radius:8px;background:var(--bg)"><b>④ 買付条件を設定</b><br><span style="color:var(--text3)">目標買値・売値・比率を価格管理へ</span></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">💡 この画面は「候補を比較する場所」です。実際に保有した銘柄は<strong style="color:var(--text2)">価格管理</strong>で目標買値・売値を管理します。外部サイトの最新数値は自動上書きせず、確認した値を登録して履歴を残します。</div>
+  </div>
+
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
     <div style="font-size:15px;font-weight:700;margin-bottom:5px">候補を追加</div>
     <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">新規銘柄はここに登録すると、保有銘柄と同じ比較表に加わります。株価・PER等は外部から自動取得せず、確認した値を入力します。</div>
@@ -2025,13 +2036,34 @@ function amMonthlyPerfRender(){
       <select id="sel-new-theme" style="padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)"><option>半導体・AI</option><option>長期コア</option><option>バリュー</option><option>AI電力</option><option>セキュリティ</option><option>その他</option></select>
       <select id="sel-new-region" style="padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)"><option>米国</option><option>日本</option><option>韓国</option><option>その他</option></select>
     </div>
-    <button class="btn-sm" type="button" onclick="selectorAddCandidate()" style="margin-top:8px;width:100%">＋ 新規候補を追加</button>
+    <button class="btn-sm" type="button" onclick="selectorAddCandidate()" style="margin-top:8px;width:100%">＋ 新規候補を追加 → 比較表へ</button>
     <div id="sel-add-note" style="font-size:10px;color:var(--text3);margin-top:6px"></div>
   </div>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+      <div><div style="font-size:15px;font-weight:700">📊 銘柄比較・優先順位</div><div style="font-size:10px;color:var(--text3);margin-top:2px">業績・目標株価乖離率・PER/PBRを横並びで比較。並び順を切り替えて優先候補を確認できます。</div></div>
+      <button class="btn-sm" type="button" onclick="selectorRender()">↻</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px">
+      <label style="font-size:10px;color:var(--text3)">セクター / テーマ<select id="sel-sector-filter" onchange="selectorSetSector(this.value)" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"><option value="all">すべて</option></select></label>
+      <label style="font-size:10px;color:var(--text3)">優先順位の基準<select id="sel-sort" onchange="selectorSetSort(this.value)" style="width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)"><option value="priority">業績＋目標株価乖離</option><option value="targetGap">目標株価乖離率</option><option value="revenueGrowth">売上成長率</option><option value="opProfitGrowth">営業利益成長率</option><option value="epsGrowth">EPS成長率</option><option value="growthAvg">業績成長平均</option><option value="forwardPER">予想PER（低い順）</option><option value="pbr">PBR（低い順）</option></select></label>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="filter-btn active" data-sel-filter="all" onclick="selectorSetFilter('all')">すべて</button>
+      <button class="filter-btn" data-sel-filter="held" onclick="selectorSetFilter('held')">保有</button>
+      <button class="filter-btn" data-sel-filter="new" onclick="selectorSetFilter('new')">新規</button>
+      <button class="filter-btn" data-sel-filter="semi" onclick="selectorSetFilter('semi')">半導体・AI</button>
+      <button class="filter-btn" data-sel-filter="value" onclick="selectorSetFilter('value')">バリュー</button>
+    </div>
+    <div id="sel-summary" style="font-size:11px;margin-bottom:7px"></div>
+    <div id="sel-note" style="font-size:10px;color:var(--text3);margin-bottom:7px"></div>
+    <div id="sel-list"></div>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
     <div style="font-size:15px;font-weight:700;margin-bottom:5px">📡 最新情報・決算確認を銘柄選定に統合</div>
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">候補を選んだら、最新株価・目標価格・PER・業績・決算日を確認し、確認日と情報源を銘柄ごとに残します。外部サイトから数値を自動取得・上書きしません。</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">候補を選んだら、最新株価・目標価格・PER・予想PER・PBR・前年比業績・決算日を確認し、確認日と情報源を銘柄ごとに残します。確認した最新値を「編集」から登録します。</div>
     <div id="sel-monitor-summary" style="font-size:12px;margin-bottom:8px"></div>
     <div id="sel-monitor-list"></div>
   </div>
@@ -2120,18 +2152,15 @@ function amMonthlyPerfRender(){
     <div id="sel-hyp-history" style="margin-top:10px"></div>
   </div>
 
-  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
-      <button class="filter-btn active" data-sel-filter="all" onclick="selectorSetFilter('all')">すべて</button>
-      <button class="filter-btn" data-sel-filter="held" onclick="selectorSetFilter('held')">保有</button>
-      <button class="filter-btn" data-sel-filter="new" onclick="selectorSetFilter('new')">新規</button>
-      <button class="filter-btn" data-sel-filter="semi" onclick="selectorSetFilter('semi')">半導体・AI</button>
-      <button class="filter-btn" data-sel-filter="value" onclick="selectorSetFilter('value')">バリュー</button>
+  <details style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <summary style="cursor:pointer;font-size:14px;font-weight:700">ℹ️ 比較の見方・入力データについて</summary>
+    <div style="font-size:11px;line-height:1.7;color:var(--text3);margin-top:8px">
+      <b>目標株価乖離率</b>＝アナリスト目標価格÷現在値−1。<br>
+      <b>業績成長</b>＝登録した売上・営業利益・EPSの前年比。<br>
+      <b>優先順位</b>は、選択した並び順に基づく表示順です。投資判断そのものを自動決定するものではありません。<br>
+      「数値なし」は悪いという意味ではなく、最新情報を確認して入力する必要がある項目です。
     </div>
-    <div id="sel-summary" style="font-size:12px;margin-bottom:9px"></div>
-    <div id="sel-list"></div>
-    <div id="sel-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
-  </div>
+  </details>
 
   <div style="background:var(--bg2);border-radius:12px;padding:12px">
     <div style="font-size:14px;font-weight:700;margin-bottom:5px">比較の見方</div>
@@ -16436,7 +16465,7 @@ function selectorAddCandidate(){
   if(!ticker){if(note)note.textContent='ティッカー / コードを入力してください。';return;}
   const rows=selectorLoadCandidates();if(rows.some(x=>String(x.ticker||'').toUpperCase()===ticker)){if(note)note.textContent='同じ候補はすでに登録されています。';return;}
   rows.push({ticker,name:name||ticker,theme,region,currentPrice:0,targetBuy:0,targetSell:0,targetRatio:0,analystTarget:0,forwardPER:0,per:0,pbr:0,revenueGrowth:0,opProfitGrowth:0,epsGrowth:0,note:'',createdAt:new Date().toISOString()});selectorSaveCandidates(rows);
-  ['sel-new-ticker','sel-new-name'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});if(note)note.textContent='✓ '+ticker+' を新規候補に追加しました。価格・PER等は比較表の「編集」から入力できます。';selectorRender();
+  ['sel-new-ticker','sel-new-name'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});selectorCompareSave([ticker,...selectorCompareLoad().filter(x=>x!==ticker)]);if(note)note.textContent='✓ '+ticker+' を追加しました。比較表に自動選択されています。まず「編集」で最新確認値を登録してください。';selectorRender();
 }
 function selectorDeleteCandidate(ticker){const t=String(ticker||'').toUpperCase();selectorSaveCandidates(selectorLoadCandidates().filter(x=>String(x.ticker||'').toUpperCase()!==t));selectorRender();}
 function selectorEditCandidate(ticker){
@@ -16612,26 +16641,52 @@ function selectorHypothesisRender(){
   const sel=document.getElementById('sel-hyp-ticker');if(!sel)return;const rows=selectorAllRows(),old=sel.value;
   sel.innerHTML=rows.map(r=>'<option value="'+selectorEsc(r.ticker)+'">'+selectorEsc(r.ticker)+'｜'+selectorEsc(r.name)+(r.held?'（保有）':'（新規）')+'</option>').join('');if(rows.some(r=>r.ticker===old))sel.value=old;selectorHypothesisLoad();
 }
+let selectorSector='all';
+let selectorSort='priority';
+function selectorSetSector(v){selectorSector=v||'all';selectorRender();}
+function selectorSetSort(v){selectorSort=v||'priority';selectorRender();}
+function selectorGrowthAvg(r){const a=[selectorNum(r.revenueGrowth),selectorNum(r.opProfitGrowth),selectorNum(r.epsGrowth)].filter(x=>x!==0);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;}
+function selectorTargetGap(r){const p=selectorNum(r.currentPrice),t=selectorNum(r.analystTarget);return p>0&&t>0?(t/p-1)*100:null;}
+function selectorSortValue(r,key){
+  const gap=selectorTargetGap(r),avg=selectorGrowthAvg(r);
+  if(key==='targetGap')return gap;
+  if(key==='revenueGrowth')return selectorNum(r.revenueGrowth)||null;
+  if(key==='opProfitGrowth')return selectorNum(r.opProfitGrowth)||null;
+  if(key==='epsGrowth')return selectorNum(r.epsGrowth)||null;
+  if(key==='growthAvg')return avg;
+  if(key==='forwardPER')return selectorNum(r.forwardPER)||null;
+  if(key==='pbr')return selectorNum(r.pbr)||null;
+  // 優先順位：目標株価乖離率と業績成長平均を同時に確認できるよう、両方を単純加算
+  // 欠損値は0扱いにせず、入力済みの値だけで比較する
+  if(gap===null&&avg===null)return null;
+  return (gap||0)+(avg||0);
+}
+function selectorSortLabel(key){const m={priority:'業績＋目標株価乖離',targetGap:'目標株価乖離率',revenueGrowth:'売上成長率',opProfitGrowth:'営業利益成長率',epsGrowth:'EPS成長率',growthAvg:'業績成長平均',forwardPER:'予想PER',pbr:'PBR'};return m[key]||'優先度';}
 function selectorRender(){
   const host=document.getElementById('sel-list'),sum=document.getElementById('sel-summary'),note=document.getElementById('sel-note');if(!host)return;
   let rows=selectorScreenRows(selectorAllRows());
   rows=rows.filter(r=>{const f=selectorFilter,t=selectorTheme(r);if(f==='held')return r.held;if(f==='new')return !r.held;if(f==='semi')return t==='半導体・AI';if(f==='value')return t==='バリュー';return true;});
+  const sectorValues=[...new Set(selectorAllRows().map(r=>selectorTheme(r)).filter(Boolean))].sort();
+  const sf=document.getElementById('sel-sector-filter');
+  if(sf){const old=selectorSector;sf.innerHTML='<option value="all">すべて</option>'+sectorValues.map(x=>'<option value="'+selectorEsc(x)+'">'+selectorEsc(x)+'</option>').join('');sf.value=sectorValues.includes(old)?old:'all';selectorSector=sf.value;}
+  if(selectorSector!=='all')rows=rows.filter(r=>selectorTheme(r)===selectorSector);
+  const sortEl=document.getElementById('sel-sort');if(sortEl)sortEl.value=selectorSort;
   const total=selectorTotalInvest();
-  sum.innerHTML='候補 <b>'+rows.length+'件</b> ／ 保有 '+rows.filter(r=>r.held).length+'件 ／ 新規 '+rows.filter(r=>!r.held).length+'件'+(total?' ／ 投資資産 ¥'+Math.round(total).toLocaleString('ja-JP'):'');
-  const ss=document.getElementById('sel-screen-summary');if(ss)ss.textContent=selectorScreen.active?'スクリーニング適用中：'+rows.length+'件表示':'スクリーニング未適用';
-  try{selectorSimRender();}catch(e){}
+  rows.sort((a,b)=>{const av=selectorSortValue(a,selectorSort),bv=selectorSortValue(b,selectorSort);if(av===null&&bv===null)return 0;if(av===null)return 1;if(bv===null)return -1;return selectorSort==='forwardPER'||selectorSort==='pbr'?av-bv:bv-av;});
+  sum.innerHTML='表示 <b>'+rows.length+'件</b> ／ '+(selectorSector==='all'?'セクター：すべて':'セクター：<b>'+selectorEsc(selectorSector)+'</b>')+' ／ 並び順：<b>'+selectorEsc(selectorSortLabel(selectorSort))+'</b>'+(total?' ／ 投資資産 ¥'+Math.round(total).toLocaleString('ja-JP'):'');
+  if(document.getElementById('sel-screen-summary'))document.getElementById('sel-screen-summary').textContent=selectorScreen.active?'スクリーニング適用中：'+rows.length+'件表示':'スクリーニング未適用';
   if(!rows.length){host.innerHTML='<div style="padding:14px;color:var(--text3);font-size:11px">条件に該当する銘柄がありません。</div>';return;}
-  host.innerHTML=rows.map(r=>{
-    const price=selectorNum(r.currentPrice),up=price>0&&selectorNum(r.analystTarget)>0?(r.analystTarget/price-1)*100:null,gap=selectorGap(r),theme=selectorTheme(r),growth=[r.revenueGrowth,r.opProfitGrowth,r.epsGrowth].filter(x=>Number.isFinite(x)&&x!==0);const growthAvg=growth.length?growth.reduce((a,b)=>a+b,0)/growth.length:null;
-    const isNew=!r.held, isCustom=selectorLoadCandidates().some(x=>String(x.ticker||'').toUpperCase()===String(r.ticker||'').toUpperCase());
-    const priceGap=r.targetBuy>0&&price>0?(price/r.targetBuy-1)*100:null;
-    return '<div style="background:var(--bg);border-radius:10px;padding:11px;margin-bottom:8px;border:1px solid var(--border)"><div style="display:flex;gap:7px;align-items:center"><div style="flex:1;min-width:0"><b>'+selectorEsc(r.ticker)+'</b> <span style="font-size:11px;color:var(--text2)">'+selectorEsc(r.name)+'</span></div><span style="font-size:10px;padding:3px 6px;border-radius:999px;background:var(--bg2)">'+(isNew?'新規':'保有')+'</span></div><div style="margin-top:5px">'+selectorPill('テーマ',theme)+selectorPill('現在比率',r.amount&&total?(r.amount/total*100).toFixed(1)+'%':'—')+selectorPill('目標との差',gap!==null?(gap>=0?'+':'')+gap.toFixed(1)+'pt':'—')+'</div><div style="margin-top:4px">'+selectorPill('現在値',price?(r.currency==='USD'?'$':'¥')+price.toLocaleString('ja-JP',{maximumFractionDigits:2}):'—')+selectorPill('目標価格余地',up!==null?(up>=0?'+':'')+up.toFixed(1)+'%':'—')+selectorPill('目標買値との差',priceGap!==null?(priceGap>=0?'+':'')+priceGap.toFixed(1)+'%':'—')+'</div><div style="margin-top:4px">'+selectorPill('PER',r.per?r.per.toFixed(1)+'倍':'—')+selectorPill('予想PER',r.forwardPER?r.forwardPER.toFixed(1)+'倍':'—')+selectorPill('PBR',r.pbr?r.pbr.toFixed(1)+'倍':'—')+'</div><div style="margin-top:4px">'+selectorPill('売上YoY',r.revenueGrowth?r.revenueGrowth.toFixed(1)+'%':'—')+selectorPill('営業利益YoY',r.opProfitGrowth?r.opProfitGrowth.toFixed(1)+'%':'—')+selectorPill('EPS成長',r.epsGrowth?r.epsGrowth.toFixed(1)+'%':'—')+(growthAvg!==null?selectorPill('平均成長',growthAvg.toFixed(1)+'%'):'')+'</div><div style="display:flex;gap:6px;margin-top:8px"><button class="btn-sm" type="button" onclick="selectorEditCandidate(\''+selectorEsc(r.ticker).replace(/'/g,"\\'")+'\')">編集</button>'+(isCustom&&!r.held?'<button class="btn-sm" type="button" onclick="selectorDeleteCandidate(\''+selectorEsc(r.ticker).replace(/'/g,"\\'")+'\')">削除</button>':'')+'<button class="btn-sm" type="button" onclick="switchTab(\'pricewatch\')">🎯価格管理</button></div></div>';
+  const head='<div style="overflow:auto;border:1px solid var(--border);border-radius:9px"><table style="border-collapse:separate;border-spacing:0;width:100%;min-width:1120px;font-size:10px"><thead><tr style="background:var(--bg);position:sticky;top:0;z-index:2"><th style="padding:8px 6px;text-align:left;position:sticky;left:0;background:var(--bg);z-index:3">優先</th><th style="padding:8px 6px;text-align:left;position:sticky;left:42px;background:var(--bg);z-index:3;min-width:150px">銘柄</th><th style="padding:8px 6px">セクター</th><th style="padding:8px 6px;text-align:right">現在値</th><th style="padding:8px 6px;text-align:right">目標株価</th><th style="padding:8px 6px;text-align:right">乖離率</th><th style="padding:8px 6px;text-align:right">売上YoY</th><th style="padding:8px 6px;text-align:right">営業利益YoY</th><th style="padding:8px 6px;text-align:right">EPS成長</th><th style="padding:8px 6px;text-align:right">予想PER</th><th style="padding:8px 6px;text-align:right">PBR</th><th style="padding:8px 6px">比較</th><th style="padding:8px 6px">操作</th></tr></thead><tbody>';
+  const body=rows.map((r,i)=>{
+    const gap=selectorTargetGap(r),avg=selectorGrowthAvg(r),val=selectorSortValue(r,selectorSort),chosen=selectorCompareLoad().includes(String(r.ticker||'').toUpperCase());
+    const fmtPct=v=>v===null?'—':(v>=0?'+':'')+v.toFixed(1)+'%';
+    const color=v=>v===null?'var(--text3)':v>=0?'#16a34a':'#dc2626';
+    const cur=r.currentPrice>0?(r.currency==='USD'?'$':'¥')+Number(r.currentPrice).toLocaleString('ja-JP',{maximumFractionDigits:2}):'—';
+    return '<tr style="border-top:1px solid var(--border)"><td style="padding:7px 6px;text-align:center;font-weight:700;position:sticky;left:0;background:var(--bg2);z-index:1">'+(i+1)+'</td><td style="padding:7px 6px;position:sticky;left:42px;background:var(--bg2);z-index:1"><b>'+selectorEsc(r.ticker)+'</b><div style="font-size:9px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+selectorEsc(r.name||'')+(r.held?' ・保有':' ・新規')+'</div></td><td style="padding:7px 6px;white-space:nowrap">'+selectorEsc(selectorTheme(r))+'</td><td style="padding:7px 6px;text-align:right;white-space:nowrap">'+cur+'</td><td style="padding:7px 6px;text-align:right;white-space:nowrap">'+(r.analystTarget>0?Number(r.analystTarget).toLocaleString('ja-JP',{maximumFractionDigits:2}):'—')+'</td><td style="padding:7px 6px;text-align:right;font-weight:700;color:'+color(gap)+'">'+fmtPct(gap)+'</td><td style="padding:7px 6px;text-align:right;color:'+color(r.revenueGrowth||null)+'">'+fmtPct(r.revenueGrowth||null)+'</td><td style="padding:7px 6px;text-align:right;color:'+color(r.opProfitGrowth||null)+'">'+fmtPct(r.opProfitGrowth||null)+'</td><td style="padding:7px 6px;text-align:right;color:'+color(r.epsGrowth||null)+'">'+fmtPct(r.epsGrowth||null)+'</td><td style="padding:7px 6px;text-align:right">'+(r.forwardPER>0?r.forwardPER.toFixed(1)+'x':'—')+'</td><td style="padding:7px 6px;text-align:right">'+(r.pbr>0?r.pbr.toFixed(1)+'x':'—')+'</td><td style="padding:7px 6px;text-align:center"><button class="btn-sm" type="button" onclick="selectorCompareToggle(\''+selectorEsc(r.ticker).replace(/'/g,"\\'")+'\')">'+(chosen?'✓ 比較中':'＋ 比較')+'</button></td><td style="padding:7px 6px;white-space:nowrap"><button class="btn-sm" type="button" onclick="selectorEditCandidate(\''+selectorEsc(r.ticker).replace(/'/g,"\\'")+'\')">編集</button> <button class="btn-sm" type="button" onclick="switchTab(\'pricewatch\')">価格管理</button></td></tr>';
   }).join('');
-  if(note)note.textContent='※既存保有銘柄は資産管理のCSV取込値を使用。新規候補のファンダメンタルズは手入力です。外部データを自動取得・上書きしません。';
-  try{selectorMonitorRender();}catch(e){}
-  try{selectorCompareRender();}catch(e){}
-  try{selectorHypothesisRender();}catch(e){}
-  try{selectorTimingRender();}catch(e){}
+  host.innerHTML=head+body+'</tbody></table></div>';
+  note.textContent='※優先順位は選択した並び順による表示順です。「業績＋目標株価乖離」は、入力済みの目標株価乖離率と業績成長平均を単純加算して比較します。数値未入力の銘柄は下位表示になります。';
+  try{selectorSimRender();selectorMonitorRender();selectorCompareRender();selectorHypothesisRender();selectorTimingRender();}catch(e){}
 }
 (function(){[800,1800,3500].forEach(ms=>setTimeout(()=>{try{selectorRender();}catch(e){}},ms));const base=window.amRender;if(typeof base==='function'&&!window.__selectorAmWrapped){window.__selectorAmWrapped=true;window.amRender=function(){const x=base.apply(this,arguments);try{selectorRender();}catch(e){}return x;};}})();
 
