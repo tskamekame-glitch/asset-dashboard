@@ -2287,7 +2287,7 @@ function amMonthlyPerfRender(){
     <!-- 投資戦略別ポートフォリオ -->
     <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
       <div style="font-size:15px;font-weight:700;margin-bottom:4px">🎯 投資戦略別ポートフォリオ</div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">長期コア・半導体/AI・バリュー・その他の4戦略で資産配分を確認します。目標比率を設定すると不足/超過を表示し、上の買付シミュレーターの入力額を買付後に反映できます。</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">長期コア・半導体/AI・バリュー・その他・インデックス・銀行・年金の7分類で資産配分を確認します。目標比率を設定すると不足/超過を表示し、上の買付シミュレーターの入力額を買付後に反映できます。</div>
       <div id="strat-summary" style="font-size:12px;margin-bottom:10px"></div>
       <div id="strat-targets" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px"></div>
       <div id="strat-table"></div>
@@ -17727,8 +17727,8 @@ function marketRender(){
 // ============================================================
 // 投資戦略別ポートフォリオ管理
 // ============================================================
-const STRAT_KEYS=['長期コア','半導体・AI','バリュー','その他'];
-const STRAT_DEFAULT={長期コア:0,'半導体・AI':0,バリュー:0,その他:0};
+const STRAT_KEYS=['長期コア','半導体・AI','バリュー','その他','インデックス','銀行','年金'];
+const STRAT_DEFAULT={長期コア:0,'半導体・AI':0,バリュー:0,その他:0,インデックス:0,銀行:0,年金:0};
 function stratEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function stratTargets(){
   try{const x=JSON.parse(localStorage.getItem('strategyAllocationTargets')||'{}');return {...STRAT_DEFAULT,...x};}catch(e){return {...STRAT_DEFAULT};}
@@ -17759,7 +17759,7 @@ function stratRows(){
     if(a.strategy)map[key].strategy=String(a.strategy);
     if(a.sector)map[key].sector=String(a.sector);
   });
-  return Object.values(map).map(r=>({...r,displayStrategy:r.strategy||stratAuto([r.ticker,r.name,r.sector].join(' '))||'未設定'}));
+  return Object.values(map).map(r=>({...r,displayStrategy:r.strategy||'その他'}));
 }
 function stratPurchaseAdds(){
   const adds={};
