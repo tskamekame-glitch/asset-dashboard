@@ -5400,6 +5400,9 @@ const AM_NAME_TO_CAT_RULES=[
 ];
 function amGuessCat(name){
   if(!name)return null;
+  // 三菱UFJフィナンシャル・グループ(8306)は銀行口座ではなく個別株。
+  // 「三菱UFJ銀行」などの銀行口座判定とは明確に分ける。
+  if(/8306|三菱UFJフィナンシャル.?グループ|三菱ＵＦＪフィナンシャル.?グループ/i.test(String(name)))return'個別株';
   for(const rule of AM_NAME_TO_CAT_RULES){
     if(rule.pat.test(name))return rule.cat;
   }
@@ -8600,6 +8603,8 @@ function trParseCSV(text,filename){
     '証券':'個別株', '投信':'全世界インデックス', '銀行キープ':'銀行', 'その他':'その他',
   };
   const CAT_NORM_BY_NAME=[
+    // 三菱UFJフィナンシャル・グループ(8306)は銀行口座ではなく個別株。
+    {pat:/8306|三菱UFJフィナンシャル.?グループ/i, cat:'個別株'},
     {pat:/iDeCo|イデコ|確定拠出|DC.*年金|ＤＣ.*年金|企業年金|確定給付/i, cat:'年金'},
     {pat:/TOPIX|日本.*インデックス|国内.*インデックス|eMAXIS.*国内|eMAXIS.*TOPIX|eMAXIS.*日経/i, cat:'日本インデックス'},
     {pat:/インド|India/i, cat:'インドインデックス'},
