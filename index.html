@@ -1161,7 +1161,14 @@ const AM_PERF_KEY='amPerformanceMode_v1';
 function amPerfEsc(v){return typeof esc==='function'?esc(String(v??'')):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function amPerfMoney(v){const n=Number(v);return Number.isFinite(n)?'¥'+Math.round(n).toLocaleString('ja-JP'):'—';}
 function amPerfPct(v){const n=Number(v);return Number.isFinite(n)?(n>=0?'+':'')+n.toFixed(1)+'%':'—';}
-function amPerfAccounts(){try{return JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){return[];}}
+function amPerfAccounts(){
+  try{
+    const src=(Array.isArray(window.amAccounts)?window.amAccounts:[]).slice();
+    const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    if(Array.isArray(ls)){const ids=new Set(src.map(a=>String(a.id||'')));ls.forEach(a=>{if(!ids.has(String(a.id||'')))src.push(a);});}
+    return src;
+  }catch(e){return Array.isArray(window.amAccounts)?window.amAccounts:[];}
+}
 function amPerfTicker(a){return String(a?.ticker||a?.code||a?.symbol||'').trim()||amLotBaseName(a?.name||'');}
 function amPerfStrategy(a){return String(a?.strategy||'').trim()||((typeof stratAuto==='function')?stratAuto(a):'その他');}
 function amPerfCurrentRows(){
@@ -1175,7 +1182,8 @@ function amPerfCurrentRows(){
     if(a.cat==='個別株'||a.cat==='高配当')g[t].cost+=shares>0&&cost>0?shares*cost:cost;
     const st=amPerfStrategy(a);g[t].strategies[st]=(g[t].strategies[st]||0)+amount;g[t].rows.push(a);
   });
-  const unreal=typeof pnlCalcUnrealized==='function'?pnlCalcUnrealized():[];
+  let unreal=[];
+  try{unreal=typeof pnlCalcUnrealized==='function'?(pnlCalcUnrealized()||[]):[];}catch(e){console.warn('amPerf pnlCalcUnrealized',e);unreal=[];}
   const byName=new Map(unreal.map(x=>[String(x.code||x.name||'').toUpperCase(),x]));
   return Object.values(g).map(x=>{
     const u=byName.get(x.ticker)||byName.get(String(x.name).toUpperCase());
@@ -1197,7 +1205,15 @@ function amPerfNetDepositHint(){
 }
 function amPerfRender(targetId='amPerformancePanel'){
   const el=document.getElementById(targetId);if(!el)return;
-  const cur=amPerfCurrentRows(), realized=amPerfRealized();
+  let cur=[],realized=[];
+  try{cur=amPerfCurrentRows()||[];}catch(e){console.error('amPerfCurrentRows',e);cur=[];}
+  try{realized=amPerfRealized()||[];}catch(e){console.error('amPerfRealized',e);realized=[];}
+  if(!cur.length&&!realized.length){
+    const all=amPerfAccounts();
+    const active=all.filter(a=>!a.sold);
+    el.innerHTML=`<div style="padding:14px"><div style="background:var(--bg2);border-radius:10px;padding:12px;line-height:1.7"><b>まだ分析対象の投資データを取得できていません。</b><br><span style="font-size:11px;color:var(--text3)">資産管理に登録された「個別株・高配当・外国株式」を集計します。現在の登録データ：${active.length}件。CSV取込後に資産管理を一度開いてから、もう一度このタブを開いてください。</span></div></div>`;
+    return;
+  }
   const totalEval=cur.reduce((s,x)=>s+x.amount,0), totalUnreal=cur.reduce((s,x)=>s+(Number(x.gain)||0),0), totalReal=realized.reduce((s,x)=>s+(Number(x.gain)||0),0);
   const investCost=cur.reduce((s,x)=>s+(x.cost>0?x.cost:0),0);
   const totalPerf=totalUnreal+totalReal;
@@ -1952,13 +1968,12 @@ function amMonthlyPerfRender(){
 </div>
 
 
-<!-- ========== LATEST INFO / EARNINGS MONITOR ========== -->
+<!-- ========== LATEST INFO MONITOR ========== -->
 <div class="panel" id="tab-monitor">
   <div style="padding:16px">
-    <div class="panel-head"><div><div class="panel-title">📡 最新情報・決算モニター</div><div class="panel-sub">保有銘柄の情報鮮度、決算までの日数、確認が必要な項目を一覧化します。外部サイトから数値を自動取得・上書きしません。</div></div><button class="icon-btn" onclick="monitorRender()">↻ 更新</button></div>
+    <div class="panel-head"><div><div class="panel-title">📡 最新情報モニター</div><div class="panel-sub">保有銘柄の株価・分析情報の鮮度、バリュエーション、業績、確認が必要な項目を一覧化します。決算予定・重要イベントは「重要イベント」で管理します。</div></div><button class="icon-btn" onclick="monitorRender()">↻ 更新</button></div>
     <div id="monitor-summary" class="card" style="margin-bottom:12px"></div>
     <div id="monitor-alerts" class="card" style="margin-bottom:12px"></div>
-    <div class="card" style="margin-bottom:12px"><div class="card-head"><h2>📅 保有銘柄の決算カウントダウン</h2></div><div id="monitor-earnings"></div></div>
     <div class="card"><div class="card-head"><h2>🔎 情報鮮度・確認状況</h2></div><div id="monitor-table"></div></div>
   </div>
 </div>
@@ -2294,21 +2309,6 @@ function amMonthlyPerfRender(){
       </div>
       <div id="rb-history" style="margin-top:10px"></div>
       <div style="font-size:10px;color:var(--text3);line-height:1.6;margin-top:8px">※「今月の実績を記録」は、その時点の資産・現金・買付額を保存します。運用損益は入力した入出金を差し引いて機械的に算出します。外部市場予測ではありません。</div>
-    </div>
-
-    <!-- リスク管理・暴落耐性シミュレーター -->
-    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-top:14px">
-      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📉 リスク管理・暴落耐性シミュレーター</div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">現在のポートフォリオを基準に、株式市場や半導体・AIが下落した場合の資産影響と、暴落時に使える現金を試算します。実際の資産・注文は変更しません。</div>
-      <div id="risk-summary" style="font-size:12px;margin-bottom:10px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px">
-        <label style="font-size:10px;color:var(--text3)">今後の買付予定額<input id="risk-planned-buy" type="number" min="0" step="10000" value="0" oninput="riskRender()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"></label>
-        <label style="font-size:10px;color:var(--text3)">サイドFIRE想定年利<input id="risk-fire-rate" type="number" min="0" step="0.1" value="5" oninput="riskRender()" style="width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;text-align:right"></label>
-      </div>
-      <div id="risk-scenarios"></div>
-      <div id="risk-strategy"></div>
-      <div id="risk-fire"></div>
-      <div id="risk-note" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6"></div>
     </div>
 
     <!-- 暴落時の買い増しルール・資金投入シミュレーター -->
@@ -17195,59 +17195,6 @@ setTimeout(()=>{try{bpRender();}catch(e){}},1000);
 
 <script>
 // ============================================================
-// リスク管理・暴落耐性シミュレーター
-// ============================================================
-function riskNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
-function riskEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function riskRows(){
-  const src=Array.isArray(amAccounts)?amAccounts:[], map={};
-  src.filter(a=>!a.sold&&riskNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''))).forEach(a=>{
-    const ticker=String(a.ticker||a.code||a.symbol||'').trim(), name=String(a.name||ticker).trim(), key=ticker||name;
-    if(!key)return;
-    if(!map[key])map[key]={ticker:ticker||key,name,amount:0,sector:String(a.sector||''),strategy:''};
-    map[key].amount+=riskNum(a.amount); if(a.sector)map[key].sector=String(a.sector); if(a.strategy)map[key].strategy=String(a.strategy);
-  });
-  return Object.values(map).map(r=>({...r,strategy:r.strategy||((typeof stratAuto==='function'?stratAuto([r.ticker,r.name,r.sector].join(' ')):'')||'その他')}));
-}
-function riskCash(){try{return typeof amStage1GetInvestableCashByBank==='function'?riskNum(amStage1GetInvestableCashByBank(amAccounts).total):0;}catch(e){return 0;}}
-function riskScenarioLoss(rows,allDrop,semiDrop){
-  return rows.reduce((sum,r)=>{const d=r.strategy==='半導体・AI'?semiDrop:allDrop;return sum+r.amount*d/100;},0);
-}
-function riskMonthsToTarget(current,target,monthly,rate){
-  if(target<=0||current>=target)return 0;
-  const m=Math.max(0,monthly), r=Math.max(0,rate)/100/12; let bal=current,months=0;
-  while(bal<target&&months<1200){bal=bal*(1+r)+m;months++;}
-  return months>=1200?null:months;
-}
-function riskMoney(v){return '¥'+Math.round(v).toLocaleString('ja-JP');}
-function riskRender(){
-  const summary=document.getElementById('risk-summary'),sc=document.getElementById('risk-scenarios'),st=document.getElementById('risk-strategy'),fire=document.getElementById('risk-fire'),note=document.getElementById('risk-note');
-  if(!summary||!sc)return;
-  const rows=riskRows(), invest=rows.reduce((s,r)=>s+r.amount,0), cash=riskCash(), total=invest+cash;
-  const planned=Math.max(0,riskNum(document.getElementById('risk-planned-buy')?.value)), reserve=Math.max(0,cash-planned), rate=Math.max(0,riskNum(document.getElementById('risk-fire-rate')?.value));
-  const scenarios=[
-    {name:'軽い調整',all:-10,semi:-10},
-    {name:'半導体調整',all:0,semi:-25},
-    {name:'AI・半導体調整',all:-10,semi:-30},
-    {name:'大幅下落',all:-30,semi:-30},
-    {name:'厳しいケース',all:-20,semi:-50}
-  ];
-  summary.innerHTML=`投資資産 <b>${riskMoney(invest)}</b> ／ 投資可能現金 <b>${riskMoney(cash)}</b> ／ 総資産 <b>${riskMoney(total)}</b><br><span style="color:var(--text3)">今後の買付予定 ${riskMoney(planned)} → 暴落時に残る現金 <b>${riskMoney(reserve)}</b></span>`;
-  sc.innerHTML=`<div style="font-size:12px;font-weight:650;margin-bottom:7px">📉 想定シナリオ</div><div style="overflow:auto"><table style="width:100%;min-width:650px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">シナリオ</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">想定下落</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">損失額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">下落後総資産</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">総資産減少率</th></tr></thead><tbody>${scenarios.map(x=>{const loss=riskScenarioLoss(rows,x.all,x.semi), after=total-loss, pct=total?loss/total*100:0;return `<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)"><b>${riskEsc(x.name)}</b></td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${x.semi!==x.all?`全体 ${x.all}% / 半導体 ${x.semi}%`:`${x.all}%`}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);color:var(--red)">−${riskMoney(loss)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);font-weight:700">${riskMoney(after)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">−${pct.toFixed(1)}%</td></tr>`;}).join('')}</tbody></table></div>`;
-  const sg={};['長期コア','半導体・AI','バリュー','その他'].forEach(k=>sg[k]=0);rows.forEach(r=>{if(sg[r.strategy]!==undefined)sg[r.strategy]+=r.amount;});
-  st.innerHTML=`<div style="font-size:12px;font-weight:650;margin:12px 0 7px">🎯 戦略別の下落耐性（半導体・AI -30%、その他 -10%）</div><div style="overflow:auto"><table style="width:100%;min-width:560px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">保有額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">想定損失</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">残存額</th></tr></thead><tbody>${Object.keys(sg).map(k=>{const d=k==='半導体・AI'?30:10,loss=sg[k]*d/100;return `<tr><td style="padding:7px 6px;border-bottom:1px solid var(--border)">${riskEsc(k)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${riskMoney(sg[k])}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);color:var(--red)">−${riskMoney(loss)}</td><td style="text-align:right;padding:7px 6px;border-bottom:1px solid var(--border)">${riskMoney(sg[k]-loss)}</td></tr>`;}).join('')}</tbody></table></div>`;
-  let fireTarget=0,monthly=0;try{const x=JSON.parse(localStorage.getItem('amFireGoalSettings')||'null')||{};fireTarget=riskNum(x.target);monthly=riskNum(x.monthly);}catch(e){}
-  if(fireTarget>0){
-    const baseMonths=riskMonthsToTarget(invest,fireTarget,monthly,rate), worstLoss=riskScenarioLoss(rows,-20,-50), shocked=Math.max(0,total-worstLoss), shockedInvest=Math.max(0,invest-worstLoss), shockMonths=riskMonthsToTarget(shockedInvest,fireTarget,monthly,rate);
-    const fmt=m=>m===null?'30年以上':m===0?'達成済み':Math.floor(m/12)+'年'+(m%12?m%12+'か月':'');
-    fire.innerHTML=`<div style="font-size:12px;font-weight:650;margin:12px 0 7px">🔥 サイドFIREへの影響（目標 ${riskMoney(fireTarget)}）</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px"><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">現在</div><b>${riskMoney(invest)}</b><div style="font-size:10px;margin-top:3px">到達目安 ${fmt(baseMonths)}</div></div><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">厳しいケース後</div><b>${riskMoney(shockedInvest)}</b><div style="font-size:10px;margin-top:3px">到達目安 ${fmt(shockMonths)}</div></div><div style="padding:8px;border:1px solid var(--border);border-radius:8px"><div style="font-size:10px;color:var(--text3)">到達時期の差</div><b>${baseMonths!==null&&shockMonths!==null?('+'+Math.max(0,shockMonths-baseMonths)+'か月'):'—'}</b><div style="font-size:10px;margin-top:3px">年利 ${rate.toFixed(1)}%</div></div></div>`;
-  }else fire.innerHTML='<div style="margin-top:12px;font-size:10px;color:var(--text3)">サイドFIRE目標資産が未設定のため、到達時期への影響は表示しません。</div>';
-  note.textContent='※ストレステストは仮定シナリオです。将来の株価下落幅を予測するものではありません。下落率は投資資産にのみ適用し、現金は減少しない前提です。サイドFIRE到達時期は設定された目標・毎月追加投資・想定年利からの機械計算です。';
-}
-(function(){[800,1800,3500].forEach(ms=>setTimeout(()=>{try{riskRender();}catch(e){}},ms));const base=window.amRender;if(typeof base==='function'&&!window.__riskAmWrapped){window.__riskAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{riskRender();}catch(e){}return r;};}const baseBa=window.baRender;if(typeof baseBa==='function'&&!window.__riskBaWrapped){window.__riskBaWrapped=true;window.baRender=function(){const r=baseBa.apply(this,arguments);try{riskRender();}catch(e){}return r;};}})();
-</script>
-<script>
-// ============================================================
 // 利益確定・再投資戦略シミュレーター
 // ============================================================
 function riEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -17938,7 +17885,7 @@ setTimeout(evRefresh,800);
 
 \n<script>
 // ============================================================
-// 最新情報・決算モニター
+// 最新情報モニター
 // ============================================================
 function monitorEsc(v){return String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));}
 function monitorNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
@@ -17994,41 +17941,29 @@ function monitorFreshLabel(age){
   if(age<=30)return '<span style="color:#D68910">△ '+age+'日前</span>';
   return '<span style="color:#C0392B;font-weight:700">⚠ '+age+'日前</span>';
 }
-function monitorEarningsBadge(days){
-  if(days==null)return '<span style="color:var(--text3)">未登録</span>';
-  if(days<0)return '<span style="color:var(--text3)">決算済み</span>';
-  if(days===0)return '<b style="color:#C0392B">今日</b>';
-  if(days<=7)return '<b style="color:#C0392B">あと'+days+'日</b>';
-  if(days<=30)return '<b style="color:#D68910">あと'+days+'日</b>';
-  return 'あと'+days+'日';
-}
 function monitorRender(){
-  const sum=document.getElementById('monitor-summary'),alerts=document.getElementById('monitor-alerts'),earn=document.getElementById('monitor-earnings'),table=document.getElementById('monitor-table');
-  if(!sum||!alerts||!earn||!table)return;
+  const sum=document.getElementById('monitor-summary'),alerts=document.getElementById('monitor-alerts'),table=document.getElementById('monitor-table');
+  if(!sum||!alerts||!table)return;
   const rows=monitorRows();
-  if(!rows.length){sum.innerHTML='<div style="padding:16px;color:var(--text3)">保有銘柄がありません。</div>';alerts.innerHTML='';earn.innerHTML='';table.innerHTML='';return;}
+  if(!rows.length){sum.innerHTML='<div style="padding:16px;color:var(--text3)">保有銘柄がありません。</div>';alerts.innerHTML='';table.innerHTML='';return;}
   const staleAnalysis=rows.filter(a=>a.analysisAge==null||a.analysisAge>30).length;
   const staleMarket=rows.filter(a=>a.marketAge==null||a.marketAge>7).length;
-  const near=rows.filter(a=>a.earningsDays!=null&&a.earningsDays>=0&&a.earningsDays<=7).length;
-  sum.innerHTML=`<div class="mini-grid"><div><span>保有銘柄</span><b>${rows.length}</b></div><div><span>業績分析 30日超/未確認</span><b>${staleAnalysis}</b></div><div><span>株価データ 7日超/未確認</span><b>${staleMarket}</b></div><div><span>7日以内の決算</span><b>${near}</b></div></div>`;
+  sum.innerHTML=`<div class="mini-grid"><div><span>保有銘柄</span><b>${rows.length}</b></div><div><span>業績分析 30日超/未確認</span><b>${staleAnalysis}</b></div><div><span>株価データ 7日超/未確認</span><b>${staleMarket}</b></div><div><span>最新情報の確認対象</span><b>${staleAnalysis+staleMarket}</b></div></div>`;
   const alertItems=[];
   rows.forEach(a=>{
-    if(a.earningsDays!=null&&a.earningsDays>=0&&a.earningsDays<=7)alertItems.push('📅 '+a.key+'：決算まで'+(a.earningsDays===0?'今日':a.earningsDays+'日'));
     if(a.analysisAge==null||a.analysisAge>30)alertItems.push('📝 '+a.key+'：業績・目標株価などの最終確認が'+(a.analysisAge==null?'未登録':a.analysisAge+'日前'));
     if(a.marketAge==null||a.marketAge>7)alertItems.push('💹 '+a.key+'：株価データ更新日が'+(a.marketAge==null?'未登録':a.marketAge+'日前'));
   });
-  alerts.innerHTML=alertItems.length?'<div style="padding:12px"><div style="font-weight:700;font-size:12px;margin-bottom:7px">⚠️ 要確認</div>'+alertItems.slice(0,12).map(x=>'<div style="padding:6px 0;border-bottom:.5px solid var(--border);font-size:11px">'+monitorEsc(x)+'</div>').join('')+'</div>':'<div style="padding:14px;color:var(--text3);font-size:12px">現時点で鮮度・決算の確認項目はありません。</div>';
-  const earnRows=rows.filter(a=>a.earningsDays!=null&&a.earningsDays>=0).slice(0,12);
-  earn.innerHTML=earnRows.length?'<div style="overflow:auto"><table style="width:100%;min-width:620px;border-collapse:collapse;font-size:11px"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid var(--border)">銘柄</th><th style="padding:7px;border-bottom:1px solid var(--border)">決算日</th><th style="padding:7px;border-bottom:1px solid var(--border)">残り</th><th style="padding:7px;border-bottom:1px solid var(--border)">予定</th><th style="padding:7px;border-bottom:1px solid var(--border)">操作</th></tr></thead><tbody>'+earnRows.map(a=>{const plan=(typeof evLoadPlans==='function'?evLoadPlans()[a.key]||{}:{});return '<tr><td style="padding:7px;border-bottom:1px solid var(--border)"><b>'+monitorEsc(a.key)+'</b><div style="color:var(--text3)">'+monitorEsc(a.name||'')+'</div></td><td style="padding:7px;text-align:center;border-bottom:1px solid var(--border)">'+monitorEsc(a.earningsDate)+'</td><td style="padding:7px;text-align:center;border-bottom:1px solid var(--border)">'+monitorEarningsBadge(a.earningsDays)+'</td><td style="padding:7px;text-align:center;border-bottom:1px solid var(--border)">'+monitorEsc(plan.action||'未定')+'</td><td style="padding:7px;text-align:center;border-bottom:1px solid var(--border)"><button class="btn-sm" onclick="switchTab(&quot;events&quot;)">イベント管理</button></td></tr>';}).join('')+'</tbody></table></div>':'<div style="padding:16px;color:var(--text3);font-size:12px">資産管理に決算日を登録すると、ここにカウントダウンが表示されます。</div>';
-  table.innerHTML='<div style="overflow:auto"><table style="width:100%;min-width:980px;border-collapse:collapse;font-size:10px"><thead><tr>'+['銘柄','株価確認','分析確認','目標株価','予想PER','売上YoY','営業利益YoY','決算','確認状況','操作'].map((x,i)=>'<th style="text-align:'+(i?'center':'left')+';padding:7px 5px;border-bottom:1px solid var(--border)">'+x+'</th>').join('')+'</tr></thead><tbody>'+rows.map(a=>{
+  alerts.innerHTML=alertItems.length?'<div style="padding:12px"><div style="font-weight:700;font-size:12px;margin-bottom:7px">⚠️ 要確認</div>'+alertItems.slice(0,12).map(x=>'<div style="padding:6px 0;border-bottom:.5px solid var(--border);font-size:11px">'+monitorEsc(x)+'</div>').join('')+'</div>':'<div style="padding:14px;color:var(--text3);font-size:12px">現時点で情報鮮度の確認項目はありません。決算・FOMC・CPIなどは「重要イベント」で確認してください。</div>';
+  table.innerHTML='<div style="overflow:auto"><table style="width:100%;min-width:900px;border-collapse:collapse;font-size:10px"><thead><tr>'+['銘柄','株価確認','分析確認','目標株価','予想PER','売上YoY','営業利益YoY','確認状況','操作'].map((x,i)=>'<th style="text-align:'+(i?'center':'left')+';padding:7px 5px;border-bottom:1px solid var(--border)">'+x+'</th>').join('')+'</tr></thead><tbody>'+rows.map(a=>{
     const target=monitorNum(a.analystTargetPrice),price=monitorNum(a.price),up=price&&target?(target/price-1)*100:null;
-    const checks=[a.price,a.analystTargetPrice,a.forwardPER,a.revenueGrowth,a.opProfitGrowth,a.earningsDate,a.lastAnalysisDate].filter(v=>v!==null&&v!==undefined&&v!=='').length;
+    const checks=[a.price,a.analystTargetPrice,a.forwardPER,a.revenueGrowth,a.opProfitGrowth,a.lastAnalysisDate].filter(v=>v!==null&&v!==undefined&&v!=='').length;
     const targetText=target?(Math.round(target).toLocaleString('ja-JP')+(up!=null?' / '+(up>=0?'+':'')+up.toFixed(1)+'%':'')):'—';
     const perText=a.forwardPER?Number(a.forwardPER).toFixed(1):'—';
     const revText=a.revenueGrowth!==''&&a.revenueGrowth!=null?(Number(a.revenueGrowth)>0?'+':'')+Number(a.revenueGrowth).toFixed(1)+'%':'—';
     const opText=a.opProfitGrowth!==''&&a.opProfitGrowth!=null?(Number(a.opProfitGrowth)>0?'+':'')+Number(a.opProfitGrowth).toFixed(1)+'%':'—';
-    return '<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>'+monitorEsc(a.key)+'</b><div style="color:var(--text3)">'+monitorEsc(a.name||'')+'</div></td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+monitorFreshLabel(a.marketAge)+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+monitorFreshLabel(a.analysisAge)+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+targetText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+perText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+revText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+opText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+(a.earningsDate?monitorEsc(a.earningsDate)+'<br>'+monitorEarningsBadge(a.earningsDays):'—')+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+checks+'/7項目</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)"><button class="btn-sm" onclick="latestMarkChecked('+Number(a.id||0)+')">今日確認</button></td></tr>';
-  }).join('')+'</tbody></table></div><div style="padding:9px 4px;color:var(--text3);font-size:10px;line-height:1.6">株価・PER・業績などの数値はSBI/moomoo CSVまたはユーザー登録値を使用。ここでの「確認」は更新日を記録するだけで、外部データを自動取得しません。</div>';
+    return '<tr><td style="padding:7px 5px;border-bottom:1px solid var(--border);white-space:nowrap"><b>'+monitorEsc(a.key)+'</b><div style="color:var(--text3)">'+monitorEsc(a.name||'')+'</div></td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+monitorFreshLabel(a.marketAge)+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+monitorFreshLabel(a.analysisAge)+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+targetText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+perText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+revText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+opText+'</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)">'+checks+'/6項目</td><td style="text-align:center;padding:7px 5px;border-bottom:1px solid var(--border)"><button class="btn-sm" onclick="latestMarkChecked('+Number(a.id||0)+')">今日確認</button></td></tr>';
+  }).join('')+'</tbody></table></div><div style="padding:9px 4px;color:var(--text3);font-size:10px;line-height:1.6">株価・PER・業績などの数値はSBI/moomoo CSVまたはユーザー登録値を使用。ここでの「確認」は更新日を記録するだけで、外部データを自動取得しません。決算日・FOMC・CPI・雇用統計などの日程管理は「重要イベント」に集約しています。</div>';
 }
 setTimeout(()=>{try{monitorRender()}catch(e){}},1300);
 </script>\n
