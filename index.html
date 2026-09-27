@@ -17717,7 +17717,9 @@ function stratSaveTargets(){
   stratRender(); showToast('✓ 投資戦略の目標比率を保存しました');
 }
 function stratAuto(k){
-  const n=String(k||'').toLowerCase();
+  const n=typeof k==='object'&&k!==null
+    ? [k.ticker,k.code,k.symbol,k.name,k.sector,k.industry,k.cat].filter(Boolean).join(' ').toLowerCase()
+    : String(k||'').toLowerCase();
   if(/半導体|memory|semiconductor|nvda|nvidia|micron|mu\b|sndk|sandisk|kioxia|キオクシア|sk hynix|hynix|advantest|アドバンテスト|東京エレクトロン|disco|broadcom|amd\b|intel/.test(n))return '半導体・AI';
   if(/外国株|米国株|service|software|cloud|google|alphabet|microsoft|amazon|meta|apple|crwd|palo alto|panw|pltr/.test(n))return '長期コア';
   if(/高配当|value|バリュー|銀行|商社|保険|鉄鋼|pbr|低per/.test(n))return 'バリュー';
