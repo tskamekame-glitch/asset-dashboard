@@ -5865,8 +5865,10 @@ async function amMoomooImport(event){
   }
   if(!rows.length){showToast('⚠️ moomoo CSVから有効な保有銘柄を読み取れませんでした',4000);return;}
 
-  // moomoo CSVの換算は通貨別。手入力したSKハイニックスのKRWレートがUSDに流用されないようにする。
-  const fxDefault=(typeof amGetFxRateForCurrency==='function'?Number(amGetFxRateForCurrency('USD')):Number(amGetFxRate()))||0;
+  // moomoo CSVの換算は通貨別。手入力したSKハイニックスのKRWレートをUSDへ流用しない。
+  // 過去データにUSD=0.xx（KRWの値）が残っている場合も無効化する。
+  let fxDefault=(typeof amGetFxRateForCurrency==='function'?Number(amGetFxRateForCurrency('USD')):Number(amGetFxRate()))||0;
+  if(fxDefault<50 || fxDefault>250)fxDefault=157.5; // USD/JPYの安全なフォールバック
   let updated=0,added=0;const log=[];const today=todayStr();
   const totalBefore=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+Number(a.amount||0),0);
   const seen=new Set();
@@ -5878,26 +5880,10 @@ async function amMoomooImport(event){
   rows.forEach(row=>{
     const key=normCode(row.code)+'|'+row.acct;
     if(seen.has(key))return;seen.add(key);
-    // CSVの評価額は原通貨ベースとして扱い、通貨ごとの円換算レートを使用する。
-    // 既存の手入力銘柄（SBI等の別ブローカーを含む）に設定されたレートも再利用する。
-    let fx=row.currency==='JPY'?1:((typeof amGetFxRateForCurrency==='function')?Number(amGetFxRateForCurrency(row.currency)):0);
-    let jpyValue=0;
-    if(row.currency==='JPY')jpyValue=row.value;
-    else{
-      const prior=amAccounts.find(a=>{
-        if(a.sold)return false;
-        const sameCode=normCode(a.code)===normCode(row.code);
-        const sameName=normName(a.name)===normName(row.name);
-        const ccy=String(a.priceCcy||a.priceCurrency||'').toUpperCase();
-        return (sameCode||sameName) && (!ccy||ccy===row.currency);
-      });
-      const priorFx=Number(prior?.fxRate||0);
-      if(priorFx>0)fx=priorFx;
-      if(fx>0)jpyValue=row.value*fx;
-      else{log.push({name:row.name,skip:true,reason:`${row.currency}/円レート未設定`});return;}
-      if(typeof amSetFxRateForCurrency==='function')amSetFxRateForCurrency(row.currency,fx);
-    }
-    jpyValue=Math.round(jpyValue);
+    // 重要: moomooの「評価額」はCSV上ですでに日本円。
+    // したがって、SKハイニックス等で手入力したKRW/JPYやUSD/JPYを
+    // 評価額へ掛けない。CSVの評価額をそのまま円評価額として保存する。
+    const jpyValue=Math.round(Number(row.value)||0);
     const codeKey=normCode(row.code);
     // 同一ティッカーの既存行を優先順位付きで突合する。
     // 1) 既存moomoo行、2) 金融機関未設定の手入力行。SBI等の別証券会社行は残す。
@@ -5914,7 +5900,7 @@ async function amMoomooImport(event){
     if(existing){
       const old=Number(existing.amount||0);
       existing.prevMoomooAmount=old;
-      existing.amount=jpyValue;existing.shares=row.shares;existing.price=row.price;existing.costPrice=row.cost;existing.fxRate=fx||existing.fxRate||0;existing.code=row.code;existing.broker='moomoo証券';existing.updated=today;existing.marketPrice=row.price;existing.priceCurrency=row.currency;existing.marketUpdated=new Date().toISOString();existing.marketSource='moomoo CSV';existing.marketError='';existing.prevClose=(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):existing.prevClose||0;existing.note=String(existing.note||'').replace(/\s*\[moomoo.*?\]$/,'')+` [moomoo ${today}]`;updated++;log.push({name:existing.name,val:jpyValue,oldVal:old});
+      existing.amount=jpyValue;existing.shares=row.shares;existing.price=row.price;existing.costPrice=row.cost;existing.fxRate=existing.fxRate||0;existing.code=row.code;existing.broker='moomoo証券';existing.updated=today;existing.marketPrice=row.price;existing.priceCurrency=row.currency;existing.marketUpdated=new Date().toISOString();existing.marketSource='moomoo CSV';existing.marketError='';existing.prevClose=(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):existing.prevClose||0;existing.note=String(existing.note||'').replace(/\s*\[moomoo.*?\]$/,'')+` [moomoo ${today}]`;updated++;log.push({name:existing.name,val:jpyValue,oldVal:old});
       // 既に同じティッカーのmoomoo行が複数ある場合は、今回更新した1行に統合して重複を除去する。
       const dupes=candidates.filter(a=>a!==existing&&(String(a.broker||'')==='moomoo証券'||!String(a.broker||'').trim()));
       if(dupes.length){
@@ -5922,7 +5908,7 @@ async function amMoomooImport(event){
       }
     }else{
       const maxId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0);
-      const newAcc={id:maxId+added+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:fx||undefined,sold:false,nisaType:'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',prevClose:(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):0};
+      const newAcc={id:maxId+added+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:undefined,sold:false,nisaType:'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',prevClose:(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):0};
       amAccounts.push(newAcc);added++;log.push({name:row.name,val:jpyValue,oldVal:0});
     }
   });
@@ -5935,14 +5921,14 @@ async function amMoomooImport(event){
   const totalAfter=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+Number(a.amount||0),0);
   const diff=totalAfter-totalBefore;
   const skipped=log.filter(x=>x.skip).length;
-  showToast(`✅ moomoo CSV: ${updated}件更新 / ${added}件新規追加${skipped?` / ${skipped}件未反映`:''}（USDは${fxDefault?fxDefault.toFixed(2):'—'}円/USDで換算）`,6000);
-  amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,fxDefault);
+  showToast(`✅ moomoo CSV: ${updated}件更新 / ${added}件新規追加${skipped?` / ${skipped}件未反映`:''}（CSV評価額は円のまま反映）`,6000);
+  amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,null);
 }
 
 function amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,fx){
   const diff=totalAfter-totalBefore;const sign=diff>=0?'+':'';const col=diff>=0?'var(--green)':'var(--danger)';
   const items=log.filter(x=>!x.skip&&x.oldVal>0&&x.val!==x.oldVal).sort((a,b)=>Math.abs(b.val-b.oldVal)-Math.abs(a.val-a.oldVal)).slice(0,6);
-  const html=`<div id="moomooDiffBanner" style="margin:8px 0 4px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden"><div style="padding:12px 14px;cursor:pointer" onclick="const x=document.getElementById('moomooDiffDetail');x.style.display=x.style.display==='none'?'block':'none'"><div style="font-size:12px;color:var(--text3)">📥 moomoo CSV取り込み完了</div><div style="font-size:18px;font-weight:800;color:${col}">${sign}${fmt(Math.round(diff))}</div><div style="font-size:11px;color:var(--text3)">総資産 ${fmt(Math.round(totalBefore))} → ${fmt(Math.round(totalAfter))} ／ 為替 ${fx?fx.toFixed(2)+'円/USD':'既存レート'}</div></div><div id="moomooDiffDetail" style="display:none;padding:4px 14px 10px">${items.length?items.map(x=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:11px"><span>${esc(x.name)}</span><span style="color:${x.val-x.oldVal>=0?'var(--green)':'var(--danger)'}">${x.val-x.oldVal>=0?'+':''}${fmt(Math.round(x.val-x.oldVal))}</span></div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">既存moomoo銘柄の評価額変化なし</div>'}</div></div>`;
+  const html=`<div id="moomooDiffBanner" style="margin:8px 0 4px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden"><div style="padding:12px 14px;cursor:pointer" onclick="const x=document.getElementById('moomooDiffDetail');x.style.display=x.style.display==='none'?'block':'none'"><div style="font-size:12px;color:var(--text3)">📥 moomoo CSV取り込み完了</div><div style="font-size:18px;font-weight:800;color:${col}">${sign}${fmt(Math.round(diff))}</div><div style="font-size:11px;color:var(--text3)">総資産 ${fmt(Math.round(totalBefore))} → ${fmt(Math.round(totalAfter))} ／ CSV評価額：円</div></div><div id="moomooDiffDetail" style="display:none;padding:4px 14px 10px">${items.length?items.map(x=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:11px"><span>${esc(x.name)}</span><span style="color:${x.val-x.oldVal>=0?'var(--green)':'var(--danger)'}">${x.val-x.oldVal>=0?'+':''}${fmt(Math.round(x.val-x.oldVal))}</span></div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0">既存moomoo銘柄の評価額変化なし</div>'}</div></div>`;
   const banner=document.getElementById('soldSummaryBanner');if(!banner)return;const old=document.getElementById('moomooDiffBanner');if(old)old.remove();banner.insertAdjacentHTML('afterend',html);setTimeout(()=>{const d=document.getElementById('moomooDiffDetail');if(d)d.style.display='block';},300);
 }
 
