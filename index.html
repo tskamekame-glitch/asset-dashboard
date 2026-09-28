@@ -5781,9 +5781,10 @@ function amInlineCalcFx(id){
   const price=parseFloat(document.getElementById('il-price-'+id)?.value)||0;
   const cost=parseFloat(document.getElementById('il-cost-'+id)?.value)||0;
   const fxEl=document.getElementById('il-fx-'+id);
-  const fxRate=fxEl?parseFloat(fxEl.value)||amGetFxRate():amGetFxRate();
-  // fxRateをキャッシュ更新
-  if(fxEl&&parseFloat(fxEl.value)>0)amSetFxRate(fxEl.value);
+  const currency=String(acc.priceCurrency||'USD').toUpperCase();
+  const fxRate=fxEl?parseFloat(fxEl.value)||amGetFxRateForCurrency(currency):amGetFxRateForCurrency(currency);
+  // 通貨別FXレートを更新
+  if(fxEl&&parseFloat(fxEl.value)>0)amSetFxRateForCurrency(currency,fxEl.value);
   const calc=document.getElementById('il-calc-'+id);
   const gainEl=document.getElementById('il-gain-'+id);
   if(shares>0&&price>0){
@@ -5807,8 +5808,9 @@ async function amInlineSaveFx(id){
   const sharesEl=document.getElementById('il-shares-'+id);
   const priceEl=document.getElementById('il-price-'+id);
   const fxEl=document.getElementById('il-fx-'+id);
-  const fxRate=fxEl?parseFloat(fxEl.value)||amGetFxRate():amGetFxRate();
-  if(fxEl&&parseFloat(fxEl.value)>0){amSetFxRate(fxEl.value);a.fxRate=fxRate;}
+  const currency=String(a.priceCurrency||'USD').toUpperCase();
+  const fxRate=fxEl?parseFloat(fxEl.value)||amGetFxRateForCurrency(currency):amGetFxRateForCurrency(currency);
+  if(fxEl&&parseFloat(fxEl.value)>0){amSetFxRateForCurrency(currency,fxEl.value);a.fxRate=fxRate;}
   if(sharesEl&&priceEl){
     const shares=parseFloat(sharesEl.value)||0;
     const price=parseFloat(priceEl.value)||0;
@@ -5880,10 +5882,18 @@ async function amMoomooImport(event){
   rows.forEach(row=>{
     const key=normCode(row.code)+'|'+row.acct;
     if(seen.has(key))return;seen.add(key);
-    // 重要: moomooの「評価額」はCSV上ですでに日本円。
-    // したがって、SKハイニックス等で手入力したKRW/JPYやUSD/JPYを
-    // 評価額へ掛けない。CSVの評価額をそのまま円評価額として保存する。
-    const jpyValue=Math.round(Number(row.value)||0);
+    // moomoo CSVの「評価額」はCSV記載の通貨建て。
+    // USDならUSD/JPY、KRWならKRW/JPY、JPYならそのまま円として換算する。
+    // 通貨別レートを使うため、SKハイニックスのKRWレートがUSD株へ波及しない。
+    const rowCurrency=amFxKey(row.currency||'USD');
+    let rowFx=Number(amGetFxRateForCurrency(rowCurrency))||0;
+    if(rowCurrency==='JPY')rowFx=1;
+    if(rowCurrency!=='JPY'&&rowFx<=0){
+      log.push({name:row.name,skip:true,reason:`${rowCurrency}/JPYレート未設定`});
+      return;
+    }
+    const jpyValue=Math.round((Number(row.value)||0)*rowFx);
+    amSetFxRateForCurrency(rowCurrency,rowFx);
     const codeKey=normCode(row.code);
     // 同一ティッカーの既存行を優先順位付きで突合する。
     // 1) 既存moomoo行、2) 金融機関未設定の手入力行。SBI等の別証券会社行は残す。
@@ -5908,7 +5918,7 @@ async function amMoomooImport(event){
       updated++;
     }else{added++;}
     const maxId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0);
-    const newAcc={id:oldId||maxId+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:undefined,sold:false,nisaType:row.acct==='NISA'?'NISA成長':'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',prevClose:(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):0};
+    const newAcc={id:oldId||maxId+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:rowFx,sold:false,nisaType:row.acct==='NISA'?'NISA成長':'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',prevClose:(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):0};
     amAccounts.push(newAcc);
     log.push({name:row.name,val:jpyValue,oldVal:oldTotal});
   });
