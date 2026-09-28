@@ -822,6 +822,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
       <button class="btn-sm" style="color:#e6931a;border-color:#e6931a;font-weight:600" onclick="document.getElementById('amSBIInput').click()">📥 SBI証券CSV</button>
       <button class="btn-sm" style="color:#FF6A13;border-color:#FF6A13;font-weight:600" onclick="document.getElementById('amMoomooInput').click()">📥 moomoo CSV</button>
+      <button class="btn-sm" style="color:#2980b9;border-color:#2980b9;font-weight:600" onclick="openAddModal('外国株式')">＋ 海外株を手入力</button>
       <button class="btn-sm" onclick="amFetchAllForeignQuotes()" style="color:#2980b9;border-color:#2980b9;font-weight:600" title="保有中の外国株式（ティッカー登録済み）の株価とドル円レートを一括取得">🌐 外国株更新</button>
       <button class="btn-sm" onclick="sendToTrend()" style="color:var(--green);border-color:var(--green)">📈 推移に記録</button>
       <button class="btn-sm" onclick="amReclassifyAll()" style="color:#8B5CF6;border-color:#8B5CF6" title="口座名からカテゴリを自動再判定">🔄 カテゴリ再判定</button>
@@ -2898,13 +2899,22 @@ function ruleCurrentPrice(r){
         <button type="button" id="fFetchQuoteBtn" onclick="amFetchQuoteIntoModal()" style="display:none;margin-top:8px;padding:8px 12px;border:1px solid #2980b9;border-radius:var(--radius);background:var(--bg2);color:#2980b9;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🌐 ティッカーから株価・為替を自動取得</button>
       </div>
       <div class="field" id="fFxRow" style="display:none">
-        <label>為替レート <span style="font-size:11px;color:var(--text3);font-weight:400">（USD/JPY）</span></label>
+        <label>海外株の通貨・円換算レート</label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input type="number" id="fFxRate" placeholder="例: 150.5" inputmode="decimal" step="0.1" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-width:100px" oninput="amCalcAmount()">
-          <span style="font-size:13px;color:var(--text3)">円/USD</span>
+          <select id="fCurrency" onchange="amForeignCurrencyChanged()" style="width:110px;padding:10px 8px;font-size:14px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none">
+            <option value="USD">USD 米ドル</option>
+            <option value="KRW">KRW 韓国ウォン</option>
+            <option value="EUR">EUR ユーロ</option>
+            <option value="GBP">GBP ポンド</option>
+            <option value="CNY">CNY 人民元</option>
+            <option value="HKD">HKD 香港ドル</option>
+            <option value="AUD">AUD 豪ドル</option>
+          </select>
+          <input type="number" id="fFxRate" placeholder="例: 150.5" inputmode="decimal" step="0.0001" style="flex:1;padding:10px 12px;font-size:15px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);font-family:inherit;outline:none;min-width:100px" oninput="amCalcAmount()">
+          <span id="fFxUnit" style="font-size:13px;color:var(--text3);white-space:nowrap">円/USD</span>
           <button type="button" onclick="amFetchFxRate()" style="padding:8px 12px;border:1px solid var(--accent);border-radius:var(--radius);background:var(--bg2);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">🔄 取得</button>
         </div>
-        <div id="fFxNote" style="font-size:11px;color:var(--text3);margin-top:4px">SBI CSV読込時は評価額（円）が直接設定されます</div>
+        <div id="fFxNote" style="font-size:11px;color:var(--text3);margin-top:4px">SBI海外株CSVがないため、通貨・為替レートを手入力できます。評価額は「株数×現地株価×円換算レート」で計算します。</div>
       </div>
 
       <!-- インデックス専用：取得総額・売却総額入力（損益自動計算） -->
@@ -4989,7 +4999,10 @@ async function amInlineSave(id){
     const shares=parseFloat(sharesEl.value)||0;
     const price=parseFloat(priceEl.value)||0;
     a.shares=shares;a.price=price;
-    if(shares>0&&price>0)a.amount=Math.round(shares*price);
+    if(shares>0&&price>0){
+      const fx=a.cat==='外国株式'?(Number(a.fxRate)||0):1;
+      a.amount=a.cat==='外国株式'?Math.round(shares*price*fx):Math.round(shares*price);
+    }
   }else if(amountEl){
     a.amount=parseFloat(amountEl.value)||0;
   }
@@ -5021,8 +5034,11 @@ function openAddModal(defaultCat){
   if(document.getElementById('fStrategy'))document.getElementById('fStrategy').value='';
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
+  const curEl=document.getElementById('fCurrency');
+  if(curEl)curEl.value='USD';
   const fxEl=document.getElementById('fFxRate');
   if(fxEl)fxEl.value=amGetFxRate()>0?amGetFxRate():'';
+  amForeignCurrencyChanged();
   amToggleStockFields();
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fName').focus(),300);
@@ -5117,8 +5133,11 @@ function openEditModal(id){
   setTimeout(amCalcSellPct,50);
   document.getElementById('fCalcResult').textContent='';
   if(document.getElementById('fGainResult'))document.getElementById('fGainResult').innerHTML='';
+  const curEl=document.getElementById('fCurrency');
+  if(curEl)curEl.value=a.priceCcy||'USD';
   const fxEl=document.getElementById('fFxRate');
   if(fxEl)fxEl.value=a.fxRate||amGetFxRate()||145;
+  amForeignCurrencyChanged();
   amToggleStockFields();
   document.getElementById('sheetBg').classList.add('open');
   setTimeout(()=>document.getElementById('fAmount').focus(),300);
@@ -5152,8 +5171,9 @@ async function saveAccount(){
   if(cat==='FX')code='JPY=X';// FXロットはドル円ティッカー固定（レート自動取得用）
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
+  const priceCcy=cat==='外国株式'?String(document.getElementById('fCurrency')?.value||'USD').toUpperCase():'';
   const fxRate=(cat==='外国株式')?(parseFloat(document.getElementById('fFxRate')?.value)||amGetFxRate()):0;
-  if(cat==='外国株式'&&fxRate>0)amSetFxRate(fxRate);
+  if(cat==='外国株式'&&priceCcy==='USD'&&fxRate>0)amSetFxRate(fxRate);
 
   // インデックスの場合：取得総額・売却総額フィールドから保存
   let costPrice=0;
@@ -5188,8 +5208,8 @@ async function saveAccount(){
   const lastAnalysisDate=(document.getElementById('fLastAnalysisDate')?.value||'').trim();
   const analysisSource=(document.getElementById('fAnalysisSource')?.value||'').trim();
   const analysis={sell1,sell2,sell3,per,pbr,eps1,eps2,strategy:strategy||undefined,analystTargetPrice,forwardPER,revenueGrowth:Number.isFinite(revenueGrowth)?revenueGrowth:undefined,opProfitGrowth:Number.isFinite(opProfitGrowth)?opProfitGrowth:undefined,lastAnalysisDate:lastAnalysisDate||undefined,analysisSource:analysisSource||undefined};
-  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()};}
-  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()});}
+  if(amEditId!==null){const idx=amAccounts.findIndex(a=>a.id===amEditId);if(idx>=0)amAccounts[idx]={...amAccounts[idx],name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,priceCcy:priceCcy||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()};}
+  else{const newId=amAccounts.length?Math.max(...amAccounts.map(a=>a.id))+1:1;amAccounts.push({id:newId,name,cat,code,amount,note,shares,price,costPrice,fxRate:fxRate||undefined,priceCcy:priceCcy||undefined,earningsDate:earningsDate||undefined,sector:sector||undefined,broker:broker||undefined,buyDate:buyDate||undefined,nisaType:nisaType||undefined,...analysis,updated:todayStr()});}
   closeSheet();amRender();await amSaveToSheet();refreshHome();
   // ウォッチ銘柄からの購入登録: ステータスを購入済に更新
   if(purchasedWlId){
@@ -5286,10 +5306,10 @@ function amToggleStockFields(){
   if(idxF)idxF.style.display=showIndexFields?'block':'none';// インデックス専用
   const fetchBtn=document.getElementById('fFetchQuoteBtn');
   if(fetchBtn)fetchBtn.style.display=isForeignStock?'inline-block':'none';
-  if(costLabel)costLabel.textContent=isFX?'取得レート（円/USD）':isStock?'取得株価（円/株）':isForeignStock?'取得株価（USD/株）':'取得価格（円・総額）';
-  if(sfLabel)sfLabel.textContent=isFX?'FX 自動計算（USD×レート→円）':isStock?'株式自動計算':isForeignStock?'外国株 自動計算（USD×為替→円）':'投資信託 自動計算';
+  if(costLabel)costLabel.textContent=isFX?'取得レート（円/USD）':isStock?'取得株価（円/株）':isForeignStock?`取得株価（${String(document.getElementById('fCurrency')?.value||'USD')}/株）`:'取得価格（円・総額）';
+  if(sfLabel)sfLabel.textContent=isFX?'FX 自動計算（USD×レート→円）':isStock?'株式自動計算':isForeignStock?`海外株 自動計算（${String(document.getElementById('fCurrency')?.value||'USD')}×為替→円）`:'投資信託 自動計算';
   if(sharesEl)sharesEl.placeholder=isFX?'購入USD額':isStock||isForeignStock?'株数':'数量';
-  if(priceEl)priceEl.placeholder=isFX?'現在レート（円/USD）':isForeignStock?'株価（USD）':isStock?'株価（円）':'単価（円）';
+  if(priceEl)priceEl.placeholder=isFX?'現在レート（円/USD）':isForeignStock?`株価（${String(document.getElementById('fCurrency')?.value||'USD')}）`:isStock?'株価（円）':'単価（円）';
 
   if(!isUnitBased&&!showIndexFields){
     document.getElementById('fShares').value='';
@@ -5343,7 +5363,8 @@ function amCalcAmount(){
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
   const cost=parseFloat(document.getElementById('fCost').value)||0;
-  const fxRate=isForeignStock?(parseFloat(document.getElementById('fFxRate')?.value)||amGetFxRate()):1;
+  const priceCcy=isForeignStock?String(document.getElementById('fCurrency')?.value||'USD').toUpperCase():'JPY';
+  const fxRate=isForeignStock?(parseFloat(document.getElementById('fFxRate')?.value)||0):1;
   const result=document.getElementById('fCalcResult');
   const gainResult=document.getElementById('fGainResult');
   let amount=parseFloat(document.getElementById('fAmount').value)||0;
@@ -5352,7 +5373,7 @@ function amCalcAmount(){
   if(!isIndexFund && shares>0&&price>0){
     amount=isForeignStock?Math.round(shares*price*fxRate):Math.round(shares*price);
     document.getElementById('fAmount').value=amount;
-    if(result)result.textContent='¥'+amount.toLocaleString('ja-JP')+(isForeignStock&&fxRate>1?` (${fxRate}円/USD)`:'');
+    if(result)result.textContent='¥'+amount.toLocaleString('ja-JP')+(isForeignStock?` (${fxRate}円/${priceCcy})`:'');
   }else if(isIndexFund){
     if(result)result.textContent='SBI CSVの評価額を使用';
   }else{
@@ -5374,17 +5395,30 @@ function amCalcAmount(){
   }
 }
 // 為替レート手動更新ボタン処理（Open Exchange Rates不要、ユーザー入力促す）
+function amForeignCurrencyChanged(){
+  const cur=String(document.getElementById('fCurrency')?.value||'USD').toUpperCase();
+  const unit=document.getElementById('fFxUnit');
+  if(unit)unit.textContent='円/'+cur;
+  const fx=document.getElementById('fFxRate');
+  if(fx&&!String(fx.value||'').trim()){
+    if(cur==='USD'){fx.value=amGetFxRate()>0?amGetFxRate():'';}
+    else if(cur==='JPY'){fx.value='1';}
+  }
+  amCalcAmount();
+}
 function amFetchFxRate(){
-  const current=amGetFxRate()||145;
-  const val=prompt(`USD/JPY 為替レートを入力してください\n（現在の設定: ${current}円）\n\nSBI証券トップページやYahoo!ファイナンスで確認できます`,''+current);
+  const cur=String(document.getElementById('fCurrency')?.value||'USD').toUpperCase();
+  if(cur==='JPY'){const fx=document.getElementById('fFxRate');if(fx)fx.value='1';amCalcAmount();return;}
+  const current=parseFloat(document.getElementById('fFxRate')?.value)||((cur==='USD'&&amGetFxRate()>0)?amGetFxRate():0);
+  const val=prompt(`${cur}/JPY 円換算レートを入力してください\n（1 ${cur} = ? 円）\n\n例：USDなら150.5、KRWなら0.10前後`,current?String(current):'');
   if(val===null)return;
   const n=parseFloat(val);
-  if(!n||n<50||n>300){alert('正しい為替レートを入力してください（50〜300の範囲）');return;}
-  amSetFxRate(n);
+  if(!n||n<=0||n>10000){alert('正しい為替レートを入力してください');return;}
   const fxEl=document.getElementById('fFxRate');
   if(fxEl)fxEl.value=n;
+  if(cur==='USD')amSetFxRate(n);
   amCalcAmount();
-  showToast(`✓ 為替レート: ${n}円/USD に設定しました`);
+  showToast(`✓ ${cur}/JPY: ${n}円`);
 }
 
 // ── 外国株式: ティッカーをキーに現在株価・為替レートをWorker経由で自動取得 ──
@@ -5514,8 +5548,11 @@ async function amFetchQuoteIntoModal(){
     const fxRate=await amFetchJpyRateFor(currency);
     const priceEl=document.getElementById('fPrice');
     const fxEl=document.getElementById('fFxRate');
+    const curEl=document.getElementById('fCurrency');
+    if(curEl)curEl.value=currency;
     if(priceEl)priceEl.value=Math.round(price*100)/100;
     if(fxEl)fxEl.value=Math.round(fxRate*10000)/10000;
+    amForeignCurrencyChanged();
     if(currency==='USD')amSetFxRate(Math.round(fxRate*10000)/10000);// 共有のドル円レートはUSD建て銘柄の時のみ更新
     amCalcAmount();
     showToast(`✅ 株価 ${currency} ${Math.round(price*100)/100} ／ 為替 ${Math.round(fxRate*10000)/10000}円`,3000);
