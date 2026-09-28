@@ -5172,8 +5172,8 @@ async function saveAccount(){
   const shares=parseFloat(document.getElementById('fShares').value)||0;
   const price=parseFloat(document.getElementById('fPrice').value)||0;
   const priceCcy=cat==='外国株式'?String(document.getElementById('fCurrency')?.value||'USD').toUpperCase():'';
-  const fxRate=(cat==='外国株式')?(parseFloat(document.getElementById('fFxRate')?.value)||amGetFxRate()):0;
-  if(cat==='外国株式'&&priceCcy==='USD'&&fxRate>0)amSetFxRate(fxRate);
+  const fxRate=(cat==='外国株式')?(parseFloat(document.getElementById('fFxRate')?.value)||amGetFxRateForCurrency(priceCcy)):0;
+  if(cat==='外国株式'&&fxRate>0)amSetFxRateForCurrency(priceCcy,fxRate);
 
   // インデックスの場合：取得総額・売却総額フィールドから保存
   let costPrice=0;
@@ -5746,11 +5746,29 @@ function fxLotApply(rate,save){
 }
 
 function amGetFxRate(){
-  return amFxRateCache>0?amFxRateCache:145;// デフォルト145円
+  return amFxRateCache>0?amFxRateCache:145;// USD/JPYの互換用デフォルト
+}
+function amFxKey(currency){
+  const c=String(currency||'USD').trim().toUpperCase();
+  return c==='JPY'?'JPY':c;
+}
+function amGetFxRateForCurrency(currency){
+  const c=amFxKey(currency);
+  if(c==='JPY')return 1;
+  // 通貨別レートを優先。従来のUSD共有レートはUSDだけで使用する。
+  try{const v=parseFloat(localStorage.getItem('am_fx_'+c+'jpy')||'0');if(v>0)return v;}catch(e){}
+  if(c==='USD')return amGetFxRate();
+  return 0;
+}
+function amSetFxRateForCurrency(currency,val){
+  const c=amFxKey(currency),v=parseFloat(val)||0;
+  if(!v||c==='JPY')return;
+  try{localStorage.setItem('am_fx_'+c+'jpy',String(v));}catch(e){}
+  if(c==='USD')amSetFxRate(v);
 }
 function amSetFxRate(val){
   const v=parseFloat(val)||0;
-  if(v>0){amFxRateCache=v;try{localStorage.setItem('am_fx_usdjpy',String(v));}catch(e){}}
+  if(v>0){amFxRateCache=v;try{localStorage.setItem('am_fx_usdjpy',String(v));localStorage.setItem('am_fx_USDjpy',String(v));}catch(e){}}
 }
 function amLoadFxRate(){
   try{const v=parseFloat(localStorage.getItem('am_fx_usdjpy')||'0');if(v>0)amFxRateCache=v;}catch(e){}
@@ -5847,7 +5865,8 @@ async function amMoomooImport(event){
   }
   if(!rows.length){showToast('⚠️ moomoo CSVから有効な保有銘柄を読み取れませんでした',4000);return;}
 
-  const fxDefault=(typeof amGetFxRate==='function'?Number(amGetFxRate()):0)||0;
+  // moomoo CSVの換算は通貨別。手入力したSKハイニックスのKRWレートがUSDに流用されないようにする。
+  const fxDefault=(typeof amGetFxRateForCurrency==='function'?Number(amGetFxRateForCurrency('USD')):Number(amGetFxRate()))||0;
   let updated=0,added=0;const log=[];const today=todayStr();
   const totalBefore=amAccounts.filter(a=>!a.sold).reduce((sum,a)=>sum+Number(a.amount||0),0);
   const seen=new Set();
@@ -5859,17 +5878,24 @@ async function amMoomooImport(event){
   rows.forEach(row=>{
     const key=normCode(row.code)+'|'+row.acct;
     if(seen.has(key))return;seen.add(key);
-    const isUsd=row.currency==='USD';
-    const fx=isUsd?fxDefault:(row.currency==='JPY'?1:0);
-    // 円換算できない通貨は既存口座のFXレートがあればそれを利用。なければCSV評価額をそのまま保存せずスキップ。
+    // CSVの評価額は原通貨ベースとして扱い、通貨ごとの円換算レートを使用する。
+    // 既存の手入力銘柄（SBI等の別ブローカーを含む）に設定されたレートも再利用する。
+    let fx=row.currency==='JPY'?1:((typeof amGetFxRateForCurrency==='function')?Number(amGetFxRateForCurrency(row.currency)):0);
     let jpyValue=0;
     if(row.currency==='JPY')jpyValue=row.value;
-    else if(fx>0)jpyValue=row.value*fx;
     else{
-      const prior=amAccounts.find(a=>!a.sold&&String(a.broker||'')==='moomoo証券'&&normCode(a.code)===normCode(row.code));
+      const prior=amAccounts.find(a=>{
+        if(a.sold)return false;
+        const sameCode=normCode(a.code)===normCode(row.code);
+        const sameName=normName(a.name)===normName(row.name);
+        const ccy=String(a.priceCcy||a.priceCurrency||'').toUpperCase();
+        return (sameCode||sameName) && (!ccy||ccy===row.currency);
+      });
       const priorFx=Number(prior?.fxRate||0);
-      if(priorFx>0)jpyValue=row.value*priorFx;
+      if(priorFx>0)fx=priorFx;
+      if(fx>0)jpyValue=row.value*fx;
       else{log.push({name:row.name,skip:true,reason:`${row.currency}/円レート未設定`});return;}
+      if(typeof amSetFxRateForCurrency==='function')amSetFxRateForCurrency(row.currency,fx);
     }
     jpyValue=Math.round(jpyValue);
     const codeKey=normCode(row.code);
