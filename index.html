@@ -5337,10 +5337,16 @@ function openEditModal(id){
 }
 // 口座名入力時にカテゴリを自動推定
 function amAutoCategory(){
-  const name=document.getElementById('fName').value;
+  const name=document.getElementById('fName').value.trim();
   const guessed=amGuessCat(name);
   if(guessed){
     document.getElementById('fCat').value=guessed;
+  }
+  // セクターも新規追加時に自動推定。既に手動設定されている値は上書きしない。
+  const secEl=document.getElementById('fSector');
+  if(secEl && !String(secEl.value||'').trim() && typeof secSuggestSector==='function'){
+    const sec=secSuggestSector(name);
+    if(sec)secEl.value=sec;
   }
   amToggleStockFields();
 }
@@ -5372,7 +5378,9 @@ async function saveAccount(){
     costPrice=parseFloat(document.getElementById('fCost')?.value)||0;
   }
   const earningsDate=(document.getElementById('fEarningsDate')?.value||'').trim();
-  const sector=(document.getElementById('fSector')?.value||'').trim();
+  // セクター未設定なら銘柄名から自動分類して保存。手動設定値は優先。
+  let sector=(document.getElementById('fSector')?.value||'').trim();
+  if(!sector && typeof secSuggestSector==='function')sector=secSuggestSector(name)||'';
   const broker=(document.getElementById('fBroker')?.value||'').trim();
   const buyDate=(document.getElementById('fBuyDate')?.value||'').trim();
   const nisaType=(document.getElementById('fNisa')?.value||'').trim();
@@ -6522,6 +6530,12 @@ async function amApplySBIRows(rows){
   };
   const nisaType=s=>s==='NISA成長'?'growth':s==='NISAつみたて'?'tsumitate':'none';
   const existingCatIsStock=a=>['個別株','高配当','外国株式'].includes(String(a.cat||''));
+  // CSV再取込で一度分類したセクターを維持するため、既存SBI資産の手動/保存済みセクターを先に退避。
+  const savedSectorByCode=new Map(), savedSectorByName=new Map();
+  amAccounts.filter(a=>!a.sold && a.sector).forEach(a=>{
+    if(a.code)savedSectorByCode.set(normCode(a.code),String(a.sector));
+    if(a.name)savedSectorByName.set(normName(a.name),String(a.sector));
+  });
 
   // ★再構築モード：SBI CSVをSBI保有資産の唯一の正本として扱う。
   // 旧バージョンで broker/importSource が付いていなかった手入力・旧ロットも、
@@ -6624,10 +6638,15 @@ async function amApplySBIRows(rows){
     const code=isFund?'':String(r.code||'').trim();
     const name=isFund?String(r.nameRaw||r.nameNorm||'').trim():String(r.bareName||r.nameRaw||'').trim();
     const cat=isFund?catForFund(r):catForStock(r);
+    // ①既存の保存済み分類 → ②銘柄名から自動推定 の順で決定。
+    // これによりCSV再取込で手動修正したセクターが元に戻らない。
+    const savedSector=(!isFund&&code&&savedSectorByCode.get(normCode(code))) || savedSectorByName.get(normName(name)) || '';
+    const autoSector=(typeof secSuggestSector==='function'?secSuggestSector(name):'')||'';
+    const sector=savedSector||autoSector||'';
     const acc={
       id:nextId++,name,cat,amount:evalAmt,note:`[SBI CSV ${today}]`,shares,
       price,updated:today,code,costPrice:Math.round(costPrice*100)/100,
-      sold:false,nisaType:nisa,broker:'SBI証券',sector:undefined
+      sold:false,nisaType:nisa,broker:'SBI証券',sector:sector||undefined
     };
     if(r.isForeignStock&&shares>0&&price>0&&evalAmt>0){
       const fx=evalAmt/(shares*price);
