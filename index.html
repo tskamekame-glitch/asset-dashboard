@@ -5478,7 +5478,7 @@ async function amFetchForeignQuote(id){
 }
 // エクスポートバーの「🌐 外国株更新」：保有中の外国株式を一括で自動取得（通貨は銘柄ごとに自動判定）
 async function amFetchAllForeignQuotes(){
-  const targets=amAccounts.filter(a=>a.cat==='外国株式'&&!a.sold&&a.code);
+  const targets=amAccounts.filter(a=>a.cat==='外国株式'&&!a.sold&&a.code&&String(a.broker||'')!=='moomoo証券'&&String(a.marketSource||'')!=='moomoo CSV');
   if(!targets.length){showToast('⚠️ ティッカー登録済みの外国株式がありません');return;}
   showToast('📡 '+targets.length+'銘柄の株価・為替レートを取得中...',3000);
   let updated=0;const failed=[];let usdRateForToast=null;
@@ -5503,7 +5503,7 @@ let amForeignQuoteAutoFetching=false;
 // 資産管理タブを開く／更新するたびに呼ばれる。15分以内に取得済みなら何もしない（fxLotRefreshと同じキャッシュ方式）。
 // ボタン操作なしで、外国株式の株価・為替レートをバックグラウンドで静かに最新化する（通貨は銘柄ごとに自動判定）。
 async function amAutoFetchForeignQuotesIfStale(){
-  const targets=amAccounts.filter(a=>a.cat==='外国株式'&&!a.sold&&(a.code||'').trim());
+  const targets=amAccounts.filter(a=>a.cat==='外国株式'&&!a.sold&&(a.code||'').trim()&&String(a.broker||'')!=='moomoo証券'&&String(a.marketSource||'')!=='moomoo CSV');
   if(!targets.length)return;
   let cache=null;try{cache=JSON.parse(localStorage.getItem('amForeignQuoteAutoCache')||'null');}catch(e){}
   if(cache&&Date.now()-cache.ts<15*60*1000)return;
