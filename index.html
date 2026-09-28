@@ -619,8 +619,6 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <button class="nav-btn" data-tab="selector" onclick="switchTab('selector')"><span class="ni">🔎</span>銘柄選定</button>
   <button class="nav-btn" data-tab="buysim" onclick="switchTab('buysim')"><span class="ni">🧮</span>買付シミュ</button>
   <button class="nav-btn" data-tab="events" onclick="switchTab('events')"><span class="ni">📅</span>重要イベント</button>
-  <button class="nav-btn" data-tab="scenarios" onclick="switchTab('scenarios')"><span class="ni">🧪</span>シナリオ比較</button>
-  <button class="nav-btn" data-tab="monitor" onclick="switchTab('monitor')"><span class="ni">📡</span>情報モニター</button>
   <button class="nav-btn" data-tab="performance" onclick="switchTab('performance')"><span class="ni">📊</span>運用分析</button>
   <button class="nav-btn" data-tab="diagnosis" onclick="switchTab('diagnosis')"><span class="ni">🔍</span>診断</button>
   <button class="nav-btn" data-tab="sell" onclick="switchTab('sell')"><span class="ni">💴</span>売却</button>
@@ -1028,8 +1026,7 @@ function amDiagRender(targetId='amDiagnosisPanel'){
     <div style="font-size:12px;font-weight:700;margin:12px 0 6px">🎯 戦略配分</div><div style="overflow:auto"><table style="width:100%;min-width:520px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">戦略</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">現在</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">目標</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">差</th></tr></thead><tbody>${stratHtml}</tbody></table></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px"><div><div style="font-size:12px;font-weight:700;margin-bottom:6px">🌍 地域</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">地域</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">金額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">比率</th></tr></thead><tbody>${regionHtml}</tbody></table></div></div><div><div style="font-size:12px;font-weight:700;margin-bottom:6px">💱 通貨</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">通貨</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">金額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">比率</th></tr></thead><tbody>${currHtml}</tbody></table></div></div></div>
     <div style="font-size:12px;font-weight:700;margin:14px 0 6px">🏆 上位10銘柄</div><div style="overflow:auto"><table style="width:100%;min-width:460px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">銘柄</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">評価額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">比率</th></tr></thead><tbody>${topHtml}</tbody></table></div>
-    <div style="font-size:12px;font-weight:700;margin:14px 0 6px">📉 暴落ストレス</div><div style="overflow:auto"><table style="width:100%;min-width:560px;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:6px;border-bottom:1px solid var(--border)">ケース</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">資産減少率</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">減少額</th><th style="text-align:right;padding:6px;border-bottom:1px solid var(--border)">残存評価額</th></tr></thead><tbody>${stressHtml}</tbody></table></div>
-    <div style="font-size:9px;color:var(--text3);line-height:1.6;margin-top:10px">※ 地域・半導体の分類は銘柄名、コード、通貨、セクター等からの機械判定です。暴落ストレスは想定シナリオであり予測ではありません。評価額はSBI/moomoo CSV等の登録値を使用し、Webから株価を取得して上書きしません。</div>
+    <div style="font-size:9px;color:var(--text3);line-height:1.6;margin-top:10px">※ 地域・半導体の分類は銘柄名、コード、通貨、セクター等からの機械判定です。評価額はSBI/moomoo CSV等の登録値を使用し、Webから株価を取得して上書きしません。</div>
   </div>`;
 }
 (function(){
@@ -1098,6 +1095,8 @@ function amPerfNetDepositHint(){
   for(const k of keys){const n=Number(localStorage.getItem(k));if(Number.isFinite(n)&&n>0)return n;}
   return null;
 }
+function amPerfSetDecision(ticker,status){try{const x=JSON.parse(localStorage.getItem('amPerformanceDecisions_v1')||'{}');x[ticker]=Object.assign({},x[ticker],{status});localStorage.setItem('amPerformanceDecisions_v1',JSON.stringify(x));showToast('✓ '+ticker+' の売買判断を保存しました');}catch(e){}}
+function amPerfSetMemo(ticker,memo){try{const x=JSON.parse(localStorage.getItem('amPerformanceDecisions_v1')||'{}');x[ticker]=Object.assign({},x[ticker],{memo});localStorage.setItem('amPerformanceDecisions_v1',JSON.stringify(x));}catch(e){}}
 function amPerfRender(targetId='amPerformancePanel'){
   const el=document.getElementById(targetId);if(!el)return;
   let cur=[],realized=[];
@@ -1119,11 +1118,29 @@ function amPerfRender(targetId='amPerformancePanel'){
   const topLoss=[...contrib].filter(x=>Number(x.gain)<0).sort((a,b)=>a.gain-b.gain).slice(0,5);
   const rows=[...contrib].sort((a,b)=>Math.abs(Number(b.gain||0))-Math.abs(Number(a.gain||0)));
   const stratRows=Object.entries(strat).sort((a,b)=>b[1].amount-a[1].amount);
+  const perfDecisionLoad=()=>{try{return JSON.parse(localStorage.getItem('amPerformanceDecisions_v1')||'{}')||{};}catch(e){return {};}};
+  const perfDecisions=perfDecisionLoad();
+  const perfDecisionSave=(ticker,value)=>{const x=perfDecisionLoad();x[ticker]=value;localStorage.setItem('amPerformanceDecisions_v1',JSON.stringify(x));};
+  const perfMemoSave=(ticker,value)=>{const x=perfDecisionLoad();x[ticker]=Object.assign({},x[ticker],{memo:value});localStorage.setItem('amPerformanceDecisions_v1',JSON.stringify(x));};
   const flow=amPerfNetDepositHint();
   const fireGain=flow?totalPerf:null;
-  const fmtRow=x=>`<tr><td><b>${amPerfEsc(x.ticker)}</b><div style="font-size:9px;color:var(--text3)">${amPerfEsc(x.name)}</div></td><td>${amPerfMoney(x.amount)}</td><td style="color:${Number(x.gain)>=0?'var(--green)':'var(--danger)'}">${x.gain==null?'—':(x.gain>=0?'+':'')+amPerfMoney(Math.abs(x.gain))}</td><td>${amPerfPct(x.pct)}</td><td>${amPerfEsc(x.strategy)}</td><td>${x.contrib==null?'—':amPerfPct(x.contrib)}</td></tr>`;
-  const table=rows.length?`<div class="table-wrap"><table><thead><tr><th>銘柄</th><th>評価額</th><th>含み損益</th><th>損益率</th><th>戦略</th><th>運用益への比率</th></tr></thead><tbody>${rows.map(fmtRow).join('')}</tbody></table></div>`:'<div style="padding:14px;color:var(--text3);font-size:11px">現在の投資銘柄がありません。</div>';
   const perfTargets=(typeof stratTargets==='function'?stratTargets():{});
+  const totalForRatio=totalEval||0;
+  const fmtRow=x=>{
+    const a=x.rows?.[0]||{};
+    const currentPrice=Number(a.price||a.marketPrice||0);
+    const purchasePrice=Number(a.costPrice||0);
+    const target=Number(a.analystTargetPrice||0);
+    const targetGap=currentPrice>0&&target>0?(target/currentPrice-1)*100:null;
+    const targetBuy=Number(a.targetBuyPrice||0), targetSell=Number(a.targetSellPrice||0);
+    const targetStr=target>0?(Math.round(target).toLocaleString('ja-JP')+' / '+(targetGap>=0?'+':'')+targetGap.toFixed(1)+'%'):'—';
+    const targetRatio=Number(perfTargets?.[x.strategy]||0);
+    const curRatio=totalForRatio?x.amount/totalForRatio*100:0;
+    const ratioGap=curRatio-targetRatio;
+    const d=perfDecisions[x.ticker]||{};
+    return `<tr><td><b>${amPerfEsc(x.name)}</b><div style="font-size:9px;color:var(--text3)">${amPerfEsc(x.ticker)}</div></td><td>${currentPrice?Math.round(currentPrice).toLocaleString('ja-JP'):'—'}<div style="font-size:9px;color:var(--text3)">買値 ${purchasePrice?Math.round(purchasePrice).toLocaleString('ja-JP'):'—'}</div></td><td>${amPerfMoney(x.amount)}</td><td style="color:${Number(x.gain)>=0?'var(--green)':'var(--danger)'}">${x.gain==null?'—':(x.gain>=0?'+':'')+amPerfMoney(Math.abs(x.gain))}<div style="font-size:9px">${amPerfPct(x.pct)}</div></td><td>${targetStr}<div style="font-size:9px;color:var(--text3)">買値目標 ${targetBuy?Math.round(targetBuy).toLocaleString('ja-JP'):'—'} / 売値目標 ${targetSell?Math.round(targetSell).toLocaleString('ja-JP'):'—'}</div></td><td>${Number(a.forwardPER)>0?Number(a.forwardPER).toFixed(1)+'倍':'—'}</td><td>${a.revenueGrowth!=null&&a.revenueGrowth!==''?(Number(a.revenueGrowth)>=0?'+':'')+Number(a.revenueGrowth).toFixed(1)+'%':'—'}<div style="font-size:9px;color:var(--text3)">営業利益 ${a.opProfitGrowth!=null&&a.opProfitGrowth!==''?(Number(a.opProfitGrowth)>=0?'+':'')+Number(a.opProfitGrowth).toFixed(1)+'%':'—'}</div></td><td>${amPerfEsc(x.strategy)}<div style="font-size:9px;color:${ratioGap>1?'var(--danger)':ratioGap<-1?'var(--accent)':'var(--text3)'}">配分差 ${ratioGap>=0?'+':''}${ratioGap.toFixed(1)}pt</div></td><td><select onchange="amPerfSetDecision('${amPerfEsc(x.ticker)}',this.value)" style="min-width:108px;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:11px"><option value="" ${!d.status?'selected':''}>未判断</option><option value="買い増し候補" ${d.status==='買い増し候補'?'selected':''}>買い増し候補</option><option value="保有継続" ${d.status==='保有継続'?'selected':''}>保有継続</option><option value="売却候補" ${d.status==='売却候補'?'selected':''}>売却候補</option><option value="監視" ${d.status==='監視'?'selected':''}>監視</option></select><input value="${amPerfEsc(d.memo||'')}" placeholder="判断メモ" onchange="amPerfSetMemo('${amPerfEsc(x.ticker)}',this.value)" style="width:108px;margin-top:4px;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:10px"></td><td><button class="btn-sm" onclick="switchTab('pricewatch')">価格管理</button></td></tr>`;
+  };
+  const table=rows.length?`<div style="font-size:10px;color:var(--text3);margin-bottom:7px">※ 「判断」は自分の売買方針を記録する欄です。損益・目標株価・業績・戦略配分を同時に確認できます。</div><div class="table-wrap"><table style="min-width:1250px"><thead><tr><th>銘柄</th><th>現在値 / 買値</th><th>評価額</th><th>含み損益 / 率</th><th>目標株価 / 乖離</th><th>予想PER</th><th>業績</th><th>戦略 / 配分差</th><th>売買判断 / メモ</th><th>操作</th></tr></thead><tbody>${rows.map(fmtRow).join('')}</tbody></table></div>`:'<div style="padding:14px;color:var(--text3);font-size:11px">現在の投資銘柄がありません。</div>';
   const perfTargetEditor=`<div style="margin:8px 0 10px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:11px;font-weight:700;margin-bottom:7px">🎯 戦略別の目標比率を入力</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${STRAT_KEYS.map(k=>`<label style="font-size:10px;color:var(--text2)">${amPerfEsc(k)}<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><input id="perf-target-${k}" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="${Number(perfTargets[k]||0)}" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:16px"><span>%</span></div></label>`).join('')}</div><div id="perf-target-total" style="font-size:10px;margin-top:7px;color:var(--text3)"></div><button class="btn-sm primary" type="button" onclick="amPerfSaveTargets()" style="margin-top:7px">💾 目標比率を保存</button></div>`;
   const strategyHtml=(stratRows.length?`<div class="table-wrap"><table><thead><tr><th>戦略</th><th>評価額</th><th>現在比率</th><th>目標比率</th><th>差</th><th>目標との差額</th><th>含み損益</th></tr></thead><tbody>${stratRows.map(([k,v])=>{const curPct=totalEval?v.amount/totalEval*100:0,target=Number(perfTargets[k]||0),diff=curPct-target,amountGap=totalEval*target/100-v.amount;return `<tr><td><b>${amPerfEsc(k)}</b></td><td>${amPerfMoney(v.amount)}</td><td>${totalEval?amPerfPct(curPct):'—'}</td><td>${target.toFixed(1)}%</td><td style="font-weight:700;color:${Math.abs(diff)<0.5?'var(--text2)':diff>0?'var(--danger)':'var(--accent)'}">${diff>0?'+':''}${diff.toFixed(1)}pt</td><td style="font-weight:700;color:${amountGap>0?'var(--accent)':amountGap<0?'var(--danger)':'var(--text2)'}">${amountGap>0?'+':''}${amPerfMoney(Math.abs(amountGap))}</td><td style="color:${v.gain>=0?'var(--green)':'var(--danger)'}">${v.gain>=0?'+':''}${amPerfMoney(Math.abs(v.gain))}</td></tr>`;}).join('')}</tbody></table></div>`:'<div style="padding:12px;color:var(--text3);font-size:11px">戦略データがありません。</div>');
   const rank=(title,list)=>`<div style="flex:1;min-width:240px"><div style="font-size:11px;font-weight:700;margin:6px 0">${title}</div>${list.length?list.map((x,i)=>`<div style="display:flex;gap:7px;padding:7px 0;border-bottom:.5px solid var(--border);font-size:10px"><span>${i+1}</span><b style="flex:1">${amPerfEsc(x.name||x.ticker)}<span style="font-weight:400;color:var(--text3);font-size:9px;margin-left:4px">${x.ticker&&x.name&&String(x.name)!==String(x.ticker)?'('+amPerfEsc(x.ticker)+')':''}</span></b><span style="color:${x.gain>=0?'var(--green)':'var(--danger)'}">${x.gain>=0?'+':''}${amPerfMoney(Math.abs(x.gain))}</span></div>`).join(''):'<div style="color:var(--text3);font-size:10px">該当なし</div>'}</div>`;
@@ -1849,38 +1866,7 @@ function amMonthlyPerfRender(){
 </div>
 
 
-<!-- ========== LATEST INFO MONITOR ========== -->
-<div class="panel" id="tab-monitor">
-  <div style="padding:16px">
-    <div class="panel-head"><div><div class="panel-title">📡 最新情報モニター</div><div class="panel-sub">保有銘柄の株価・分析情報の鮮度、バリュエーション、業績、確認が必要な項目を一覧化します。決算予定・重要イベントは「重要イベント」で管理します。</div></div><button class="icon-btn" onclick="monitorRender()">↻ 更新</button></div>
-    <div id="monitor-summary" class="card" style="margin-bottom:12px"></div>
-    <div id="monitor-alerts" class="card" style="margin-bottom:12px"></div>
-    <div class="card"><div class="card-head"><h2>🔎 情報鮮度・確認状況</h2></div><div id="monitor-table"></div></div>
-  </div>
-</div>
-
 <!-- ========== EVENTS ========== -->
-<div class="panel" id="tab-scenarios">
-  <div class="section-head"><div><h2>🧪 投資シナリオ比較</h2><p>買付案を並べ、買付後の配分と上昇・下落時の資産影響を比較します。</p></div></div>
-  <div class="card" style="margin-bottom:12px">
-    <div style="font-weight:700;margin-bottom:10px">シナリオを追加</div>
-    <div style="display:grid;grid-template-columns:1.1fr .8fr 1fr .9fr;gap:8px;align-items:end">
-      <label style="font-size:11px;color:var(--text2)">銘柄<input id="scTicker" list="scTickerList" placeholder="MU / NVDA" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:11px;color:var(--text2)">株数<input id="scShares" type="number" step="0.01" min="0" value="1" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)"></label>
-      <label style="font-size:11px;color:var(--text2)">買付価格<input id="scPrice" type="number" step="0.01" min="0" placeholder="現在値" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:0.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text)"></label>
-      <button onclick="scAdd()" style="padding:9px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer">＋追加</button>
-    </div>
-    <datalist id="scTickerList"></datalist>
-    <div id="scHint" style="font-size:11px;color:var(--text3);margin-top:8px">米国株は登録されている為替レートで円換算。価格未入力なら登録済み現在値を使用します。</div>
-  </div>
-  <div id="scRows" class="card" style="margin-bottom:12px"></div>
-  <div id="scSummary" class="card" style="margin-bottom:12px"></div>
-  <div class="card">
-    <div style="font-weight:700;margin-bottom:10px">上昇・下落シナリオ</div>
-    <div id="scStress"></div>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px">※購入直後の価格変動を仮定した機械的試算です。予測ではありません。</div>
-  </div>
-</div>
 <div class="panel" id="tab-events">
   <div style="padding:16px">
     <div style="font-size:18px;font-weight:700;margin-bottom:4px">📅 決算・重要イベント管理</div>
@@ -2614,188 +2600,6 @@ function ruleCurrentPrice(r){
         <div id="s-sidefire-gap" style="font-size:10px;color:var(--text3);line-height:1.6"></div>
       </div>
 
-      <!-- FIRE到達予想 -->
-      <div id="s-fire-projection" style="background:rgba(16,185,129,0.06);border:0.5px solid rgba(16,185,129,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🚀 FIRE目標までの到達予想</div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">現在資産＋毎月の追加投資を、各シナリオの利回りで運用した場合の「年間生活費×25倍」到達時期。生活費・副収入による取り崩しは含めない積立フェーズの試算です。</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">
-          <div style="background:var(--bg2);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">😔 悲観</div><div id="s-proj-bear" style="font-size:14px;font-weight:700;margin-top:3px">—</div><div id="s-proj-bear-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
-          <div style="background:rgba(52,211,153,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--green)">📈 実績</div><div id="s-proj-actual" style="font-size:14px;font-weight:700;color:var(--green);margin-top:3px">—</div><div id="s-proj-actual-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
-          <div style="background:rgba(251,191,36,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--amber)">🎯 目標</div><div id="s-proj-target" style="font-size:14px;font-weight:700;color:var(--amber);margin-top:3px">—</div><div id="s-proj-target-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
-        </div>
-      </div>
-
-      <!-- 3シナリオ比較カード -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-        <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="s-pct-bear" style="font-weight:600"></span></div>
-          <div id="s-val-bear" style="font-size:16px;font-weight:700;color:var(--text1)">—</div>
-          <div id="s-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">65歳時点</div>
-        </div>
-        <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="s-pct-actual" style="font-weight:600"></span></div>
-          <div id="s-val-actual" style="font-size:16px;font-weight:700;color:var(--green)">—</div>
-          <div id="s-sub-actual" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
-        </div>
-        <div style="background:rgba(251,191,36,0.08);border:0.5px solid rgba(251,191,36,0.3);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--amber);margin-bottom:4px">🎯 目標<span id="s-pct-target" style="font-weight:600"></span></div>
-          <div id="s-val-target" style="font-size:16px;font-weight:700;color:var(--amber)">—</div>
-          <div id="s-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
-        </div>
-      </div>
-
-      <!-- 月次収支サマリー -->
-      <div class="chart-card">
-        <div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap">
-          <button onclick="setFireChartAge('s','y1')" id="s-age-btn-y1" class="filter-btn" style="font-size:11px;padding:4px 8px">1年</button>
-          <button onclick="setFireChartAge('s','y2')" id="s-age-btn-y2" class="filter-btn" style="font-size:11px;padding:4px 8px">2年</button>
-          <button onclick="setFireChartAge('s','y3')" id="s-age-btn-y3" class="filter-btn" style="font-size:11px;padding:4px 8px">3年</button>
-          <button onclick="setFireChartAge('s','y4')" id="s-age-btn-y4" class="filter-btn" style="font-size:11px;padding:4px 8px">4年</button>
-          <button onclick="setFireChartAge('s',0)" id="s-age-btn-0" class="filter-btn active" style="font-size:11px;padding:4px 8px">全期間</button>
-          <button onclick="setFireChartAge('s',50)" id="s-age-btn-50" class="filter-btn" style="font-size:11px;padding:4px 8px">〜50歳</button>
-          <button onclick="setFireChartAge('s',60)" id="s-age-btn-60" class="filter-btn" style="font-size:11px;padding:4px 8px">〜60歳</button>
-          <button onclick="setFireChartAge('s',70)" id="s-age-btn-70" class="filter-btn" style="font-size:11px;padding:4px 8px">〜70歳</button>
-          <button onclick="setFireChartAge('s',80)" id="s-age-btn-80" class="filter-btn" style="font-size:11px;padding:4px 8px">〜80歳</button>
-          <button onclick="setFireChartAge('s',90)" id="s-age-btn-90" class="filter-btn" style="font-size:11px;padding:4px 8px">〜90歳</button>
-        </div>
-        <!-- 選択期間の残高サマリー -->
-        <div id="s-chart-summary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;display:none">
-          <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">😔 悲観</div>
-            <div id="s-cs-bear" style="font-size:13px;font-weight:700;color:var(--text1)">—</div>
-          </div>
-          <div style="background:rgba(52,211,153,0.08);border-radius:8px;padding:8px;text-align:center">
-            <div style="font-size:10px;color:var(--green);margin-bottom:2px">📈 実績</div>
-            <div id="s-cs-actual" style="font-size:13px;font-weight:700;color:var(--green)">—</div>
-          </div>
-          <div style="background:rgba(251,191,36,0.08);border-radius:8px;padding:8px;text-align:center">
-            <div style="font-size:10px;color:var(--amber);margin-bottom:2px">🎯 目標</div>
-            <div id="s-cs-target" style="font-size:13px;font-weight:700;color:var(--amber)">—</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <div class="legend-dot" style="background:#94a3b8;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
-          <span style="font-size:11px;color:var(--text3);flex:1">😔 悲観 <span id="s-chart-pct-bear"></span></span>
-        </div>
-        <canvas id="s-chart-bear"></canvas>
-        <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
-          <div class="legend-dot" style="background:#34d399;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
-          <span style="font-size:11px;color:var(--green);flex:1">📈 実績 <span id="s-chart-pct-actual"></span></span>
-        </div>
-        <canvas id="s-chart-actual"></canvas>
-        <div style="display:flex;align-items:center;gap:6px;margin:12px 0 8px">
-          <div class="legend-dot" style="background:#fbbf24;width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
-          <span style="font-size:11px;color:var(--amber);flex:1">🎯 目標 <span id="s-chart-pct-target"></span></span>
-        </div>
-        <canvas id="s-chart-target"></canvas>
-      </div>
-
-      <!-- 月次収支サマリー -->
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="mlabel">月の収支</div><div class="mvalue" id="s-m1">—</div><div class="msub">収入－生活費</div></div>
-        <div class="metric-card"><div class="mlabel">年間取り崩し率</div><div class="mvalue" id="s-m2">—</div><div class="msub">4%以下が安全圏</div></div>
-        <div class="metric-card"><div class="mlabel">年金受給後の月収</div><div class="mvalue val-blue" id="s-m4">—</div><div class="msub" id="s-m4s"></div></div>
-        <div class="metric-card"><div class="mlabel">実績CAGR予測残高</div><div class="mvalue val-ok" id="s-m3">—</div><div class="msub" id="s-m3s">90歳時点</div></div>
-      </div>
-
-      <div id="s-timeline-card" class="chart-card">
-        <div style="font-size:12px;font-weight:600;color:var(--text1);margin-bottom:10px">📍 資産到達タイムライン</div>
-        <div id="s-timeline-list"></div>
-      </div>
-
-      <p class="note">※税金・医療費・インフレは未考慮。参考試算としてご利用ください。</p>
-    </div>
-  </div>
-
-  <!-- ========== サイドFIRE必要資産・到達時期シミュレーター ========== -->
-  <div class="card" id="sidefire-precision-card" style="margin-top:12px">
-    <div class="card-head"><div class="dot"></div><h2>🔥 サイドFIRE必要資産・到達時期シミュレーター</h2></div>
-    <div class="hint-box" style="margin-bottom:10px">生活費−副収入を資産から補う前提で、必要資産・到達時期・目標年数から逆算した毎月投資額を試算します。利回りは仮定値であり、将来の運用成果を保証しません。</div>
-    <div class="field-list">
-      <div class="field-row"><span class="field-label">年間生活費</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-expense" value="240" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/年</span></div></div>
-      <div class="field-row"><span class="field-label">年間サイド収入</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-income" value="240" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/年</span></div></div>
-      <div class="field-row"><span class="field-label">安全取り崩し率</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-swr" value="4" min="0.1" step="0.1" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
-      <div class="field-row"><span class="field-label">想定年利</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-rate" value="5" min="0" step="0.1" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
-      <div class="field-row"><span class="field-label">現在の投資資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-asset" value="4400" min="0" step="1" inputmode="numeric"><span class="field-unit">万円</span></div></div>
-      <div class="field-row"><span class="field-label">毎月の追加投資</span><div class="field-input-wrap"><input class="field-input" type="number" id="sf-monthly" value="15" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-    </div>
-    <button class="calc-btn" type="button" onclick="calcSideFirePrecision()">🔮 サイドFIREを試算</button>
-    <div id="sf-result" style="margin-top:12px;display:none"></div>
-  </div>
-
-  <!-- ========== 家族タブ ========== -->
-  <div class="tab-content" id="fire-tab-family">
-    <div class="hint-box"><strong>家族費用の目安（自動加算）</strong><br>配偶者の生活費・教育費・住居費増加分を年齢ごとに自動計算します。</div>
-    <div class="card">
-      <div class="card-head"><div class="dot"></div><h2>資産・収支（共通）</h2></div>
-      <div class="field-list">
-        <div class="field-row"><span class="field-label">現在の資産</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-asset" value="4400" inputmode="numeric"><span class="field-unit">万円</span></div></div>
-        <div class="field-row"><span class="field-label">毎月の追加投資額<div class="field-sub">FIRE到達まで継続して積立する想定</div></span><div class="field-input-wrap"><input class="field-input" type="number" id="f-monthly-invest" value="15" min="0" step="1" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><span class="field-label">自分の月収（副業）</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><span class="field-label">配偶者の月収</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-spouse-income" value="20" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><span class="field-label">現在の年齢</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-curage" value="45" inputmode="numeric"><span class="field-unit">歳</span></div></div>
-        <div class="field-row"><span class="field-label">年金受給開始</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-pension-age" value="65" inputmode="numeric"><span class="field-unit">歳</span></div></div>
-        <div class="field-row"><span class="field-label">自分の年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-pension-amt" value="14" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><span class="field-label">配偶者の年金月額</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-spouse-pension" value="8" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><div class="dot purple"></div><h2>3シナリオ利回り設定</h2></div>
-      <div class="field-list">
-        <div class="field-row"><span class="field-label" style="color:var(--text3)">😔 悲観</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-bear" value="3" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
-        <div class="field-row"><span class="field-label" style="color:var(--green)">📈 実績</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-actual" value="3" step="0.1" inputmode="decimal" style="border-color:var(--green)"><span class="field-unit">%/年</span></div></div>
-        <div class="field-row"><span class="field-label" style="color:var(--amber)">🎯 目標</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-rate-target" value="7" step="0.5" inputmode="decimal" style="border-color:var(--amber)"><span class="field-unit">%/年</span></div></div>
-        <div class="field-row"><span class="field-label" style="color:var(--red,#ef4444)">📈 インフレ率</span><div class="field-input-wrap"><input class="field-input" type="number" id="f-inflation" value="1" step="0.5" inputmode="decimal"><span class="field-unit">%/年</span></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><div class="dot purple"></div><h2>家族の生活費・教育費</h2></div>
-      <div class="field-list">
-        <div class="field-row"><div><span class="field-label">家族の基本生活費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-living" value="30" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">保育料（0〜5歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-nursery" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">小学校費用（6〜11歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-elem" value="3" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">中学校費用（12〜14歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-jhs" value="5" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">高校費用（15〜17歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-hs" value="6" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">大学費用（18〜21歳）</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-univ" value="15" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-        <div class="field-row"><div><span class="field-label">住宅費</span></div><div class="field-input-wrap"><input class="field-input" type="number" id="f-housing" value="12" inputmode="numeric"><span class="field-unit">万円/月</span></div></div>
-      </div>
-    </div>
-    <button class="calc-btn" onclick="calcFamily()" style="background:#7c3aed">🔮 家族シミュレーション実行</button>
-
-    <div class="results" id="family-results">
-      <!-- 独身vs家族比較 -->
-      <div class="compare-box">
-        <div class="compare-card"><div class="compare-title">独身（実績利回り・90歳）</div><div class="compare-val val-ok" id="f-compare-single">—</div></div>
-        <div class="compare-card family"><div class="compare-title family">家族あり（実績利回り・90歳）</div><div class="compare-val val-purple" id="f-compare-family">—</div></div>
-      </div>
-
-      <div class="verdict-card ok" id="f-verdict"><div class="verdict-icon" id="f-vicon"></div><div class="verdict-title" id="f-vtitle"></div><div class="verdict-body" id="f-vbody"></div></div>
-
-      <!-- サイドFIRE必要資産 -->
-      <div id="f-sidefire-line" style="background:rgba(124,58,237,0.06);border:0.5px solid rgba(124,58,237,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🔥 サイドFIRE必要資産</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
-          <div><div style="font-size:10px;color:var(--text3)">現在の資産</div><div id="f-sidefire-current" style="font-size:17px;font-weight:700;color:var(--purple)"></div></div>
-          <div><div style="font-size:10px;color:var(--text3)">必要資産</div><div id="f-sidefire-target-val" style="font-size:17px;font-weight:700;color:var(--purple)"></div></div>
-          <div><div style="font-size:10px;color:var(--text3)">月の不足額</div><div id="f-sidefire-month-gap" style="font-size:15px;font-weight:700;color:var(--text2)"></div></div>
-          <div><div style="font-size:10px;color:var(--text3)">残り必要資産</div><div id="f-sidefire-remaining" style="font-size:15px;font-weight:700;color:var(--text2)"></div></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-size:10px;color:var(--text3)">達成率</span><span id="f-sidefire-pct" style="font-size:12px;font-weight:700;color:var(--purple)"></span></div>
-        <div style="height:7px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:7px"><div id="f-sidefire-bar" style="height:100%;border-radius:99px;background:var(--purple);transition:width 0.5s"></div></div>
-        <div id="f-sidefire-gap" style="font-size:10px;color:var(--text3);line-height:1.6"></div>
-      </div>
-
-      <!-- FIRE到達予想 -->
-      <div id="f-fire-projection" style="background:rgba(124,58,237,0.06);border:0.5px solid rgba(124,58,237,0.25);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">🚀 FIRE目標までの到達予想</div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">現在資産＋毎月の追加投資を、各シナリオの利回りで運用した場合の到達時期。生活費・副収入による取り崩しは含めない積立フェーズの試算です。</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">
-          <div style="background:var(--bg2);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--text3)">😔 悲観</div><div id="f-proj-bear" style="font-size:14px;font-weight:700;margin-top:3px">—</div><div id="f-proj-bear-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
-          <div style="background:rgba(52,211,153,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--green)">📈 実績</div><div id="f-proj-actual" style="font-size:14px;font-weight:700;color:var(--green);margin-top:3px">—</div><div id="f-proj-actual-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
-          <div style="background:rgba(251,191,36,0.08);border-radius:10px;padding:9px;text-align:center"><div style="font-size:10px;color:var(--amber)">🎯 目標</div><div id="f-proj-target" style="font-size:14px;font-weight:700;color:var(--amber);margin-top:3px">—</div><div id="f-proj-target-detail" style="font-size:9px;color:var(--text3);margin-top:2px">—</div></div>
-        </div>
-      </div>
-
       <!-- FIRE達成ライン（家族） -->
       <div id="f-fire-line" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none">
         <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🎯 FIRE達成ライン（年間生活費×25倍）</div>
@@ -2810,25 +2614,6 @@ function ruleCurrentPrice(r){
           <div style="text-align:center"><div style="color:var(--text3)">😔 悲観</div><div id="f-fire-yr-bear" style="font-weight:600;color:var(--text2)">—</div></div>
           <div style="text-align:center"><div style="color:var(--green)">📈 実績</div><div id="f-fire-yr-actual" style="font-weight:600;color:var(--green)">—</div></div>
           <div style="text-align:center"><div style="color:var(--amber)">🎯 目標</div><div id="f-fire-yr-target" style="font-weight:600;color:var(--amber)">—</div></div>
-        </div>
-      </div>
-
-      <!-- 3シナリオ比較 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-        <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">😔 悲観<span id="f-pct-bear"></span></div>
-          <div id="f-val-bear" style="font-size:15px;font-weight:700;color:var(--text1)">—</div>
-          <div id="f-sub-bear" style="font-size:10px;color:var(--text3);margin-top:2px">65歳時点</div>
-        </div>
-        <div style="background:rgba(52,211,153,0.08);border:0.5px solid rgba(52,211,153,0.3);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--green);margin-bottom:4px">📈 実績<span id="f-pct-actual"></span></div>
-          <div id="f-val-actual" style="font-size:15px;font-weight:700;color:var(--green)">—</div>
-          <div id="f-sub-actual" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
-        </div>
-        <div style="background:rgba(167,139,250,0.08);border:0.5px solid rgba(167,139,250,0.3);border-radius:12px;padding:10px">
-          <div style="font-size:10px;color:var(--purple);margin-bottom:4px">🎯 目標<span id="f-pct-target"></span></div>
-          <div id="f-val-target" style="font-size:15px;font-weight:700;color:var(--purple)">—</div>
-          <div id="f-sub-target" style="font-size:10px;color:var(--text3);margin-top:2px">90歳時残高</div>
         </div>
       </div>
 
@@ -3389,8 +3174,6 @@ function switchTab(tab){
   if(tab==='pnl')pnlRender();
   if(tab==='performance')setTimeout(()=>{if(typeof amPerfRender==='function')amPerfRender('amPerformancePanel');},30);
   if(tab==='diagnosis')setTimeout(()=>{if(typeof amDiagRender==='function')amDiagRender('amDiagnosisPanel');},30);
-  if(tab==='monitor')setTimeout(()=>{if(typeof monitorRender==='function')monitorRender();},30);
-  if(tab==='scenarios')setTimeout(()=>{if(typeof scRender==='function')scRender();},30);
 }
 
 // ============================================================
