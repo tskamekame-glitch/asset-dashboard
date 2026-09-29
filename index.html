@@ -5852,7 +5852,7 @@ function amParseMoomooCSV(text){
     const acct=String(c[ci.acct]||'特定').trim();
     const shares=num(c[ci.shares]),price=num(c[ci.price]),cost=num(c[ci.cost]),value=num(c[ci.value]);
     if(!code||!name||shares<=0||value<=0)return null;
-    const dailyPct=ci.daily>=0?num(c[ci.daily]):0; return{code,name,acct,shares,price,cost,value,currency,pnlPct:num(c[ci.pnlPct]),pnl:num(c[ci.pnl]),dailyPct};
+    const dailyPct=ci.daily>=0?num(c[ci.daily]):0; return{code,name,acct,shares,price,cost,value,currency,pnlPct:num(c[ci.pnlPct]),pnl:num(c[ci.pnl]),dailyPnl:num(c[ci.daily]),dailyPct:0};
   }).filter(Boolean);
 }
 
@@ -5918,7 +5918,7 @@ async function amMoomooImport(event){
       updated++;
     }else{added++;}
     const maxId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0);
-    const newAcc={id:oldId||maxId+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:rowFx,sold:false,nisaType:row.acct==='NISA'?'NISA成長':'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',prevClose:(row.dailyPct&&row.dailyPct>-99)?row.price/(1+row.dailyPct/100):0};
+    const newAcc={id:oldId||maxId+1,name:row.name,cat:cat,amount:jpyValue,note:`[moomoo CSV ${today}]`,shares:row.shares,price:row.price,updated:today,code:row.code,costPrice:row.cost,fxRate:rowFx,sold:false,nisaType:row.acct==='NISA'?'NISA成長':'none',broker:'moomoo証券',marketPrice:row.price,priceCurrency:row.currency,marketUpdated:new Date().toISOString(),marketSource:'moomoo CSV',marketError:'',dailyPnl:Number(row.dailyPnl)||0,prevClose:(Number(row.dailyPnl)||0)!==0?row.price-(Number(row.dailyPnl)||0)/Math.max(Number(row.shares)||1,1):row.price};
     amAccounts.push(newAcc);
     log.push({name:row.name,val:jpyValue,oldVal:oldTotal});
   });
@@ -17322,8 +17322,18 @@ function dailyPnlRows(){
   return Object.values(map).map(a=>{
     const p=dailyPnlNum(a.price), prev=dailyPnlNum(a.prevClose), sh=dailyPnlNum(a.shares);
     const ccy=String(a.priceCcy||a.priceCurrency||'JPY').toUpperCase();
+    const fxNow=dailyPnlNum(a.fxRate), fxPrev=dailyPnlNum(a.prevFxRate);
+    // moomoo CSVの「前日比」は「1株あたりの変化率」ではなく、保有銘柄全体の前日比損益（現地通貨）。
+    // したがって株数を再度掛けない。USDならUSD/JPYだけを掛けて円表示する。
+    const csvDaily=Number(a.dailyPnl);
+    if(String(a.marketSource||'')==='moomoo CSV' && Number.isFinite(csvDaily) && csvDaily!==0){
+      const fx=ccy==='JPY'?1:(fxNow>0?fxNow:1);
+      const pnl=csvDaily*fx;
+      const base=Math.max(0,Number(a.amount||0)-pnl);
+      const pct=base>0?(pnl/base)*100:null;
+      return {...a,pnl,pct,stockPnl:pnl,fxPnl:0,ccy};
+    }
     let pnl=prev>0?(p-prev)*sh:null, pct=prev>0?(p/prev-1)*100:null, fxPnl=0, stockPnl=pnl||0;
-    let fxNow=dailyPnlNum(a.fxRate), fxPrev=dailyPnlNum(a.prevFxRate);
     if(ccy!=='JPY' && fxNow>0 && prev>0){
       const oldFx=fxPrev>0?fxPrev:fxNow;
       const prevYen=prev*sh*oldFx, nowYen=p*sh*fxNow;
