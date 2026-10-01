@@ -3957,6 +3957,11 @@ function amMovementEscape(v){return typeof esc==='function'?esc(String(v??'')):S
 function amMovementPctColor(v){return v>0?'var(--green)':v<0?'var(--danger)':'var(--text2)';}
 function amMovementRows(accounts){
   const INVEST=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'];
+  const quoteCache=amLoadDailyQuotes()||{};
+  const quoteOf=a=>{
+    const code=String(a?.code||'').trim();
+    return code&&quoteCache.quotes?quoteCache.quotes[code]:null;
+  };
   const groups={};
   (accounts||[]).filter(a=>!a.sold&&Number(a.amount||0)>0&&INVEST.includes(a.cat)).forEach(a=>{
     const k=amLotKey(a);
@@ -3975,8 +3980,12 @@ function amMovementRows(accounts){
       if(c>0&&sh>0){base+=c*sh*(a.priceCurrency&&a.priceCurrency!=='JPY'?Number(a.fxRate||1):1);}
       if(Number.isFinite(Number(a.amount)))pnl+=Number(a.amount||0)-(c>0&&sh>0?c*sh*(a.priceCurrency&&a.priceCurrency!=='JPY'?Number(a.fxRate||1):1):0);
       const pr=Number(a.price||a.marketPrice||0);
-      const csvPrev=(String(a.marketSource||'').includes('CSV')?Number(a.prevClose||0):0);
-      if(pr>0&&csvPrev>0){price+=pr*Number(a.shares||0);priceWeight+=Number(a.shares||0);prevClose+=csvPrev*Number(a.shares||0);}
+      // CSVで前日終値を持たない銘柄（特にSBI）は共通の当日株価キャッシュを利用する。
+      // これによりSBI＋moomooを同じ「今日」分析に含める。
+      const q=quoteOf(a);
+      const csvPrev=Number(a.prevClose||0);
+      const dailyPrev=csvPrev>0?csvPrev:(q&&Number(q.prev)>0?Number(q.prev):0);
+      if(pr>0&&dailyPrev>0){price+=pr*Number(a.shares||0);priceWeight+=Number(a.shares||0);prevClose+=dailyPrev*Number(a.shares||0);}
     });
     const importPct=prev>0?(g.amount-prev)/prev*100:null;
     const dailyPct=prevClose>0&&priceWeight>0?(price/prevClose-1)*100:null;
@@ -3986,6 +3995,18 @@ function amMovementRows(accounts){
 }
 function amRenderMovementAnalysis(accounts){
   const el=document.getElementById('amMovementPanel');if(!el)return;
+  // 「今日」モードではSBI/moomoo双方の銘柄について前日終値を共通取得する。
+  // 既にキャッシュ済みなら追加取得せず、未取得銘柄がある場合だけ取得して再描画。
+  if(amMovementMode==='daily' && !amDailyFetching){
+    const targets=amDailyTargets(accounts);
+    const q=amLoadDailyQuotes();
+    const missing=targets.filter(t=>{const x=q?.quotes?.[t.qcode];return !(x&&Number(x.prev)>0&&Number(x.cur)>0);});
+    if(missing.length){
+      el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:11px">📡 SBI・moomooの保有銘柄の前日終値を取得中…</div>';
+      amFetchDailyQuotes([...new Set(targets.map(t=>t.qcode))]).then(()=>{try{amRenderMovementAnalysis(accounts);}catch(e){}});
+      return;
+    }
+  }
   const rows=amMovementRows(accounts);
   const mode=amMovementMode;
   const metric=mode==='daily'?'dailyPct':mode==='import'?'importPct':'pnlPct';
@@ -17309,6 +17330,11 @@ function marketFmt(n){return n>0?Number(n).toLocaleString('ja-JP',{maximumFracti
 function dailyPnlNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
 function dailyPnlRows(){
   const src=Array.isArray(amAccounts)?amAccounts:[], map={};
+  const quoteCache=amLoadDailyQuotes()||{};
+  const quoteOf=a=>{
+    const code=String(a?.code||'').trim();
+    return code&&quoteCache.quotes?quoteCache.quotes[code]:null;
+  };
   src.filter(a=>!a.sold && Number(a.shares||0)>0 && Number(a.amount||0)>0).forEach(a=>{
     const code=marketDisplayCode(a)||String(a.name||'');
     if(!code)return;
@@ -17316,6 +17342,7 @@ function dailyPnlRows(){
     map[code].shares+=dailyPnlNum(a.shares); map[code].amount+=dailyPnlNum(a.amount);
     if(dailyPnlNum(a.price)>dailyPnlNum(map[code].price))map[code].price=dailyPnlNum(a.price);
     if(!map[code].prevClose&&dailyPnlNum(a.prevClose))map[code].prevClose=dailyPnlNum(a.prevClose);
+    if(!map[code].prevClose){const q=quoteOf(a);if(q&&dailyPnlNum(q.prev)>0)map[code].prevClose=dailyPnlNum(q.prev);}
     if(!map[code].fxRate&&dailyPnlNum(a.fxRate))map[code].fxRate=dailyPnlNum(a.fxRate);
     if(!map[code].priceCcy&&a.priceCcy)map[code].priceCcy=a.priceCcy;
   });
@@ -17345,6 +17372,18 @@ function dailyPnlRows(){
 }
 function dailyPnlRender(){
   const el=document.getElementById('dailyPnlPanel'); if(!el)return;
+  // SBI/moomooの両方を対象に、前日終値が無い銘柄だけ共通株価データを補完する。
+  if(!amDailyFetching){
+    const active=(Array.isArray(amAccounts)?amAccounts:[]).filter(a=>!a.sold&&Number(a.amount||0)>0);
+    const targets=amDailyTargets(active);
+    const q=amLoadDailyQuotes();
+    const missing=targets.filter(t=>{const x=q?.quotes?.[t.qcode];return !(x&&Number(x.prev)>0&&Number(x.cur)>0);});
+    if(missing.length){
+      el.innerHTML='<div style="margin:0 0 12px;background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:14px;color:var(--text3);font-size:11px">📡 SBI・moomooの保有銘柄を取得中…</div>';
+      amFetchDailyQuotes([...new Set(targets.map(t=>t.qcode))]).then(()=>{try{dailyPnlRender();}catch(e){}});
+      return;
+    }
+  }
   const rows=dailyPnlRows();
   if(!rows.length){el.innerHTML='';return;}
   const total=rows.reduce((s,a)=>s+a.pnl,0), base=rows.reduce((s,a)=>{const p=dailyPnlNum(a.prevClose),sh=dailyPnlNum(a.shares),fx=a.ccy==='JPY'?1:(dailyPnlNum(a.prevFxRate)||dailyPnlNum(a.fxRate)||1);return s+p*sh*fx;},0);
