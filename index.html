@@ -5989,45 +5989,49 @@ function amShowMoomooDiffBanner(totalBefore,totalAfter,log,added,fx){
 }
 
 async function amSBIImport(event){
-  const files=Array.from(event.target.files);
-  event.target.value='';
+  const files=Array.from(event?.target?.files||[]);
+  if(event?.target)event.target.value='';
   if(!files.length)return;
-  let pending=files.length;
-  const allRows=[];
-  const fxRows=[];
-  files.forEach(f=>{
-    const reader=new FileReader();
-    reader.onload=async ev=>{
-      const text=ev.target.result;
-      // フォーマット判定:
-      //  「建玉番号」+「通貨ペア」→ SBI FX取引履歴CSV
-      //  「銘柄コード」→ 保有証券一覧CSV（SaveFile.csv形式）
-      //  それ以外 → ポートフォリオCSV
-      if(/建玉番号/.test(text)&&/通貨ペア/.test(text)){
-        fxRows.push(...fxParseHistoryCSV(text));
-      }else{
-        const rows=/銘柄コード/.test(text)?amParseSBIHoldingsCSV(text):amParseSBICSV(text);
-        allRows.push(...rows);
+
+  // SBI CSVは複数形式（ポートフォリオ一覧／保有証券一覧／旧形式）が存在するため、
+  // 資産管理のSBIボタンでも統合CSV処理を共通利用する。
+  // これにより、文字コード判定や新しいSBI CSV形式の判定が分岐ごとに食い違う問題を防止。
+  for(const file of files){
+    try{
+      const bytes=await new Promise((resolve,reject)=>{
+        const r=new FileReader();
+        r.onload=ev=>resolve(ev.target.result);
+        r.onerror=reject;
+        r.readAsArrayBuffer(file);
+      });
+      const decode=(label)=>{try{return new TextDecoder(label,{fatal:false}).decode(bytes);}catch(_){return ''}};
+      const utf=decode('utf-8'), sjis=decode('shift-jis');
+      const score=t=>{
+        const x=String(t||'');
+        let n=0;
+        ['ポートフォリオ一覧','保有証券一覧','銘柄（コード）','銘柄コード','銘柄名称','評価額','評価損益','株式（','投資信託（','特定預り','NISA預り','総合計'].forEach(k=>{if(x.includes(k))n+=10});
+        if((x.match(/�/g)||[]).length)n-=100;
+        return n;
+      };
+      const text=score(sjis)>=score(utf)?sjis:utf;
+      const normalized=String(text||'').replace(/^\uFEFF/,'');
+
+      // FX取引履歴CSVだけは従来のFX専用処理へ。
+      if(/建玉番号/.test(normalized)&&/通貨ペア/.test(normalized)){
+        try{await fxApplyHistoryRows(fxParseHistoryCSV(normalized));}
+        catch(err){console.error('[amSBI] FX apply error',err);showToast('❌ SBI FX CSVの反映中にエラーが発生しました：'+(err?.message||err),6000);}
+        continue;
       }
-      pending--;
-      if(pending===0){
-        if(allRows.length){
-          try{
-            amCaptureImportSnapshot('SBI証券',amAccounts);
-            await amApplySBIRows(allRows);
-          }catch(err){
-            console.error('[amSBI] apply error',err);
-            showToast('❌ SBI CSVの反映中にエラーが発生しました：'+(err?.message||err),6000);
-          }
-        }
-        if(fxRows.length){
-          try{await fxApplyHistoryRows(fxRows);}catch(err){console.error('[amSBI] FX apply error',err);}
-        }
-        if(!allRows.length&&!fxRows.length)showToast('⚠️ CSVから有効な保有銘柄を読み取れませんでした。SBIの「保有証券」CSVかポートフォリオCSVを選択してください。',5000);
-      }
-    };
-    reader.readAsText(f,'Shift-JIS');
-  });
+
+      // 株式・投資信託のSBI CSVは統合パーサーへ渡す。
+      // ここで直接古い amParseSBIHoldingsCSV を固定使用しないことで、
+      // 「ポートフォリオ一覧」形式でも取り込み可能にする。
+      await importCSV({target:{files:[file],value:''}});
+    }catch(err){
+      console.error('[amSBI] import error',err);
+      showToast('❌ SBI CSVの取り込みに失敗しました：'+(err?.message||err),6000);
+    }
+  }
 }
 
 function amParseSBICSV(text){
