@@ -6557,7 +6557,18 @@ async function amApplySBIRows(rows){
       if(fx>50&&fx<300){acc.fxRate=Math.round(fx*100)/100;}
       acc.priceCurrency='USD';acc.marketPrice=price;acc.marketSource='SBI CSV';acc.marketUpdated=new Date().toISOString();
     }
-    if(g.buyDates&&g.buyDates.length)acc.buyDate=[...g.buyDates].sort()[0];
+    if(r.buyDates&&r.buyDates.length)acc.buyDate=[...new Set(r.buyDates)].sort()[0];
+    if(Array.isArray(r.purchaseHistory)&&r.purchaseHistory.length){
+      acc.purchaseHistory=r.purchaseHistory.map(h=>({
+        date:String(h.date||''),
+        shares:Number(h.shares||0),
+        costPrice:Number(h.costPrice||0),
+        broker:String(h.broker||'SBI証券')
+      })).filter(h=>h.date);
+    }else if(r.buyDates&&r.buyDates.length){
+      const dates=[...new Set(r.buyDates)].sort();
+      acc.purchaseHistory=dates.map(date=>({date,shares:0,costPrice:0,broker:'SBI証券'}));
+    }
     amAccounts.push(acc);
     log.push({sbi:name,am:name,val:evalAmt,oldVal:0,score:100,acctSuffix:suffix,rows:r.rows||1});
   };
