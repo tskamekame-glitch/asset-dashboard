@@ -1114,8 +1114,13 @@ function amPerfOpenChart(ticker){
     const buyDate=lots[0]?.date||'';
     const a=(x.rows||[])[0]||{};
     const costPrice=Number(a.costPrice||x.cost||0);
-    pnlOpenChart(x.ticker,x.name,costPrice,buyDate,'','buy',lots);
-  }catch(e){console.warn('amPerfOpenChart',e);}
+    if(typeof pnlOpenChart!=='function')throw new Error('チャート機能が読み込まれていません');
+    // モーダルは同期的に開き、その後に非同期で株価履歴を取得する。
+    pnlOpenChart(x.ticker,x.name,costPrice,buyDate,'',lots.length?'buy':'3mo',lots);
+  }catch(e){
+    console.error('amPerfOpenChart',e);
+    if(typeof showToast==='function')showToast('⚠ チャートを開けませんでした: '+(e.message||e));
+  }
 }
 function amPerfRender(targetId='amPerformancePanel'){
   const el=document.getElementById(targetId);if(!el)return;
@@ -16040,11 +16045,21 @@ async function pnlFetchChart(code, name, costPrice, buyDate, period, saleDate, p
     }
 
     const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
-    const resp=await fetch(`${WORKER}?code=${code}&range=${range}`);
-    if(!resp.ok) throw new Error('取得失敗');
-    const data=await resp.json();
-    const result=data?.chart?.result?.[0];
-    if(!result) throw new Error('データなし');
+    // チャート取得はまず指定期間、失敗時は1年データへフォールバック。
+    // 期間指定APIの一時的な失敗でチャート全体が表示されないことを防ぐ。
+    let data=null, result=null, lastErr=null;
+    const ranges=[range, range==='5y'?'2y':(range==='2y'?'1y':'1y')].filter((v,i,a)=>v&&a.indexOf(v)===i);
+    for(const rg of ranges){
+      try{
+        const resp=await fetch(`${WORKER}?code=${encodeURIComponent(code)}&range=${rg}&_ts=${Date.now()}`,{cache:'no-store'});
+        if(!resp.ok)throw new Error('HTTP '+resp.status);
+        const d=await resp.json();
+        const r=d?.chart?.result?.[0];
+        if(r&&Array.isArray(r.timestamp)&&r.timestamp.length){data=d;result=r;break;}
+        throw new Error('データなし');
+      }catch(e){lastErr=e;}
+    }
+    if(!result)throw lastErr||new Error('株価データを取得できませんでした');
 
     const timestamps=result.timestamp||[];
     const closes=result.indicators?.quote?.[0]?.close||[];
