@@ -1056,8 +1056,11 @@ function amPerfCurrentRows(){
   const g={};
   accs.forEach(a=>{
     const t=amPerfTicker(a).toUpperCase(), name=amLotBaseName(a.name||t), amount=Number(a.amount||0), shares=Number(a.shares||0), price=Number(a.price||a.marketPrice||0), cost=Number(a.costPrice||0);
-    if(!g[t])g[t]={ticker:t,name,amount:0,shares:0,cost:0,strategies:{},rows:[]};
+    if(!g[t])g[t]={ticker:t,name,amount:0,shares:0,cost:0,strategies:{},rows:[],buyDates:[],purchaseHistory:[]};
     g[t].amount+=amount;g[t].shares+=shares;
+    if(a.buyDate&&!isNaN(new Date(a.buyDate).getTime()))g[t].buyDates.push(String(a.buyDate));
+    if(Array.isArray(a.purchaseHistory)) a.purchaseHistory.forEach(h=>{if(h&&h.date&&!isNaN(new Date(h.date).getTime()))g[t].purchaseHistory.push({...h,date:String(h.date)});});
+    else if(a.buyDate&&!isNaN(new Date(a.buyDate).getTime())) g[t].purchaseHistory.push({date:String(a.buyDate),shares:Number(a.shares||0),costPrice:Number(a.costPrice||0),broker:String(a.broker||'')});
     // 外国株は評価額が円換算されているため、損益はpnlCalcUnrealizedを後で優先して補完
     if(a.cat==='個別株'||a.cat==='高配当')g[t].cost+=shares>0&&cost>0?shares*cost:cost;
     const st=amPerfStrategy(a);g[t].strategies[st]=(g[t].strategies[st]||0)+amount;g[t].rows.push(a);
@@ -1066,6 +1069,9 @@ function amPerfCurrentRows(){
   try{unreal=typeof pnlCalcUnrealized==='function'?(pnlCalcUnrealized()||[]):[];}catch(e){console.warn('amPerf pnlCalcUnrealized',e);unreal=[];}
   const byName=new Map(unreal.map(x=>[String(x.code||x.name||'').toUpperCase(),x]));
   return Object.values(g).map(x=>{
+    x.buyDate=x.buyDates.length?x.buyDates.sort()[0]:'';
+    const ph=[...x.purchaseHistory].sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const seen=new Set(); x.purchaseHistory=ph.filter(h=>{const k=[h.date,h.shares,h.costPrice,h.broker].join('|');if(seen.has(k))return false;seen.add(k);return true;});
     const u=byName.get(x.ticker)||byName.get(String(x.name).toUpperCase());
     let gain=u&&Number.isFinite(Number(u.gain))?Number(u.gain):(x.cost>0?x.amount-x.cost:null);
     let pct=u&&Number.isFinite(Number(u.pct))?Number(u.pct):(x.cost>0?gain/x.cost*100:null);
@@ -1098,6 +1104,19 @@ function amPerfNetDepositHint(){
 }
 function amPerfSetDecision(ticker,status){try{const x=JSON.parse(localStorage.getItem('amPerformanceDecisions_v1')||'{}');x[ticker]=Object.assign({},x[ticker],{status});localStorage.setItem('amPerformanceDecisions_v1',JSON.stringify(x));showToast('✓ '+ticker+' の売買判断を保存しました');}catch(e){}}
 function amPerfSetMemo(ticker,memo){try{const x=JSON.parse(localStorage.getItem('amPerformanceDecisions_v1')||'{}');x[ticker]=Object.assign({},x[ticker],{memo});localStorage.setItem('amPerformanceDecisions_v1',JSON.stringify(x));}catch(e){}}
+function amPerfOpenChart(ticker){
+  try{
+    const t=String(ticker||'').trim().toUpperCase();
+    const rows=amPerfCurrentRows();
+    const x=rows.find(r=>String(r.ticker||'').toUpperCase()===t);
+    if(!x)return;
+    const lots=(x.purchaseHistory||[]).filter(h=>h&&h.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const buyDate=lots[0]?.date||'';
+    const a=(x.rows||[])[0]||{};
+    const costPrice=Number(a.costPrice||x.cost||0);
+    pnlOpenChart(x.ticker,x.name,costPrice,buyDate,'','buy',lots);
+  }catch(e){console.warn('amPerfOpenChart',e);}
+}
 function amPerfRender(targetId='amPerformancePanel'){
   const el=document.getElementById(targetId);if(!el)return;
   let cur=[],realized=[];
@@ -1139,7 +1158,7 @@ function amPerfRender(targetId='amPerformancePanel'){
     const curRatio=totalForRatio?x.amount/totalForRatio*100:0;
     const ratioGap=curRatio-targetRatio;
     const d=perfDecisions[x.ticker]||{};
-    return `<tr><td><b>${amPerfEsc(x.name)}</b><div style="font-size:9px;color:var(--text3)">${amPerfEsc(x.ticker)}</div></td><td>${currentPrice?Math.round(currentPrice).toLocaleString('ja-JP'):'—'}<div style="font-size:9px;color:var(--text3)">買値 ${purchasePrice?Math.round(purchasePrice).toLocaleString('ja-JP'):'—'}</div></td><td>${amPerfMoney(x.amount)}</td><td style="color:${Number(x.gain)>=0?'var(--green)':'var(--danger)'}">${x.gain==null?'—':(x.gain>=0?'+':'')+amPerfMoney(Math.abs(x.gain))}<div style="font-size:9px">${amPerfPct(x.pct)}</div></td><td>${targetStr}<div style="font-size:9px;color:var(--text3)">買値目標 ${targetBuy?Math.round(targetBuy).toLocaleString('ja-JP'):'—'} / 売値目標 ${targetSell?Math.round(targetSell).toLocaleString('ja-JP'):'—'}</div></td><td>${Number(a.forwardPER)>0?Number(a.forwardPER).toFixed(1)+'倍':'—'}</td><td>${a.revenueGrowth!=null&&a.revenueGrowth!==''?(Number(a.revenueGrowth)>=0?'+':'')+Number(a.revenueGrowth).toFixed(1)+'%':'—'}<div style="font-size:9px;color:var(--text3)">営業利益 ${a.opProfitGrowth!=null&&a.opProfitGrowth!==''?(Number(a.opProfitGrowth)>=0?'+':'')+Number(a.opProfitGrowth).toFixed(1)+'%':'—'}</div></td><td>${amPerfEsc(x.strategy)}<div style="font-size:9px;color:${ratioGap>1?'var(--danger)':ratioGap<-1?'var(--accent)':'var(--text3)'}">配分差 ${ratioGap>=0?'+':''}${ratioGap.toFixed(1)}pt</div></td><td><select onchange="amPerfSetDecision('${amPerfEsc(x.ticker)}',this.value)" style="min-width:108px;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:11px"><option value="" ${!d.status?'selected':''}>未判断</option><option value="買い増し候補" ${d.status==='買い増し候補'?'selected':''}>買い増し候補</option><option value="保有継続" ${d.status==='保有継続'?'selected':''}>保有継続</option><option value="売却候補" ${d.status==='売却候補'?'selected':''}>売却候補</option><option value="監視" ${d.status==='監視'?'selected':''}>監視</option></select><input value="${amPerfEsc(d.memo||'')}" placeholder="判断メモ" onchange="amPerfSetMemo('${amPerfEsc(x.ticker)}',this.value)" style="width:108px;margin-top:4px;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:10px"></td><td><button class="btn-sm" onclick="switchTab('pricewatch')">価格管理</button></td></tr>`;
+    return `<tr><td><button type="button" onclick="amPerfOpenChart('${amPerfEsc(x.ticker)}')" style="border:0;background:none;padding:0;text-align:left;color:var(--accent);font-weight:700;cursor:pointer">${amPerfEsc(x.name)}</button><div style="font-size:9px;color:var(--text3)">${amPerfEsc(x.ticker)}${x.buyDate?`・初回買付 ${amPerfEsc(x.buyDate)}`:''}${x.purchaseHistory?.length?`・購入${x.purchaseHistory.length}回`:''}</div></td><td>${currentPrice?Math.round(currentPrice).toLocaleString('ja-JP'):'—'}<div style="font-size:9px;color:var(--text3)">買値 ${purchasePrice?Math.round(purchasePrice).toLocaleString('ja-JP'):'—'}</div></td><td>${amPerfMoney(x.amount)}</td><td style="color:${Number(x.gain)>=0?'var(--green)':'var(--danger)'}">${x.gain==null?'—':(x.gain>=0?'+':'')+amPerfMoney(Math.abs(x.gain))}<div style="font-size:9px">${amPerfPct(x.pct)}</div></td><td>${targetStr}<div style="font-size:9px;color:var(--text3)">買値目標 ${targetBuy?Math.round(targetBuy).toLocaleString('ja-JP'):'—'} / 売値目標 ${targetSell?Math.round(targetSell).toLocaleString('ja-JP'):'—'}</div></td><td>${Number(a.forwardPER)>0?Number(a.forwardPER).toFixed(1)+'倍':'—'}</td><td>${a.revenueGrowth!=null&&a.revenueGrowth!==''?(Number(a.revenueGrowth)>=0?'+':'')+Number(a.revenueGrowth).toFixed(1)+'%':'—'}<div style="font-size:9px;color:var(--text3)">営業利益 ${a.opProfitGrowth!=null&&a.opProfitGrowth!==''?(Number(a.opProfitGrowth)>=0?'+':'')+Number(a.opProfitGrowth).toFixed(1)+'%':'—'}</div></td><td>${amPerfEsc(x.strategy)}<div style="font-size:9px;color:${ratioGap>1?'var(--danger)':ratioGap<-1?'var(--accent)':'var(--text3)'}">配分差 ${ratioGap>=0?'+':''}${ratioGap.toFixed(1)}pt</div></td><td><select onchange="amPerfSetDecision('${amPerfEsc(x.ticker)}',this.value)" style="min-width:108px;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:11px"><option value="" ${!d.status?'selected':''}>未判断</option><option value="買い増し候補" ${d.status==='買い増し候補'?'selected':''}>買い増し候補</option><option value="保有継続" ${d.status==='保有継続'?'selected':''}>保有継続</option><option value="売却候補" ${d.status==='売却候補'?'selected':''}>売却候補</option><option value="監視" ${d.status==='監視'?'selected':''}>監視</option></select><input value="${amPerfEsc(d.memo||'')}" placeholder="判断メモ" onchange="amPerfSetMemo('${amPerfEsc(x.ticker)}',this.value)" style="width:108px;margin-top:4px;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:10px"></td><td><button class="btn-sm" onclick="switchTab('pricewatch')">価格管理</button></td></tr>`;
   };
   const table=rows.length?`<div style="font-size:10px;color:var(--text3);margin-bottom:7px">※ 「判断」は自分の売買方針を記録する欄です。損益・目標株価・業績・戦略配分を同時に確認できます。</div><div class="table-wrap"><table style="min-width:1250px"><thead><tr><th>銘柄</th><th>現在値 / 買値</th><th>評価額</th><th>含み損益 / 率</th><th>目標株価 / 乖離</th><th>予想PER</th><th>業績</th><th>戦略 / 配分差</th><th>売買判断 / メモ</th><th>操作</th></tr></thead><tbody>${rows.map(fmtRow).join('')}</tbody></table></div>`:'<div style="padding:14px;color:var(--text3);font-size:11px">現在の投資銘柄がありません。</div>';
   const perfTargetEditor=`<div style="margin:8px 0 10px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)"><div style="font-size:11px;font-weight:700;margin-bottom:7px">🎯 戦略別の目標比率を入力</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${STRAT_KEYS.map(k=>`<label style="font-size:10px;color:var(--text2)">${amPerfEsc(k)}<div style="display:flex;align-items:center;gap:4px;margin-top:3px"><input id="perf-target-${k}" type="number" min="0" max="100" step="0.1" inputmode="decimal" value="${Number(perfTargets[k]||0)}" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:16px"><span>%</span></div></label>`).join('')}</div><div id="perf-target-total" style="font-size:10px;margin-top:7px;color:var(--text3)"></div><button class="btn-sm primary" type="button" onclick="amPerfSaveTargets()" style="margin-top:7px">💾 目標比率を保存</button></div>`;
@@ -6452,7 +6471,9 @@ async function amApplySBIRows(rows){
   rows.filter(r=>!r.isFund&&r.code&&Number(r.evalAmt)>0).forEach(r=>{
     const key=normCode(r.code)+'|'+acctKey(r);
     let g=stockMap.get(key);
-    if(!g)g={...r,shares:0,evalAmt:0,costAmt:0,rows:0};
+    if(!g)g={...r,shares:0,evalAmt:0,costAmt:0,rows:0,buyDates:[],purchaseHistory:[]};
+    if(r.buyDate&&/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(String(r.buyDate)))g.buyDates.push(String(r.buyDate).replace(/\//g,'-'));
+      g.purchaseHistory.push({date:String(r.buyDate).replace(/\//g,'-'),shares:Number(r.shares||0),costPrice:Number(r.costPrice||0),broker:'SBI証券'});
     g.shares+=Number(r.shares||0);
     g.evalAmt+=Number(r.evalAmt||0);
     g.costAmt+=Number(r.costAmt||((r.costPrice||0)*(r.shares||0)));
@@ -6527,6 +6548,7 @@ async function amApplySBIRows(rows){
       if(fx>50&&fx<300){acc.fxRate=Math.round(fx*100)/100;}
       acc.priceCurrency='USD';acc.marketPrice=price;acc.marketSource='SBI CSV';acc.marketUpdated=new Date().toISOString();
     }
+    if(g.buyDates&&g.buyDates.length)acc.buyDate=[...g.buyDates].sort()[0];
     amAccounts.push(acc);
     log.push({sbi:name,am:name,val:evalAmt,oldVal:0,score:100,acctSuffix:suffix,rows:r.rows||1});
   };
@@ -6688,14 +6710,15 @@ async function importCSV(e){
       const groups=new Map();
       exactRows.forEach(r=>{
         const key=r.type==='stock'?'S|'+r.code+'|'+r.acctSuffix:'F|'+keyNorm(r.name)+'|'+r.acctSuffix;
-        if(!groups.has(key))groups.set(key,{...r,cat:catFor(r),rows:[]});
+        if(!groups.has(key))groups.set(key,{...r,cat:catFor(r),rows:[],buyDates:[]});
+        if(r.buyDate&&/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(String(r.buyDate)))groups.get(key).buyDates.push(String(r.buyDate).replace(/\//g,'-'));
         groups.get(key).rows.push(r);
       });
       groups.forEach(g=>{
         const totalShares=g.rows.reduce((a,r)=>a+r.shares,0);
         const totalAmt=g.rows.reduce((a,r)=>a+r.evalAmt,0);
         const weightedCost=totalShares>0?g.rows.reduce((a,r)=>a+r.costPrice*r.shares,0)/totalShares:(g.rows[0].costPrice||0);
-        g.shares=totalShares;g.evalAmt=totalAmt;g.costPrice=weightedCost;g.price=g.rows[0].price||0;
+        g.shares=totalShares;g.evalAmt=totalAmt;g.costPrice=weightedCost;g.buyDate=g.buyDates&&g.buyDates.length?[...g.buyDates].sort()[0]:'';g.purchaseHistory=(g.purchaseHistory||[]).sort((a,b)=>new Date(a.date)-new Date(b.date));g.price=g.rows[0].price||0;
       });
       const before=amAccounts.filter(a=>!a.sold).reduce((a,x)=>a+Number(x.amount||0),0);
       // 重要: SBI CSV取込で既存のSBI行を丸ごと削除して作り直すと、
@@ -6743,10 +6766,11 @@ async function importCSV(e){
           acc.name=display; acc.code=g.code||acc.code||''; acc.cat=g.cat; acc.amount=amount; acc.shares=shares;
           acc.price=g.price||0; acc.costPrice=costPrice; acc.nisaType=nisa||acc.nisaType||''; acc.broker='SBI証券';
           acc.importSource='sbi_csv'; acc.memo='[SBIポートフォリオCSV]'; acc.updated=todayStr();
-          if(g.rows.length===1&&g.rows[0].buyDate)acc.buyDate=g.rows[0].buyDate;
+          if(g.buyDate)acc.buyDate=g.buyDate;
+          if(g.purchaseHistory?.length)acc.purchaseHistory=g.purchaseHistory;
           updated++;
         }else{
-          amAccounts.push({id:nextId(),name:display,cat:g.cat,code:g.code||'',amount:amount,shares:shares,price:g.price||0,costPrice:costPrice,note:'',nisaType:nisa,updated:todayStr(),broker:'SBI証券',memo:'[SBIポートフォリオCSV]',importSource:'sbi_csv',buyDate:g.rows.length===1&&g.rows[0].buyDate?g.rows[0].buyDate:undefined});
+          amAccounts.push({id:nextId(),name:display,cat:g.cat,code:g.code||'',amount:amount,shares:shares,price:g.price||0,costPrice:costPrice,note:'',nisaType:nisa,updated:todayStr(),broker:'SBI証券',memo:'[SBIポートフォリオCSV]',importSource:'sbi_csv',buyDate:g.buyDate||undefined,purchaseHistory:g.purchaseHistory?.length?g.purchaseHistory:undefined});
           added++;
         }
       });
@@ -6932,13 +6956,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','prevMoomooAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','prevMoomooAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','purchaseHistory','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.prevMoomooAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.prevMoomooAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',JSON.stringify(a.purchaseHistory||[]),a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AU${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AU1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AV${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AV1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -7027,57 +7051,30 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AU1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AV1000'});
     const rows=res.result.values||[];
-    amAccounts=rows.filter(r=>r[0]).map(r=>({
-      id:parseInt(r[0])||Date.now(),
-      name:r[1]||'',
-      cat:r[2]||'その他',
-      amount:parseFloat(r[3])||0,
-      note:r[4]||'',
-      shares:parseFloat(r[5])||0,
-      price:parseFloat(r[6])||0,
-      updated:r[7]||todayStr(),
-      code:r[8]||'',
-      costPrice:parseFloat(r[9])||0,
-      fxRate:r[10]?parseFloat(r[10])||0:undefined,
-      sold:r[11]==='1'||r[11]===true,
-      soldDate:r[12]||'',
-      soldAmount:r[13]?parseFloat(r[13])||0:0,
-      soldPrice:r[14]?parseFloat(r[14])||0:0,
-      prevSBIAmount:r[15]?parseFloat(r[15])||0:0,
-      prevMoomooAmount:r[16]?parseFloat(r[16])||0:0,
-      sell1:r[18]?parseFloat(r[18])||undefined:undefined,
-      sell2:r[19]?parseFloat(r[19])||undefined:undefined,
-      sell3:r[20]?parseFloat(r[20])||undefined:undefined,
-      per:r[21]?parseFloat(r[21])||undefined:undefined,
-      pbr:r[22]?parseFloat(r[22])||undefined:undefined,
-      eps1:r[23]?parseFloat(r[23])||undefined:undefined,
-      eps2:r[24]?parseFloat(r[24])||undefined:undefined,
-      earningsDate:r[17]||'',
-      sector:r[25]||'',
-      broker:r[26]||'',
-      buyDate:r[27]||'',
-      nisaType:r[28]||undefined,
-      targetBuyPrice:r[29]?parseFloat(r[29])||0:0,
-      targetSellPrice:r[30]?parseFloat(r[30])||0:0,
-      targetRatio:r[31]?parseFloat(r[31])||0:0,
-      watchStatus:r[32]||'',
-      watchMemo:r[33]||'',
-      strategy:r[34]||'',
-      analystTargetPrice:r[35]?parseFloat(r[35])||0:0,
-      forwardPER:r[36]?parseFloat(r[36])||0:0,
-      revenueGrowth:r[37]!==undefined&&r[37]!==''?parseFloat(r[37])||0:undefined,
-      opProfitGrowth:r[38]!==undefined&&r[38]!==''?parseFloat(r[38])||0:undefined,
-      lastAnalysisDate:r[39]||'',
-      analysisSource:r[40]||'',
-      marketUpdated:r[41]||'',
-      marketSource:r[42]||'',
-      prevClose:r[43]?parseFloat(r[43])||0:0,
-      priceCurrency:r[44]||'',
-      marketError:r[45]||'',
-      marketPrice:r[46]?parseFloat(r[46])||0:0,
-    }));
+    amAccounts=rows.filter(r=>r[0]).map(r=>{
+      const hasPH=typeof r[28]==='string' && /^\s*\[/.test(r[28]);
+      const off=hasPH?1:0;
+      const idx=n=>n+off;
+      return {
+        id:parseInt(r[0])||Date.now(), name:r[1]||'', cat:r[2]||'その他', amount:parseFloat(r[3])||0, note:r[4]||'',
+        shares:parseFloat(r[5])||0, price:parseFloat(r[6])||0, updated:r[7]||todayStr(), code:r[8]||'', costPrice:parseFloat(r[9])||0,
+        fxRate:r[10]?parseFloat(r[10])||0:undefined, sold:r[11]==='1'||r[11]===true, soldDate:r[12]||'', soldAmount:r[13]?parseFloat(r[13])||0:0,
+        soldPrice:r[14]?parseFloat(r[14])||0:0, prevSBIAmount:r[15]?parseFloat(r[15])||0:0, prevMoomooAmount:r[16]?parseFloat(r[16])||0:0,
+        earningsDate:r[17]||'', sell1:r[18]?parseFloat(r[18])||undefined:undefined, sell2:r[19]?parseFloat(r[19])||undefined:undefined, sell3:r[20]?parseFloat(r[20])||undefined:undefined,
+        per:r[21]?parseFloat(r[21])||undefined:undefined, pbr:r[22]?parseFloat(r[22])||undefined:undefined, eps1:r[23]?parseFloat(r[23])||undefined:undefined, eps2:r[24]?parseFloat(r[24])||undefined:undefined,
+        sector:r[25]||'', broker:r[26]||'', buyDate:r[27]||'',
+        purchaseHistory:(()=>{try{return hasPH&&r[28]?JSON.parse(r[28]):[]}catch(e){return[]}})(),
+        nisaType:r[idx(28)]||undefined, targetBuyPrice:r[idx(29)]?parseFloat(r[idx(29)])||0:0, targetSellPrice:r[idx(30)]?parseFloat(r[idx(30)])||0:0,
+        targetRatio:r[idx(31)]?parseFloat(r[idx(31)])||0:0, watchStatus:r[idx(32)]||'', watchMemo:r[idx(33)]||'', strategy:r[idx(34)]||'',
+        analystTargetPrice:r[idx(35)]?parseFloat(r[idx(35)])||0:0, forwardPER:r[idx(36)]?parseFloat(r[idx(36)])||0:0,
+        revenueGrowth:r[idx(37)]!==undefined&&r[idx(37)]!==''?parseFloat(r[idx(37)])||0:undefined,
+        opProfitGrowth:r[idx(38)]!==undefined&&r[idx(38)]!==''?parseFloat(r[idx(38)])||0:undefined,
+        lastAnalysisDate:r[idx(39)]||'', analysisSource:r[idx(40)]||'', marketUpdated:r[idx(41)]||'', marketSource:r[idx(42)]||'',
+        prevClose:r[idx(43)]?parseFloat(r[idx(43)])||0:0, priceCurrency:r[idx(44)]||'', marketError:r[idx(45)]||'', marketPrice:r[idx(46)]?parseFloat(r[idx(46)])||0:0
+      };
+    });
     // sold=falseのものはundefinedにクリーン（旧データ互換）
     amAccounts.forEach(a=>{if(!a.sold){delete a.sold;delete a.soldDate;delete a.soldAmount;delete a.soldPrice;}});
     amSaveToLocal();amRender();
@@ -15962,7 +15959,7 @@ function pnlRender(){
 let pnlChartInstance=null;
 let pnlChartPeriod='3mo';
 
-function pnlOpenChart(code, name, costPrice, buyDate, saleDate){
+function pnlOpenChart(code, name, costPrice, buyDate, saleDate, initialPeriod='3mo', purchaseHistory=[]){
   // モーダル作成
   let modal=document.getElementById('pnlChartModal');
   if(!modal){
@@ -15981,15 +15978,16 @@ function pnlOpenChart(code, name, costPrice, buyDate, saleDate){
         <button onclick="pnlCloseChart()" style="background:var(--bg2);border:none;width:28px;height:28px;border-radius:50%;font-size:15px;cursor:pointer;color:var(--text2);flex-shrink:0">✕</button>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:10px" id="pnl-chart-period-btns">
-        <button class="pnl-cp-btn active" onclick="pnlSetPeriod('3mo',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}')">3ヶ月</button>
-        <button class="pnl-cp-btn" onclick="pnlSetPeriod('6mo',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}')">6ヶ月</button>
-        <button class="pnl-cp-btn" onclick="pnlSetPeriod('1y',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}')">1年</button>
-        <button class="pnl-cp-btn" onclick="pnlSetPeriod('buy',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}')">購入日〜</button>
+        <button class="pnl-cp-btn active" onclick="pnlSetPeriod('3mo',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}',${JSON.stringify(purchaseHistory||[]).replace(/</g,'\u003c')})">3ヶ月</button>
+        <button class="pnl-cp-btn" onclick="pnlSetPeriod('6mo',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}',${JSON.stringify(purchaseHistory||[]).replace(/</g,'\u003c')})">6ヶ月</button>
+        <button class="pnl-cp-btn" onclick="pnlSetPeriod('1y',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}',${JSON.stringify(purchaseHistory||[]).replace(/</g,'\u003c')})">1年</button>
+        <button class="pnl-cp-btn" onclick="pnlSetPeriod('buy',this,'${esc(code)}','${esc(name)}',${costPrice},'${buyDate||''}','${saleDate||''}',${JSON.stringify(purchaseHistory||[]).replace(/</g,'\u003c')})">購入日〜</button>
       </div>
       <div id="pnl-chart-area" style="min-height:240px;display:flex;align-items:center;justify-content:center">
         <div style="color:var(--text3)">読み込み中...</div>
       </div>
       <div id="pnl-chart-info" style="display:none;margin-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center"></div>
+      <div id="pnl-purchase-history" style="margin-top:12px"></div>
     </div>`;
   // ボタンスタイル注入
   if(!document.getElementById('pnlChartStyle')){
@@ -15999,7 +15997,12 @@ function pnlOpenChart(code, name, costPrice, buyDate, saleDate){
     document.head.appendChild(st);
   }
   modal.style.display='flex';
-  pnlFetchChart(code, name, costPrice, buyDate||'', '3mo', saleDate||'');
+  const ph=document.getElementById('pnl-purchase-history');
+  if(ph){
+    const hist=(Array.isArray(purchaseHistory)?purchaseHistory:[]).filter(h=>h&&h.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    ph.innerHTML=hist.length?`<div style="font-size:11px;font-weight:700;margin-bottom:6px">🛒 購入履歴（${hist.length}回）</div><div style="max-height:150px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table style="width:100%;font-size:10px;border-collapse:collapse"><thead><tr><th style="padding:5px;text-align:left">購入日</th><th style="padding:5px;text-align:right">数量</th><th style="padding:5px;text-align:right">購入単価</th><th style="padding:5px;text-align:left">口座</th></tr></thead><tbody>${hist.map(h=>`<tr><td style="padding:5px">${esc(h.date)}</td><td style="padding:5px;text-align:right">${Number(h.shares||0).toLocaleString()}</td><td style="padding:5px;text-align:right">${Number(h.costPrice||0)?'¥'+Math.round(Number(h.costPrice)).toLocaleString():'—'}</td><td style="padding:5px">${esc(h.broker||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div style="font-size:10px;color:var(--text3)">購入履歴はまだ登録されていません。</div>';
+  }
+  pnlFetchChart(code, name, costPrice, buyDate||'', initialPeriod||'3mo', saleDate||'', purchaseHistory||[]);
 }
 
 function pnlCloseChart(){
@@ -16008,13 +16011,13 @@ function pnlCloseChart(){
   if(pnlChartInstance){pnlChartInstance.destroy();pnlChartInstance=null;}
 }
 
-function pnlSetPeriod(period, btn, code, name, costPrice, buyDate, saleDate){
+function pnlSetPeriod(period, btn, code, name, costPrice, buyDate, saleDate, purchaseHistory=[]){
   document.querySelectorAll('.pnl-cp-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  pnlFetchChart(code, name, costPrice, buyDate, period, saleDate);
+  pnlFetchChart(code, name, costPrice, buyDate, period, saleDate, purchaseHistory);
 }
 
-async function pnlFetchChart(code, name, costPrice, buyDate, period, saleDate){
+async function pnlFetchChart(code, name, costPrice, buyDate, period, saleDate, purchaseHistory=[]){
   const areaEl=document.getElementById('pnl-chart-area');
   const infoEl=document.getElementById('pnl-chart-info');
   if(!areaEl)return;
@@ -16070,27 +16073,16 @@ async function pnlFetchChart(code, name, costPrice, buyDate, period, saleDate){
       resolvedBuy=m?m[1].replace(/\//g,'-'):'';
     }
 
-    // 購入日縦線インデックス
-    let buyIdx=-1;
-    if(period==='buy'&&startMs){
-      buyIdx=0; // 購入日〜モードでは左端＝取得日
-    }else if(resolvedBuy){
-      const buyMs=new Date(resolvedBuy).getTime();
-      if(!isNaN(buyMs)){
-        let minDiff=Infinity;
-        pairs.forEach((p,i)=>{
-          const diff=Math.abs(p.t-buyMs);
-          if(diff<minDiff){minDiff=diff;buyIdx=i;}
-        });
-        if(minDiff>7*86400000) buyIdx=-1; // 表示期間より前の取得は線を出さない
-      }
-    }
-    // バッジ表示用「買 M/D」
-    let buyLabel='買';
-    if(buyIdx>=0){
-      const bd2=new Date(period==='buy'&&startMs?startMs:new Date(resolvedBuy).getTime());
-      if(!isNaN(bd2.getTime()))buyLabel=`買 ${bd2.getMonth()+1}/${bd2.getDate()}`;
-    }
+    // 購入日をすべてチャート上にマーク。旧データはbuyDateから1件だけ補完。
+    const history=Array.isArray(purchaseHistory)?purchaseHistory.filter(h=>h&&h.date&&!isNaN(new Date(h.date).getTime())):[];
+    if(!history.length&&resolvedBuy)history.push({date:resolvedBuy,shares:0,costPrice:Number(costPrice||0),broker:''});
+    const buyMarks=history.map(h=>{
+      const ms=new Date(h.date).getTime(); let idx=-1,minDiff=Infinity;
+      if(period==='buy'&&startMs&&Math.abs(ms-startMs)<86400000*2)idx=0;
+      else pairs.forEach((p,i)=>{const d=Math.abs(p.t-ms);if(d<minDiff){minDiff=d;idx=i;}});
+      if(idx<0||minDiff>7*86400000)return null;
+      return {...h,idx,label:`買 ${new Date(h.date).getMonth()+1}/${new Date(h.date).getDate()}`};
+    }).filter(Boolean);
 
     // 売却日縦線インデックス（確定損益タブから開いた場合）
     let saleIdx=-1;
@@ -16138,7 +16130,7 @@ async function pnlFetchChart(code, name, costPrice, buyDate, period, saleDate){
       afterDraw(chart){
         const{ctx:c,chartArea:ca,scales:sc}=chart;
         // 売却済み銘柄の場合は取得日ではなく売却日を優先して表示（両方あれば両方表示）
-        drawMarkLine(c,ca,sc,buyIdx,buyLabel,'rgba(251,191,36,0.85)','rgba(251,191,36,0.92)','#3a2c00');
+        buyMarks.forEach(m=>drawMarkLine(c,ca,sc,m.idx,m.label,'rgba(251,191,36,0.85)','rgba(251,191,36,0.92)','#3a2c00'));
         drawMarkLine(c,ca,sc,saleIdx,saleLabel,'rgba(231,76,60,0.9)','rgba(231,76,60,0.95)','#ffffff');
       }
     };
