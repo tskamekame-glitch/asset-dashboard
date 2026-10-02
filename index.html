@@ -6458,12 +6458,10 @@ async function amApplySBIRows(rows){
   amAccounts=amAccounts.filter(a=>{
     if(a.sold)return true;
     if(String(a.broker||'')==='moomoo証券')return true;
-    // SBI CSVはSBI証券の証券・投信の唯一の正本。
-    // 旧インポートでカテゴリや銘柄コードが変わっていても、SBI証券の証券行は全て置換する。
-    // 銀行・預り金・FX等の非証券行は残す。
-    const broker=String(a.broker||'');
-    const isSbiSecurity=broker==='SBI証券' && !['銀行','現金','FX','暗号資産'].includes(String(a.cat||''));
-    if(isSbiSecurity)return false;
+    // ★重要：CSVに存在しない既存資産は削除しない。
+    // CSVの形式・セクションによって一部だけ読み取れた場合でも、
+    // 読み取れなかった既存のSBI資産が消えて総資産が減少しないようにする。
+    // 実際に今回CSVと同一銘柄として特定できた行だけを後段で置換する。
     if(!existingCatIsStock(a) && !incomingFundKeys.has(fundKeyForAccount(a)))return true;
     // SBI CSVに今回存在する個別株は、旧SBI/手入力ロットをすべて除去。
     if(existingCatIsStock(a)){
@@ -6504,6 +6502,15 @@ async function amApplySBIRows(rows){
   });
 
   const importedFunds=[...fundMap.values()];
+  // 読み取り件数が極端に少ない場合は、資産を更新せず中断する。
+  // CSV形式変更などで一部しか解析できなかった際の総資産減少を防止する。
+  const currentSbiSecurityTotal=amAccounts.filter(a=>!a.sold&&String(a.broker||'')==='SBI証券'&&!['銀行','現金','FX','暗号資産'].includes(String(a.cat||''))).reduce((s,a)=>s+Number(a.amount||0),0);
+  const parsedSbiTotal=rows.reduce((s,r)=>s+Number(r.evalAmt||0),0);
+  if(currentSbiSecurityTotal>0 && parsedSbiTotal>0 && parsedSbiTotal<currentSbiSecurityTotal*0.5){
+    showToast(`⚠️ SBI CSVの読み取り額が現在のSBI証券資産の50%未満です（現在 ¥${Math.round(currentSbiSecurityTotal).toLocaleString('ja-JP')} / 読取 ¥${Math.round(parsedSbiTotal).toLocaleString('ja-JP')}）。資産を変更せず中止しました。`,8000);
+    console.warn('[SBI] suspiciously low parsed total; import aborted', {currentSbiSecurityTotal,parsedSbiTotal,rows:rows.length});
+    return;
+  }
   // 同じファンド名＋NISA区分の既存行だけ除去（CSVにない他のインデックスは維持）。
   const importedFundKeys=new Set(importedFunds.map(r=>normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r)));
   // SMT 米国株式モメンタムファンドは旧基準CSVに broker 情報がない行が残りやすいため、
