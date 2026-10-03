@@ -3511,15 +3511,24 @@ function amNormalizeLedger(){
       const g=groups.get(key);
       const gIsSbiCsv=broker==='SBI証券' && /^\[SBI CSV/.test(String(g.note||''));
       if(isSbiCsv){
-        // CSV評価額をそのまま採用。既存行のamountを足さない。
+        // SBI CSV側を正本にする。旧行の金額だけでなく、取得単価・株数・現在値も
+        // 旧データを残さずCSV値へ置換する。旧データに「取得単価=16」等の
+        // 異常値が残っていると、金額だけ正しくても画面上の取得単価が壊れるため。
         g.amount=Number(a.amount||0);
+        g.shares=Number(a.shares||0);
+        g.price=Number(a.price||0);
+        g.costPrice=Number(a.costPrice||0);
+        g.buyDate=a.buyDate||g.buyDate||'';
+        g.purchaseHistory=Array.isArray(a.purchaseHistory)?a.purchaseHistory.map(h=>({...h})):g.purchaseHistory;
         g.sbiCsvEvalAmt=Number(a.amount||0);
         g.sbiCsvSource='SBI';
       }else if(!gIsSbiCsv){
         g.amount=Number(g.amount||0)+Number(a.amount||0);
       }
-      if(Number(a.shares||0))g.shares=Number(g.shares||0)+Number(a.shares||0);
-      if(Number(a.costPrice||0)&&!Number(g.costPrice||0))g.costPrice=Number(a.costPrice);
+      if(!isSbiCsv){
+        if(Number(a.shares||0))g.shares=Number(g.shares||0)+Number(a.shares||0);
+        if(Number(a.costPrice||0)&&!Number(g.costPrice||0))g.costPrice=Number(a.costPrice);
+      }
       if(a.updated&&(!g.updated||String(a.updated)>String(g.updated)))g.updated=a.updated;
       if(isSbiCsv)g.note=a.note||g.note;
     }
