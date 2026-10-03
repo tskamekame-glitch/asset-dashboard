@@ -6121,8 +6121,10 @@ function amParseSBICSV(text){
     // 評価額が数値の行（総合計など）をスキップ
     if(/^[\d,]+(\.\d+)?$/.test(c0))continue;
 
-    // 評価額は最終列（11列目 index=10）
-    const evalAmt=toNum(cols[10]);
+    // この旧形式パーサーでは列位置から評価額を推測しない。
+    // 現行SBIポートフォリオCSVは parseUniversalSBI のヘッダー名解析を正本とする。
+    // 誤った列（例: 144）を評価額として採用する事故を防ぐため、明示ヘッダーのない行はここでは取り込まない。
+    const evalAmt=0;
     if(evalAmt<=0)continue;
 
     // 株数・現在値・取得単価
@@ -6824,7 +6826,9 @@ async function importCSV(e){
             if(!(shares>0&&evalAmt>0&&costPrice>0))continue;
             rows.push({nameRaw:name,nameNorm:name,bareName:name,code,evalAmt,shares,price,costPrice,costAmt:costPrice*shares,section:sec,acctSuffix:acct,isFund:false,isForeignStock:/外国株式/.test(sec),buyDate:bi>=0?String(c[bi]||'').trim():''});
           }else{
-            const ni=ix('ファンド名'), qi=Math.max(ix('数量'),ix('保有口数')), coi=ix('取得単価'), pi=Math.max(ix('基準価額'),ix('現在値')), ei=ix('評価額');
+            const ni=ix('ファンド名'), qi=Math.max(ix('数量'),ix('保有口数')), coi=ix('取得単価'), pi=Math.max(ix('基準価額'),ix('現在値'));
+            // 投信の評価額は列位置を推測せず、評価額系ヘッダーだけを明示検索する。
+            const ei=hdr.findIndex(h=>/^(評価額|評価金額|時価評価額)(?:[（(]?円[）)]?)?$/.test(String(h||'').trim()));
             if(ni<0||ei<0)continue; const name=String(c[ni]||'').trim(), evalAmt=n(c[ei]); if(!name||evalAmt<=0)continue;
             const rawQty=qi>=0?n(c[qi]):0;
             const fundShares=rawQty/10000;
@@ -6923,9 +6927,12 @@ async function importCSV(e){
             const sharesI=idxOf(header,[/保有口数/,/保有数量/,/数量/,/口数/]);
             const costI=idxOf(header,[/^取得単価$/,/取得価額/]);
             const priceI=idxOf(header,[/^基準価額$/,/現在値$/,/現在価格/]);
-            const evalI=idxOf(header,[/^評価額$/,/評価金額/]);
+            const evalI=idxOf(header,[/^評価額(?:[（(]?円[）)]?)?$/,/^評価金額(?:[（(]?円[）)]?)?$/,/^時価評価額(?:[（(]?円[）)]?)?$/]);
             const name=norm(cols[nameI>=0?nameI:0]); if(!name || /^(ファンド名|合計|総合計)$/.test(name))continue;
-            const evalIdx=evalI>=0?evalI:(cols.length>=7?6:-1); const evalAmt=evalIdx>=0?num(cols[evalIdx]):0; if(evalAmt<=0)continue;
+            // 投資信託は評価額列の位置を絶対に推測しない。
+            // 「評価額」系ヘッダーを明示的に特定できた場合だけ、そのセルを資産額として採用する。
+            if(evalI<0)continue;
+            const evalAmt=num(cols[evalI]); if(evalAmt<=0)continue;
             const sharesRaw=sharesI>=0?num(cols[sharesI]):0;
             const fundShares=sharesRaw/10000;
             const fundPrice=priceI>=0?num(cols[priceI]):0;
@@ -6945,12 +6952,9 @@ async function importCSV(e){
         e.target.value='';
         return;
       }
-      // 可変列解析で読めなかった場合だけ従来パーサーへフォールバック。
-      let rows=amParseSBIHoldingsCSV(text);
-      if(!rows.length)rows=amParseSBICSV(text);
-      if(!rows.length){showToast('⚠️ SBI CSVは認識しましたが、保有銘柄を読み取れませんでした。資産は変更していません。',6000);return;}
-      amCaptureImportSnapshot('SBI証券',amAccounts);
-      await amApplySBIRows(rows,sbiImportMeta);
+      // 現行SBI CSVでは旧固定列パーサーへフォールバックしない。
+      // 評価額列を特定できない場合に別列（例:144円）を資産額として誤採用する事故を防ぐ。
+      showToast('⚠️ SBI CSVの「評価額」列を特定できませんでした。推測取込はせず、資産は変更していません。',7000);
       e.target.value='';
       return;
     }
