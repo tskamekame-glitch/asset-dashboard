@@ -6691,7 +6691,7 @@ async function importCSV(e){
     // ── SBI「ポートフォリオ一覧」実形式専用処理 ──
     // SBIの実ファイルは「銘柄（コード）/買付日/数量/.../評価額」のロット一覧。
     // ロットをそのまま資産管理へ追加すると二重計上しやすいため、銘柄×口座区分で集約する。
-    const isSBIPortfolio=/^"?ポートフォリオ一覧"?/m.test(text)&&/銘柄（コード）/.test(text)&&/株式（現物\//.test(text)&&/総合計/.test(text);
+    const isSBIPortfolio=/^\"?ポートフォリオ一覧\"?/m.test(text)&&/銘柄（コード）/.test(text)&&/株式/.test(text)&&/評価額/.test(text);
     if(isSBIPortfolio){
       // SBI「ポートフォリオ一覧」は列位置を固定せず、ヘッダー名から列を特定する。
       // SBI側のCSV列追加・並び替えで評価額を数量や損益として誤読しないようにする。
@@ -6741,11 +6741,11 @@ async function importCSV(e){
             return fallback;
           };
           const evalIdx=findIdx([/^評価額$/,/評価額/]);
-          const qtyIdx=findIdx([/^数量$/,/保有株数/,/保有口数/]);
-          const costIdx=findIdx([/^取得単価$/]);
-          const priceIdx=findIdx([/^現在値$/,/基準価額/]);
+          const qtyIdx=findIdx([/^数量(?:（.*）)?$/,/数量/,/保有株数/,/保有口数/,/口数/]);
+          const costIdx=findIdx([/^取得単価(?:（.*）)?$/,/取得単価/]);
+          const priceIdx=findIdx([/^現在値(?:（.*）)?$/,/現在値/,/基準価額/,/基準価額（.*）/]);
           const buyIdx=findIdx([/^買付日$/,/購入日/,/取得日/]);
-          const costAmtIdx=findIdx([/^取得金額$/]);
+          const costAmtIdx=findIdx([/^取得金額(?:（.*）)?$/,/取得金額/]);
           const evalAmt=num(evalIdx>=0?cols[evalIdx]:'');
           if(evalAmt<=0)continue;
 
@@ -6756,10 +6756,29 @@ async function importCSV(e){
           const costAmt=num(costAmtIdx>=0?cols[costAmtIdx]:'');
           const buyDate=date(buyIdx>=0?cols[buyIdx]:'');
           if(isStock){
-            const m=c0.match(/^([0-9A-Za-z]{3,6})\s+(.+)$/);
-            if(!m)continue;
+            // SBIの実CSVではコードと銘柄名の区切りが半角/全角スペースの
+            // どちらにもなり得る。また形式によってはコード列と名称列が分かれる。
+            // ここを柔軟にして、日本株4桁コードを確実に拾う。
+            let code='', name='';
+            const c1=clean(cols[1]);
+            const codeOnly=c0.match(/^([0-9]{4,6}|[A-Za-z]{1,6})$/);
+            if(codeOnly && c1){
+              code=codeOnly[1].toUpperCase(); name=c1;
+            }else{
+              let m=c0.match(/^([0-9A-Za-z]{3,6})[\s　]+(.+?)$/);
+              if(!m)m=c0.match(/^([0-9]{4,6})(.+)$/);
+              if(!m)m=c0.match(/^([A-Za-z]{1,6})[\s　]*(.+?)$/);
+              if(m){code=m[1].toUpperCase();name=String(m[2]||'').trim();}
+            }
+            // コードを銘柄名から取得できない場合でも、行の先頭に4桁コードがあれば採用。
+            if(!code){
+              const raw=(c0+' '+c1).trim();
+              const cm=raw.match(/(?:^|[\s　])([0-9]{4,6})(?:[\s　]|$)/);
+              if(cm){code=cm[1];name=c1||raw.replace(cm[1],'').trim();}
+            }
+            if(!code||!name)continue;
             out.push({
-              type:'stock',code:m[1].toUpperCase(),name:m[2].trim(),buyDate,
+              type:'stock',code,name,buyDate,
               shares,costPrice,price,costAmt,evalAmt,section,
               acctSuffix:/NISA.*成長|成長.*NISA/.test(section)?'NISA成長':
                          /NISA.*つみたて|つみたて.*NISA/.test(section)?'NISAつみたて':
@@ -6841,11 +6860,13 @@ async function importCSV(e){
       // 重要: 解析結果を検証するまで既存資産を一切変更しない。
       // CSVの列追加・形式変更で評価額を誤読した場合の総資産急減を防ぐ。
       const parsedTotal=[...groups.values()].reduce((s,g)=>s+Number(g.evalAmt||0),0);
+      const SBI_INV_CATS=['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス','その他'];
       const isSbiInvestment=a=>{
         if(a.sold)return false;
-        if(String(a.broker||'')==='SBI証券')return true;
-        if(a.importSource==='sbi_csv')return true;
-        return /\[SBI(?:ポートフォリオCSV|CSV|自動追加)/.test(String(a.memo||''));
+        const cat=String(a.cat||'');
+        const tagged=a.importSource==='sbi_csv'||/\[SBI(?:ポートフォリオCSV|CSV|自動追加)/.test(String(a.memo||''));
+        if(tagged)return true;
+        return String(a.broker||'')==='SBI証券' && SBI_INV_CATS.includes(cat);
       };
       const currentSbiTotal=amAccounts.filter(isSbiInvestment)
         .reduce((s,a)=>s+Number(a.amount||0),0);
