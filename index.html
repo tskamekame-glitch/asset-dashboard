@@ -6471,6 +6471,9 @@ async function amApplySBIRows(rows){
   };
   const nisaType=s=>s==='NISA成長'?'growth':s==='NISAつみたて'?'tsumitate':'none';
   const existingCatIsStock=a=>['個別株','高配当','外国株式'].includes(String(a.cat||''));
+  // SBI CSV連続取込では、今回CSVに載っているキーだけを更新する。
+  // 他社・手入力資産は同名/同コードでも絶対に削除しない。
+  const isSbiImported=a=>String(a.broker||'')==='SBI証券'||/^\[SBI CSV(?:\s|\])/i.test(String(a.note||''));
   // CSV再取込で一度分類したセクターを維持するため、既存SBI資産の手動/保存済みセクターを先に退避。
   const savedSectorByCode=new Map(), savedSectorByName=new Map();
   amAccounts.filter(a=>!a.sold && a.sector).forEach(a=>{
@@ -6497,9 +6500,9 @@ async function amApplySBIRows(rows){
 
   amAccounts=amAccounts.filter(a=>{
     if(a.sold)return true;
-    // moomoo等、他社CSV由来の同一銘柄は残す（SBIとは別管理）。
-    if(String(a.broker||'')==='moomoo証券')return true;
-    // 個別株：カテゴリに関係なくコードまたは正規化銘柄名が一致した旧行を置換。
+    // SBI CSV由来以外は同名・同コードでも触らない。
+    if(!isSbiImported(a))return true;
+    // 個別株：今回CSVに含まれるSBI行だけを置換する。
     // これで「その他」等に残った旧SBI行による二重計上を防止する。
     const kCode=a.code?('c:'+normCode(a.code)):'';
     const kName='n:'+normName(a.name);
@@ -6539,22 +6542,20 @@ async function amApplySBIRows(rows){
   });
 
   const importedFunds=[...fundMap.values()];
-  // 読み取り件数が極端に少ない場合は、資産を更新せず中断する。
-  // CSV形式変更などで一部しか解析できなかった際の総資産減少を防止する。
-  const parsedSbiTotal=rows.reduce((s,r)=>s+Number(r.evalAmt||0),0);
-  if(currentSbiSecurityTotalBefore>0 && parsedSbiTotal>0 && parsedSbiTotal<currentSbiSecurityTotalBefore*0.5){
-    // この判定より前に同一銘柄の旧行を一時除外しているため、中断時は必ず完全ロールバックする。
-    // これがないと「中止」と表示しても資産額だけ減る。
+  // SBIは保有件数が50件を超えるとCSVが複数ページに分かれる。
+  // そのため「今回CSVの合計が既存SBI残高の50%未満」を異常判定に使わない。
+  // 各ファイルは、そのファイルに含まれる銘柄だけを追加/更新し、含まれない既存SBI銘柄は保持する。
+  const parsedSbiTotal=rows.reduce((sum,r)=>sum+Number(r.evalAmt||0),0);
+  if(!(parsedSbiTotal>0)){
     amAccounts=beforeRows;
-    showToast(`⚠️ SBI CSVの読み取り額が現在のSBI証券資産の50%未満です（現在 ¥${Math.round(currentSbiSecurityTotalBefore).toLocaleString('ja-JP')} / 読取 ¥${Math.round(parsedSbiTotal).toLocaleString('ja-JP')}）。資産は変更していません。`,8000);
-    console.warn('[SBI] suspiciously low parsed total; import rolled back', {currentSbiSecurityTotalBefore,parsedSbiTotal,rows:rows.length});
+    showToast('⚠️ SBI CSVの評価額を読み取れなかったため、資産は変更していません。',6000);
     return;
   }
   // 同じファンド名＋NISA区分の既存行だけ除去（CSVにない他のインデックスは維持）。
   const importedFundKeys=new Set(importedFunds.map(r=>normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r)));
   // SMTモメンタムはNISA/特定を独立管理し、他の口座を削除しない。
   amAccounts=amAccounts.filter(a=>{
-    if(a.sold||existingCatIsStock(a)||String(a.broker||'')==='moomoo証券')return true;
+    if(a.sold||existingCatIsStock(a)||!isSbiImported(a))return true;
     const key=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
     if(importedFundKeys.has(key))return false;
     return true;
@@ -6617,7 +6618,7 @@ async function amApplySBIRows(rows){
   const keepIds=new Set();
   const latestByKey=new Map();
   for(const a of amAccounts){
-    if(a.sold||String(a.broker||'')==='moomoo証券')continue;
+    if(a.sold||!isSbiImported(a))continue;
     const nisa=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
     const sk=a.code?(normCode(a.code)+'|'+nisa):'';
     const fk=(!a.code&&a.name)?(normName(a.name)+'|'+nisa):'';
@@ -6630,7 +6631,7 @@ async function amApplySBIRows(rows){
   }
   // 上で残したCSV由来行以外の同一キー行を削除。CSVにない銘柄は保持する。
   amAccounts=amAccounts.filter(a=>{
-    if(a.sold||String(a.broker||'')==='moomoo証券')return true;
+    if(a.sold||!isSbiImported(a))return true;
     const nisa=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
     const sk=a.code?(normCode(a.code)+'|'+nisa):'';
     const fk=(!a.code&&a.name)?(normName(a.name)+'|'+nisa):'';
