@@ -3538,7 +3538,7 @@ function amNormalizeLedger(){
   // SBI CSV取込行は、最終的にもCSV評価額をそのまま保持する。
   amAccounts.forEach(a=>{
     if(String(a.broker||'')==='SBI証券' && a.sbiCsvSource==='SBI' && Number.isFinite(Number(a.sbiCsvEvalAmt))){
-      a.amount=Math.round(Number(a.sbiCsvEvalAmt));
+      a.amount=Number(a.sbiCsvEvalAmt);
     }
   });
   amAccounts=clean;
@@ -6793,6 +6793,54 @@ async function importCSV(e){
       rangeEnd:sbiRangeMatch?Number(sbiRangeMatch[2]):0,
       totalCount:sbiTotalMatch?Number(sbiTotalMatch[1]):0
     };
+    // SBI投信ページ専用の最優先ルート。
+    // 「ファンド名」と「評価額」のヘッダーが実在する場合、他のSBI形式判定より先に
+    // 評価額セルをそのまま取り込む。列位置・数量・基準価額から金額を推測しない。
+    const parseSBIFundEvalOnly=(txt)=>{
+      const split=line=>{const a=[];let cur='',q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(ch===','&&!q){a.push(cur.trim());cur='';}else cur+=ch;}a.push(cur.trim());return a;};
+      const clean=v=>String(v??'').replace(/^\uFEFF/,'').trim();
+      const num=v=>{const x=Number(clean(v).replace(/[¥￥,，+＋\s]/g,''));return Number.isFinite(x)?x:NaN;};
+      const out=[]; let sec='', hdr=null, nameI=-1, evalI=-1, qtyI=-1, priceI=-1, costI=-1;
+      for(const raw of String(txt||'').split('\n')){
+        if(!raw.trim())continue;
+        const c=split(raw), first=clean(c[0]);
+        if(/^投資信託[（(]/.test(first)&&!/合計/.test(first)){sec=first;hdr=null;continue;}
+        const thisNameI=c.findIndex(x=>clean(x)==='ファンド名');
+        const thisEvalI=c.findIndex(x=>/^(評価額|評価金額|時価評価額)(?:[（(]?円[）)]?)?$/.test(clean(x)));
+        if(thisNameI>=0 && thisEvalI>=0){
+          hdr=c.map(clean); nameI=thisNameI; evalI=thisEvalI;
+          qtyI=hdr.findIndex(x=>/^(数量|保有口数|保有数量|口数)$/.test(x));
+          priceI=hdr.findIndex(x=>/^(現在値|基準価額|現在価格)$/.test(x));
+          costI=hdr.findIndex(x=>/^(取得単価|取得価額)$/.test(x));
+          continue;
+        }
+        if(!hdr || nameI<0 || evalI<0)continue;
+        if(/合計|総合計/.test(first)) { hdr=null; continue; }
+        const name=clean(c[nameI]);
+        const evalAmt=num(c[evalI]);
+        if(!name || !Number.isFinite(evalAmt) || evalAmt<=0)continue;
+        const acct=/NISA.*つみたて|つみたて.*NISA/.test(sec)?'NISAつみたて':/NISA.*成長|成長.*NISA/.test(sec)?'NISA成長':/特定/.test(sec)?'特定':'特定';
+        const rawQty=qtyI>=0?num(c[qtyI]):0;
+        const shares=Number.isFinite(rawQty)?rawQty/10000:0;
+        const price=priceI>=0?num(c[priceI]):0;
+        const costPrice=costI>=0?num(c[costI]):0;
+        out.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt,shares:Number.isFinite(shares)?shares:0,price:Number.isFinite(price)?price:0,costPrice:Number.isFinite(costPrice)?costPrice:0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
+      }
+      return out;
+    };
+    const directFundRows=parseSBIFundEvalOnly(text);
+    // 投信だけのページ（SBIのページ2等）はここで完結させる。
+    // 株式を含むページ1は従来の統合パーサーで株式＋投信をまとめて処理する。
+    const hasStockSection=/^"?株式[（(]/m.test(text) || /銘柄（コード）|銘柄コード/.test(text);
+    if(directFundRows.length && !hasStockSection){
+      console.table(directFundRows.map(r=>({name:r.nameRaw,evalAmt:r.evalAmt,acct:r.acctSuffix})));
+      amCaptureImportSnapshot('SBI証券',amAccounts);
+      await amApplySBIRows(directFundRows,sbiImportMeta);
+      showToast(`✅ SBI投信 ${directFundRows.length}件をCSV評価額そのままで取り込みました`,4500);
+      e.target.value='';
+      return;
+    }
+
     const looksLikeSBI=/ポートフォリオ一覧|保有証券一覧|銘柄（コード）|銘柄コード|銘柄名称|ファンド名/.test(text)
       && /評価額/.test(text) && /(株式|投資信託)/.test(text);
     if(looksLikeSBI){
