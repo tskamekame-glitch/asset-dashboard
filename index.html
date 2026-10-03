@@ -6543,8 +6543,11 @@ async function amApplySBIRows(rows){
   // CSV形式変更などで一部しか解析できなかった際の総資産減少を防止する。
   const parsedSbiTotal=rows.reduce((s,r)=>s+Number(r.evalAmt||0),0);
   if(currentSbiSecurityTotalBefore>0 && parsedSbiTotal>0 && parsedSbiTotal<currentSbiSecurityTotalBefore*0.5){
-    showToast(`⚠️ SBI CSVの読み取り額が現在のSBI証券資産の50%未満です（現在 ¥${Math.round(currentSbiSecurityTotalBefore).toLocaleString('ja-JP')} / 読取 ¥${Math.round(parsedSbiTotal).toLocaleString('ja-JP')}）。資産を変更せず中止しました。`,8000);
-    console.warn('[SBI] suspiciously low parsed total; import aborted', {currentSbiSecurityTotalBefore,parsedSbiTotal,rows:rows.length});
+    // この判定より前に同一銘柄の旧行を一時除外しているため、中断時は必ず完全ロールバックする。
+    // これがないと「中止」と表示しても資産額だけ減る。
+    amAccounts=beforeRows;
+    showToast(`⚠️ SBI CSVの読み取り額が現在のSBI証券資産の50%未満です（現在 ¥${Math.round(currentSbiSecurityTotalBefore).toLocaleString('ja-JP')} / 読取 ¥${Math.round(parsedSbiTotal).toLocaleString('ja-JP')}）。資産は変更していません。`,8000);
+    console.warn('[SBI] suspiciously low parsed total; import rolled back', {currentSbiSecurityTotalBefore,parsedSbiTotal,rows:rows.length});
     return;
   }
   // 同じファンド名＋NISA区分の既存行だけ除去（CSVにない他のインデックスは維持）。
@@ -6564,7 +6567,11 @@ async function amApplySBIRows(rows){
     const shares=Number(r.shares||0);
     const price=Number(r.price||0);
     const evalAmt=Math.round(Number(r.evalAmt||0));
-    const costPrice=isFund ? (shares>0&&Number(r.costAmt||0)>0?Number(r.costAmt)/shares:Number(r.costPrice||0)) : Number(r.costPrice||0);
+    // 株式も複数買付行を集約した後は、取得単価を必ず加重平均で算出する。
+    // 例：キオクシアの15ロットを単純な先頭行の取得単価で上書きしない。
+    const costPrice=(shares>0&&Number(r.costAmt||0)>0)
+      ? Number(r.costAmt)/shares
+      : Number(r.costPrice||0);
     const code=isFund?'':String(r.code||'').trim();
     const name=isFund?String(r.nameRaw||r.nameNorm||'').trim():String(r.bareName||r.nameRaw||'').trim();
     const cat=isFund?catForFund(r):catForStock(r);
@@ -6578,7 +6585,7 @@ async function amApplySBIRows(rows){
       price,updated:today,code,costPrice:Math.round(costPrice*100)/100,
       sold:false,nisaType:nisa,broker:'SBI証券',sector:sector||undefined,
       // SBI CSVの「評価額」を正本として保持。画面再計算で書き換えない。
-      sbiCsvEvalAmt:evalAmt,sbiCsvSource:'SBI',sbiCsvCostPrice:Number(r.costPrice||costPrice||0)
+      sbiCsvEvalAmt:evalAmt,sbiCsvSource:'SBI',sbiCsvCostPrice:Math.round(costPrice*100)/100
     };
     if(r.isForeignStock&&shares>0&&price>0&&evalAmt>0){
       const fx=evalAmt/(shares*price);
@@ -6633,7 +6640,16 @@ async function amApplySBIRows(rows){
   // CSV評価額を明示的に再設定（丸め誤差・画面側再計算による金額変化を防止）。
   for(const r of stockMap.values()){
     const k=normCode(r.code)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&x.code&&normCode(x.code)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
-    if(a)a.amount=Math.round(Number(r.evalAmt||0));
+    if(a){
+      const sh=Number(r.shares||0), ca=Number(r.costAmt||0);
+      const cp=sh>0&&ca>0?ca/sh:Number(r.costPrice||0);
+      a.amount=Math.round(Number(r.evalAmt||0));
+      a.shares=sh;
+      a.price=Number(r.price||0);
+      a.costPrice=Math.round(cp*100)/100;
+      a.sbiCsvEvalAmt=a.amount;
+      a.sbiCsvCostPrice=a.costPrice;
+    }
   }
   for(const r of importedFunds){
     const k=normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&!x.code&&normName(x.name)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
