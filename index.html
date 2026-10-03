@@ -6906,17 +6906,13 @@ async function importCSV(e){
       };
       const exactRows=parseUniversalSBI(text);
       if(exactRows.length){
-        // 読み取り結果が既存SBI投資残高の半分未満なら、形式誤認による削除を防止して通常パーサーへ。
-        const existingSbi=amAccounts.filter(a=>!a.sold&&String(a.broker||'')==='SBI証券'&&['個別株','高配当','外国株式','全世界インデックス','日本インデックス','インドインデックス'].includes(String(a.cat||''))).reduce((s,a)=>s+Number(a.amount||0),0);
-        const parsed=exactRows.reduce((s,r)=>s+Number(r.evalAmt||0),0);
-        if(existingSbi<=0 || parsed>=existingSbi*0.5){
-          // 以下は従来のSBI再構築処理へ渡すため、一時的に標準行へ変換。
-          const normalizedRows=exactRows.map(r=>({nameRaw:r.name,nameNorm:r.name,code:r.code||'',bareName:r.name,evalAmt:r.evalAmt,shares:r.shares,price:r.price,costPrice:r.costPrice,costAmt:r.costPrice*r.shares,section:r.section,acctSuffix:r.acctSuffix,isFund:r.isFund,isForeignStock:r.isForeignStock,buyDate:r.buyDate||''}));
-          amCaptureImportSnapshot('SBI証券',amAccounts);
-          await amApplySBIRows(normalizedRows);
-          e.target.value='';
-          return;
-        }
+        // SBIは50件超でCSVが複数ページになるため、既存残高との比率では拒否しない。
+        // 2ページ目など少額のCSVでも、正常な保有行が1件以上読めればそのページ分だけ追加/更新する。
+        const normalizedRows=exactRows.map(r=>({nameRaw:r.name,nameNorm:r.name,code:r.code||'',bareName:r.name,evalAmt:r.evalAmt,shares:r.shares,price:r.price,costPrice:r.costPrice,costAmt:r.costPrice*r.shares,section:r.section,acctSuffix:r.acctSuffix,isFund:r.isFund,isForeignStock:r.isForeignStock,buyDate:r.buyDate||''}));
+        amCaptureImportSnapshot('SBI証券',amAccounts);
+        await amApplySBIRows(normalizedRows);
+        e.target.value='';
+        return;
       }
       // 可変列解析で読めなかった場合だけ従来パーサーへフォールバック。
       let rows=amParseSBIHoldingsCSV(text);
