@@ -6513,24 +6513,7 @@ async function amApplySBIRows(rows){
   }
   // 同じファンド名＋NISA区分の既存行だけ除去（CSVにない他のインデックスは維持）。
   const importedFundKeys=new Set(importedFunds.map(r=>normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r)));
-  // SMT 米国株式モメンタムファンドは旧基準CSVに broker 情報がない行が残りやすいため、
-  // SBI CSVに存在する場合は「SBI CSVを正本」として旧行を必ず除去する。
-  // moomoo証券の行は対象外（証券会社ごとの保有を分離するため）。
-  const isSmtMomentumFund=v=>{
-    const n=normName(v).replace(/ファンド/g,'');
-    return /smt.*(?:米国|日本)株式モメンタム|(?:米国|日本)株式モメンタム.*smt/.test(n);
-  };
-  // SMTモメンタムファンドは過去のCSV再取込で同一銘柄が複数行残ることがある。
-  // SBI CSVに存在する場合、SBI証券の既存行をいったん全削除し、今回のCSVから1行だけ再生成する。
-  const sbiHasSmtMomentum=importedFunds.some(r=>isSmtMomentumFund(r.nameNorm||r.nameRaw));
-  if(sbiHasSmtMomentum){
-    amAccounts=amAccounts.filter(a=>{
-      if(a.sold || String(a.broker||'')==='moomoo証券') return true;
-      const isSbi=String(a.broker||'')==='SBI証券' || !a.broker;
-      return !(isSbi && isSmtMomentumFund(a.name));
-    });
-    window.amAccounts=amAccounts;
-  }
+  // SMTモメンタムはNISA/特定を独立管理し、他の口座を削除しない。
   amAccounts=amAccounts.filter(a=>{
     if(a.sold||existingCatIsStock(a)||String(a.broker||'')==='moomoo証券')return true;
     const key=normName(a.name)+'|'+(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定');
