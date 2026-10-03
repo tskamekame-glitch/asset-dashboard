@@ -6804,10 +6804,23 @@ async function importCSV(e){
             const costI=idxOf(header,[/^取得単価$/,/取得価額/]);
             const priceI=idxOf(header,[/^現在値$/,/現在価格/]);
             const evalI=idxOf(header,[/^評価額$/,/評価金額/]);
+            const pnlI=idxOf(header,[/^損益$/,/評価損益/]);
             const buyI=idxOf(header,[/購入日/,/買付日/,/約定日/,/取得日/]);
             let code='',name='';
             if(codeI>=0 && nameI>=0){code=norm(cols[codeI]);name=norm(cols[nameI]);}
-            else if(combinedI>=0){const v=norm(cols[combinedI]);const m=v.match(/^([0-9A-Za-z.]{1,8})[\s　]+(.+)$/);if(m){code=m[1].toUpperCase();name=m[2].trim();}else{name=v;}}
+            else if(combinedI>=0){
+              const v=norm(cols[combinedI]);
+              // SBIの「銘柄（コード）」は画面によって「285A キオクシアHD」だけでなく
+              // 「キオクシアHD（285A）」「キオクシアHD (285A)」等でも出力される。
+              // コード先頭・コード末尾の両形式を受け付ける。
+              let m=v.match(/^([0-9A-Za-z.]{1,8})[\s　]+(.+)$/);
+              if(m){code=m[1].toUpperCase();name=m[2].trim();}
+              else{
+                m=v.match(/^(.+?)[\s　]*[（(]([0-9A-Za-z.]{1,8})[）)]$/);
+                if(m){name=m[1].trim();code=m[2].toUpperCase();}
+                else{name=v;}
+              }
+            }
             else {
               const m=c0.match(/^([0-9A-Za-z.]{1,8})[\s　]+(.+)$/); if(m){code=m[1].toUpperCase();name=m[2].trim();}
               else if(/^[0-9A-Za-z.]{3,8}$/.test(c0)&&cols[1]){code=c0.toUpperCase();name=norm(cols[1]);}
@@ -6817,11 +6830,21 @@ async function importCSV(e){
             const evalIdx=evalI>=0?evalI:(cols.length>=9?7:(cols.length>=8?7:-1));
             const evalAmt=evalIdx>=0?num(cols[evalIdx]):0; if(evalAmt<=0)continue;
             const shares=sharesI>=0?num(cols[sharesI]):0;
-            const costPrice=costI>=0?num(cols[costI]):0;
+            const csvCostPrice=costI>=0?num(cols[costI]):0;
             const price=priceI>=0?num(cols[priceI]):0;
+            const pnl=pnlI>=0?num(cols[pnlI]):NaN;
+            // 取得単価はSBI CSV内の別列でも検算する。
+            // 評価額 = 取得総額 + 損益 なので、取得総額=(評価額-損益)。
+            // 「取得単価」列が列ずれ等で異常値でも、損益から復元した値を優先できる。
+            const derivedCostPrice=(shares>0&&Number.isFinite(pnl))?(evalAmt-pnl)/shares:0;
+            let costPrice=csvCostPrice;
+            if(derivedCostPrice>0){
+              const badCsv=!(csvCostPrice>0) || csvCostPrice<derivedCostPrice*0.5 || csvCostPrice>derivedCostPrice*1.5;
+              if(badCsv)costPrice=derivedCostPrice;
+            }
             let buyDate=buyI>=0?norm(cols[buyI]):'';
             if(!/^\d{4}[\/-]\d{1,2}[\/-]\d{1,2}$/.test(buyDate))buyDate='';
-            out.push({type:'stock',code,name,buyDate,shares,costPrice,price,evalAmt,section,acctSuffix:acct(section),isFund:false,isForeignStock:/外国株式/.test(section)});
+            out.push({type:'stock',code,name,buyDate,shares,costPrice,price,evalAmt,pnl,section,acctSuffix:acct(section),isFund:false,isForeignStock:/外国株式/.test(section)});
           }else if(mode==='fund'){
             const nameI=idxOf(header,[/^ファンド名$/,/^銘柄名称$/,/^銘柄名$/]);
             const sharesI=idxOf(header,[/保有口数/,/保有数量/,/数量/,/口数/]);
