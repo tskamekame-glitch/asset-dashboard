@@ -3517,7 +3517,8 @@ function amNormalizeLedger(){
         g.amount=Number(a.amount||0);
         g.shares=Number(a.shares||0);
         g.price=Number(a.price||0);
-        g.costPrice=Number(a.costPrice||0);
+        g.costPrice=Number(a.sbiCsvCostPrice||a.costPrice||0);
+        g.sbiCsvCostPrice=Number(a.sbiCsvCostPrice||a.costPrice||0);
         g.buyDate=a.buyDate||g.buyDate||'';
         g.purchaseHistory=Array.isArray(a.purchaseHistory)?a.purchaseHistory.map(h=>({...h})):g.purchaseHistory;
         g.sbiCsvEvalAmt=Number(a.amount||0);
@@ -3532,7 +3533,7 @@ function amNormalizeLedger(){
       if(a.updated&&(!g.updated||String(a.updated)>String(g.updated)))g.updated=a.updated;
       if(isSbiCsv)g.note=a.note||g.note;
     }
-    if(isSbiCsv){a.sbiCsvEvalAmt=Number(a.amount||0);a.sbiCsvSource='SBI';}
+    if(isSbiCsv){a.sbiCsvEvalAmt=Number(a.amount||0);a.sbiCsvSource='SBI';a.sbiCsvCostPrice=Number(a.sbiCsvCostPrice||a.costPrice||0);}
   }
   // SBI CSV取込行は、最終的にもCSV評価額をそのまま保持する。
   amAccounts.forEach(a=>{
@@ -3541,7 +3542,17 @@ function amNormalizeLedger(){
     }
   });
   amAccounts=clean;
-  // clean配列内の参照も同じオブジェクトなので、SBI評価額固定は維持される。
+  // ★SBI CSVの株式は「取得単価」をCSV値から絶対固定する。
+  // 旧データの取得単価が16等になっていても、正規化処理で復活させない。
+  amAccounts.forEach(a=>{
+    if(String(a.broker||'')==='SBI証券' && a.sbiCsvSource==='SBI' && a.code && Number(a.sbiCsvCostPrice)>0){
+      a.costPrice=Number(a.sbiCsvCostPrice);
+      if(Array.isArray(a.purchaseHistory) && a.purchaseHistory.length){
+        a.purchaseHistory=a.purchaseHistory.map(h=>({...h,costPrice:Number(a.sbiCsvCostPrice)}));
+      }
+    }
+  });
+  // clean配列内の参照も同じオブジェクトなので、SBI評価額・取得単価固定は維持される。
   window.amAccounts=amAccounts;
 }
 
@@ -6553,7 +6564,7 @@ async function amApplySBIRows(rows){
     const shares=Number(r.shares||0);
     const price=Number(r.price||0);
     const evalAmt=Math.round(Number(r.evalAmt||0));
-    const costPrice=shares>0&&Number(r.costAmt||0)>0?Number(r.costAmt)/shares:Number(r.costPrice||0);
+    const costPrice=isFund ? (shares>0&&Number(r.costAmt||0)>0?Number(r.costAmt)/shares:Number(r.costPrice||0)) : Number(r.costPrice||0);
     const code=isFund?'':String(r.code||'').trim();
     const name=isFund?String(r.nameRaw||r.nameNorm||'').trim():String(r.bareName||r.nameRaw||'').trim();
     const cat=isFund?catForFund(r):catForStock(r);
@@ -6567,7 +6578,7 @@ async function amApplySBIRows(rows){
       price,updated:today,code,costPrice:Math.round(costPrice*100)/100,
       sold:false,nisaType:nisa,broker:'SBI証券',sector:sector||undefined,
       // SBI CSVの「評価額」を正本として保持。画面再計算で書き換えない。
-      sbiCsvEvalAmt:evalAmt,sbiCsvSource:'SBI'
+      sbiCsvEvalAmt:evalAmt,sbiCsvSource:'SBI',sbiCsvCostPrice:Number(r.costPrice||costPrice||0)
     };
     if(r.isForeignStock&&shares>0&&price>0&&evalAmt>0){
       const fx=evalAmt/(shares*price);
