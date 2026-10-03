@@ -6447,7 +6447,7 @@ function amFindDuplicates(){
   el.style.display='block';
 }
 
-async function amApplySBIRows(rows){
+async function amApplySBIRows(rows, importMeta={}){
   if(!rows.length){showToast('⚠️ SBI CSVに有効な保有銘柄がありません',3000);return;}
   if(!Array.isArray(amAccounts))amAccounts=[];
   const today=todayStr();
@@ -6473,7 +6473,15 @@ async function amApplySBIRows(rows){
   const existingCatIsStock=a=>['個別株','高配当','外国株式'].includes(String(a.cat||''));
   // SBI CSV連続取込では、今回CSVに載っているキーだけを更新する。
   // 他社・手入力資産は同名/同コードでも絶対に削除しない。
-  const isSbiImported=a=>String(a.broker||'')==='SBI証券'||/^\[SBI CSV(?:\s|\])/i.test(String(a.note||''));
+  // CSV由来の行だけを識別する。broker='SBI証券' だけの手入力行は削除対象にしない。
+  const isSbiImported=a=>a&&((a.sbiCsvSource==='SBI')||/^\[SBI CSV(?:\s|\])/i.test(String(a.note||'')));
+  // SBIのページ分割CSVでは、ページ1が新しい取込セッションの開始。
+  // ページ1読込時に「過去のCSV由来SBI行」だけを全消去し、ページ1→2...を積み上げる。
+  // これにより以前の取込試行で残った古いページ2行との二重計上を防ぐ。
+  const importPage=Number(importMeta&&importMeta.page||0);
+  if(importPage===1){
+    amAccounts=amAccounts.filter(a=>a.sold||!isSbiImported(a));
+  }
   // CSV再取込で一度分類したセクターを維持するため、既存SBI資産の手動/保存済みセクターを先に退避。
   const savedSectorByCode=new Map(), savedSectorByName=new Map();
   amAccounts.filter(a=>!a.sold && a.sector).forEach(a=>{
@@ -6567,7 +6575,16 @@ async function amApplySBIRows(rows){
     const suffix=acctKey(r), nisa=nisaType(suffix);
     const shares=Number(r.shares||0);
     const price=Number(r.price||0);
-    const evalAmt=Math.round(Number(r.evalAmt||0));
+    let evalAmt=Math.round(Number(r.evalAmt||0));
+    // SBI投資信託の最終防波堤：数量は万口、基準価額は1万口あたり円なので shares×price が円評価額。
+    // CSV列ずれで144円等の異常値が入っても、ここで桁違いを検出して復元する。
+    if(isFund&&shares>0&&price>0){
+      const derivedFundEval=shares*price;
+      if(derivedFundEval>0&&(evalAmt<=0||evalAmt<derivedFundEval*0.2||evalAmt>derivedFundEval*5)){
+        console.warn('[SBI fund eval repaired]',r.nameRaw||r.nameNorm,{csvEval:evalAmt,derivedEval:Math.round(derivedFundEval),shares,price});
+        evalAmt=Math.round(derivedFundEval);
+      }
+    }
     // 株式も複数買付行を集約した後は、取得単価を必ず加重平均で算出する。
     // 例：キオクシアの15ロットを単純な先頭行の取得単価で上書きしない。
     const costPrice=(shares>0&&Number(r.costAmt||0)>0)
@@ -6654,7 +6671,13 @@ async function amApplySBIRows(rows){
   }
   for(const r of importedFunds){
     const k=normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&!x.code&&normName(x.name)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
-    if(a)a.amount=Math.round(Number(r.evalAmt||0));
+    if(a){
+      let v=Math.round(Number(r.evalAmt||0));
+      const sh=Number(r.shares||0), pr=Number(r.price||0), derived=sh>0&&pr>0?sh*pr:0;
+      if(derived>0&&(v<=0||v<derived*0.2||v>derived*5))v=Math.round(derived);
+      a.amount=v;
+      a.sbiCsvEvalAmt=v;
+    }
   }
 
   const afterTotal=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+Number(a.amount||0),0);
@@ -6666,7 +6689,7 @@ async function amApplySBIRows(rows){
   try{await amSaveToSheet();}catch(e){console.error('SBI sheet save',e);}
   try{opsRender();}catch(e){}
   const stockCount=stockMap.size, fundCount=importedFunds.length;
-  showToast(`✅ SBI CSV反映：個別株${stockCount}銘柄・投信${fundCount}本。SBI CSV評価額 ¥${Math.round(importedTotal).toLocaleString('ja-JP')} / 総資産 ¥${Math.round(afterTotal).toLocaleString('ja-JP')}`,7000);
+  showToast(`✅ SBI CSV${importPage?`（ページ${importPage}）`:''}反映：個別株${stockCount}銘柄・投信${fundCount}本。今回CSV評価額 ¥${Math.round(importedTotal).toLocaleString('ja-JP')} / 総資産 ¥${Math.round(afterTotal).toLocaleString('ja-JP')}`,7000);
   try{amShowSBIDiffBanner(beforeTotal,afterTotal,log,stockCount+fundCount);}catch(e){console.error('SBI diff banner',e);}
 }
 
@@ -6766,6 +6789,16 @@ async function importCSV(e){
     // ── SBI CSV：ポートフォリオ一覧／保有証券一覧を同一の可変列パーサーで処理 ──
     // SBIは画面・時期によって「銘柄コード＋銘柄名称が別列」「銘柄（コード）が同一列」、
     // また9列/11列など列数が変わるため、列番号を固定せずヘッダー名から位置を解決する。
+    // SBIページ情報を取得。例: 「ページ：1」「選択範囲：1-50件」「総件数：54件」
+    const sbiPageMatch=text.match(/ページ[：:]\s*["']?(\d+)/);
+    const sbiRangeMatch=text.match(/選択範囲[：:]\s*["']?(\d+)\s*[-－〜~]\s*(\d+)/);
+    const sbiTotalMatch=text.match(/総件数[：:]\s*["']?(\d+)/);
+    const sbiImportMeta={
+      page:sbiPageMatch?Number(sbiPageMatch[1]):0,
+      rangeStart:sbiRangeMatch?Number(sbiRangeMatch[1]):0,
+      rangeEnd:sbiRangeMatch?Number(sbiRangeMatch[2]):0,
+      totalCount:sbiTotalMatch?Number(sbiTotalMatch[1]):0
+    };
     const looksLikeSBI=/ポートフォリオ一覧|保有証券一覧|銘柄（コード）|銘柄コード|銘柄名称|ファンド名/.test(text)
       && /評価額/.test(text) && /(株式|投資信託)/.test(text);
     if(looksLikeSBI){
@@ -6802,13 +6835,19 @@ async function importCSV(e){
             const ni=ix('ファンド名'), qi=Math.max(ix('数量'),ix('保有口数')), coi=ix('取得単価'), pi=Math.max(ix('基準価額'),ix('現在値')), ei=ix('評価額');
             if(ni<0||ei<0)continue; const name=String(c[ni]||'').trim(), evalAmt=n(c[ei]); if(!name||evalAmt<=0)continue;
             const rawQty=qi>=0?n(c[qi]):0;
-            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt,shares:rawQty/10000,price:pi>=0?n(c[pi]):0,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
+            const fundShares=rawQty/10000; // SBI投信の数量は「口」。内部では万口単位で保持
+            const fundPrice=pi>=0?n(c[pi]):0; // 基準価額は1万口あたり円
+            const derivedEval=(fundShares>0&&fundPrice>0)?fundShares*fundPrice:0;
+            // 評価額列を正本とする。ただし列ずれ等で 144円 vs 約10万円のような桁違いになった場合は
+            // 保有口数×基準価額÷10,000 で独立検算した値へ復元する。
+            const safeEval=(derivedEval>0&&(evalAmt<=0||evalAmt<derivedEval*0.2||evalAmt>derivedEval*5))?Math.round(derivedEval):Math.round(evalAmt);
+            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt:safeEval,shares:fundShares,price:fundPrice,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
           }
         }
         if(rows.length){
           console.table(rows.map(r=>({code:r.code,name:r.nameRaw,shares:r.shares,costPrice:r.costPrice,price:r.price,evalAmt:r.evalAmt,acct:r.acctSuffix})));
           amCaptureImportSnapshot('SBI証券',amAccounts);
-          await amApplySBIRows(rows);
+          await amApplySBIRows(rows,sbiImportMeta);
           e.target.value='';
           return;
         }
@@ -6899,7 +6938,11 @@ async function importCSV(e){
             const name=norm(cols[nameI>=0?nameI:0]); if(!name || /^(ファンド名|合計|総合計)$/.test(name))continue;
             const evalIdx=evalI>=0?evalI:(cols.length>=7?6:-1); const evalAmt=evalIdx>=0?num(cols[evalIdx]):0; if(evalAmt<=0)continue;
             const sharesRaw=sharesI>=0?num(cols[sharesI]):0;
-            out.push({type:'fund',name,code:'',buyDate:'',shares:sharesRaw/10000,costPrice:costI>=0?num(cols[costI]):0,price:priceI>=0?num(cols[priceI]):0,evalAmt,section,acctSuffix:acct(section),isFund:true,isForeignStock:false});
+            const fundShares=sharesRaw/10000;
+            const fundPrice=priceI>=0?num(cols[priceI]):0;
+            const derivedEval=(fundShares>0&&fundPrice>0)?fundShares*fundPrice:0;
+            const safeEval=(derivedEval>0&&(evalAmt<=0||evalAmt<derivedEval*0.2||evalAmt>derivedEval*5))?Math.round(derivedEval):Math.round(evalAmt);
+            out.push({type:'fund',name,code:'',buyDate:'',shares:fundShares,costPrice:costI>=0?num(cols[costI]):0,price:fundPrice,evalAmt:safeEval,section,acctSuffix:acct(section),isFund:true,isForeignStock:false});
           }
         }
         return out;
@@ -6910,7 +6953,7 @@ async function importCSV(e){
         // 2ページ目など少額のCSVでも、正常な保有行が1件以上読めればそのページ分だけ追加/更新する。
         const normalizedRows=exactRows.map(r=>({nameRaw:r.name,nameNorm:r.name,code:r.code||'',bareName:r.name,evalAmt:r.evalAmt,shares:r.shares,price:r.price,costPrice:r.costPrice,costAmt:r.costPrice*r.shares,section:r.section,acctSuffix:r.acctSuffix,isFund:r.isFund,isForeignStock:r.isForeignStock,buyDate:r.buyDate||''}));
         amCaptureImportSnapshot('SBI証券',amAccounts);
-        await amApplySBIRows(normalizedRows);
+        await amApplySBIRows(normalizedRows,sbiImportMeta);
         e.target.value='';
         return;
       }
@@ -6919,7 +6962,7 @@ async function importCSV(e){
       if(!rows.length)rows=amParseSBICSV(text);
       if(!rows.length){showToast('⚠️ SBI CSVは認識しましたが、保有銘柄を読み取れませんでした。資産は変更していません。',6000);return;}
       amCaptureImportSnapshot('SBI証券',amAccounts);
-      await amApplySBIRows(rows);
+      await amApplySBIRows(rows,sbiImportMeta);
       e.target.value='';
       return;
     }
@@ -6936,7 +6979,7 @@ async function importCSV(e){
         return;
       }
       amCaptureImportSnapshot('SBI証券',amAccounts);
-      await amApplySBIRows(rows);
+      await amApplySBIRows(rows,sbiImportMeta);
       e.target.value='';
       return;
     }
