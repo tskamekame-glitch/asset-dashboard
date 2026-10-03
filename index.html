@@ -3538,7 +3538,7 @@ function amNormalizeLedger(){
   // SBI CSV取込行は、最終的にもCSV評価額をそのまま保持する。
   amAccounts.forEach(a=>{
     if(String(a.broker||'')==='SBI証券' && a.sbiCsvSource==='SBI' && Number.isFinite(Number(a.sbiCsvEvalAmt))){
-      a.amount=Number(a.sbiCsvEvalAmt);
+      a.amount=Math.round(Number(a.sbiCsvEvalAmt));
     }
   });
   amAccounts=clean;
@@ -6552,6 +6552,26 @@ async function amApplySBIRows(rows, importMeta={}){
   });
 
   const importedFunds=[...fundMap.values()];
+
+  // ★旧資産管理データとの重複移行処理
+  // 旧版ではSBI投信に broker / nisaType が付いていない行があり、
+  // 同じ投信をSBI CSVから取り込むと別資産として追加されていた。
+  // SBI CSVに同名投信が来た場合、名称を全半角・空白差を吸収して照合し、
+  // broker未設定の旧インデックス行だけをSBI CSV側へ置換する。
+  // PayPay・DC・iDeCo・年金など明らかな別口座は絶対に対象にしない。
+  const incomingFundBaseNames=new Set(importedFunds.map(r=>normName(r.nameNorm||r.nameRaw)));
+  const isLegacyUnscopedFund=a=>{
+    if(!a||a.sold||isSbiImported(a))return false;
+    if(String(a.broker||'').trim())return false;
+    if(!['全世界インデックス','日本インデックス','インドインデックス'].includes(String(a.cat||'')))return false;
+    const label=String(a.name||'')+' '+String(a.note||'');
+    if(/paypay|dc|ＤＣ|ideco|iDeCo|年金|確定拠出|企業年金/i.test(label))return false;
+    return incomingFundBaseNames.has(normName(a.name));
+  };
+  const legacyFundRows=amAccounts.filter(isLegacyUnscopedFund);
+  if(legacyFundRows.length){
+    amAccounts=amAccounts.filter(a=>!isLegacyUnscopedFund(a));
+  }
   // SBIは保有件数が50件を超えるとCSVが複数ページに分かれる。
   // そのため「今回CSVの合計が既存SBI残高の50%未満」を異常判定に使わない。
   // 各ファイルは、そのファイルに含まれる銘柄だけを追加/更新し、含まれない既存SBI銘柄は保持する。
