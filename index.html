@@ -6674,7 +6674,7 @@ async function importCSV(e){
     // ── SBI「ポートフォリオ一覧」実形式専用処理 ──
     // SBIの実ファイルは「銘柄（コード）/買付日/数量/.../評価額」のロット一覧。
     // ロットをそのまま資産管理へ追加すると二重計上しやすいため、銘柄×口座区分で集約する。
-    const isSBIPortfolio=/^"?ポートフォリオ一覧"?/m.test(text)&&/銘柄（コード）/.test(text)&&/株式（現物\//.test(text)&&/総合計/.test(text);
+    const isSBIPortfolio=/ポートフォリオ一覧/.test(text)&&/銘柄（コード）/.test(text)&&/評価額/.test(text)&&/(株式|投資信託)/.test(text);
     if(isSBIPortfolio){
       const parseExact=(txt)=>{
         const out=[]; let section='';
@@ -6685,16 +6685,21 @@ async function importCSV(e){
           for(const ch of line){ if(ch==='"')q=!q; else if(ch===','&&!q){cols.push(cur.trim());cur='';} else cur+=ch; }
           cols.push(cur.trim());
           const c0=(cols[0]||'').replace(/^"|"$/g,'').trim();
-          if(/^(株式|投資信託)（/.test(c0)){section=c0;continue;}
+          if(/^(株式|投資信託)[（(]/.test(c0)){section=c0;continue;}
           if(/合計|評価額|総合計|銘柄（コード）|ファンド名|ポートフォリオ|個別表示|PTS|総件数|選択範囲|ページ/.test(c0))continue;
           const isStock=/^株式（/.test(section);
           const isFund=/^投資信託（/.test(section);
           if(!isStock&&!isFund)continue;
           const num=v=>parseFloat(String(v||'').replace(/[",＋+]/g,'').replace(/口$/,''))||0;
           if(isStock && cols.length>=11){
-            const m=c0.match(/^([0-9A-Za-z]{3,6})\s+(.+)$/); if(!m)continue;
-            const evalAmt=num(cols[10]); if(evalAmt<=0)continue;
-            out.push({type:'stock',code:m[1].toUpperCase(),name:m[2].trim(),buyDate:String(cols[1]||'').replace(/"/g,''),shares:num(cols[2]),costPrice:num(cols[4]),price:num(cols[5]),evalAmt,section,acctSuffix:/NISA.*成長|成長.*NISA/.test(section)?'NISA成長':/特定/.test(section)?'特定':'一般'});
+            let code='', name='';
+            const m=c0.match(/^([0-9A-Za-z]{3,6})[\\s　]+(.+)$/);
+            if(m){code=m[1].toUpperCase();name=m[2].trim();}
+            else if(/^[0-9A-Za-z]{3,6}$/.test(c0)&&cols[1]){code=c0.toUpperCase();name=String(cols[1]).trim();}
+            else continue;
+            const evalIdx=cols.length>=11?10:7;
+            const evalAmt=num(cols[evalIdx]); if(evalAmt<=0)continue;
+            out.push({type:'stock',code,name,buyDate:String(cols[1]||'').replace(/"/g,''),shares:num(cols[2]),costPrice:num(cols[4]),price:num(cols[5]),evalAmt,section,acctSuffix:/NISA.*成長|成長.*NISA/.test(section)?'NISA成長':/特定/.test(section)?'特定':'一般'});
           }else if(isFund && cols.length>=11){
             const evalAmt=num(cols[10]); if(evalAmt<=0)continue;
             out.push({type:'fund',code:'',name:c0,buyDate:'',shares:num(cols[2])/10000,costPrice:num(cols[4]),price:num(cols[5]),evalAmt,section,acctSuffix:/NISA.*成長|成長.*NISA/.test(section)?'NISA成長':/NISA.*つみたて|つみたて.*NISA/.test(section)?'NISAつみたて':/特定/.test(section)?'特定':'一般'});
