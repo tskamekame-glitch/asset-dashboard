@@ -6768,6 +6768,50 @@ async function importCSV(e){
     const looksLikeSBI=/ポートフォリオ一覧|保有証券一覧|銘柄（コード）|銘柄コード|銘柄名称|ファンド名/.test(text)
       && /評価額/.test(text) && /(株式|投資信託)/.test(text);
     if(looksLikeSBI){
+      // 2026-10 SBI「ポートフォリオ一覧」専用パーサー。
+      // この形式を旧/汎用パーサーへ流すと、列位置の解釈差で全銘柄の取得単価が壊れるため、
+      // ヘッダー名を厳密に使ってここで完結させる。
+      if(/ポートフォリオ一覧/.test(text) && /銘柄（コード）/.test(text)){
+        const csvSplit=line=>{const a=[];let cur='',q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='\"'){if(q&&line[i+1]==='\"'){cur+='\"';i++;}else q=!q;}else if(ch===','&&!q){a.push(cur.trim());cur='';}else cur+=ch;}a.push(cur.trim());return a;};
+        const n=v=>{const x=Number(String(v??'').replace(/[¥￥,，+＋\s]/g,''));return Number.isFinite(x)?x:0;};
+        const rows=[]; let sec='',hdr=null,mode='';
+        for(const line of text.split('\n')){
+          if(!line.trim())continue;
+          const c=csvSplit(line), first=String(c[0]||'').trim();
+          if(/^(株式|投資信託|外国株式)[（(]/.test(first)&&!/合計/.test(first)){sec=first;mode=/^投資信託/.test(first)?'fund':'stock';hdr=null;continue;}
+          if(c.includes('銘柄（コード）')||c.includes('ファンド名')){hdr=c.map(x=>String(x).trim());continue;}
+          if(!hdr||/合計|総合計/.test(first))continue;
+          const ix=name=>hdr.indexOf(name);
+          const acct=/NISA.*成長|成長.*NISA/.test(sec)?'NISA成長':/NISA.*つみたて|つみたて.*NISA/.test(sec)?'NISAつみたて':'特定';
+          if(mode==='stock'){
+            const ci=ix('銘柄（コード）'), qi=ix('数量'), coi=ix('取得単価'), pi=ix('現在値'), ei=ix('評価額'), li=ix('損益'), bi=ix('買付日');
+            if(ci<0||qi<0||coi<0||pi<0||ei<0)continue;
+            const raw=String(c[ci]||'').trim(); let code='',name='';
+            let m=raw.match(/^([0-9A-Za-z.]{1,8})[\s　]+(.+)$/);
+            if(m){code=m[1].toUpperCase();name=m[2].trim();}else{m=raw.match(/^(.+?)[\s　]*[（(]([0-9A-Za-z.]{1,8})[）)]$/);if(m){name=m[1].trim();code=m[2].toUpperCase();}}
+            if(!code||!name)continue;
+            const shares=n(c[qi]), evalAmt=n(c[ei]), price=n(c[pi]), csvCost=n(c[coi]);
+            const pnl=li>=0?n(c[li]):NaN;
+            const implied=shares>0&&Number.isFinite(pnl)?(evalAmt-pnl)/shares:0;
+            // 取得単価列を第一正本とし、損益からの逆算値と大幅乖離する場合のみ逆算値へ補正。
+            const costPrice=implied>0&&(csvCost<=0||csvCost<implied*0.5||csvCost>implied*1.5)?implied:csvCost;
+            if(!(shares>0&&evalAmt>0&&costPrice>0))continue;
+            rows.push({nameRaw:name,nameNorm:name,bareName:name,code,evalAmt,shares,price,costPrice,costAmt:costPrice*shares,section:sec,acctSuffix:acct,isFund:false,isForeignStock:/外国株式/.test(sec),buyDate:bi>=0?String(c[bi]||'').trim():''});
+          }else{
+            const ni=ix('ファンド名'), qi=Math.max(ix('数量'),ix('保有口数')), coi=ix('取得単価'), pi=Math.max(ix('基準価額'),ix('現在値')), ei=ix('評価額');
+            if(ni<0||ei<0)continue; const name=String(c[ni]||'').trim(), evalAmt=n(c[ei]); if(!name||evalAmt<=0)continue;
+            const rawQty=qi>=0?n(c[qi]):0;
+            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt,shares:rawQty/10000,price:pi>=0?n(c[pi]):0,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
+          }
+        }
+        if(rows.length){
+          console.table(rows.map(r=>({code:r.code,name:r.nameRaw,shares:r.shares,costPrice:r.costPrice,price:r.price,evalAmt:r.evalAmt,acct:r.acctSuffix})));
+          amCaptureImportSnapshot('SBI証券',amAccounts);
+          await amApplySBIRows(rows);
+          e.target.value='';
+          return;
+        }
+      }
       const parseUniversalSBI=(txt)=>{
         const out=[]; let section='', mode=null, header=null;
         const clean=v=>String(v??'').replace(/^\uFEFF/,'').replace(/^"|"$/g,'').trim();
