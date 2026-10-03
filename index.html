@@ -6576,15 +6576,8 @@ async function amApplySBIRows(rows, importMeta={}){
     const shares=Number(r.shares||0);
     const price=Number(r.price||0);
     let evalAmt=Math.round(Number(r.evalAmt||0));
-    // SBI投資信託の最終防波堤：数量は万口、基準価額は1万口あたり円なので shares×price が円評価額。
-    // CSV列ずれで144円等の異常値が入っても、ここで桁違いを検出して復元する。
-    if(isFund&&shares>0&&price>0){
-      const derivedFundEval=shares*price;
-      if(derivedFundEval>0&&(evalAmt<=0||evalAmt<derivedFundEval*0.2||evalAmt>derivedFundEval*5)){
-        console.warn('[SBI fund eval repaired]',r.nameRaw||r.nameNorm,{csvEval:evalAmt,derivedEval:Math.round(derivedFundEval),shares,price});
-        evalAmt=Math.round(derivedFundEval);
-      }
-    }
+    // SBI投資信託/インデックスはCSVの「評価額」だけを正本とする。
+    // 数量×基準価額などから評価額を計算・補正しない。
     // 株式も複数買付行を集約した後は、取得単価を必ず加重平均で算出する。
     // 例：キオクシアの15ロットを単純な先頭行の取得単価で上書きしない。
     const costPrice=(shares>0&&Number(r.costAmt||0)>0)
@@ -6672,9 +6665,8 @@ async function amApplySBIRows(rows, importMeta={}){
   for(const r of importedFunds){
     const k=normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&!x.code&&normName(x.name)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
     if(a){
-      let v=Math.round(Number(r.evalAmt||0));
-      const sh=Number(r.shares||0), pr=Number(r.price||0), derived=sh>0&&pr>0?sh*pr:0;
-      if(derived>0&&(v<=0||v<derived*0.2||v>derived*5))v=Math.round(derived);
+      // 投資信託はSBI CSVの評価額をそのまま反映。再計算禁止。
+      const v=Math.round(Number(r.evalAmt||0));
       a.amount=v;
       a.sbiCsvEvalAmt=v;
     }
@@ -6835,13 +6827,10 @@ async function importCSV(e){
             const ni=ix('ファンド名'), qi=Math.max(ix('数量'),ix('保有口数')), coi=ix('取得単価'), pi=Math.max(ix('基準価額'),ix('現在値')), ei=ix('評価額');
             if(ni<0||ei<0)continue; const name=String(c[ni]||'').trim(), evalAmt=n(c[ei]); if(!name||evalAmt<=0)continue;
             const rawQty=qi>=0?n(c[qi]):0;
-            const fundShares=rawQty/10000; // SBI投信の数量は「口」。内部では万口単位で保持
-            const fundPrice=pi>=0?n(c[pi]):0; // 基準価額は1万口あたり円
-            const derivedEval=(fundShares>0&&fundPrice>0)?fundShares*fundPrice:0;
-            // 評価額列を正本とする。ただし列ずれ等で 144円 vs 約10万円のような桁違いになった場合は
-            // 保有口数×基準価額÷10,000 で独立検算した値へ復元する。
-            const safeEval=(derivedEval>0&&(evalAmt<=0||evalAmt<derivedEval*0.2||evalAmt>derivedEval*5))?Math.round(derivedEval):Math.round(evalAmt);
-            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt:safeEval,shares:fundShares,price:fundPrice,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
+            const fundShares=rawQty/10000;
+            const fundPrice=pi>=0?n(c[pi]):0;
+            // 投資信託/インデックスの金額はCSV「評価額」列のみを使用する。計算・補正はしない。
+            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt:Math.round(evalAmt),shares:fundShares,price:fundPrice,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
           }
         }
         if(rows.length){
@@ -6940,9 +6929,8 @@ async function importCSV(e){
             const sharesRaw=sharesI>=0?num(cols[sharesI]):0;
             const fundShares=sharesRaw/10000;
             const fundPrice=priceI>=0?num(cols[priceI]):0;
-            const derivedEval=(fundShares>0&&fundPrice>0)?fundShares*fundPrice:0;
-            const safeEval=(derivedEval>0&&(evalAmt<=0||evalAmt<derivedEval*0.2||evalAmt>derivedEval*5))?Math.round(derivedEval):Math.round(evalAmt);
-            out.push({type:'fund',name,code:'',buyDate:'',shares:fundShares,costPrice:costI>=0?num(cols[costI]):0,price:fundPrice,evalAmt:safeEval,section,acctSuffix:acct(section),isFund:true,isForeignStock:false});
+            // 投資信託/インデックスはCSVの「評価額」列のみを資産額に採用する。
+            out.push({type:'fund',name,code:'',buyDate:'',shares:fundShares,costPrice:costI>=0?num(cols[costI]):0,price:fundPrice,evalAmt:Math.round(evalAmt),section,acctSuffix:acct(section),isFund:true,isForeignStock:false});
           }
         }
         return out;
