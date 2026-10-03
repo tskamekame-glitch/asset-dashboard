@@ -6562,6 +6562,43 @@ async function amApplySBIRows(rows){
   [...stockMap.values()].forEach(r=>addImported(r,false));
   importedFunds.forEach(r=>addImported(r,true));
 
+  // ★最終整合：今回のCSVから作った行を基準に、同一銘柄の残存重複を強制除去。
+  // 金額は必ずCSV評価額の合計値を採用し、株数×株価から再計算しない。
+  const importedStockKeys=new Set([...stockMap.values()].map(r=>normCode(r.code)+'|'+acctKey(r)));
+  const importedFundKeys2=new Set(importedFunds.map(r=>normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r)));
+  const keepIds=new Set();
+  const latestByKey=new Map();
+  for(const a of amAccounts){
+    if(a.sold||String(a.broker||'')==='moomoo証券')continue;
+    const nisa=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
+    const sk=a.code?(normCode(a.code)+'|'+nisa):'';
+    const fk=(!a.code&&a.name)?(normName(a.name)+'|'+nisa):'';
+    if(sk&&importedStockKeys.has(sk)||fk&&importedFundKeys2.has(fk)){
+      const k=sk||fk;
+      const prev=latestByKey.get(k);
+      if(prev)keepIds.delete(prev.id);
+      keepIds.add(a.id);latestByKey.set(k,a);
+    }
+  }
+  // 上で残したCSV由来行以外の同一キー行を削除。CSVにない銘柄は保持する。
+  amAccounts=amAccounts.filter(a=>{
+    if(a.sold||String(a.broker||'')==='moomoo証券')return true;
+    const nisa=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
+    const sk=a.code?(normCode(a.code)+'|'+nisa):'';
+    const fk=(!a.code&&a.name)?(normName(a.name)+'|'+nisa):'';
+    if(sk&&importedStockKeys.has(sk)||fk&&importedFundKeys2.has(fk))return keepIds.has(a.id);
+    return true;
+  });
+  // CSV評価額を明示的に再設定（丸め誤差・画面側再計算による金額変化を防止）。
+  for(const r of stockMap.values()){
+    const k=normCode(r.code)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&x.code&&normCode(x.code)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
+    if(a)a.amount=Math.round(Number(r.evalAmt||0));
+  }
+  for(const r of importedFunds){
+    const k=normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&!x.code&&normName(x.name)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
+    if(a)a.amount=Math.round(Number(r.evalAmt||0));
+  }
+
   const afterTotal=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+Number(a.amount||0),0);
   const importedTotal=rows.reduce((s,r)=>s+Number(r.evalAmt||0),0);
   amSaveToLocal();
