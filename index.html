@@ -6577,7 +6577,7 @@ async function amApplySBIRows(rows, importMeta={}){
     const suffix=acctKey(r), nisa=nisaType(suffix);
     const shares=Number(r.shares||0);
     const price=Number(r.price||0);
-    let evalAmt=Math.round(Number(r.evalAmt||0));
+    let evalAmt=Number(r.evalAmt||0);
     // SBI投資信託/インデックスはCSVの「評価額」だけを正本とする。
     // 数量×基準価額などから評価額を計算・補正しない。
     // 株式も複数買付行を集約した後は、取得単価を必ず加重平均で算出する。
@@ -6668,7 +6668,7 @@ async function amApplySBIRows(rows, importMeta={}){
     const k=normName(r.nameNorm||r.nameRaw)+'|'+acctKey(r); const a=amAccounts.find(x=>!x.sold&&x.broker==='SBI証券'&&!x.code&&normName(x.name)+'|'+(x.nisaType==='growth'?'NISA成長':x.nisaType==='tsumitate'?'NISAつみたて':'特定')===k);
     if(a){
       // 投資信託はSBI CSVの評価額をそのまま反映。再計算禁止。
-      const v=Math.round(Number(r.evalAmt||0));
+      const v=Number(r.evalAmt||0);
       a.amount=v;
       a.sbiCsvEvalAmt=v;
     }
@@ -6799,7 +6799,7 @@ async function importCSV(e){
       // 2026-10 SBI「ポートフォリオ一覧」専用パーサー。
       // この形式を旧/汎用パーサーへ流すと、列位置の解釈差で全銘柄の取得単価が壊れるため、
       // ヘッダー名を厳密に使ってここで完結させる。
-      if(/ポートフォリオ一覧/.test(text) && /銘柄（コード）/.test(text)){
+      if(/ポートフォリオ一覧/.test(text)){
         const csvSplit=line=>{const a=[];let cur='',q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='\"'){if(q&&line[i+1]==='\"'){cur+='\"';i++;}else q=!q;}else if(ch===','&&!q){a.push(cur.trim());cur='';}else cur+=ch;}a.push(cur.trim());return a;};
         const n=v=>{const x=Number(String(v??'').replace(/[¥￥,，+＋\s]/g,''));return Number.isFinite(x)?x:0;};
         const rows=[]; let sec='',hdr=null,mode='';
@@ -6834,7 +6834,7 @@ async function importCSV(e){
             const fundShares=rawQty/10000;
             const fundPrice=pi>=0?n(c[pi]):0;
             // 投資信託/インデックスの金額はCSV「評価額」列のみを使用する。計算・補正はしない。
-            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt:Math.round(evalAmt),shares:fundShares,price:fundPrice,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
+            rows.push({nameRaw:name,nameNorm:name,bareName:name,code:'',evalAmt:evalAmt,shares:fundShares,price:fundPrice,costPrice:coi>=0?n(c[coi]):0,costAmt:0,section:sec,acctSuffix:acct,isFund:true,isForeignStock:false,buyDate:''});
           }
         }
         if(rows.length){
@@ -6937,7 +6937,7 @@ async function importCSV(e){
             const fundShares=sharesRaw/10000;
             const fundPrice=priceI>=0?num(cols[priceI]):0;
             // 投資信託/インデックスはCSVの「評価額」列のみを資産額に採用する。
-            out.push({type:'fund',name,code:'',buyDate:'',shares:fundShares,costPrice:costI>=0?num(cols[costI]):0,price:fundPrice,evalAmt:Math.round(evalAmt),section,acctSuffix:acct(section),isFund:true,isForeignStock:false});
+            out.push({type:'fund',name,code:'',buyDate:'',shares:fundShares,costPrice:costI>=0?num(cols[costI]):0,price:fundPrice,evalAmt:evalAmt,section,acctSuffix:acct(section),isFund:true,isForeignStock:false});
           }
         }
         return out;
