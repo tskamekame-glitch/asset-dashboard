@@ -646,7 +646,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <div class="page-inner sd-page">
     <div class="sd-head"><div><div class="sd-eyebrow">株価 × 信用需給</div><h2>需給分析</h2></div><button class="sd-btn" onclick="sdSyncHoldings(true)">↻ 保有銘柄同期</button></div>
     <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">☁️ Mac / iPhone クラウド同期（Supabase）</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input id="cloud-url" placeholder="Supabase Project URL"><input id="cloud-key" type="password" placeholder="Publishable key (sb_publishable_...)"><input id="cloud-email" type="email" placeholder="ログイン用メール"><input id="cloud-password" type="password" placeholder="パスワード"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="sd-btn" onclick="cloudSaveConfig()">設定保存・ログイン</button><button class="sd-btn secondary" onclick="cloudPush(true)">この端末 → クラウド</button><button class="sd-btn secondary" onclick="cloudPull(true)">クラウド → この端末</button><button class="sd-btn secondary" onclick="cloudLogout()">ログアウト</button></div><div id="cloud-status" class="sd-note" style="margin-top:8px">初回だけSupabase設定が必要です。ログイン後は資産管理・需給分析データを端末間で自動同期します。</div><details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;font-weight:700">初回セットアップ用SQL / Edge Functionの説明</summary><pre id="cloud-setup" style="white-space:pre-wrap;font-size:10px;max-height:300px;overflow:auto;background:var(--bg3);padding:10px;border-radius:8px;margin-top:8px"></pre></details></div>
-    <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">信用残 PDF取込（簡単方式）</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="sd-btn secondary" onclick="window.open('https://www.jpx.co.jp/markets/statistics-equities/margin/01.html','_blank')">JPX公式データを開く</button><input id="sd-jpx-file" type="file" accept=".pdf,application/pdf" style="max-width:100%"><button class="sd-btn" onclick="sdImportJpxFile()">JPX PDFを読み込む</button><button class="sd-btn secondary" onclick="sdSyncHoldings(true)">保有銘柄を再同期</button></div><div id="sd-sync-status" class="sd-note" style="margin-top:8px">JPX公式ページから最新の「銘柄別信用取引残高」PDFを保存し、そのPDFをそのまま選択してください。資産管理で保有している日本株だけを抽出し、信用買残・信用売残を履歴へ追加します。</div></div>
+    <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">信用残 PDF取込（簡単方式）</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="sd-btn secondary" onclick="window.open('https://www.jpx.co.jp/markets/statistics-equities/margin/01.html','_blank')">JPX公式データを開く</button><input id="sd-jpx-file" type="file" accept=".pdf,application/pdf" style="max-width:100%"><button class="sd-btn" onclick="sdImportJpxFile()">JPX PDFを読み込む</button><button class="sd-btn secondary" onclick="sdSyncHoldings(true)">保有銘柄を再同期</button></div><div id="sd-sync-status" class="sd-note" style="margin-top:8px">JPX公式ページから最新の「銘柄別信用取引残高」PDFを保存し、そのPDFをそのまま選択してください。資産管理で保有している日本株だけを抽出し、信用買残・信用売残を履歴へ追加します。</div><div id="sd-import-detail" class="sd-note" style="margin-top:8px;display:none;padding:10px 12px;border-radius:10px;background:#f7f7f8;line-height:1.65;white-space:normal"></div></div>
     <div class="sd-controls card">
       <label>銘柄<select id="sd-symbol" onchange="sdRender()"></select></label>
       <label>銘柄名<input id="sd-name" placeholder="例：任天堂"></label>
@@ -18446,7 +18446,16 @@ async function sdImportJpxFile(){
       o.rows.sort((a,b)=>a.date.localeCompare(b.date)); imported++;
     }
     if(!imported)throw new Error(`保有銘柄の信用残をPDFから検出できませんでした（保有${wanted.size}銘柄）。PDF内のコード行を再確認してください。`);
-    sdPut(st);sdInit();sdRender();sdStatus(`取込完了：${detectedDate} の保有日本株 ${imported}銘柄を反映しました。PDF：${file.name}`);showToast(`信用残 ${imported}銘柄を取り込みました`);setTimeout(()=>cloudPush(false),300);
+    const matchedCodes=Object.keys(found).filter(code=>wanted.has(code));
+    const missingCodes=[...wanted].filter(code=>!found[code]);
+    const detail=document.getElementById('sd-import-detail');
+    if(detail){
+      const matchedText=matchedCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
+      const missingText=missingCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
+      detail.innerHTML=`<b>取得結果：${imported}/${wanted.size}銘柄</b><br>取得できた銘柄：${esc(matchedText)}<br><b>取得できなかった銘柄：${esc(missingText)}</b>`;
+      detail.style.display='block';
+    }
+    sdPut(st);sdInit();sdRender();sdStatus(`取込完了：${detectedDate} の保有日本株 ${imported}/${wanted.size}銘柄を反映しました。PDF：${file.name}`);showToast(`信用残 ${imported}/${wanted.size}銘柄を取り込みました`);setTimeout(()=>cloudPush(false),300);
   }catch(e){console.warn(e);sdStatus('PDF取込に失敗：'+e.message);showToast('JPX PDFを取り込めませんでした')}
 }
 function sdMaybeAutoFetch(){/* 簡単方式では自動通信しない */}
