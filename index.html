@@ -18450,6 +18450,17 @@ async function sdImportJpxFile(){
         // 売残合計・前日比・(%)・買残合計・前日比・(%)… の順。%はnumTokenで除外。
         if(nums.length>=3)found[code]={sell:nums[0],buy:nums[2]};
       }
+      // 行のY座標がずれて同一銘柄の残高が別行扱いになるPDFにも対応。
+      // PDF.jsの元の読み順を使い、JPXコード → 「株数 Shs.」→ 売残/買残をページ全体から再抽出する。
+      const flat=tc.items.map(x=>String(x.str||'').trim()).filter(Boolean).join(' ').replace(/[，]/g,',');
+      for(const c of wanted){
+        if(found[c])continue;
+        const rawCode=/^\d{4}$/.test(c)?c+'0':(/^\d{3}[A-Z]$/.test(c)?c+'0':c);
+        const escCode=rawCode.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        const re=new RegExp('(?:^|\\s)'+escCode+'(?:\\s|$)[\\s\\S]{0,180}?株数\\s*Shs\\.?\\s*([\\d,]+)\\s+(?:▲\\s*)?([\\d,]+)\\s+[\\d.]+%\\s+([\\d,]+)','i');
+        const m=flat.match(re);
+        if(m){const sell=sdParseInt(m[1]),buy=sdParseInt(m[3]);if(sell!==null&&buy!==null)found[c]={sell,buy}}
+      }
     }
     if(!detectedDate){const m=file.name.match(/(20\d{2})[-_]?([01]\d)[-_]?([0-3]\d)/);detectedDate=m?`${m[1]}-${m[2]}-${m[3]}`:todayStr()}
     let imported=0;
