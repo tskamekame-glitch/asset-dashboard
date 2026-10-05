@@ -18378,7 +18378,7 @@ function sdPut(x){localStorage.setItem('supplyDemandV1',JSON.stringify(x))}
 function sdKey(){return document.getElementById('sd-symbol')?.value||''}
 function sdStatus(msg){const e=document.getElementById('sd-sync-status');if(e)e.textContent=msg}
 function sdInit(){const st=sdStore(),sel=document.getElementById('sd-symbol');if(!sel)return;let keys=Object.keys(st.symbols);const old=sel.value;sel.innerHTML=keys.map(k=>`<option value="${esc(k)}">${esc(st.symbols[k].name||k)} (${esc(k)})</option>`).join('')+`<option value="__new__">＋ 新しい銘柄</option>`;if(keys.includes(old))sel.value=old;else if(keys.length)sel.value=keys[0];else sel.value='__new__'}
-function sdHoldingMap(){const map={};try{const a=JSON.parse(localStorage.getItem('assetAccounts')||'[]');(Array.isArray(a)?a:[]).forEach(x=>{if(x.sold)return;let c=String(x.ticker||x.code||x.symbol||'').trim().replace(/\.T$/i,'');if(!/^\d{4,5}$/.test(c))return;const k=c.slice(0,4);const amt=Number(x.amount||0);if(!(amt>0))return;if(!map[k])map[k]={code:k,name:String(x.name||k),price:0,per:null,fper:null,pbr:null,target:null};const m=map[k];if(Number(x.price)>0)m.price=Number(x.price);if(Number(x.per)>0)m.per=Number(x.per);if(Number(x.forwardPER)>0)m.fper=Number(x.forwardPER);if(Number(x.pbr)>0)m.pbr=Number(x.pbr);if(Number(x.analystTarget||x.targetPrice)>0)m.target=Number(x.analystTarget||x.targetPrice);});}catch(e){}return map}
+function sdHoldingMap(){const map={};try{const a=JSON.parse(localStorage.getItem('assetAccounts')||'[]');(Array.isArray(a)?a:[]).forEach(x=>{if(x.sold)return;let c=String(x.ticker||x.code||x.symbol||'').trim().replace(/\.T$/i,'');if(!/^(?:\d{4,5}|\d{3}[A-Za-z]0?)$/.test(c))return; c=c.toUpperCase(); const k=(c.length===5&&c.endsWith('0'))?c.slice(0,-1):c;const amt=Number(x.amount||0);if(!(amt>0))return;if(!map[k])map[k]={code:k,name:String(x.name||k),price:0,per:null,fper:null,pbr:null,target:null};const m=map[k];if(Number(x.price)>0)m.price=Number(x.price);if(Number(x.per)>0)m.per=Number(x.per);if(Number(x.forwardPER)>0)m.fper=Number(x.forwardPER);if(Number(x.pbr)>0)m.pbr=Number(x.pbr);if(Number(x.analystTarget||x.targetPrice)>0)m.target=Number(x.analystTarget||x.targetPrice);});}catch(e){}return map}
 function sdSyncHoldings(manual=false){const hm=sdHoldingMap(),st=sdStore();let added=0,updated=0;Object.values(hm).forEach(h=>{if(!st.symbols[h.code]){st.symbols[h.code]={name:h.name,code:h.code,rows:[],linked:true};added++}else{st.symbols[h.code].name=h.name||st.symbols[h.code].name;st.symbols[h.code].linked=true;updated++}st.symbols[h.code].asset=h;});sdPut(st);sdInit();if(manual){sdStatus(`資産管理から日本株 ${Object.keys(hm).length}銘柄を連携（新規${added}・更新${updated}）。米国株等は信用残対象外です。`);showToast('保有銘柄を需給分析へ同期しました')}return hm}
 function sdSaveMeta(){const st=sdStore(), code=(document.getElementById('sd-code').value||'').trim(),name=(document.getElementById('sd-name').value||'').trim();if(!code||!name){showToast('銘柄名とコードを入力してください');return}const cur=sdKey(),old=(cur&&cur!=='__new__')?st.symbols[cur]:null;st.symbols[code]={name,code,rows:old?.rows||[],asset:old?.asset||null,linked:old?.linked||false};if(cur&&cur!==code&&cur!=='__new__')delete st.symbols[cur];sdPut(st);sdInit();document.getElementById('sd-symbol').value=code;sdRender();showToast('銘柄情報を保存しました')}
 function sdDetectDelimiter(line){const cs=[['\\t',(line.match(/\\t/g)||[]).length],[',',(line.match(/,/g)||[]).length],[';',(line.match(/;/g)||[]).length]];cs.sort((a,b)=>b[1]-a[1]);return cs[0][1]?cs[0][0].replace('\\t','\t'):','}
@@ -18444,17 +18444,20 @@ async function sdImportJpxFile(){
           }
         }
         if(!code)continue;
-        const nums=[];
-        for(const t of toks.slice(codeIndex+1)){const n=numToken(t);if(n!==null)nums.push(n)}
-        // JPX表：コードの後ろに ISIN/単位が入り、その後は
-        // 売残合計・前日比・(%)・買残合計・前日比・(%)… の順。%はnumTokenで除外。
-        if(nums.length>=3)found[code]={sell:nums[0],buy:nums[2]};
+        // 同じ銘柄コードは「株数 Shs.」行と「金額 Val.」行の両方に出る。
+        // 金額行を残高として上書きしないよう、株数行だけを採用する。
+        if(!/(?:株数|Shs\.?)/i.test(joined))continue;
+        const afterCode=toks.slice(codeIndex+1).join(' ').replace(/[，]/g,',');
+        const sm=afterCode.match(/株数\s*Shs\.?\s*([\d,]+)\s+(?:▲\s*)?([\d,]+)\s+(?:[\d.]+%|\*)\s+([\d,]+)/i);
+        if(sm){
+          const sell=sdParseInt(sm[1]),buy=sdParseInt(sm[3]);
+          if(sell!==null&&buy!==null)found[code]={sell,buy};
+        }
       }
       // 行のY座標がずれて同一銘柄の残高が別行扱いになるPDFにも対応。
       // PDF.jsの元の読み順を使い、JPXコード → 「株数 Shs.」→ 売残/買残をページ全体から再抽出する。
       const flat=tc.items.map(x=>String(x.str||'').trim()).filter(Boolean).join(' ').replace(/[，]/g,',');
       for(const c of wanted){
-        if(found[c])continue;
         const rawCode=/^\d{4}$/.test(c)?c+'0':(/^\d{3}[A-Z]$/.test(c)?c+'0':c);
         const escCode=rawCode.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
         // コード周辺だけを切り出して解析する。PDF.jsではコードの前後の空白が消える
