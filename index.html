@@ -18372,6 +18372,7 @@ setTimeout(cloudInit,1000);
 // ============================================================
 let sdChart=null;
 const SD_LAST_SYNC='sdJpxFreeLastSyncV1';
+const SD_IMPORT_RESULT='sdJpxImportResultV1';
 function sdStore(){try{return JSON.parse(localStorage.getItem('supplyDemandV1')||'{"symbols":{}}')}catch(e){return {symbols:{}}}}
 function sdPut(x){localStorage.setItem('supplyDemandV1',JSON.stringify(x))}
 function sdKey(){return document.getElementById('sd-symbol')?.value||''}
@@ -18448,15 +18449,23 @@ async function sdImportJpxFile(){
     if(!imported)throw new Error(`保有銘柄の信用残をPDFから検出できませんでした（保有${wanted.size}銘柄）。PDF内のコード行を再確認してください。`);
     const matchedCodes=Object.keys(found).filter(code=>wanted.has(code));
     const missingCodes=[...wanted].filter(code=>!found[code]);
-    const detail=document.getElementById('sd-import-detail');
-    if(detail){
-      const matchedText=matchedCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
-      const missingText=missingCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
-      detail.innerHTML=`<b>取得結果：${imported}/${wanted.size}銘柄</b><br>取得できた銘柄：${esc(matchedText)}<br><b>取得できなかった銘柄：${esc(missingText)}</b>`;
-      detail.style.display='block';
-    }
-    sdPut(st);sdInit();sdRender();sdStatus(`取込完了：${detectedDate} の保有日本株 ${imported}/${wanted.size}銘柄を反映しました。PDF：${file.name}`);showToast(`信用残 ${imported}/${wanted.size}銘柄を取り込みました`);setTimeout(()=>cloudPush(false),300);
+    const matchedText=matchedCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
+    const missingText=missingCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
+    const result={date:detectedDate,file:file.name,imported,total:wanted.size,matchedText,missingText};
+    localStorage.setItem(SD_IMPORT_RESULT,JSON.stringify(result));
+    sdPut(st);sdInit();sdRender();sdRenderImportResult(result);
+    sdStatus(`取込完了：${detectedDate} の保有日本株 ${imported}/${wanted.size}銘柄を反映しました。未取得 ${missingCodes.length}銘柄。PDF：${file.name}`);showToast(`信用残 ${imported}/${wanted.size}銘柄を取り込みました`);setTimeout(()=>cloudPush(false),300);
   }catch(e){console.warn(e);sdStatus('PDF取込に失敗：'+e.message);showToast('JPX PDFを取り込めませんでした')}
+}
+
+function sdRenderImportResult(result){
+  const detail=document.getElementById('sd-import-detail'); if(!detail)return;
+  let r=result;
+  if(!r){try{r=JSON.parse(localStorage.getItem(SD_IMPORT_RESULT)||'null')}catch(e){r=null}}
+  if(!r){detail.style.display='none';detail.innerHTML='';return}
+  const miss=String(r.missingText||'なし');
+  detail.innerHTML=`<div style="font-size:14px;font-weight:800;margin-bottom:6px">取得結果：${Number(r.imported||0)}/${Number(r.total||0)}銘柄</div><div style="margin-bottom:6px"><b>取得できた銘柄：</b>${esc(String(r.matchedText||'なし'))}</div><div style="padding:8px 10px;border-radius:8px;background:${miss==='なし'?'rgba(46,125,50,.08)':'rgba(211,47,47,.08)'}"><b>${miss==='なし'?'✓ 未取得銘柄なし':'⚠ 取得できなかった銘柄：'}</b>${miss==='なし'?'':esc(miss)}</div><div style="margin-top:6px;font-size:10px;color:var(--text3)">${esc(String(r.date||''))} ／ ${esc(String(r.file||''))}</div>`;
+  detail.style.display='block';
 }
 function sdMaybeAutoFetch(){/* 簡単方式では自動通信しない */}
 function sdNum(id){const v=parseFloat(document.getElementById(id)?.value);return Number.isFinite(v)?v:null}
@@ -18465,5 +18474,5 @@ function sdDeleteLatest(){const st=sdStore(),o=st.symbols[sdKey()];if(!o?.rows?.
 function sdFmtShares(n){if(!Number.isFinite(n))return '—';return n>=10000?(n/10000).toLocaleString('ja-JP',{maximumFractionDigits:1})+'万株':Math.round(n).toLocaleString('ja-JP')+'株'}
 function sdPct(v){return Number.isFinite(v)?(v>=0?'+':'')+v.toFixed(1)+'%':'—'}
 function sdRender(){sdInit();const st=sdStore(),key=sdKey();if(key==='__new__'){document.getElementById('sd-name').value='';document.getElementById('sd-code').value='';document.getElementById('sd-dashboard').style.display='none';document.getElementById('sd-empty').style.display='block';return}const o=st.symbols[key];if(!o)return;document.getElementById('sd-name').value=o.name||'';document.getElementById('sd-code').value=o.code||key;const rows=[...(o.rows||[])].sort((a,b)=>a.date.localeCompare(b.date));document.getElementById('sd-empty').style.display=rows.length?'none':'block';document.getElementById('sd-dashboard').style.display=rows.length?'block':'none';if(!rows.length)return;const r=rows.at(-1),prev=rows.at(-2),ratio=r.sell>0?r.buy/r.sell:null,pratio=prev&&prev.sell>0?prev.buy/prev.sell:null;document.getElementById('sd-title').textContent=o.name;document.getElementById('sd-title-code').textContent=o.code;document.getElementById('sd-asof').textContent=r.date+' 時点';document.getElementById('sd-ratio').textContent=ratio===null?'—':ratio.toFixed(2)+'倍';document.getElementById('sd-ratio-change').textContent=pratio&&ratio?'前週 '+sdPct((ratio/pratio-1)*100):'前週比 —';document.getElementById('sd-buy').textContent=sdFmtShares(r.buy);document.getElementById('sd-sell').textContent=sdFmtShares(r.sell);document.getElementById('sd-buychg').textContent=prev?'前週 '+sdPct((r.buy/prev.buy-1)*100):'—';document.getElementById('sd-sellchg').textContent=prev?'前週 '+sdPct((r.sell/prev.sell-1)*100):'—';document.getElementById('sd-price').textContent=r.price>0?'¥'+Number(r.price).toLocaleString('ja-JP'):'—';document.getElementById('sd-per').textContent=r.per==null?'—':r.per.toFixed(1)+'倍';document.getElementById('sd-fper').textContent=r.fper==null?'—':r.fper.toFixed(1)+'倍';document.getElementById('sd-pbr').textContent=r.pbr==null?'—':r.pbr.toFixed(2)+'倍';document.getElementById('sd-target').textContent=r.target==null?'—':'¥'+Number(r.target).toLocaleString('ja-JP');document.getElementById('sd-upside').textContent=r.target&&r.price?sdPct((r.target/r.price-1)*100):'—';let judge='中立',note='データ蓄積後に、倍率・買残・売残・株価の方向を合わせて確認します。';if(prev&&ratio!==null&&pratio!==null){const priceUp=r.price>=prev.price,buyDown=r.buy<prev.buy,sellUp=r.sell>prev.sell,ratioDown=ratio<pratio;if(priceUp&&buyDown&&ratioDown){judge='改善';note='株価が維持/上昇しつつ買残・信用倍率が低下。需給面では改善方向です。'}else if(!priceUp&&r.buy>prev.buy&&ratio>pratio){judge='悪化';note='株価下落と買残・信用倍率の上昇が同時進行。戻り売り圧力に注意が必要です。'}else if(sellUp&&ratioDown){judge='改善傾向';note='売残増加で信用倍率は低下。ただし踏み上げ余地と株価トレンドを併せて確認してください。'}}document.getElementById('sd-judge').textContent=judge;document.getElementById('sd-judge-note').textContent=note;document.getElementById('sd-table').innerHTML=rows.slice(-6).reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>¥${Number(x.price).toLocaleString('ja-JP')}</td><td>${sdFmtShares(x.buy)}</td><td>${sdFmtShares(x.sell)}</td><td>${x.sell>0?(x.buy/x.sell).toFixed(2)+'倍':'—'}</td></tr>`).join('');if(sdChart)sdChart.destroy();const ctx=document.getElementById('sd-chart');sdChart=new Chart(ctx,{data:{labels:rows.map(x=>x.date.slice(5)),datasets:[{type:'line',label:'株価',data:rows.map(x=>x.price),yAxisID:'yPrice',borderWidth:2,pointRadius:2,tension:.25},{type:'line',label:'信用買残',data:rows.map(x=>x.buy),yAxisID:'yShares',borderWidth:2,pointRadius:2,tension:.25},{type:'line',label:'信用売残',data:rows.map(x=>x.sell),yAxisID:'yShares',borderWidth:2,pointRadius:2,tension:.25},{type:'line',label:'信用倍率',data:rows.map(x=>x.sell>0?x.buy/x.sell:null),yAxisID:'yRatio',borderDash:[5,4],borderWidth:2,pointRadius:1,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},scales:{yPrice:{position:'left',grid:{display:false},ticks:{font:{size:9}}},yShares:{position:'right',grid:{display:false},ticks:{display:false}},yRatio:{position:'right',grid:{display:false},ticks:{font:{size:9},callback:v=>v+'x'}}}}})}
-setTimeout(()=>{try{sdSyncHoldings(false);sdInit()}catch(e){}},800);
+setTimeout(()=>{try{sdSyncHoldings(false);sdInit();sdRenderImportResult()}catch(e){}},800);
 </script>
