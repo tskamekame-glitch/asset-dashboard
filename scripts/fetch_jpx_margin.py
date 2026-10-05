@@ -22,54 +22,62 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ[
 
 
 def get_latest_pdf_url():
-    r = requests.get(
+    """
+    JPXの銘柄別信用取引残高ページから、
+    最新の日次・全銘柄PDF（YYYYMMDD_mtall.pdf）を取得する。
+    """
+    response = requests.get(
         JPX_PAGE,
         timeout=30,
         headers={
             "User-Agent":
-                "Mozilla/5.0 JPX-Margin-Updater/2.0"
+                "Mozilla/5.0 JPX-Margin-Updater/3.0"
         },
     )
-    r.raise_for_status()
+    response.raise_for_status()
 
     links = re.findall(
         r'href=["\']([^"\']+\.pdf(?:\?[^"\']*)?)["\']',
-        r.text,
+        response.text,
         flags=re.I,
     )
 
     urls = [
         urljoin(
             JPX_PAGE,
-            x.replace("&amp;", "&")
+            link.replace("&amp;", "&")
         )
-        for x in links
+        for link in links
     ]
 
-    # 現行の日次全銘柄ファイルを優先
-    candidates = [
-        u for u in urls
-        if re.search(
-            r"/\d{8}_mtall\.pdf(?:\?|$)",
-            u,
+    candidates = []
+
+    for url in urls:
+        match = re.search(
+            r"/(\d{8})_mtall\.pdf(?:\?|$)",
+            url,
             flags=re.I,
         )
-    ]
 
-    if not candidates:
-        candidates = [
-            u for u in urls
-            if "/statistics-equities/margin/" in u
-            and "-att/" in u
-        ]
+        if match:
+            candidates.append(
+                (match.group(1), url)
+            )
 
     if not candidates:
         raise RuntimeError(
-            "JPXページから銘柄別信用取引残高PDFを"
-            "検出できませんでした"
+            "JPXページから日次全銘柄信用残PDF"
+            "（YYYYMMDD_mtall.pdf）を検出できませんでした"
         )
 
-    return candidates[0]
+    # HTML上の並び順に依存せず、
+    # ファイル名の日付が最も新しいPDFを採用
+    candidates.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
+
+    return candidates[0][1]
 
 
 def normalize_cell(value):
@@ -83,66 +91,45 @@ def normalize_cell(value):
     ).strip()
 
 
-def parse_number(value):
+def parse_nonnegative_integer(value):
+    """
+    売残・買残などの残高を整数化する。
+
+    例:
+      9,400     -> 9400
+      160,100   -> 160100
+      0         -> 0
+
+    ▲やマイナス値は残高列として不正なのでNone。
+    """
     value = normalize_cell(value)
 
     if not value:
         return None
 
-    negative = (
+    if (
         "▲" in value
         or value.startswith("-")
-    )
+    ):
+        return None
 
-    digits = re.sub(r"[^\d]", "", value)
+    digits = re.sub(
+        r"[^\d]",
+        "",
+        value
+    )
 
     if not digits:
         return None
 
-    number = int(digits)
-
-    return -number if negative else number
+    return int(digits)
 
 
-def find_date_from_pdf(pdf, pdf_url):
-    # ファイル名を最優先
-    m = re.search(
-        r"(\d{4})(\d{2})(\d{2})_mtall\.pdf",
-        pdf_url,
-        flags=re.I,
-    )
-
-    if m:
-        return (
-            f"{m.group(1)}-"
-            f"{m.group(2)}-"
-            f"{m.group(3)}"
-        )
-
-    # 念のため1ページ目からも取得
-    text = pdf.pages[0].extract_text() or ""
-
-    patterns = [
-        r"(\d{4})/(\d{1,2})/(\d{1,2})",
-        r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日",
-    ]
-
-    for pattern in patterns:
-        m = re.search(pattern, text)
-
-        if m:
-            return (
-                f"{m.group(1)}-"
-                f"{int(m.group(2)):02d}-"
-                f"{int(m.group(3)):02d}"
-            )
-
-    raise RuntimeError(
-        "JPX PDFの日付を取得できませんでした"
-    )
-
-
-def is_code(value):
+def valid_security_code(value):
+    """
+    JPXの証券コードを判定。
+    通常の4桁コードに加え、285A等にも対応。
+    """
     value = normalize_cell(value).upper()
 
     return bool(
@@ -153,29 +140,34 @@ def is_code(value):
     )
 
 
-def find_code_index(row):
-    """
-    現行JPX表ではコード列は概ね5列目前後。
-    表抽出時の列ズレにも対応するため、
-    先頭側から証券コード候補を探す。
-    """
-    for i, cell in enumerate(row[:8]):
-        value = normalize_cell(cell).upper()
+def find_date_from_url(pdf_url):
+    match = re.search(
+        r"/(\d{4})(\d{2})(\d{2})_mtall\.pdf",
+        pdf_url,
+        flags=re.I,
+    )
 
-        if is_code(value):
-            return i
+    if not match:
+        raise RuntimeError(
+            "JPX PDF URLから公表日を取得できませんでした"
+        )
 
-    return None
+    return (
+        f"{match.group(1)}-"
+        f"{match.group(2)}-"
+        f"{match.group(3)}"
+    )
 
 
 def extract_tables(pdf):
     """
-    JPX PDFは罫線付き表。
-    まず lines 方式で表を抽出し、
-    失敗ページだけ text 方式を試す。
+    JPX PDFは罫線付きの表なので、
+    pdfplumberでページごとに表として取得する。
     """
-    for page in pdf.pages:
-
+    for page_number, page in enumerate(
+        pdf.pages,
+        start=1
+    ):
         tables = page.extract_tables(
             {
                 "vertical_strategy": "lines",
@@ -189,120 +181,81 @@ def extract_tables(pdf):
         )
 
         if not tables:
-            tables = page.extract_tables(
-                {
-                    "vertical_strategy": "text",
-                    "horizontal_strategy": "text",
-                    "text_tolerance": 3,
-                }
+            print(
+                f"WARNING: "
+                f"{page_number}ページ目で"
+                "表を取得できませんでした",
+                file=sys.stderr,
+                flush=True,
             )
+            continue
 
-        for table in tables or []:
+        for table in tables:
             yield table
 
 
-def parse_table_row(row, date, pdf_url):
+def parse_table_row(
+    row,
+    date,
+    pdf_url
+):
+    """
+    2026-10-02時点で確認したJPX PDFの実列構造:
+
+      0 銘柄 Issue
+      1 市場 Section
+      2 銘柄種別 Loan/Margin
+      3 コード Code
+      4 新証券コード New Sec. Code
+      5 単位（株数 Shs. / 金額 Val.）
+      6 売残高 Outstanding Sales
+      7 売残高 前日比
+      8 売残高 上場比
+      9 買残高 Outstanding Purchases
+     10 買残高 前日比
+     11 買残高 上場比
+     ...
+
+    同一コードについて「株数 Shs.」と「金額 Val.」の
+    2行が存在するため、株数行のみ採用する。
+    """
+
     if not row:
         return None
 
     cells = [
-        normalize_cell(x)
-        for x in row
+        normalize_cell(cell)
+        for cell in row
     ]
 
-    code_index = find_code_index(cells)
-
-    if code_index is None:
+    # 必要列まで存在しない行はヘッダー等なので除外
+    if len(cells) < 10:
         return None
 
-    code = cells[code_index].upper()
+    code = cells[3].upper()
 
-    # 「小計」の2724銘柄等を誤ってコード扱いしない
-    joined = " ".join(cells[:code_index + 2])
+    if not valid_security_code(code):
+        return None
 
+    unit = cells[5].lower()
+
+    # 「株数 Shs.」行のみ採用。
+    # 金額 Val. 行は絶対に登録しない。
     if (
-        "小計" in joined
-        or "sub-total" in joined.lower()
-        or "銘柄" == normalize_cell(
-            cells[code_index + 1]
-            if code_index + 1 < len(cells)
-            else ""
-        )
+        "shs" not in unit
+        and "株数" not in unit
     ):
         return None
 
-    #
-    # 現行JPX PDF:
-    #
-    # code
-    # new security code
-    # total outstanding sales
-    # daily change
-    # ratio
-    # total outstanding purchases
-    # daily change
-    # ratio
-    # ...
-    #
-    # したがってコード列より後方の
-    # 「売残高」「買残高」を位置で取得する。
-    #
-    after = cells[code_index + 1:]
+    sell = parse_nonnegative_integer(
+        cells[6]
+    )
 
-    # ISIN/New Sec. Codeの次から数値列を調べる
-    numeric = []
+    buy = parse_nonnegative_integer(
+        cells[9]
+    )
 
-    for index, cell in enumerate(after):
-        n = parse_number(cell)
-
-        if n is not None:
-            numeric.append(
-                (index, cell, n)
-            )
-
-    if len(numeric) < 4:
-        return None
-
-    #
-    # 上場比(Ratio)は小数値なので、
-    # 「整数の株数列」を抽出する。
-    #
-    share_values = []
-
-    for index, raw, number in numeric:
-        # 小数値は上場比なので除外
-        if "." in raw:
-            continue
-
-        # ISIN等を数値化したものを除外
-        clean = re.sub(
-            r"[,\s▲△+-]",
-            "",
-            raw
-        )
-
-        if len(clean) > 12:
-            continue
-
-        share_values.append(
-            (index, number)
-        )
-
-    if len(share_values) < 4:
-        return None
-
-    #
-    # コード直後にはNew Sec. Codeがあり、
-    # その後の株数列は
-    #   売残 → 売前日比 → 買残 → 買前日比
-    # の順。
-    #
-    sell = share_values[0][1]
-    sell_change = share_values[1][1]
-    buy = share_values[2][1]
-    buy_change = share_values[3][1]
-
-    if sell < 0 or buy < 0:
+    if sell is None or buy is None:
         return None
 
     return {
@@ -314,46 +267,39 @@ def parse_table_row(row, date, pdf_url):
         "fetched_at": datetime.now(
             timezone.utc
         ).isoformat(),
-        "_sell_change": sell_change,
-        "_buy_change": buy_change,
     }
 
 
-def parse_pdf(pdf_bytes, pdf_url):
+def parse_pdf(
+    pdf_bytes,
+    pdf_url
+):
+    date = find_date_from_url(
+        pdf_url
+    )
+
     rows = []
+    table_count = 0
 
     with pdfplumber.open(
         io.BytesIO(pdf_bytes)
     ) as pdf:
 
-        date = find_date_from_pdf(
-            pdf,
-            pdf_url
+        print(
+            "公表日:",
+            date,
+            flush=True
         )
 
-        print("公表日:", date)
-        print("PDFページ数:", len(pdf.pages))
-
-        table_count = 0
+        print(
+            "PDFページ数:",
+            len(pdf.pages),
+            flush=True
+        )
 
         for table in extract_tables(pdf):
             table_count += 1
 
-                   
-                    # 診断用：最初の3テーブルの先頭10行をログへ強制表示
-            if table_count <= 3:
-                print(
-                    f"=== DEBUG TABLE {table_count} ===",
-                    file=sys.stderr,
-                    flush=True
-                )
-                for debug_row in table[:10]:
-                    print(
-                        "DEBUG ROW:",
-                        repr(debug_row),
-                        file=sys.stderr,
-                        flush=True
-                    )
             for row in table:
                 parsed = parse_table_row(
                     row,
@@ -361,73 +307,100 @@ def parse_pdf(pdf_bytes, pdf_url):
                     pdf_url
                 )
 
-                if parsed:
+                if parsed is not None:
                     rows.append(parsed)
 
-        print("抽出テーブル数:", table_count)
+    print(
+        "抽出テーブル数:",
+        table_count,
+        flush=True
+    )
 
-    # コード単位で重複除去
+    #
+    # 同一コードが複数市場等で現れた場合に備える。
+    #
+    # 原則1コード1株数行の想定だが、
+    # 重複した場合は残高を合算せず更新を停止する。
+    #
     unique = {}
+    duplicates = set()
 
     for row in rows:
-        unique[row["code"]] = row
+        code = row["code"]
 
-    result = list(unique.values())
+        if code in unique:
+            duplicates.add(code)
+        else:
+            unique[code] = row
 
-    # デバッグ確認
-    for code in [
+    if duplicates:
+        sample = ", ".join(
+            sorted(duplicates)[:20]
+        )
+
+        raise RuntimeError(
+            "同一証券コードの株数行が複数検出されました。"
+            "誤集計防止のため更新を中止します。"
+            f" 重複例: {sample}"
+        )
+
+    result = list(
+        unique.values()
+    )
+
+    print(
+        "解析銘柄数:",
+        len(result),
+        flush=True
+    )
+
+    #
+    # 代表銘柄をログへ出して検証しやすくする
+    #
+    for code in (
         "7974",
         "285A",
         "9984",
         "8035",
         "6857",
-    ]:
-        hit = unique.get(code)
+    ):
+        row = unique.get(code)
 
-        if hit:
+        if row:
+            ratio = (
+                row["buy"] / row["sell"]
+                if row["sell"] > 0
+                else None
+            )
+
+            if ratio is None:
+                ratio_text = "算出不可"
+            else:
+                ratio_text = (
+                    f"{ratio:.2f}倍"
+                )
+
             print(
                 f"確認 {code}: "
-                f"売残={hit['sell']:,} "
-                f"買残={hit['buy']:,}"
+                f"売残={row['sell']:,} "
+                f"買残={row['buy']:,} "
+                f"信用倍率={ratio_text}",
+                flush=True
+            )
+        else:
+            print(
+                f"確認 {code}: 未検出",
+                flush=True
             )
 
     return result
 
 
-def main():
-    print("JPX信用残データ取得開始")
+def validate_rows(rows):
+    """
+    誤解析データをSupabaseへ保存しないための安全確認。
+    """
 
-    pdf_url = get_latest_pdf_url()
-
-    print("PDF:", pdf_url)
-
-    r = requests.get(
-        pdf_url,
-        timeout=90,
-        headers={
-            "User-Agent":
-                "Mozilla/5.0 JPX-Margin-Updater/2.0",
-            "Referer": JPX_PAGE,
-        },
-    )
-
-    r.raise_for_status()
-
-    print(
-        "PDFサイズ:",
-        f"{len(r.content):,} bytes"
-    )
-
-    rows = parse_pdf(
-        r.content,
-        pdf_url
-    )
-
-    print("解析銘柄数:", len(rows))
-
-    #
-    # 誤解析をSupabaseへ入れない安全装置
-    #
     if len(rows) < 1000:
         raise RuntimeError(
             f"解析銘柄数が少なすぎます "
@@ -436,23 +409,34 @@ def main():
             "可能性があるため更新を中止しました。"
         )
 
-    # 内部確認用項目はDBへ送らない
-    db_rows = []
+    by_code = {
+        row["code"]: row
+        for row in rows
+    }
 
-    for row in rows:
-        db_rows.append(
-            {
-                "code": row["code"],
-                "date": row["date"],
-                "buy": row["buy"],
-                "sell": row["sell"],
-                "source_url":
-                    row["source_url"],
-                "fetched_at":
-                    row["fetched_at"],
-            }
+    #
+    # 7974 任天堂を構造確認用の基準銘柄にする。
+    # 数値そのものは固定しない。
+    #
+    if "7974" not in by_code:
+        raise RuntimeError(
+            "検証銘柄7974を取得できませんでした。"
+            "JPX PDF解析に問題がある可能性があるため"
+            "更新を中止しました。"
         )
 
+    for row in rows:
+        if (
+            row["buy"] < 0
+            or row["sell"] < 0
+        ):
+            raise RuntimeError(
+                f"{row['code']}で負の残高を検出しました。"
+                "更新を中止しました。"
+            )
+
+
+def save_to_supabase(rows):
     supabase = create_client(
         SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY
@@ -460,13 +444,13 @@ def main():
 
     batch_size = 500
 
-    for i in range(
+    for start in range(
         0,
-        len(db_rows),
+        len(rows),
         batch_size
     ):
-        batch = db_rows[
-            i:i + batch_size
+        batch = rows[
+            start:start + batch_size
         ]
 
         supabase.table(
@@ -478,14 +462,68 @@ def main():
 
         print(
             "Supabase保存:",
-            f"{i + 1}〜"
-            f"{min(i + batch_size, len(db_rows))}"
+            f"{start + 1}〜"
+            f"{min(start + batch_size, len(rows))}",
+            flush=True
+        )
+
+
+def main():
+    print(
+        "JPX信用残データ取得開始",
+        flush=True
+    )
+
+    pdf_url = get_latest_pdf_url()
+
+    print(
+        "PDF:",
+        pdf_url,
+        flush=True
+    )
+
+    response = requests.get(
+        pdf_url,
+        timeout=90,
+        headers={
+            "User-Agent":
+                "Mozilla/5.0 JPX-Margin-Updater/3.0",
+            "Referer": JPX_PAGE,
+        },
+    )
+
+    response.raise_for_status()
+
+    if not response.content.startswith(
+        b"%PDF"
+    ):
+        raise RuntimeError(
+            "取得ファイルがPDFではありません"
         )
 
     print(
+        "PDFサイズ:",
+        f"{len(response.content):,} bytes",
+        flush=True
+    )
+
+    rows = parse_pdf(
+        response.content,
+        pdf_url
+    )
+
+    #
+    # DB書き込みより前に必ず検証
+    #
+    validate_rows(rows)
+
+    save_to_supabase(rows)
+
+    print(
         "JPX信用残更新完了:",
-        len(db_rows),
-        "銘柄"
+        len(rows),
+        "銘柄",
+        flush=True
     )
 
 
@@ -493,10 +531,11 @@ if __name__ == "__main__":
     try:
         main()
 
-    except Exception as e:
+    except Exception as error:
         print(
             "ERROR:",
-            str(e),
-            file=sys.stderr
+            str(error),
+            file=sys.stderr,
+            flush=True
         )
         raise
