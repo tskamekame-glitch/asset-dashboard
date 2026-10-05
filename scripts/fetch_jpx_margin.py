@@ -339,6 +339,11 @@ def parse_pdf(pdf_bytes, pdf_url):
         for table in extract_tables(pdf):
             table_count += 1
 
+                    # 診断用：最初の3テーブルの先頭10行をログへ表示
+        if table_count <= 3:
+            print(f"=== DEBUG TABLE {table_count} ===")
+            for debug_row in table[:10]:
+                print("DEBUG ROW:", repr(debug_row))
             for row in table:
                 parsed = parse_table_row(
                     row,
