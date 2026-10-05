@@ -18428,7 +18428,21 @@ async function sdImportJpxFile(){
         // 「株数 Shs.」と銘柄コードが同一テキスト行にあることを前提にせず、
         // 保有コード（JPXの5桁コード末尾0も含む）がある行を基準に残高列を読む。
         let code='', codeIndex=-1;
-        for(let ti=0;ti<toks.length;ti++){const c=normCode(toks[ti]);if(c&&wanted.has(c)){code=c;codeIndex=ti;break}}
+        // PDF.js は銘柄によってコードを「43690」の1要素で返す場合と、
+        // 他の文字列と結合/分割して返す場合がある。各テキスト要素の中から
+        // JPXコード候補を抽出し、5桁末尾0 → 東証4桁へ正規化して照合する。
+        for(let ti=0;ti<toks.length&&!code;ti++){
+          const raw=String(toks[ti]||'').toUpperCase();
+          const candidates=[raw,...(raw.match(/(?<![0-9A-Z])(?:\d{5}|\d{4}|\d{3}[A-Z]0?)(?![0-9A-Z])/g)||[])];
+          for(const cand of candidates){const c=normCode(cand);if(c&&wanted.has(c)){code=c;codeIndex=ti;break}}
+        }
+        // まれにPDF.jsが「4369」「0」のようにコードを2要素へ分割するため、隣接要素も確認。
+        if(!code){
+          for(let ti=0;ti<toks.length-1;ti++){
+            const pair=String(toks[ti]||'')+String(toks[ti+1]||'');
+            const c=normCode(pair);if(c&&wanted.has(c)){code=c;codeIndex=ti+1;break}
+          }
+        }
         if(!code)continue;
         const nums=[];
         for(const t of toks.slice(codeIndex+1)){const n=numToken(t);if(n!==null)nums.push(n)}
