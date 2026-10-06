@@ -680,7 +680,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <div class="page-inner sd-page">
     <div class="sd-head"><div><div class="sd-eyebrow">テクニカル × 出来高 × 相対強度 × 信用需給</div><h2>売買判断</h2></div><button class="sd-btn" onclick="tjRefreshAll()">↻ 最新データ更新</button></div>
     <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-note">保有銘柄の株価履歴から 5/25/75日線・RSI(14)・MACD・出来高・1か月相対強度を計算し、JPX信用残がある日本株は需給も加味します。<b>点数は売買の補助指標で、将来の利益を保証するものではありません。</b></div><div id="tj-status" class="sd-note" style="margin-top:8px">「最新データ更新」で分析します。</div></div>
-    <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-cardtitle">総合ランキング</div><div class="table-wrap"><table style="min-width:1050px"><thead><tr><th>判定</th><th>銘柄</th><th>総合</th><th>現在値</th><th>トレンド</th><th>RSI</th><th>MACD</th><th>出来高</th><th>相対強度(1M)</th><th>信用倍率</th></tr></thead><tbody id="tj-table"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px">未分析</td></tr></tbody></table></div></div>
+    <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-cardtitle">総合ランキング</div><div id="tj-missing" class="sd-note" style="margin:0 0 8px"></div><div class="table-wrap" style="overflow-x:auto"><table class="tj-table" style="width:100%;min-width:0"><thead><tr><th>判定 / 銘柄</th><th>総合</th><th>現在値</th><th>主な根拠</th></tr></thead><tbody id="tj-table"><tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">未分析</td></tr></tbody></table></div><div class="sd-note" style="margin-top:8px">銘柄をタップすると、各指標の加点・減点を表示します。</div></div>
     <div class="card" style="padding:12px 14px"><div class="sd-cardtitle">判定の目安</div><div class="sd-note">80点以上＝買い増し候補／65〜79点＝強い・押し目候補／45〜64点＝保有・様子見／44点以下＝警戒。高RSIや信用買残の偏りは減点します。</div></div>
   </div>
 </div>
@@ -18543,28 +18543,42 @@ function tjSupply(code){try{const st=sdStore(),x=st.symbols?.[code],rows=x?.rows
 function tjAnalyze(h,s,bench){
   const c=s.map(x=>x.c),v=s.map(x=>x.v||0),p=c.at(-1),ma5=tjSma(c,5),ma25=tjSma(c,25),ma75=tjSma(c,75),rsi=tjRsi(c),e12=tjEma(c,12),e26=tjEma(c,26),mac=e12.at(-1)-e26.at(-1),macArr=e12.map((x,i)=>i<e26.length?x-e26[i]:0),sig=tjEma(macArr.slice(-Math.min(macArr.length,60)),9).at(-1),avgVol=tjSma(v.filter(Number.isFinite),20),vr=avgVol>0?v.at(-1)/avgVol:null;
   const ret=a=>a.length>21?(a.at(-1)/a.at(-22)-1)*100:null, own=ret(c),bm=ret(bench),rel=own!=null&&bm!=null?own-bm:null,ratio=tjSupply(h.code);
-  let score=50;
-  if(ma25){score+=p>ma25?8:-8} if(ma75){score+=p>ma75?7:-7} if(ma5&&ma25){score+=ma5>ma25?5:-5}
-  if(rsi!=null){if(rsi>=50&&rsi<=68)score+=7;else if(rsi>75)score-=8;else if(rsi<35)score-=4}
-  score+=mac>sig?7:-5;if(vr!=null){if(vr>=1.5&&p>(ma25||0))score+=6;else if(vr<0.7)score-=2}
-  if(rel!=null)score+=rel>5?8:rel>0?4:rel<-5?-8:-4;
-  if(ratio!=null){if(ratio<2)score+=5;else if(ratio>10)score-=7;else if(ratio>5)score-=3}
+  const pts=[]; let score=50; const add=(name,n,why)=>{score+=n;pts.push({name,n,why})};
+  if(ma25)add('25日線',p>ma25?8:-8,p>ma25?'株価が25日線より上':'株価が25日線より下');
+  if(ma75)add('75日線',p>ma75?7:-7,p>ma75?'株価が75日線より上':'株価が75日線より下');
+  if(ma5&&ma25)add('短期トレンド',ma5>ma25?5:-5,ma5>ma25?'5日線が25日線より上':'5日線が25日線より下');
+  if(rsi!=null){if(rsi>=50&&rsi<=68)add('RSI',7,'50〜68の上昇帯');else if(rsi>75)add('RSI',-8,'75超で過熱');else if(rsi<35)add('RSI',-4,'35未満で弱い');else add('RSI',0,'中立');}
+  add('MACD',mac>sig?7:-5,mac>sig?'MACDがシグナルより上':'MACDがシグナルより下');
+  if(vr!=null){if(vr>=1.5&&p>(ma25||0))add('出来高',6,'20日平均の1.5倍以上＋25日線上');else if(vr<0.7)add('出来高',-2,'20日平均の0.7倍未満');else add('出来高',0,'通常範囲');}
+  if(rel!=null)add('相対強度',rel>5?8:rel>0?4:rel<-5?-8:-4,`ベンチマーク比 ${rel>=0?'+':''}${rel.toFixed(1)}%`);
+  if(ratio!=null)add('信用需給',ratio<2?5:ratio>10?-7:ratio>5?-3:0,`信用倍率 ${ratio.toFixed(1)}倍`);
   score=Math.max(0,Math.min(100,Math.round(score)));
   const label=score>=80?'買い増し候補':score>=65?'押し目候補':score>=45?'保有・様子見':'警戒';
-  return {...h,score,label,price:p,ma5,ma25,ma75,rsi,macBull:mac>sig,volRatio:vr,rel,ratio};
+  return {...h,score,label,price:p,ma5,ma25,ma75,rsi,macBull:mac>sig,volRatio:vr,rel,ratio,pts};
 }
-function tjRender(rows){
+function tjPriceLooksValid(h,s){
+  if(!Array.isArray(s)||s.length<30)return {ok:false,reason:'価格履歴不足'};
+  const c=s.map(x=>Number(x.c)).filter(Number.isFinite); if(c.length<30)return {ok:false,reason:'有効な価格履歴不足'};
+  const last=c.at(-1),prev=c.at(-2),med=[...c.slice(-20)].sort((a,b)=>a-b)[Math.floor(Math.min(19,c.slice(-20).length-1)/2)];
+  if(!(last>0)||!(med>0))return {ok:false,reason:'価格データ異常'};
+  if(last/med>2.2||last/med<0.45)return {ok:false,reason:'直近価格が20日中央値から大幅乖離'};
+  if(prev>0&&(last/prev>1.8||last/prev<0.55))return {ok:false,reason:'前日比が異常'};
+  return {ok:true};
+}
+function tjToggle(i){const el=document.getElementById('tj-detail-'+i);if(el)el.style.display=el.style.display==='none'?'table-row':'none'}
+function tjRender(rows,missing=[]){
   const tb=document.getElementById('tj-table');if(!tb)return;rows=[...(rows||[])].sort((a,b)=>b.score-a.score);
+  const miss=document.getElementById('tj-missing');if(miss)miss.textContent=missing.length?'⚠ 未分析：'+missing.map(x=>x.name+'（'+x.code+'）— '+x.reason).join('、'):'✓ 未分析銘柄なし';
   const f=n=>n==null||!Number.isFinite(n)?'—':Number(n).toFixed(1), pct=n=>n==null?'—':(n>=0?'+':'')+f(n)+'%';
-  tb.innerHTML=rows.length?rows.map(r=>`<tr><td><b>${r.label}</b></td><td><b>${esc(r.name)}</b><div style="font-size:9px;color:var(--text3)">${esc(r.code)}</div></td><td><b style="font-size:15px">${r.score}</b>/100</td><td>${Number(r.price).toLocaleString('ja-JP',{maximumFractionDigits:2})}</td><td>${r.price>r.ma25?'🟢':'🔴'} 25日線 ${r.ma25?pct((r.price/r.ma25-1)*100):'—'}<div style="font-size:9px;color:var(--text3)">5日&gt;25日 ${r.ma5&&r.ma25?(r.ma5>r.ma25?'○':'×'):'—'}</div></td><td>${f(r.rsi)} ${r.rsi>75?'🔴':r.rsi>=50?'🟢':'🟡'}</td><td>${r.macBull?'🟢 買い':'🔴 弱い'}</td><td>${r.volRatio?f(r.volRatio)+'倍':'—'}</td><td>${pct(r.rel)}</td><td>${r.ratio?f(r.ratio)+'倍':'—'}</td></tr>`).join(''):'<tr><td colspan="10" style="text-align:center;padding:20px">対象銘柄なし</td></tr>';
+  tb.innerHTML=rows.length?rows.map((r,i)=>{const trend=r.ma25?(r.price>r.ma25?'25日線上':'25日線下'):'—';const details=(r.pts||[]).map(x=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:.5px solid var(--border)"><span>${esc(x.name)} <span style="color:var(--text3)">${esc(x.why)}</span></span><b>${x.n>0?'+':''}${x.n}点</b></div>`).join('');return `<tr onclick="tjToggle(${i})" style="cursor:pointer"><td><b>${r.label}</b><div style="font-size:11px;margin-top:3px"><b>${esc(r.name)}</b> <span style="color:var(--text3)">${esc(r.code)}</span></div></td><td><b style="font-size:15px">${r.score}</b>/100</td><td>${Number(r.price).toLocaleString('ja-JP',{maximumFractionDigits:2})}</td><td><div>${r.price>r.ma25?'🟢':'🔴'} ${trend}</div><div style="font-size:10px;color:var(--text3)">RSI ${f(r.rsi)} / MACD ${r.macBull?'買い':'弱い'} / 出来高 ${r.volRatio?f(r.volRatio)+'倍':'—'} / 相対 ${pct(r.rel)} / 信用 ${r.ratio?f(r.ratio)+'倍':'—'}</div></td></tr><tr id="tj-detail-${i}" style="display:none"><td colspan="4" style="padding:10px 14px;background:var(--bg2)"><div style="font-weight:700;margin-bottom:6px">採点内訳（基準50点）</div>${details}</td></tr>`}).join(''):'<tr><td colspan="4" style="text-align:center;padding:20px">対象銘柄なし</td></tr>';
 }
-function tjRenderCached(){try{const x=JSON.parse(localStorage.getItem(TJ_KEY)||'{}');if(Array.isArray(x.rows)){tjRender(x.rows);const st=document.getElementById('tj-status');if(st)st.textContent='前回分析：'+(x.at?new Date(x.at).toLocaleString('ja-JP'):'—')+'（最新化する場合は「最新データ更新」）';}}catch(e){}}
+function tjRenderCached(){try{const x=JSON.parse(localStorage.getItem(TJ_KEY)||'{}');if(Array.isArray(x.rows)){tjRender(x.rows,x.missing||[]);const st=document.getElementById('tj-status');if(st)st.textContent='前回分析：'+(x.at?new Date(x.at).toLocaleString('ja-JP'):'—')+'（最新化する場合は「最新データ更新」）';}}catch(e){}}
 async function tjRefreshAll(){
   const st=document.getElementById('tj-status'),hs=tjHoldings();if(st)st.textContent=`⏳ 0/${hs.length}銘柄を分析中…`;
   let jpBench=[],usBench=[];try{[jpBench,usBench]=await Promise.all([tjSeries('^N225'),tjSeries('^GSPC')]);}catch(e){}
-  const jpC=jpBench.map(x=>x.c),usC=usBench.map(x=>x.c);const rows=[];let done=0;
-  for(const h of hs){try{const s=await tjSeries(h.code);rows.push(tjAnalyze(h,s,(/^(\d{4}|\d{3}[A-Z])$/.test(h.code)?jpC:usC)));}catch(e){console.warn('tradejudge',h.code,e)}done++;if(st)st.textContent=`⏳ ${done}/${hs.length}銘柄を分析中…`;}
-  localStorage.setItem(TJ_KEY,JSON.stringify({at:new Date().toISOString(),rows}));tjRender(rows);if(st)st.textContent=`✓ ${rows.length}/${hs.length}銘柄を分析しました：${new Date().toLocaleString('ja-JP')}`;showToast('売買判断を更新しました');
+  const jpC=jpBench.map(x=>x.c),usC=usBench.map(x=>x.c);const rows=[],missing=[];let done=0;
+  for(const h of hs){try{const ser=await tjSeries(h.code),chk=tjPriceLooksValid(h,ser);if(!chk.ok)missing.push({...h,reason:chk.reason});else rows.push(tjAnalyze(h,ser,(/^(\d{4}|\d{3}[A-Z])$/.test(h.code)?jpC:usC)));}catch(e){console.warn('tradejudge',h.code,e);missing.push({...h,reason:e?.message||'取得失敗'})}done++;if(st)st.textContent=`⏳ ${done}/${hs.length}銘柄を分析中…`;}
+  localStorage.setItem(TJ_KEY,JSON.stringify({at:new Date().toISOString(),rows,missing}));tjRender(rows,missing);if(st)st.textContent=`✓ ${rows.length}/${hs.length}銘柄を分析しました${missing.length?'（未分析 '+missing.length+'銘柄）':''}：${new Date().toLocaleString('ja-JP')}`;showToast('売買判断を更新しました');
 }
 
 </script>
