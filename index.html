@@ -35,28 +35,45 @@ const EJ_AUTO_KEY='ejAutoFundamentals_v1';
 function ejYahooSymbol(code){const c=String(code||'').trim().toUpperCase().replace(/\.T$/,'');return (/^\d{4}$/.test(c)||/^\d{3}[A-Z]$/.test(c))?c+'.T':c}
 function ejAutoLoad(){try{return JSON.parse(localStorage.getItem(EJ_AUTO_KEY)||'{}')||{}}catch(e){return {}}}
 function ejRaw(v){if(v==null)return null;if(typeof v==='object'&&v.raw!=null)v=v.raw;const n=Number(v);return Number.isFinite(n)?n:null}
-async function ejFetchJson(url){
-  const urls=[url,'https://api.allorigins.win/raw?url='+encodeURIComponent(url),'https://corsproxy.io/?url='+encodeURIComponent(url)];
-  let last=null;for(const u of urls){try{const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}catch(e){last=e}}
-  throw last||new Error('取得失敗');
+const EJ_WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
+function ejErrKind(e){const m=String(e?.message||e||'');if(/HTTP 401|HTTP 403/i.test(m))return '認証/アクセス拒否';if(/HTTP 404/i.test(m))return '取得先未対応';if(/Failed to fetch|NetworkError|CORS/i.test(m))return '通信/CORS';if(/quoteSummary|fundamental/i.test(m))return 'Worker未対応';return m.slice(0,80)||'取得失敗'}
+async function ejWorkerFundamentals(symbol){
+  const modules='price,summaryDetail,defaultKeyStatistics,financialData,earnings';
+  // テクニカルと同じCloudflare Workerを唯一の取得経路にする。
+  // Worker側が fundamentals/quoteSummary に対応していればそのJSONを返す。
+  const tries=[
+    `${EJ_WORKER}?code=${encodeURIComponent(symbol)}&type=fundamentals&modules=${encodeURIComponent(modules)}&_ts=${Date.now()}`,
+    `${EJ_WORKER}?code=${encodeURIComponent(symbol)}&endpoint=quoteSummary&modules=${encodeURIComponent(modules)}&_ts=${Date.now()}`
+  ];
+  let last=null;
+  for(const u of tries){
+    try{
+      const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
+      const j=await r.json();
+      const q=j?.quoteSummary?.result?.[0]||j?.fundamentals||j?.result;
+      if(q && !j?.chart) return q;
+      last=new Error('Worker fundamental endpoint unsupported');
+    }catch(e){last=e}
+  }
+  throw last||new Error('Worker fundamental endpoint unsupported');
 }
 async function ejFetchOne(code){
-  const symbol=ejYahooSymbol(code), modules='price,summaryDetail,defaultKeyStatistics,financialData,earnings';
-  const url='https://query2.finance.yahoo.com/v10/finance/quoteSummary/'+encodeURIComponent(symbol)+'?modules='+encodeURIComponent(modules);
-  const j=await ejFetchJson(url),q=j?.quoteSummary?.result?.[0];if(!q)throw new Error(j?.quoteSummary?.error?.description||'データなし');
-  const price=q.price||{}, sd=q.summaryDetail||{}, ks=q.defaultKeyStatistics||{}, fd=q.financialData||{}, er=q.earnings||{};
-  const cur=ejRaw(price.regularMarketPrice), per=ejRaw(sd.trailingPE)??ejRaw(ks.trailingPE), fper=ejRaw(sd.forwardPE)??ejRaw(ks.forwardPE), pbr=ejRaw(ks.priceToBook), target=ejRaw(fd.targetMeanPrice);
-  const rev=ejRaw(fd.revenueGrowth); const earnGrowth=ejRaw(fd.earningsGrowth)??ejRaw(fd.earningsQuarterlyGrowth);
-  const eps1=ejRaw(ks.trailingEps), eps2=ejRaw(ks.forwardEps);
-  return {price:cur,per,fper,pbr,target,rev:rev==null?null:rev*100,op:earnGrowth==null?null:earnGrowth*100,eps1,eps2,date:new Date().toLocaleString('ja-JP'),source:'Yahoo Finance系',symbol};
+  const symbol=ejYahooSymbol(code), q=await ejWorkerFundamentals(symbol);
+  const price=q.price||{}, sd=q.summaryDetail||{}, ks=q.defaultKeyStatistics||{}, fd=q.financialData||{};
+  const cur=ejRaw(price.regularMarketPrice)??ejRaw(q.regularMarketPrice), per=ejRaw(sd.trailingPE)??ejRaw(ks.trailingPE)??ejRaw(q.trailingPE), fper=ejRaw(sd.forwardPE)??ejRaw(ks.forwardPE)??ejRaw(q.forwardPE), pbr=ejRaw(ks.priceToBook)??ejRaw(q.priceToBook), target=ejRaw(fd.targetMeanPrice)??ejRaw(q.targetMeanPrice);
+  const rev=ejRaw(fd.revenueGrowth)??ejRaw(q.revenueGrowth); const earnGrowth=ejRaw(fd.earningsGrowth)??ejRaw(fd.earningsQuarterlyGrowth)??ejRaw(q.earningsGrowth);
+  const eps1=ejRaw(ks.trailingEps)??ejRaw(q.trailingEps), eps2=ejRaw(ks.forwardEps)??ejRaw(q.forwardEps);
+  const vals=[cur,per,fper,pbr,target,rev,earnGrowth,eps1,eps2];if(!vals.some(v=>v!==null))throw new Error('Worker returned no fundamental fields');
+  return {price:cur,per,fper,pbr,target,rev:rev==null?null:rev*100,op:earnGrowth==null?null:earnGrowth*100,eps1,eps2,date:new Date().toLocaleString('ja-JP'),source:'Yahoo Finance系（Cloudflare Worker経由）',symbol,error:''};
 }
 async function ejAutoRefresh(){
   const btn=document.getElementById('ej-refresh-btn'),st=document.getElementById('ej-status');if(btn){btn.disabled=true;btn.textContent='取得中…'}
-  const rows=ejHoldings(), cache=ejAutoLoad(), queue=[...new Map(rows.map(r=>[r.code,r])).values()];let ok=0,fail=0,done=0;
+  const rows=ejHoldings(), cache=ejAutoLoad(), queue=[...new Map(rows.map(r=>[r.code,r])).values()];let ok=0,fail=0,done=0;const errors={};
   if(st)st.textContent=`0/${queue.length}銘柄を取得中…`;
-  const runners=Array.from({length:3},async()=>{while(queue.length){const r=queue.shift();try{cache[r.code]=await ejFetchOne(r.code);ok++}catch(e){cache[r.code]={...(cache[r.code]||{}),error:String(e?.message||e),date:new Date().toLocaleString('ja-JP'),source:'Yahoo Finance系'};fail++}done++;if(st)st.textContent=`${done}/${rows.length}銘柄を取得中…（成功 ${ok} / 失敗 ${fail}）`;}});
+  const runners=Array.from({length:3},async()=>{while(queue.length){const r=queue.shift();try{cache[r.code]=await ejFetchOne(r.code);ok++}catch(e){const kind=ejErrKind(e);errors[kind]=(errors[kind]||0)+1;cache[r.code]={...(cache[r.code]||{}),error:kind+': '+String(e?.message||e),date:new Date().toLocaleString('ja-JP'),source:'Cloudflare Worker'};fail++}done++;if(st)st.textContent=`${done}/${rows.length}銘柄を取得中…（成功 ${ok} / 失敗 ${fail}）`;}});
   await Promise.all(runners);try{localStorage.setItem(EJ_AUTO_KEY,JSON.stringify(cache))}catch(e){}
-  if(btn){btn.disabled=false;btn.textContent='↻ 最新データ自動取得'};ejRender();if(st)st.textContent=`自動取得完了：成功 ${ok}/${rows.length}銘柄${fail?`・失敗 ${fail}銘柄`:''}。取得できない項目は「—」で表示します。`;
+  if(btn){btn.disabled=false;btn.textContent='↻ 最新データ自動取得'};ejRender();
+  const detail=Object.entries(errors).map(([k,v])=>`${k} ${v}`).join(' / ');if(st)st.textContent=`自動取得完了：成功 ${ok}/${rows.length}銘柄${fail?`・失敗 ${fail}銘柄` : ''}${detail?'（'+detail+'）':''}。`+(fail&&ok===0?' Workerが業績取得に未対応の場合はWorker側の拡張が必要です。':'');
 }
 function ejHoldings(){
   let a=[];try{if(typeof amAccounts!=='undefined'&&Array.isArray(amAccounts))a=amAccounts}catch(e){};
@@ -764,7 +781,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 <div class="panel" id="tab-earnjudge">
   <div class="page-inner sd-page">
     <div class="sd-head"><div><div class="sd-eyebrow">業績 × バリュエーション × 目標株価</div><h2>業績判断</h2></div><button class="sd-btn" id="ej-refresh-btn" onclick="ejAutoRefresh()">↻ 最新データ自動取得</button></div>
-    <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-note"><b>Yahoo Finance系の公開データを自動取得</b>し、売上成長率・利益成長率・EPS・PER・予想PER・PBR・アナリスト目標株価を横断評価します。取得できない項目は「—」のままにし、推測値では補完しません。取得日時とデータ元をカードに表示します。</div><div id="ej-status" class="sd-note" style="margin-top:8px">「最新データ自動取得」で更新します。</div></div>
+    <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-note"><b>テクニカルと同じCloudflare Worker経由でYahoo Finance系の公開データを自動取得</b>し、売上成長率・利益成長率・EPS・PER・予想PER・PBR・アナリスト目標株価を横断評価します。取得できない項目は「—」のままにし、推測値では補完しません。取得日時とデータ元をカードに表示します。</div><div id="ej-status" class="sd-note" style="margin-top:8px">「最新データ自動取得」で更新します。</div></div>
     <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-cardtitle">業績アクション順</div><div class="sd-note" style="margin-bottom:8px">「業績加速 → 成長継続 → 中立 → 業績鈍化 → データ不足」の順です。テクニカルの売買タイミングとは別評価です。</div><div id="ej-list"></div></div>
   </div>
 </div>
