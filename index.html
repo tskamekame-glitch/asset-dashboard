@@ -3375,11 +3375,22 @@ function switchTab(tab){
 // HOME
 // ============================================================
 function refreshHome(){
+  // ホームは資産管理タブと同じ amAccounts を唯一の集計元にする。
+  // localStorage の保存タイミング差でホームだけ古い金額になるのを防止。
+  try{if(typeof amNormalizeLedger==='function')amNormalizeLedger();}catch(e){}
+  const homeAccounts=(()=>{
+    try{
+      if(typeof amAccounts!=='undefined'&&Array.isArray(amAccounts))return amAccounts;
+      if(Array.isArray(window.amAccounts))return window.amAccounts;
+      return JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    }catch(e){return [];}
+  })();
+
   // ── 1. 資産総額 ──
   try{
-    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const accs=homeAccounts;
     const active=accs.filter(a=>!a.sold);
-    const total=active.reduce((s,a)=>s+(a.amount||0),0);
+    const total=active.reduce((s,a)=>s+Number(a.amount||0),0);
     const totalEl=document.getElementById('home-total');
     if(totalEl)totalEl.textContent=total>0?fmt(total):'—';
     const acEl=document.getElementById('home-accounts');
@@ -3415,7 +3426,7 @@ function refreshHome(){
     try{
       const q=(typeof amLoadDailyQuotes==='function')?amLoadDailyQuotes():null;
       if(q&&q.quotes&&(Date.now()-q.ts)<24*3600*1000){
-        const accs2=JSON.parse(localStorage.getItem('assetAccounts')||'[]').filter(a=>!a.sold);
+        const accs2=homeAccounts.filter(a=>!a.sold);
         const targets=amDailyTargets(accs2);
         let g=0,b=0,plus=0,minus=0,flat=0;
         const seen=new Set();
@@ -3472,7 +3483,7 @@ function refreshHome(){
 
   // ── 3. 評価損益（保有中・SBI掲載銘柄）＋ ベスト/ワースト ──
   try{
-    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const accs=homeAccounts;
     const active=accs.filter(a=>!a.sold&&a.prevSBIAmount>0);
     const PAYPAY=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
     const rankings=[];
