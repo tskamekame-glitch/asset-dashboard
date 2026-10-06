@@ -30,6 +30,34 @@ try{localStorage.removeItem('amDecisionLogs_v1');localStorage.removeItem('amDeci
 // Uses only fundamentals already registered in asset management.
 // ============================================================
 function ejNum(v){const n=Number(v);return Number.isFinite(n)?n:null}
+
+const EJ_AUTO_KEY='ejAutoFundamentals_v1';
+function ejYahooSymbol(code){const c=String(code||'').trim().toUpperCase().replace(/\.T$/,'');return (/^\d{4}$/.test(c)||/^\d{3}[A-Z]$/.test(c))?c+'.T':c}
+function ejAutoLoad(){try{return JSON.parse(localStorage.getItem(EJ_AUTO_KEY)||'{}')||{}}catch(e){return {}}}
+function ejRaw(v){if(v==null)return null;if(typeof v==='object'&&v.raw!=null)v=v.raw;const n=Number(v);return Number.isFinite(n)?n:null}
+async function ejFetchJson(url){
+  const urls=[url,'https://api.allorigins.win/raw?url='+encodeURIComponent(url),'https://corsproxy.io/?url='+encodeURIComponent(url)];
+  let last=null;for(const u of urls){try{const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}catch(e){last=e}}
+  throw last||new Error('取得失敗');
+}
+async function ejFetchOne(code){
+  const symbol=ejYahooSymbol(code), modules='price,summaryDetail,defaultKeyStatistics,financialData,earnings';
+  const url='https://query2.finance.yahoo.com/v10/finance/quoteSummary/'+encodeURIComponent(symbol)+'?modules='+encodeURIComponent(modules);
+  const j=await ejFetchJson(url),q=j?.quoteSummary?.result?.[0];if(!q)throw new Error(j?.quoteSummary?.error?.description||'データなし');
+  const price=q.price||{}, sd=q.summaryDetail||{}, ks=q.defaultKeyStatistics||{}, fd=q.financialData||{}, er=q.earnings||{};
+  const cur=ejRaw(price.regularMarketPrice), per=ejRaw(sd.trailingPE)??ejRaw(ks.trailingPE), fper=ejRaw(sd.forwardPE)??ejRaw(ks.forwardPE), pbr=ejRaw(ks.priceToBook), target=ejRaw(fd.targetMeanPrice);
+  const rev=ejRaw(fd.revenueGrowth); const earnGrowth=ejRaw(fd.earningsGrowth)??ejRaw(fd.earningsQuarterlyGrowth);
+  const eps1=ejRaw(ks.trailingEps), eps2=ejRaw(ks.forwardEps);
+  return {price:cur,per,fper,pbr,target,rev:rev==null?null:rev*100,op:earnGrowth==null?null:earnGrowth*100,eps1,eps2,date:new Date().toLocaleString('ja-JP'),source:'Yahoo Finance系',symbol};
+}
+async function ejAutoRefresh(){
+  const btn=document.getElementById('ej-refresh-btn'),st=document.getElementById('ej-status');if(btn){btn.disabled=true;btn.textContent='取得中…'}
+  const rows=ejHoldings(), cache=ejAutoLoad(), queue=[...new Map(rows.map(r=>[r.code,r])).values()];let ok=0,fail=0,done=0;
+  if(st)st.textContent=`0/${queue.length}銘柄を取得中…`;
+  const runners=Array.from({length:3},async()=>{while(queue.length){const r=queue.shift();try{cache[r.code]=await ejFetchOne(r.code);ok++}catch(e){cache[r.code]={...(cache[r.code]||{}),error:String(e?.message||e),date:new Date().toLocaleString('ja-JP'),source:'Yahoo Finance系'};fail++}done++;if(st)st.textContent=`${done}/${rows.length}銘柄を取得中…（成功 ${ok} / 失敗 ${fail}）`;}});
+  await Promise.all(runners);try{localStorage.setItem(EJ_AUTO_KEY,JSON.stringify(cache))}catch(e){}
+  if(btn){btn.disabled=false;btn.textContent='↻ 最新データ自動取得'};ejRender();if(st)st.textContent=`自動取得完了：成功 ${ok}/${rows.length}銘柄${fail?`・失敗 ${fail}銘柄`:''}。取得できない項目は「—」で表示します。`;
+}
 function ejHoldings(){
   let a=[];try{if(typeof amAccounts!=='undefined'&&Array.isArray(amAccounts))a=amAccounts}catch(e){};
   if(!a.length){try{a=JSON.parse(localStorage.getItem('assetAccounts')||'[]')}catch(e){}}
@@ -40,12 +68,14 @@ function ejHoldings(){
     const set=(k,v)=>{const n=ejNum(v);if(n!==null&&n!==0)r[k]=n};
     set('price',x.marketPrice||x.price||x.currentPrice);set('per',x.per);set('fper',x.forwardPER);set('pbr',x.pbr);set('target',x.analystTargetPrice||x.analystTarget||x.targetPrice);set('rev',x.revenueGrowth);set('op',x.opProfitGrowth);set('eps1',x.eps1);set('eps2',x.eps2);
     if(x.lastAnalysisDate)r.date=String(x.lastAnalysisDate);if(x.analysisSource)r.source=String(x.analysisSource);
-  });return Object.values(m)
+  });
+  const auto=ejAutoLoad();Object.values(m).forEach(r=>{const z=auto[r.code];if(!z||z.error)return;['price','per','fper','pbr','target','rev','op','eps1','eps2'].forEach(k=>{if(z[k]!==null&&z[k]!==undefined&&Number.isFinite(Number(z[k])))r[k]=Number(z[k])});r.date=z.date||r.date;r.source=z.source||r.source;});
+  return Object.values(m)
 }
 function ejAnalyze(r){
   const pts=[];let score=50;const add=(n,v,w)=>{score+=v;pts.push([n,v,w])};
   if(r.rev!==null)add('売上成長',r.rev>=20?12:r.rev>=10?8:r.rev>0?4:r.rev<=-10?-12:-6,`前年比 ${r.rev>=0?'+':''}${r.rev.toFixed(1)}%`);
-  if(r.op!==null)add('営業利益',r.op>=30?14:r.op>=15?10:r.op>0?5:r.op<=-15?-14:-7,`前年比 ${r.op>=0?'+':''}${r.op.toFixed(1)}%`);
+  if(r.op!==null)add('利益成長',r.op>=30?14:r.op>=15?10:r.op>0?5:r.op<=-15?-14:-7,`前年比 ${r.op>=0?'+':''}${r.op.toFixed(1)}%`);
   let eg=null;if(r.eps1!==null&&r.eps2!==null&&r.eps1!==0)eg=(r.eps2/r.eps1-1)*100;
   if(eg!==null)add('EPS成長',eg>=25?10:eg>=10?7:eg>0?3:eg<=-15?-10:-5,`${eg>=0?'+':''}${eg.toFixed(1)}%`);
   if(r.fper!==null){let n=r.fper<=0?-8:r.fper<15?7:r.fper<25?4:r.fper<40?0:-5; if(r.rev!==null&&r.rev>=20&&r.fper<40)n+=3;add('予想PER',n,`${r.fper.toFixed(1)}倍`)}
@@ -63,9 +93,9 @@ function ejRender(){
   const tone=l=>l==='業績加速'?['#e8f5e9','#176b32']:l==='成長継続'?['#eef8f0','#267442']:l==='中立'?['#f5f5f5','#555']:l==='業績鈍化'?['#fff3e0','#a45b00']:['#f5f5f5','#888'];
   const fmt=(v,suf='')=>v===null?'—':`${v>=0?'+':''}${v.toFixed(1)}${suf}`;
   el.innerHTML=rows.map(r=>{const [bg,fg]=tone(r.label);let action=r.label==='業績加速'?'業績面は強い。売買判断タブで押し目・過熱度を確認。':r.label==='成長継続'?'成長継続。割高なら追い買いせずテクニカル待ち。':r.label==='業績鈍化'?'業績悪化を優先警戒。新規買いは慎重に。':r.label==='データ不足'?'判断材料不足。最新決算・予想値の更新が必要。':'業績だけでは方向感が弱い。テクニカルと需給を優先。';
-    const chips=[['売上YoY',fmt(r.rev,'%'),r.rev!==null&&r.rev>0],['営業益YoY',fmt(r.op,'%'),r.op!==null&&r.op>0],['EPS',fmt(r.eg,'%'),r.eg!==null&&r.eg>0],['予想PER',r.fper===null?'—':r.fper.toFixed(1)+'x',r.fper!==null&&r.fper<30],['PBR',r.pbr===null?'—':r.pbr.toFixed(1)+'x',r.pbr!==null&&r.pbr<3],['目標余地',fmt(r.up,'%'),r.up!==null&&r.up>10]];
+    const chips=[['売上YoY',fmt(r.rev,'%'),r.rev!==null&&r.rev>0],['利益成長',fmt(r.op,'%'),r.op!==null&&r.op>0],['EPS',fmt(r.eg,'%'),r.eg!==null&&r.eg>0],['予想PER',r.fper===null?'—':r.fper.toFixed(1)+'x',r.fper!==null&&r.fper<30],['PBR',r.pbr===null?'—':r.pbr.toFixed(1)+'x',r.pbr!==null&&r.pbr<3],['目標余地',fmt(r.up,'%'),r.up!==null&&r.up>10]];
     return `<div style="border:1px solid var(--border);border-radius:14px;margin:10px 0;padding:13px 14px;background:var(--card)"><div style="display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:10px"><div><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><span style="padding:4px 8px;border-radius:999px;background:${bg};color:${fg};font-weight:800;font-size:11px">${r.label}</span><b style="font-size:15px">${esc2(r.name)}</b><span style="color:var(--text3);font-size:11px">${esc2(r.code)}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">${chips.map(c=>`<span style="font-size:10px;padding:4px 6px;border-radius:7px;background:${c[2]?'#eef8f0':'#f7f7f7'};color:${c[2]?'#19713a':'var(--text3)'}">${c[0]} ${c[1]}</span>`).join('')}</div><div style="margin-top:9px;padding:8px 10px;border-radius:9px;background:${bg};color:${fg};font-size:11px;font-weight:700">今どうする：${action}</div><div style="margin-top:7px;color:var(--text3);font-size:10px">分析日 ${esc2(r.date||'未登録')} ${r.source?'・出典 '+esc2(r.source):''}</div></div><div style="text-align:right"><div style="font-size:27px;font-weight:900;line-height:1">${r.known<3?'—':r.score}</div><div style="font-size:10px;color:var(--text3)">${r.known<3?'':'/100'}</div></div></div></div>`}).join('')||'<div style="padding:20px;text-align:center;color:var(--text3)">保有銘柄がありません。</div>';
-  const enough=rows.filter(r=>r.known>=3).length,missing=rows.length-enough;if(st)st.textContent=`${enough}/${rows.length}銘柄を評価${missing?`（データ不足 ${missing}銘柄）`:''}。数値は資産管理に登録済みの分析データです。`;
+  const enough=rows.filter(r=>r.known>=3).length,missing=rows.length-enough;if(st)st.textContent=`${enough}/${rows.length}銘柄を評価${missing?`（データ不足 ${missing}銘柄）`:''}。自動取得値を優先し、取得できない項目は登録済みデータを使用します。`;
 }
 
 </script>
@@ -733,8 +763,8 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 <!-- ========== EARNINGS JUDGMENT ========== -->
 <div class="panel" id="tab-earnjudge">
   <div class="page-inner sd-page">
-    <div class="sd-head"><div><div class="sd-eyebrow">業績 × バリュエーション × 目標株価</div><h2>業績判断</h2></div><button class="sd-btn" onclick="ejRender()">↻ 登録データ再評価</button></div>
-    <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-note">資産管理に登録済みの <b>売上成長率・営業利益成長率・EPS・PER・予想PER・PBR・アナリスト目標株価</b> を横断評価します。外部サイトから数値を自動取得している画面ではありません。古い分析値を「最新」と誤認しないよう、分析日も表示します。</div><div id="ej-status" class="sd-note" style="margin-top:8px"></div></div>
+    <div class="sd-head"><div><div class="sd-eyebrow">業績 × バリュエーション × 目標株価</div><h2>業績判断</h2></div><button class="sd-btn" id="ej-refresh-btn" onclick="ejAutoRefresh()">↻ 最新データ自動取得</button></div>
+    <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-note"><b>Yahoo Finance系の公開データを自動取得</b>し、売上成長率・利益成長率・EPS・PER・予想PER・PBR・アナリスト目標株価を横断評価します。取得できない項目は「—」のままにし、推測値では補完しません。取得日時とデータ元をカードに表示します。</div><div id="ej-status" class="sd-note" style="margin-top:8px">「最新データ自動取得」で更新します。</div></div>
     <div class="card" style="padding:12px 14px;margin-bottom:12px"><div class="sd-cardtitle">業績アクション順</div><div class="sd-note" style="margin-bottom:8px">「業績加速 → 成長継続 → 中立 → 業績鈍化 → データ不足」の順です。テクニカルの売買タイミングとは別評価です。</div><div id="ej-list"></div></div>
   </div>
 </div>
