@@ -38,33 +38,41 @@ function ejRaw(v){if(v==null)return null;if(typeof v==='object'&&v.raw!=null)v=v
 const EJ_WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
 function ejErrKind(e){const m=String(e?.message||e||'');if(/HTTP 401|HTTP 403/i.test(m))return '認証/アクセス拒否';if(/HTTP 404/i.test(m))return '取得先未対応';if(/Failed to fetch|NetworkError|CORS/i.test(m))return '通信/CORS';if(/quoteSummary|fundamental/i.test(m))return 'Worker未対応';return m.slice(0,80)||'取得失敗'}
 async function ejWorkerFundamentals(symbol){
-  const modules='price,summaryDetail,defaultKeyStatistics,financialData,earnings';
-  // テクニカルと同じCloudflare Workerを唯一の取得経路にする。
-  // Worker側が fundamentals/quoteSummary に対応していればそのJSONを返す。
-  const tries=[
-    `${EJ_WORKER}?code=${encodeURIComponent(symbol)}&type=fundamentals&modules=${encodeURIComponent(modules)}&_ts=${Date.now()}`,
-    `${EJ_WORKER}?code=${encodeURIComponent(symbol)}&endpoint=quoteSummary&modules=${encodeURIComponent(modules)}&_ts=${Date.now()}`
-  ];
-  let last=null;
-  for(const u of tries){
-    try{
-      const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);
-      const j=await r.json();
-      const q=j?.quoteSummary?.result?.[0]||j?.fundamentals||j?.result;
-      if(q && !j?.chart) return q;
-      last=new Error('Worker fundamental endpoint unsupported');
-    }catch(e){last=e}
+  // Cloudflare Worker の業績専用エンドポイント。
+  const u=`${EJ_WORKER}?fundamentals=${encodeURIComponent(symbol)}&_ts=${Date.now()}`;
+  const r=await fetch(u,{cache:'no-store'});
+  let j=null;
+  try{j=await r.json()}catch(e){throw new Error('HTTP '+r.status+' / JSON解析失敗')}
+  if(!r.ok){
+    const detail=j?.message||j?.detail||j?.error||('HTTP '+r.status);
+    throw new Error('HTTP '+r.status+' / '+String(detail).slice(0,160));
   }
-  throw last||new Error('Worker fundamental endpoint unsupported');
+  if(!j?.ok)throw new Error(String(j?.error||'fundamentals_no_result'));
+  return j;
 }
 async function ejFetchOne(code){
   const symbol=ejYahooSymbol(code), q=await ejWorkerFundamentals(symbol);
-  const price=q.price||{}, sd=q.summaryDetail||{}, ks=q.defaultKeyStatistics||{}, fd=q.financialData||{};
-  const cur=ejRaw(price.regularMarketPrice)??ejRaw(q.regularMarketPrice), per=ejRaw(sd.trailingPE)??ejRaw(ks.trailingPE)??ejRaw(q.trailingPE), fper=ejRaw(sd.forwardPE)??ejRaw(ks.forwardPE)??ejRaw(q.forwardPE), pbr=ejRaw(ks.priceToBook)??ejRaw(q.priceToBook), target=ejRaw(fd.targetMeanPrice)??ejRaw(q.targetMeanPrice);
-  const rev=ejRaw(fd.revenueGrowth)??ejRaw(q.revenueGrowth); const earnGrowth=ejRaw(fd.earningsGrowth)??ejRaw(fd.earningsQuarterlyGrowth)??ejRaw(q.earningsGrowth);
-  const eps1=ejRaw(ks.trailingEps)??ejRaw(q.trailingEps), eps2=ejRaw(ks.forwardEps)??ejRaw(q.forwardEps);
-  const vals=[cur,per,fper,pbr,target,rev,earnGrowth,eps1,eps2];if(!vals.some(v=>v!==null))throw new Error('Worker returned no fundamental fields');
-  return {price:cur,per,fper,pbr,target,rev:rev==null?null:rev*100,op:earnGrowth==null?null:earnGrowth*100,eps1,eps2,date:new Date().toLocaleString('ja-JP'),source:'Yahoo Finance系（Cloudflare Worker経由）',symbol,error:''};
+  const val=q.valuation||{}, earn=q.earnings||{}, an=q.analyst||{};
+  const cur=ejRaw(q.price);
+  const per=ejRaw(val.trailingPE);
+  const fper=ejRaw(val.forwardPE);
+  const pbr=ejRaw(val.priceToBook);
+  const target=ejRaw(an.targetMeanPrice);
+  const rev=ejRaw(earn.revenueGrowth);
+  const earnGrowth=ejRaw(earn.earningsGrowth);
+  const eps1=ejRaw(earn.trailingEps);
+  const eps2=ejRaw(earn.forwardEps);
+  const vals=[cur,per,fper,pbr,target,rev,earnGrowth,eps1,eps2];
+  if(!vals.some(v=>v!==null))throw new Error('Worker returned no fundamental fields');
+  return {
+    price:cur,per,fper,pbr,target,
+    rev:rev==null?null:rev*100,
+    op:earnGrowth==null?null:earnGrowth*100,
+    eps1,eps2,
+    date:q.fetchedAt?new Date(q.fetchedAt).toLocaleString('ja-JP'):new Date().toLocaleString('ja-JP'),
+    source:q.source?`${q.source}（Cloudflare Worker経由）`:'Yahoo Finance（Cloudflare Worker経由）',
+    symbol:q.symbol||symbol,error:''
+  };
 }
 async function ejAutoRefresh(){
   const btn=document.getElementById('ej-refresh-btn'),st=document.getElementById('ej-status');if(btn){btn.disabled=true;btn.textContent='取得中…'}
