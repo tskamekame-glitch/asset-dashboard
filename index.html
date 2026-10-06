@@ -841,7 +841,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div style="padding:0 14px 8px">
       <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:16px;padding:14px 16px;cursor:pointer" onclick="switchTab('pnl')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.04em">月初来損益</div>
+          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.04em">現在の損益</div>
           <div id="home-month-range" style="font-size:10px;color:var(--text3)">—</div>
         </div>
         <div id="home-month-total" style="font-size:30px;font-weight:800;color:var(--green);letter-spacing:-0.5px;margin-bottom:8px">—</div>
@@ -3524,22 +3524,44 @@ function refreshHome(){
         urEl.style.color=totalUnrealized>=0?'#4ade80':'#f87171';
       }else{urEl.textContent='—';}
     }
-    // ベスト/ワースト
-    rankings.sort((a,b)=>b.pct-a.pct);
-    const best=rankings[0],worst=rankings[rankings.length-1];
+    // BEST/WORSTは当日の騰落率を優先。BESTはプラス銘柄、WORSTはマイナス銘柄だけを表示する。
+    // 同じ銘柄がBEST/WORSTの両方に出たり、赤いWORSTに「+0.5%」が出る誤表示を防ぐ。
+    let dailyRankings=[];
+    try{
+      const q=(typeof amLoadDailyQuotes==='function')?amLoadDailyQuotes():null;
+      if(q&&q.quotes&&(Date.now()-q.ts)<24*3600*1000){
+        const merged=new Map();
+        const targets=amDailyTargets(homeAccounts.filter(a=>!a.sold));
+        targets.forEach(t=>{
+          const qd=q.quotes[t.qcode];
+          if(!qd||qd.err||!(qd.prev>0)||!(qd.cur>0))return;
+          const pct=(qd.cur-qd.prev)/qd.prev*100;
+          const key=amLotKey(t.a);
+          const name=(typeof amLotBaseName==='function'?amLotBaseName(t.a.name):String(t.a.name||''));
+          if(!merged.has(key))merged.set(key,{name,pct});
+        });
+        dailyRankings=[...merged.values()].filter(x=>Number.isFinite(x.pct));
+      }
+    }catch(e){}
+    const sourceRanks=dailyRankings.length?dailyRankings:rankings.map(x=>({...x,name:(typeof amLotBaseName==='function'?amLotBaseName(x.name):x.name)}));
+    const positives=sourceRanks.filter(x=>x.pct>0).sort((a,b)=>b.pct-a.pct);
+    const negatives=sourceRanks.filter(x=>x.pct<0).sort((a,b)=>a.pct-b.pct);
+    const best=positives[0]||null,worst=negatives[0]||null;
     const bn=document.getElementById('home-best-name'),bp=document.getElementById('home-best-pct');
     const wn=document.getElementById('home-worst-name'),wp=document.getElementById('home-worst-pct');
-    if(best&&bn){bn.textContent=best.name;bp.textContent=(best.pct>=0?'＋':'')+best.pct.toFixed(1)+'%';}
-    if(worst&&wn){wn.textContent=worst.name;wp.textContent=(worst.pct>=0?'＋':'')+worst.pct.toFixed(1)+'%';}
+    if(bn)bn.textContent=best?best.name:'プラス銘柄なし';
+    if(bp)bp.textContent=best?'＋'+best.pct.toFixed(1)+'%':'—';
+    if(wn)wn.textContent=worst?worst.name:'マイナス銘柄なし';
+    if(wp)wp.textContent=worst?worst.pct.toFixed(1)+'%':'—';
   }catch(e){}
 
-  // ── 4. 月初来損益（評価＋確定）──
+  // ── 4. 現在の損益（保有中の累計評価損益＋当月確定損益）──
   try{
     const now=new Date();
     const y=now.getFullYear(),m=now.getMonth()+1;
     const d1=String(m).padStart(2,'0');
     const rangeEl=document.getElementById('home-month-range');
-    if(rangeEl)rangeEl.textContent=`${m}月1日〜${now.getDate()}日`;
+    if(rangeEl)rangeEl.textContent=`評価損益＋${m}月確定損益`;
     // 評価損益は全期間累計（pnlCalcUnrealized使用）
     const uItems=typeof pnlCalcUnrealized==='function'?pnlCalcUnrealized():[];
     const uTotal=uItems.reduce((s,i)=>s+i.gain,0);
@@ -4025,7 +4047,10 @@ function amLotKey(a){
   return'n:'+String(a.name||'').replace(/（[^）]*買付[^）]*）$/,'').trim();
 }
 function amLotBaseName(name){
-  return String(name||'').replace(/（[^）]*買付[^）]*）$/,'').trim();
+  return String(name||'')
+    .replace(/（[^）]*買付[^）]*）$/,'')
+    .replace(/\s*[（(]?-{2,4}\/--\/--買付[）)]?\s*$/,'')
+    .trim();
 }
 // entries: {key,name,amount,gain(null可),base,id} → 合算items {name,amount,pct,gain,base,id}
 // gain=nullのロット(取得価格未設定など)は評価額のみ合算し、名前に†を付けて部分計算を明示
