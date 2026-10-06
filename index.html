@@ -18531,22 +18531,32 @@ function tjHoldings(){
   return Object.values(m);
 }
 function tjSymbol(code){if(/^\d{4}$/.test(code)||/^\d{3}[A-Z]$/.test(code))return code+'.T';return code;}
-function tjSessionClosed(code,ts){
+function tjMarketClock(code){
   const jp=/^(\d{4}|\d{3}[A-Z])$/.test(String(code||''));
-  const now=new Date(), zone=jp?'Asia/Tokyo':'America/New_York';
-  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
-  const bar=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ts)).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
-  const same=parts.year===bar.year&&parts.month===bar.month&&parts.day===bar.day;
-  if(!same)return true;
-  const hm=Number(parts.hour)*60+Number(parts.minute);
-  return jp?hm>=15*60+30:hm>=16*60+10;
+  const zone=jp?'Asia/Tokyo':'America/New_York', now=new Date();
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',weekday:'short',hourCycle:'h23'}).formatToParts(now).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+  const ymd=`${p.year}-${p.month}-${p.day}`, hm=Number(p.hour)*60+Number(p.minute), weekday=p.weekday;
+  // 東証は15:30 JST、米国通常取引は16:00 ET。データ反映の余裕を10分みる。
+  const closeMin=jp?(15*60+40):(16*60+10);
+  return {jp,zone,ymd,hm,weekday,sessionConfirmed:weekday!=='Sat'&&weekday!=='Sun'&&hm>=closeMin};
+}
+function tjBarYmd(ts,zone){
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ts)).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+}
+function tjKeepConfirmedBar(code,ts){
+  const m=tjMarketClock(code), d=tjBarYmd(ts,m.zone);
+  // 過去日は確定。当日バーは取引終了＋10分後だけ採用。未来日扱いのバーは除外。
+  if(d<m.ymd)return true;
+  if(d>m.ymd)return false;
+  return m.sessionConfirmed;
 }
 async function tjSeries(code){
   const resp=await fetch(`${TJ_WORKER}?code=${encodeURIComponent(tjSymbol(code))}&range=6mo&_ts=${Date.now()}`,{cache:'no-store'});if(!resp.ok)throw new Error('HTTP '+resp.status);
   const d=await resp.json(),r=d?.chart?.result?.[0];if(!r)throw new Error('データなし');const q=r.indicators?.quote?.[0]||{};
   let rows=(r.timestamp||[]).map((t,i)=>({t:t*1000,c:Number(q.close?.[i]),v:Number(q.volume?.[i])})).filter(x=>Number.isFinite(x.c)&&x.c>0);
-  // Yahoo系日足は市場開催中の当日バーも close として返すことがあるため、確定前は除外する。
-  if(rows.length&&!tjSessionClosed(code,rows.at(-1).t))rows=rows.slice(0,-1);
+  // Yahoo系日足は市場開催中の当日バーも close として返すことがあるため、取引終了＋10分までは当日バーを必ず除外する。
+  while(rows.length&&!tjKeepConfirmedBar(code,rows.at(-1).t))rows=rows.slice(0,-1);
   rows.source='Yahoo Finance系データ（Cloudflare Worker経由）';
   rows.fetchedAt=Date.now();
   return rows;
