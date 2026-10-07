@@ -6992,6 +6992,23 @@ function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSna
     itemDiffs.splice(8);
   }
 
+  // 取り込み差額を「既存保有」「現金」「新規追加」に分解する。
+  // CSVだけでは既存銘柄の追加買付と純粋な価格変動を完全分離できないため、
+  // 既存保有は誤認防止のため「評価額変動（価格変動・追加買付等を含む）」と明示する。
+  const allDiffs=[...keys].map(k=>{
+    const b=bm.get(k), a=am.get(k), oldVal=b?b.value:0, newVal=a?a.value:0;
+    return {name:(a||b||{}).name||'名称不明',oldVal,newVal,diff:newVal-oldVal};
+  }).filter(x=>Math.abs(x.diff)>=1);
+  const isCashName=n=>/(預かり|預り|現金|買付余力|銀行|普通預金|cash)/i.test(String(n||''));
+  const newAddDiff=allDiffs.filter(x=>x.oldVal<=0&&x.newVal>0&&!isCashName(x.name)).reduce((t,x)=>t+x.diff,0);
+  const cashDiff=allDiffs.filter(x=>isCashName(x.name)).reduce((t,x)=>t+x.diff,0);
+  const existingDiff=diff-newAddDiff-cashDiff;
+  const metric=(label,value,note)=>{
+    const sg=value>=0?'+':'', cc=value>=0?'var(--green)':'var(--danger)';
+    return `<div style="padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg1);min-width:0"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><div style="font-size:14px;font-weight:800;color:${cc}">${sg}${fmt(Math.round(value))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;line-height:1.35">${note}</div></div>`;
+  };
+  const breakdownHtml=`<div style="margin:8px 0 10px"><div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:6px">変動の内訳</div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">${metric('① 既存保有',existingDiff,'価格変動・追加買付等')}${metric('② 現金増減',cashDiff,'SBI預かり等')}${metric('③ 新規追加',newAddDiff,'前回0円→今回残高あり')}</div><div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.45">※ SBI保有CSVだけでは、既存銘柄の「値動き」と「追加買付」を完全には分離できません。①は既存保有の評価額変動として表示します。</div></div>`;
+
   const itemHtml=itemDiffs.map(d=>{
     const s=d.diff>=0?'+':'';
     const c=d.diff>=0?'var(--green)':'var(--danger)';
@@ -7023,6 +7040,7 @@ function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSna
         <div style="font-size:11px;color:var(--text3)">▼ 詳細</div>
       </div>
       <div id="sbiDiffDetail" style="display:none;padding:4px 14px 10px">
+        ${breakdownHtml}
         ${missingWarnHtml}
         ${itemHtml||noDetail}
         ${reflectedHtml}
