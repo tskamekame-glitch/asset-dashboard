@@ -6702,13 +6702,10 @@ async function amApplySBIRows(rows, importMeta={}){
   // 他社・手入力資産は同名/同コードでも絶対に削除しない。
   // CSV由来の行だけを識別する。broker='SBI証券' だけの手入力行は削除対象にしない。
   const isSbiImported=a=>a&&((a.sbiCsvSource==='SBI')||/^\[SBI CSV(?:\s|\])/i.test(String(a.note||'')));
-  // SBIのページ分割CSVでは、ページ1が新しい取込セッションの開始。
-  // ページ1読込時に「過去のCSV由来SBI行」だけを全消去し、ページ1→2...を積み上げる。
-  // これにより以前の取込試行で残った古いページ2行との二重計上を防ぐ。
+  // 安全優先：ページ1でも既存SBI銘柄を一括削除しない。
+  // CSVに実際に載っている「同一銘柄＋同一口座区分」だけを置換し、
+  // 前回存在したのに今回CSVにない残高あり銘柄は保持して警告する。
   const importPage=Number(importMeta&&importMeta.page||0);
-  if(importPage===1){
-    amAccounts=amAccounts.filter(a=>a.sold||!isSbiImported(a));
-  }
   // CSV再取込で一度分類したセクターを維持するため、既存SBI資産の手動/保存済みセクターを先に退避。
   const savedSectorByCode=new Map(), savedSectorByName=new Map();
   amAccounts.filter(a=>!a.sold && a.sector).forEach(a=>{
@@ -6724,8 +6721,9 @@ async function amApplySBIRows(rows, importMeta={}){
   const currentSbiSecurityTotalBefore=amAccounts.filter(a=>!a.sold&&String(a.broker||'')==='SBI証券'&&!['銀行','現金','FX','暗号資産'].includes(String(a.cat||''))).reduce((s,a)=>s+Number(a.amount||0),0);
   const incomingStockKeys=new Set();
   rows.filter(r=>!r.isFund&&r.code&&Number(r.evalAmt)>0).forEach(r=>{
-    incomingStockKeys.add('c:'+normCode(r.code));
-    incomingStockKeys.add('n:'+normName(r.bareName||r.nameRaw||''));
+    const ak=acctKey(r);
+    incomingStockKeys.add('c:'+normCode(r.code)+'|'+ak);
+    incomingStockKeys.add('n:'+normName(r.bareName||r.nameRaw||'')+'|'+ak);
   });
   const incomingFundKeys=new Set();
   rows.filter(r=>(r.isFund||!r.code)&&Number(r.evalAmt)>0).forEach(r=>{
@@ -6739,8 +6737,9 @@ async function amApplySBIRows(rows, importMeta={}){
     if(!isSbiImported(a))return true;
     // 個別株：今回CSVに含まれるSBI行だけを置換する。
     // これで「その他」等に残った旧SBI行による二重計上を防止する。
-    const kCode=a.code?('c:'+normCode(a.code)):'';
-    const kName='n:'+normName(a.name);
+    const aAcct=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
+    const kCode=a.code?('c:'+normCode(a.code)+'|'+aAcct):'';
+    const kName='n:'+normName(a.name)+'|'+aAcct;
     if((kCode&&incomingStockKeys.has(kCode))||incomingStockKeys.has(kName))return false;
     // 投信：ファンド名＋NISA区分が一致する旧行を置換。カテゴリ変更にも対応。
     const fundKey=fundKeyForAccount(a);
@@ -6919,6 +6918,28 @@ async function amApplySBIRows(rows, importMeta={}){
     }
   }
 
+  // 完全な1ファイルCSVと判断できる場合だけ、前回SBI残高のうち今回CSVにない銘柄を警告する。
+  // 該当銘柄は自動削除せず、そのまま残高を保持する。
+  const isCompleteSbiSnapshot=(importMeta&&Number(importMeta.totalCount||0)>0)
+    ? Number(importMeta.rangeStart||1)<=1 && Number(importMeta.rangeEnd||0)>=Number(importMeta.totalCount||0)
+    : importPage===0;
+  const incomingExactKeys=new Set();
+  for(const r of rows){
+    if(!(Number(r.evalAmt)>0))continue;
+    const ak=acctKey(r);
+    if(!r.isFund&&r.code)incomingExactKeys.add('S|'+normCode(r.code)+'|'+ak);
+    else incomingExactKeys.add('F|'+normName(r.nameNorm||r.nameRaw)+'|'+ak);
+  }
+  const retainedMissing=[];
+  if(isCompleteSbiSnapshot){
+    for(const a of beforeSnapshot){
+      if(a.sold||!isSbiImported(a)||!(Number(a.amount)>0))continue;
+      const ak=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
+      const k=a.code?('S|'+normCode(a.code)+'|'+ak):('F|'+normName(a.name)+'|'+ak);
+      if(!incomingExactKeys.has(k))retainedMissing.push({name:a.name,code:a.code||'',account:ak,amount:Number(a.amount||0)});
+    }
+  }
+
   const afterTotal=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+Number(a.amount||0),0);
   const importedTotal=rows.reduce((s,r)=>s+Number(r.evalAmt||0),0);
   amSaveToLocal();
@@ -6929,10 +6950,11 @@ async function amApplySBIRows(rows, importMeta={}){
   try{opsRender();}catch(e){}
   const stockCount=stockMap.size, fundCount=importedFunds.length;
   showToast(`✅ SBI CSV${importPage?`（ページ${importPage}）`:''}反映：個別株${stockCount}銘柄・投信${fundCount}本。今回CSV評価額 ¥${Math.round(importedTotal).toLocaleString('ja-JP')} / 総資産 ¥${Math.round(afterTotal).toLocaleString('ja-JP')}`,7000);
-  try{amShowSBIDiffBanner(beforeTotal,afterTotal,log,stockCount+fundCount,beforeSnapshot,amAccounts.filter(a=>!a.sold).map(a=>({...a})));}catch(e){console.error('SBI diff banner',e);}
+  try{amShowSBIDiffBanner(beforeTotal,afterTotal,log,stockCount+fundCount,beforeSnapshot,amAccounts.filter(a=>!a.sold).map(a=>({...a})),retainedMissing);}catch(e){console.error('SBI diff banner',e);}
+  if(retainedMissing.length){showToast(`⚠️ 前回あったSBI銘柄 ${retainedMissing.length}件が今回CSVにありません。誤削除防止のため残高を保持しました。`,8000);}
 }
 
-function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSnapshot=[],afterSnapshot=[]){
+function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSnapshot=[],afterSnapshot=[],retainedMissing=[]){
   const diff=totalAfter-totalBefore;
   const sign=diff>=0?'+':'';
   const col=diff>=0?'var(--green)':'var(--danger)';
@@ -6981,6 +7003,10 @@ function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSna
     </div>`;
   }).join('');
 
+  const missingWarnHtml=retainedMissing.length?`<div style="margin:8px 0;padding:10px 11px;border-radius:10px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35)">
+    <div style="font-size:12px;font-weight:800;color:#b7791f;margin-bottom:5px">⚠️ 今回CSVにない前回SBI銘柄 ${retainedMissing.length}件を保持しました</div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.6">${retainedMissing.slice(0,8).map(x=>`${esc(x.name)}${x.code?' ('+esc(x.code)+')':''}・${esc(x.account)}：${fmt(Math.round(x.amount))}`).join('<br>')}${retainedMissing.length>8?`<br>ほか ${retainedMissing.length-8}件`:''}<br><b>自動削除していません。</b> 実際に売却済みなら資産管理から確認して削除してください。</div>
+  </div>`:'';
   const reflectedHtml=reflectedCount>0?`<div style="font-size:12px;color:var(--accent);margin-top:7px">CSV反映 ${reflectedCount}件</div>`:'';
   const noDetail=Math.abs(diff)>=1
     ? `<div style="font-size:12px;color:var(--danger);padding:8px 0">総資産は ${sign}${fmt(Math.round(diff))} 変動しています。銘柄別内訳を特定できないため「変動なし」にはしません。</div>`
@@ -6997,6 +7023,7 @@ function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSna
         <div style="font-size:11px;color:var(--text3)">▼ 詳細</div>
       </div>
       <div id="sbiDiffDetail" style="display:none;padding:4px 14px 10px">
+        ${missingWarnHtml}
         ${itemHtml||noDetail}
         ${reflectedHtml}
       </div>
