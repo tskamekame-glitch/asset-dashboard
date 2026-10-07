@@ -6677,6 +6677,8 @@ async function amApplySBIRows(rows, importMeta={}){
   if(!Array.isArray(amAccounts))amAccounts=[];
   const today=todayStr();
   const beforeTotal=amAccounts.filter(a=>!a.sold).reduce((s,a)=>s+Number(a.amount||0),0);
+  // SBI CSV取込前の状態を保持。ページ1で旧CSV行を削除しても差分内訳を正しく表示するために必要。
+  const beforeSnapshot=amAccounts.filter(a=>!a.sold).map(a=>({...a}));
   const normCode=v=>String(v||'').replace(/[^0-9A-Za-z.]/g,'').toUpperCase();
   const normName=v=>String(v||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   const acctKey=r=>r.acctSuffix||'特定';
@@ -6927,37 +6929,65 @@ async function amApplySBIRows(rows, importMeta={}){
   try{opsRender();}catch(e){}
   const stockCount=stockMap.size, fundCount=importedFunds.length;
   showToast(`✅ SBI CSV${importPage?`（ページ${importPage}）`:''}反映：個別株${stockCount}銘柄・投信${fundCount}本。今回CSV評価額 ¥${Math.round(importedTotal).toLocaleString('ja-JP')} / 総資産 ¥${Math.round(afterTotal).toLocaleString('ja-JP')}`,7000);
-  try{amShowSBIDiffBanner(beforeTotal,afterTotal,log,stockCount+fundCount);}catch(e){console.error('SBI diff banner',e);}
+  try{amShowSBIDiffBanner(beforeTotal,afterTotal,log,stockCount+fundCount,beforeSnapshot,amAccounts.filter(a=>!a.sold).map(a=>({...a})));}catch(e){console.error('SBI diff banner',e);}
 }
 
-function amShowSBIDiffBanner(totalBefore,totalAfter,log,added){
+function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSnapshot=[],afterSnapshot=[]){
   const diff=totalAfter-totalBefore;
   const sign=diff>=0?'+':'';
   const col=diff>=0?'var(--green)':'var(--danger)';
   const icon=diff>=0?'📈':'📉';
 
-  // 銘柄別差分（上位5件）
-  const itemDiffs=log
-    .filter(l=>l.oldVal>0&&l.val>0&&l.val!==l.oldVal)
-    .map(l=>({name:l.am,diff:l.val-l.oldVal,pct:(l.val-l.oldVal)/l.oldVal*100}))
-    .sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff))
-    .slice(0,6);
+  // 取込前後を銘柄単位で集計して差分を作る。
+  // 「旧SBI行を削除→CSVから再作成」の場合でも、総資産差分と銘柄別内訳が一致するようにする。
+  const keyOf=a=>{
+    const broker=String(a&&a.broker||'');
+    const nisa=a&&a.nisaType==='growth'?'NISA成長':a&&a.nisaType==='tsumitate'?'NISAつみたて':'特定';
+    const code=String(a&&a.code||'').replace(/[^0-9A-Za-z.]/g,'').toUpperCase();
+    const name=String(a&&a.name||'').replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/　/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+    return (code?'c:'+code:'n:'+name)+'|'+broker+'|'+nisa;
+  };
+  const aggregate=list=>{
+    const m=new Map();
+    (Array.isArray(list)?list:[]).forEach(a=>{
+      if(!a||a.sold)return;
+      const k=keyOf(a), cur=m.get(k)||{name:a.name||a.code||'名称不明',value:0};
+      cur.value+=Number(a.amount||0); if(a.name)cur.name=a.name; m.set(k,cur);
+    });
+    return m;
+  };
+  const bm=aggregate(beforeSnapshot), am=aggregate(afterSnapshot);
+  const keys=new Set([...bm.keys(),...am.keys()]);
+  const itemDiffs=[...keys].map(k=>{
+    const b=bm.get(k), a=am.get(k), oldVal=b?b.value:0, newVal=a?a.value:0;
+    return {name:(a||b||{}).name||'名称不明',oldVal,newVal,diff:newVal-oldVal,pct:oldVal>0?(newVal-oldVal)/oldVal*100:null};
+  }).filter(x=>Math.abs(x.diff)>=1).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,8);
+
+  // スナップショットが使えない旧データ向けフォールバック
+  if(!itemDiffs.length&&Array.isArray(log)){
+    log.filter(l=>Number(l.val||0)!==Number(l.oldVal||0)).forEach(l=>itemDiffs.push({name:l.am,oldVal:Number(l.oldVal||0),newVal:Number(l.val||0),diff:Number(l.val||0)-Number(l.oldVal||0),pct:Number(l.oldVal||0)>0?(Number(l.val||0)-Number(l.oldVal||0))/Number(l.oldVal||0)*100:null}));
+    itemDiffs.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+    itemDiffs.splice(8);
+  }
 
   const itemHtml=itemDiffs.map(d=>{
     const s=d.diff>=0?'+':'';
     const c=d.diff>=0?'var(--green)':'var(--danger)';
-    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
-      <span style="font-size:13px;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</span>
-      <span style="font-size:13px;font-weight:700;color:${c};flex-shrink:0;margin-left:8px">${s}${fmt(Math.round(d.diff))}</span>
-      <span style="font-size:11px;color:${c};flex-shrink:0;margin-left:6px;min-width:48px;text-align:right">(${s}${d.pct.toFixed(1)}%)</span>
+    const pct=d.pct==null?'':` (${d.pct>=0?'+':''}${d.pct.toFixed(1)}%)`;
+    const state=d.oldVal<=0&&d.newVal>0?'新規':d.oldVal>0&&d.newVal<=0?'消滅':'';
+    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border);gap:8px">
+      <span style="font-size:13px;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}${state?` <span style="font-size:10px;color:var(--text3)">(${state})</span>`:''}</span>
+      <span style="font-size:13px;font-weight:700;color:${c};flex-shrink:0">${s}${fmt(Math.round(d.diff))}${pct}</span>
     </div>`;
   }).join('');
 
-  const addedHtml=added>0?`<div style="font-size:12px;color:var(--accent);margin-top:6px">＋ 新規追加 ${added}件</div>`:'';
+  const reflectedHtml=reflectedCount>0?`<div style="font-size:12px;color:var(--accent);margin-top:7px">CSV反映 ${reflectedCount}件</div>`:'';
+  const noDetail=Math.abs(diff)>=1
+    ? `<div style="font-size:12px;color:var(--danger);padding:8px 0">総資産は ${sign}${fmt(Math.round(diff))} 変動しています。銘柄別内訳を特定できないため「変動なし」にはしません。</div>`
+    : '<div style="font-size:12px;color:var(--text3);padding:8px 0">総資産の変動なし</div>';
 
   const html=`
     <div id="sbiDiffBanner" style="margin:8px 0 4px;background:var(--bg2);border:1px solid ${diff>=0?'rgba(15,110,86,0.3)':'rgba(192,57,43,0.3)'};border-radius:12px;overflow:hidden">
-      <!-- ヘッダー -->
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px 10px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="document.getElementById('sbiDiffDetail').style.display=document.getElementById('sbiDiffDetail').style.display==='none'?'block':'none'">
         <div>
           <div style="font-size:12px;color:var(--text3);margin-bottom:2px">${icon} SBI CSV取り込み完了</div>
@@ -6966,21 +6996,17 @@ function amShowSBIDiffBanner(totalBefore,totalAfter,log,added){
         </div>
         <div style="font-size:11px;color:var(--text3)">▼ 詳細</div>
       </div>
-      <!-- 詳細（開閉） -->
       <div id="sbiDiffDetail" style="display:none;padding:4px 14px 10px">
-        ${itemHtml||'<div style="font-size:12px;color:var(--text3);padding:8px 0">変動なし</div>'}
-        ${addedHtml}
+        ${itemHtml||noDetail}
+        ${reflectedHtml}
       </div>
     </div>`;
 
-  // reminderBannerの下に挿入
   const banner=document.getElementById('soldSummaryBanner');
   if(banner){
-    // 既存の差分バナーを削除
     const old=document.getElementById('sbiDiffBanner');
     if(old)old.remove();
     banner.insertAdjacentHTML('afterend',html);
-    // 3秒後に自動で詳細を開く
     setTimeout(()=>{const d=document.getElementById('sbiDiffDetail');if(d)d.style.display='block';},300);
   }
 }
