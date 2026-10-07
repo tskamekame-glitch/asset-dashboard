@@ -999,7 +999,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
-      <button class="btn-sm" style="color:#e6931a;border-color:#e6931a;font-weight:600" onclick="document.getElementById('amSBIInput').click()">📥 SBI証券CSV</button>
+      <button class="btn-sm" style="color:#e6931a;border-color:#e6931a;font-weight:600" onclick="document.getElementById('amSBIInput').click()" title="SBI CSVを複数ページまとめて選択できます">📥 SBI証券CSV（複数可）</button>
       <button class="btn-sm" style="color:#FF6A13;border-color:#FF6A13;font-weight:600" onclick="document.getElementById('amMoomooInput').click()">📥 moomoo CSV</button>
       <button class="btn-sm" style="color:#2980b9;border-color:#2980b9;font-weight:600" onclick="openAddModal('外国株式')">＋ 海外株を手入力</button>
       <button class="btn-sm" onclick="amFetchAllForeignQuotes()" style="color:#2980b9;border-color:#2980b9;font-weight:600" title="保有中の外国株式（ティッカー登録済み）の株価とドル円レートを一括取得">🌐 外国株更新</button>
@@ -1010,7 +1010,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="btn-sm" onclick="amToggleSoldView()" id="btnSoldToggle" style="color:var(--text3);border-color:var(--text3)">🏷 売却済を表示</button>
       <button class="btn-sm" onclick="amMigrateConfirmedContribution()" style="color:#0F6E56;border-color:#0F6E56" title="確定拠出年金口座を残高入力方式に変換">🔄 DC年金データ移行</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
-      <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
+      <input type="file" id="amSBIInput" accept=".csv" multiple style="display:none" onchange="amSBIImport(event)">
       <input type="file" id="amMoomooInput" accept=".csv" multiple style="display:none" onchange="amMoomooImport(event)">
     </div>
     <div class="section" id="chartSection">
