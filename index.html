@@ -3799,7 +3799,8 @@ function amRender(){
   // 重要: 資産管理の再描画では株価・為替を自動取得して金額を書き換えない。
   // 現在値・評価額の基準はSBI/moomooのCSV取込値とする。必要な更新は専用ボタンで行う。
   // 売却済みと保有中を分離
-  const activeAccounts=amAccounts.filter(a=>!a.sold);
+  // 残高0円の旧レコードは台帳には残しても、保有資産画面には表示しない。
+  const activeAccounts=amAccounts.filter(a=>!a.sold&&Number(a.amount||0)>0);
   const soldAccounts=amAccounts.filter(a=>a.sold);
 
   const total=activeAccounts.reduce((s,a)=>s+a.amount,0);
@@ -6827,6 +6828,18 @@ async function amApplySBIRows(rows, importMeta={}){
     return true;
   });
 
+  // 同じSBI銘柄＋口座区分は、CSV再取込でも既存IDを引き継ぐ。
+  // IDを固定することで買付履歴・チャート・前回比較などの紐付けを切らさない。
+  const oldSbiByKey=new Map();
+  const oldKeyFor=(a)=>{
+    const ak=a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':'特定';
+    return a.code?('S|'+normCode(a.code)+'|'+ak):('F|'+normName(a.name)+'|'+ak);
+  };
+  beforeRows.filter(a=>!a.sold&&isSbiImported(a)).forEach(a=>{
+    const k=oldKeyFor(a), prev=oldSbiByKey.get(k);
+    // 旧重複がある場合は残高あり行を優先し、同条件なら新しいIDを採用。
+    if(!prev || (Number(a.amount||0)>0&&!(Number(prev.amount||0)>0)) || ((Number(a.amount||0)>0)===(Number(prev.amount||0)>0)&&Number(a.id||0)>Number(prev.id||0))) oldSbiByKey.set(k,a);
+  });
   let nextId=amAccounts.reduce((m,a)=>Math.max(m,Number(a.id)||0),0)+1;
   const log=[];
   const addImported=(r,isFund)=>{
@@ -6849,8 +6862,13 @@ async function amApplySBIRows(rows, importMeta={}){
     const savedSector=(!isFund&&code&&savedSectorByCode.get(normCode(code))) || savedSectorByName.get(normName(name)) || '';
     const autoSector=(typeof secSuggestSector==='function'?secSuggestSector(name):'')||'';
     const sector=savedSector||autoSector||'';
+    const stableKey=isFund?('F|'+normName(name)+'|'+suffix):('S|'+normCode(code)+'|'+suffix);
+    const oldAcc=oldSbiByKey.get(stableKey);
+    const stableId=oldAcc?Number(oldAcc.id):nextId++;
+    // 手入力した業績値・分析情報などは維持し、CSVが正本の残高/数量/価格だけ更新する。
     const acc={
-      id:nextId++,name,cat,amount:evalAmt,note:`[SBI CSV ${today}]`,shares,
+      ...(oldAcc||{}),
+      id:stableId,name,cat,amount:evalAmt,note:`[SBI CSV ${today}]`,shares,
       price,updated:today,code,costPrice:Math.round(costPrice*100)/100,
       sold:false,nisaType:nisa,broker:'SBI証券',sector:sector||undefined,
       // SBI CSVの「評価額」を正本として保持。画面再計算で書き換えない。
@@ -6874,7 +6892,7 @@ async function amApplySBIRows(rows, importMeta={}){
       acc.purchaseHistory=dates.map(date=>({date,shares:0,costPrice:0,broker:'SBI証券'}));
     }
     amAccounts.push(acc);
-    log.push({sbi:name,am:name,val:evalAmt,oldVal:0,score:100,acctSuffix:suffix,rows:r.rows||1});
+    log.push({sbi:name,am:name,val:evalAmt,oldVal:oldAcc?Number(oldAcc.amount||0):0,score:100,acctSuffix:suffix,rows:r.rows||1,id:stableId,reusedId:!!oldAcc});
   };
   [...stockMap.values()].forEach(r=>addImported(r,false));
   importedFunds.forEach(r=>addImported(r,true));
