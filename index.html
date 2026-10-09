@@ -16363,39 +16363,67 @@ function pnlCalcUnrealized(){
 function pnlCalcRealized(y1,m1,y2,m2){
   const allPeriod=(y1==null);
   const inRange=(dateStr)=>{
-    if(allPeriod)return true;  // 全期間モード
-    if(!dateStr)return true;   // 日付未設定は期間フィルター不問で含める
-    const [y,m]=dateStr.slice(0,7).split('-').map(Number);
+    if(allPeriod)return true;
+    if(!dateStr)return true;
+    const [y,m]=String(dateStr).slice(0,7).split('-').map(Number);
     const from=y1*100+m1, to=y2*100+m2, cur=y*100+m;
     return cur>=from&&cur<=to;
   };
   const items=[];
-  try{
-    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>a.sold&&inRange(a.soldDate)&&pnlBrokerMatch(a)).forEach(a=>{
-      // インデックス投信: costPriceは売却時に取得総額として保存済み(shares倍しない)
-      // 個別株等: shares×costPriceが取得総額
-      const isIndex=INDEX_CATS_SOLD.includes(a.cat);
-      const costTotal=isIndex ? (a.costPrice||0) : (a.shares>0&&a.costPrice>0 ? a.shares*a.costPrice : (a.costPrice||0));
-      const soldTotal=a.soldAmount||0;
-      if(!(soldTotal>0&&costTotal>0))return;
-      const gain=soldTotal-costTotal;
-      const pct=gain/costTotal*100;
-      items.push({
-        id:a.id, name:a.name, cat:a.cat, gain, pct,
-        soldTotal, costTotal,
-        shares:a.shares||0, costUnit:a.costPrice||0, soldUnit:a.soldPrice||0,
-        buyDate:a.buyDate||'', soldDate:a.soldDate||'', isIndex,
-        date:a.soldDate||'日付未設定',
-        code:a.code||(isIndex?'':pnlResolveCode(a.name)), costPrice:isIndex?0:(a.costPrice||0),
-        badge:'売却', badgeColor:'#8e44ad', type:'realized'
-      });
+  let accs=[];
+  try{accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){accs=[];}
+
+  // 売却収支(slData)を優先。部分売却は保有レコードがsold=trueにならないため、
+  // ここを読むことで「400株中100株売却」の100株分も確定損益へ反映する。
+  let sells=[];
+  try{sells=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');}catch(e){sells=[];}
+  const representedAccountIds=new Set();
+  sells.filter(d=>inRange(d.date)).forEach((d,idx)=>{
+    const src=accs.find(a=>String(a.id)===String(d.sourceAccountId));
+    const brokerProbe=src||{name:d.name||'',cat:d.cat||'',broker:d.broker||'',note:d.memo||''};
+    if(!pnlBrokerMatch(brokerProbe))return;
+    const soldTotal=Number(d.sellTotal)||0;
+    const costTotal=Number(d.cost)||0;
+    const gain=(d.gain!==null&&d.gain!==undefined&&d.gain!=='')?Number(d.gain):(soldTotal>0&&costTotal>0?soldTotal-costTotal:null);
+    if(!(soldTotal>0&&costTotal>0&&gain!==null&&isFinite(gain)))return;
+    if(d.sourceAccountId!=null)representedAccountIds.add(String(d.sourceAccountId));
+    const shares=Number(d.shares)||0;
+    const costUnit=Number(d.buyPrice)||0;
+    const soldUnit=Number(d.sellPrice)||0;
+    const isIndex=INDEX_CATS_SOLD.includes(src?.cat||d.cat||'');
+    const pct=costTotal>0?gain/costTotal*100:0;
+    items.push({
+      id:'sl-'+String(d.id||idx), sourceType:'sl', sourceId:d.id||null,
+      name:d.name||src?.name||'売却', cat:src?.cat||d.cat||'', gain, pct,
+      soldTotal, costTotal, shares, costUnit, soldUnit,
+      buyDate:src?.buyDate||'', soldDate:d.date||'', isIndex,
+      date:d.date||'日付未設定',
+      code:src?.code||(isIndex?'':pnlResolveCode(d.name||'')), costPrice:isIndex?0:costUnit,
+      badge:'売却', badgeColor:'#8e44ad', type:'realized'
     });
-  }catch(e){}
+  });
+
+  // 旧方式で「売却済み」だけ保存され、売却収支に記録がない過去データを補完。
+  accs.filter(a=>a.sold&&inRange(a.soldDate)&&pnlBrokerMatch(a)&&!representedAccountIds.has(String(a.id))).forEach(a=>{
+    const isIndex=INDEX_CATS_SOLD.includes(a.cat);
+    const costTotal=isIndex ? (a.soldCostTotal||a.costPrice||0) : (a.shares>0&&a.costPrice>0 ? a.shares*a.costPrice : (a.soldCostTotal||a.costPrice||0));
+    const soldTotal=a.soldAmount||0;
+    if(!(soldTotal>0&&costTotal>0))return;
+    const gain=soldTotal-costTotal;
+    const pct=gain/costTotal*100;
+    items.push({
+      id:'am-'+String(a.id), sourceType:'am', sourceId:a.id,
+      name:a.name, cat:a.cat, gain, pct, soldTotal, costTotal,
+      shares:a.shares||0, costUnit:a.costPrice||0, soldUnit:a.soldPrice||0,
+      buyDate:a.buyDate||'', soldDate:a.soldDate||'', isIndex,
+      date:a.soldDate||'日付未設定',
+      code:a.code||(isIndex?'':pnlResolveCode(a.name)), costPrice:isIndex?0:(a.costPrice||0),
+      badge:'売却', badgeColor:'#8e44ad', type:'realized'
+    });
+  });
   items.sort((a,b)=>Math.abs(b.gain)-Math.abs(a.gain));
   return items;
 }
-
 // ── 確定損益カードの詳細（購入/売却の内訳）──
 function pnlToggleRealizedDetail(id){
   const el=document.getElementById('pnl-rd-'+id);
@@ -16518,14 +16546,16 @@ function pnlRender(){
           ?`<span onclick="event.stopPropagation();pnlOpenChart('${item.code}','${esc(item.name)}',${item.costPrice||0},'${item.buyDate||''}','${item.soldDate&&item.soldDate!=='日付未設定'?item.soldDate:''}')" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:6px">📊チャート</span>`
           :''))
       :'';
-    const editBtn=item.type==='realized'&&item.id!=null
-      ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
+    const editBtn=item.type==='realized'&&item.sourceId!=null
+      ?(item.sourceType==='sl'
+        ?`<span onclick="event.stopPropagation();slOpenModal(${JSON.stringify(item.sourceId)})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
+        :`<span onclick="event.stopPropagation();amOpenSoldModal(${JSON.stringify(item.sourceId)})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`)
       :'';
     const isRealized=item.type==='realized'&&item.id!=null;
-    const detailHtml=isRealized?`<div id="pnl-rd-${item.id}" style="display:none">${pnlRealizedDetailHtml(item)}</div>`:'';
-    const clickAttr=isRealized?` onclick="pnlToggleRealizedDetail(${item.id})"`:'';
+    const detailHtml=isRealized?`<div id="pnl-rd-${esc(String(item.id))}" style="display:none">${pnlRealizedDetailHtml(item)}</div>`:'';
+    const clickAttr=isRealized?` onclick='pnlToggleRealizedDetail(${JSON.stringify(String(item.id))})'`:'';
     const chevron=isRealized
-      ?`<span id="pnl-rc-${item.id}" style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1;transition:transform 0.15s;display:inline-block">›</span>`
+      ?`<span id="pnl-rc-${esc(String(item.id))}" style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1;transition:transform 0.15s;display:inline-block">›</span>`
       :`<span style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1">›</span>`;
     return `<div${clickAttr} style="background:#17171a;border:0.5px solid rgba(255,255,255,0.08);border-left:3px solid ${edge};border-radius:10px;margin-bottom:8px;padding:10px 12px${isRealized?';cursor:pointer':''}">
       <div style="display:flex;align-items:center;gap:8px">
