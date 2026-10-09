@@ -1695,7 +1695,7 @@ function amMonthlyPerfRender(){
 
     <!-- ヘッダー -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <h2 style="font-size:17px;font-weight:700;margin:0">💴 売却済みにする</h2>
+      <h2 style="font-size:17px;font-weight:700;margin:0">💴 売却を記録</h2>
       <button onclick="amCloseSoldModal()" style="background:var(--bg2);border:none;width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center">✕</button>
     </div>
 
@@ -1706,6 +1706,11 @@ function amMonthlyPerfRender(){
 
       <!-- 株モード -->
       <div id="amSoldModeStock">
+        <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却株数</label>
+        <input id="amSoldShares" type="number" inputmode="numeric" min="0" step="1" placeholder="例: 100"
+          style="width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px"
+          oninput="amCalcSoldGain()">
+        <div id="amSoldSharesHint" style="font-size:11px;color:var(--text3);margin-top:-7px;margin-bottom:10px"></div>
         <label style="font-size:12px;color:var(--text3);font-weight:500;display:block;margin-bottom:6px">売却単価（円/株）</label>
         <input id="amSoldPrice" type="text" inputmode="decimal" placeholder="例: 7500"
           style="width:100%;padding:13px 14px;font-size:16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg2);color:var(--text);font-family:inherit;outline:none;box-sizing:border-box"
@@ -1747,7 +1752,7 @@ function amMonthlyPerfRender(){
       </button>
       <button onclick="amConfirmSold()"
         style="flex:2;padding:14px;border:none;border-radius:12px;background:#C0392B;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit">
-        ✅ 売却済みにする
+        ✅ 売却を記録
       </button>
     </div>
 
@@ -4898,7 +4903,7 @@ function amRenderCard(a){
   // 売却ボタン（個別株・高配当・外国株式・インデックス）
   const canSell=isStock||isForeignStock||isIndexFund;
   const sellBtn=canSell
-    ?'<button class="icon-btn" onclick="amOpenSoldModal('+a.id+')" style="font-size:11px;padding:4px 8px;color:#C0392B;border-color:#C0392B;white-space:nowrap">💴 売却済み</button>'
+    ?'<button class="icon-btn" onclick="amOpenSoldModal('+a.id+')" style="font-size:11px;padding:4px 8px;color:#C0392B;border-color:#C0392B;white-space:nowrap">💴 売却</button>'
     :'';
   return''
     +'<div class="account-row" style="flex-direction:column;align-items:stretch;padding:0;border-bottom:0.5px solid var(--border)">'
@@ -4930,7 +4935,7 @@ function amRenderCard(a){
           +'<button class="icon-btn" onclick="openEditModal('+a.id+')" style="color:var(--accent);border-color:var(--accent)">編集</button>'
           +chartBtn
           +sellBtn
-          +'<button class="icon-btn" onclick="amCopyAccount('+a.id+')" style="color:#8B5CF6;border-color:#8B5CF6" title="買い増し等でこの銘柄をもう1件追加">📋 コピー</button>'
+          +'<button class="icon-btn" onclick="amCopyAccount('+a.id+')" style="color:#8B5CF6;border-color:#8B5CF6" title="買い増しなど別ロットを作る場合に使用。部分売却は「売却」ボタンから行えます">📋 コピー</button>'
           +'<div style="display:flex;gap:3px;margin-bottom:2px">'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',-1)" title="上に移動" style="padding:4px 7px;font-size:12px">▲</button>'+'<button class="icon-btn" onclick="amMoveAccount('+a.id+',1)" title="下に移動" style="padding:4px 7px;font-size:12px">▼</button>'+'</div>'+'<button class="icon-btn danger" onclick="amConfirmDelete('+a.id+')">削除</button>'
         +'</div>'
       +'</div>'
@@ -5020,6 +5025,10 @@ function amOpenSoldModal(id){
     // 現在評価額をヒントとして表示（input内ではなくラベル下）
     if(hintEl)hintEl.textContent=a.amount>0?`現在の評価額: ${fmt(a.amount)}（参考）`:'';
   }else{
+    const sharesEl=document.getElementById('amSoldShares');
+    if(sharesEl){sharesEl.value=a.shares>0?String(a.shares):'';sharesEl.max=a.shares>0?String(a.shares):'';}
+    const sharesHint=document.getElementById('amSoldSharesHint');
+    if(sharesHint)sharesHint.textContent=a.shares>0?`保有 ${a.shares.toLocaleString()}株。部分売却なら売却した株数だけ入力してください。`:'';
     const priceEl=document.getElementById('amSoldPrice');
     priceEl.value='';
     priceEl.placeholder=a.price>0?String(a.price):'例: 2500';
@@ -5060,11 +5069,13 @@ function amCalcSoldGain(){
     const priceVal=parseNum(document.getElementById('amSoldPrice').value);
     if(!priceVal){previewEl.innerHTML='';return;}
     const isUnitBased=a.shares>0&&(isStock||INDEX_CATS_SOLD.includes(a.cat));
-    soldTotal=isUnitBased?Math.round(a.shares*priceVal):Math.round(priceVal);
-    costTotal=isUnitBased&&a.shares>0&&a.costPrice>0?Math.round(a.shares*a.costPrice):(a.costPrice||0);
+    const sellShares=isUnitBased?(parseNum(document.getElementById('amSoldShares')?.value)||0):0;
+    if(isUnitBased&&(!sellShares||sellShares>a.shares)){previewEl.innerHTML=sellShares>a.shares?'<div style="color:var(--danger);font-size:12px">⚠ 保有株数を超えています</div>':'';return;}
+    soldTotal=isUnitBased?Math.round(sellShares*priceVal):Math.round(priceVal);
+    costTotal=isUnitBased&&sellShares>0&&a.costPrice>0?Math.round(sellShares*a.costPrice):(a.costPrice||0);
     // 株数×単価のヒント
     const hintEl=document.getElementById('amSoldStockHint');
-    if(hintEl&&isUnitBased&&a.shares>0)hintEl.textContent=`${a.shares}株 × ${priceVal.toLocaleString()}円 = ${fmt(soldTotal)}`;
+    if(hintEl&&isUnitBased&&sellShares>0)hintEl.textContent=`${sellShares}株 × ${priceVal.toLocaleString()}円 = ${fmt(soldTotal)} ／ 売却後 ${Math.max(0,a.shares-sellShares)}株`;
     else if(hintEl)hintEl.textContent='';
   }
 
@@ -5096,61 +5107,78 @@ async function amConfirmSold(){
   const a=amAccounts.find(x=>x.id===amSoldTargetId);if(!a)return;
   const isIndex=INDEX_CATS_SOLD.includes(a.cat);
   const dateVal=document.getElementById('amSoldDate').value||todayStr();
-  let soldAmount=0,soldPrice=0,costOverride=0;
+  let soldAmount=0,soldPrice=0,costOverride=0,soldShares=0;
 
   if(isIndex){
     const parseAmt=s=>parseFloat((s||'').replace(/[,，\s￥¥円]/g,''))||0;
     soldAmount=parseAmt(document.getElementById('amSoldAmountTotal').value);
     costOverride=parseAmt(document.getElementById('amSoldCostTotal').value);
     if(!soldAmount){showToast('⚠ 売却総額を入力してください');return;}
-    soldPrice=0;// インデックスは単価不要
-    // 取得総額を修正した場合はcostPriceも更新
+    soldPrice=0;
     if(costOverride>0&&costOverride!==a.costPrice)a.costPrice=costOverride;
   }else{
     const parseNum=s=>parseFloat((s||'').replace(/[,，\s￥¥円]/g,''))||0;
     const priceVal=parseNum(document.getElementById('amSoldPrice').value);
+    soldShares=parseNum(document.getElementById('amSoldShares')?.value);
     if(!priceVal){showToast('⚠ 売却単価を入力してください');return;}
-    const isStock=a.cat==='個別株'||a.cat==='高配当'||a.cat==='外国株式'||a.cat==='FX';
-    const isUnitBased=a.shares>0&&(isStock||INDEX_CATS_SOLD.includes(a.cat));
-    soldAmount=isUnitBased?Math.round(a.shares*priceVal):Math.round(priceVal);
+    if(a.shares>0){
+      if(!soldShares){showToast('⚠ 売却株数を入力してください');return;}
+      if(soldShares>a.shares){showToast('⚠ 売却株数が保有株数を超えています');return;}
+    }
+    soldAmount=a.shares>0?Math.round(soldShares*priceVal):Math.round(priceVal);
     soldPrice=priceVal;
   }
 
-  // NISA生涯投資枠の「翌年復活額」計算のため、売却前の取得総額（簿価）を保存しておく
-  const _tqCostAtSale=isIndex
+  const originalShares=Number(a.shares)||0;
+  const originalAmount=Number(a.amount)||0;
+  const partial=!isIndex&&originalShares>0&&soldShares>0&&soldShares<originalShares;
+  const saleCost=isIndex
     ?(costOverride>0?costOverride:((typeof _calcCostTotal==='function')?_calcCostTotal(a):(a.costPrice||0)))
-    :((typeof _calcCostTotal==='function')?_calcCostTotal(a):(a.shares>0&&a.costPrice>0?Math.round(a.shares*a.costPrice):(a.costPrice||0)));
-  a.soldCostTotal=Math.round(_tqCostAtSale||0);
+    :(soldShares>0&&a.costPrice>0?Math.round(soldShares*a.costPrice):0);
 
-  a.sold=true;
-  a.soldDate=dateVal;
-  a.soldAmount=soldAmount||a.amount||0;
-  a.soldPrice=soldPrice;
-  a.amount=0;
-  a.updated=todayStr();
+  // 売却タブ/損益タブへ先に「売却した分だけ」を記録
+  amSyncSoldToSlData(a,soldAmount,soldPrice,dateVal,isIndex,soldShares,saleCost);
+
+  if(partial){
+    // 部分売却：元レコードを保有中のまま残し、株数と評価額だけ減らす
+    a.shares=originalShares-soldShares;
+    if(a.price>0)a.amount=Math.round(a.shares*a.price*(a.cat==='外国株式'?(Number(a.fxRate)||1):1));
+    else if(originalShares>0)a.amount=Math.round(originalAmount*a.shares/originalShares);
+    a.updated=todayStr();
+    a.lastPartialSale={date:dateVal,shares:soldShares,price:soldPrice,amount:soldAmount,cost:saleCost};
+  }else{
+    // 全売却：従来どおり売却済みへ移動
+    a.soldCostTotal=Math.round(saleCost||0);
+    a.sold=true;
+    a.soldDate=dateVal;
+    a.soldAmount=soldAmount||a.amount||0;
+    a.soldPrice=soldPrice;
+    a.amount=0;
+    a.updated=todayStr();
+  }
+
   amCloseSoldModal();
   amSaveToLocal();
   amRender();
-  // 売却タブにも自動追加
-  amSyncSoldToSlData(a,soldAmount,soldPrice,dateVal,isIndex);
   await amSaveToSheet();
   refreshHome();
-  // 損益タブも再描画
   if(typeof pnlRender==='function')pnlRender();
-  showToast('✅ 売却済みとして記録しました（売却タブにも追加）');
-  if(!amShowSold)amToggleSoldView();
+  if(typeof slRender==='function')slRender();
+  showToast(partial?`✅ ${soldShares}株の売却を記録。残り${a.shares}株を保有中です`:'✅ 全売却を記録しました（損益にも反映）');
+  if(!partial&&!amShowSold)amToggleSoldView();
 }
 // 資産管理の売却 → 売却タブ（slData）へ自動同期
-function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
+function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex, soldSharesOverride=0, soldCostOverride=0){
   try{
     if(typeof slData==='undefined'||typeof slUID==='undefined')return;
-    // 既に同じ銘柄・同じ日付で登録されていたら重複追加しない
-    const isDup=slData.some(d=>d.name===a.name&&d.date===soldDate&&d.amSynced);
+    // 同一売却の二重登録だけを防止。部分売却は同日でも別件として登録可能。
+    const syncKey=[a.id,soldDate,Number(soldSharesOverride||a.shares||0),Number(soldPrice||0),Number(soldAmount||0)].join('|');
+    const isDup=slData.some(d=>d.amSyncKey===syncKey);
     if(isDup)return;
 
     const NISA_PAT=/NISA|ニーサ/i;
     const isFX=a.cat==='FX';
-    const account=isFX?'FX口座':(NISA_PAT.test(a.note||'')?'NISA':'特定口座');
+    const account=isFX?'FX口座':((NISA_PAT.test(a.note||'')||/nisa|growth|tsumitate/i.test(String(a.nisaType||'')))?'NISA':'特定口座');
     const isNISA=account==='NISA';
 
     // カテゴリ変換
@@ -5168,11 +5196,11 @@ function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
       gain=cost!==null?sellTotal-cost:null;
     }else{
       // 株：単価×株数モード
-      shares=a.shares||0;
+      shares=Number(soldSharesOverride)||a.shares||0;
       sellPrice=soldPrice||0;
       buyPrice=a.costPrice||0;
       sellTotal=soldAmount||0;
-      cost=shares>0&&buyPrice>0?shares*buyPrice:null;
+      cost=soldCostOverride>0?soldCostOverride:(shares>0&&buyPrice>0?shares*buyPrice:null);
       gain=cost!==null?sellTotal-cost:null;
     }
 
@@ -5196,6 +5224,8 @@ function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
       tax,
       net,
       amSynced:true,// 資産管理からの同期フラグ
+      amSyncKey:syncKey,
+      sourceAccountId:a.id
     };
     slData.push(entry);
     if(typeof slSaveData==='function')slSaveData();
