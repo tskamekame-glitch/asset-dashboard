@@ -11829,7 +11829,7 @@ function fireRenderTimeline(containerId,ages,bals,curAge,curYear){
 
 function slFmt(n){return'¥'+Math.round(n).toLocaleString('ja-JP');}
 function slFmtSign(n){return(n>=0?'＋':'')+Math.round(n).toLocaleString('ja-JP');}
-function slSaveData(){try{localStorage.setItem(SL_KEY,JSON.stringify(slData));}catch(e){}slSaveToSheet();}
+function slSaveData(){try{localStorage.setItem(SL_KEY,JSON.stringify(slData));}catch(e){}slSaveToSheet();if(typeof pnlRender==='function')setTimeout(()=>pnlRender(),0);if(typeof refreshHome==='function')setTimeout(()=>refreshHome(),0);}
 function slLoadData(){try{slData=JSON.parse(localStorage.getItem(SL_KEY)||'[]');}catch(e){slData=[];}}
 
 function slCalc(){
@@ -16379,17 +16379,34 @@ function pnlCalcRealized(y1,m1,y2,m2){
   try{sells=JSON.parse(localStorage.getItem('sellRecords_v1')||'[]');}catch(e){sells=[];}
   const representedAccountIds=new Set();
   sells.filter(d=>inRange(d.date)).forEach((d,idx)=>{
-    const src=accs.find(a=>String(a.id)===String(d.sourceAccountId));
+    // SBI CSV再取込などで口座IDが変わっても、銘柄名/コードから元口座を再解決する。
+    let src=accs.find(a=>String(a.id)===String(d.sourceAccountId));
+    if(!src){
+      const dCode=String(d.code||'').trim();
+      const dName=pnlBaseName(d.name||'');
+      src=accs.find(a=>{
+        const aCode=String(a.code||'').trim();
+        const aName=pnlBaseName(a.name||'');
+        return (dCode&&aCode&&dCode===aCode)||(dName&&aName&&(dName===aName||dName.includes(aName)||aName.includes(dName)));
+      });
+    }
     const brokerProbe=src||{name:d.name||'',cat:d.cat||'',broker:d.broker||'',note:d.memo||''};
     if(!pnlBrokerMatch(brokerProbe))return;
-    const soldTotal=Number(d.sellTotal)||0;
-    const costTotal=Number(d.cost)||0;
-    const gain=(d.gain!==null&&d.gain!==undefined&&d.gain!=='')?Number(d.gain):(soldTotal>0&&costTotal>0?soldTotal-costTotal:null);
-    if(!(soldTotal>0&&costTotal>0&&gain!==null&&isFinite(gain)))return;
-    if(d.sourceAccountId!=null)representedAccountIds.add(String(d.sourceAccountId));
     const shares=Number(d.shares)||0;
     const costUnit=Number(d.buyPrice)||0;
     const soldUnit=Number(d.sellPrice)||0;
+    let soldTotal=Number(d.sellTotal)||0;
+    if(!(soldTotal>0)&&shares>0&&soldUnit>0)soldTotal=shares*soldUnit;
+    let costTotal=Number(d.cost)||0;
+    if(!(costTotal>0)&&shares>0&&costUnit>0)costTotal=shares*costUnit;
+    let gain=(d.gain!==null&&d.gain!==undefined&&d.gain!==''&&isFinite(Number(d.gain)))?Number(d.gain):null;
+    if(!(costTotal>0)&&soldTotal>0&&gain!==null)costTotal=soldTotal-gain;
+    if(gain===null&&soldTotal>0&&costTotal>0)gain=soldTotal-costTotal;
+    // 売却収支に有効な売却額と損益があれば確定損益へ反映する。
+    if(!(soldTotal>0&&gain!==null&&isFinite(gain)))return;
+    if(!(costTotal>0))return;
+    if(d.sourceAccountId!=null)representedAccountIds.add(String(d.sourceAccountId));
+    if(src?.id!=null)representedAccountIds.add(String(src.id));
     const isIndex=INDEX_CATS_SOLD.includes(src?.cat||d.cat||'');
     const pct=costTotal>0?gain/costTotal*100:0;
     items.push({
