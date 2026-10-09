@@ -901,11 +901,11 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div style="padding:0 14px 8px">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 10px;text-align:center;cursor:pointer" onclick="switchTab('manager')">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">口座数</div>
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">保有件数</div>
           <div id="home-accounts" style="font-size:18px;font-weight:700;color:var(--text)">—</div>
         </div>
         <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 10px;text-align:center;cursor:pointer" onclick="switchTab('trend')">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">前回比</div>
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">総資産前回比</div>
           <div id="home-diff" style="font-size:14px;font-weight:700;color:var(--text)">—</div>
         </div>
         <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:12px;padding:10px 10px;text-align:center;cursor:pointer" onclick="switchTab('todo')">
@@ -3432,31 +3432,38 @@ function refreshHome(){
   // ── 1. 資産総額 ──
   try{
     const accs=homeAccounts;
-    const active=accs.filter(a=>!a.sold);
+    const active=accs.filter(a=>!a.sold&&Number(a.amount||0)>0);
     const total=active.reduce((s,a)=>s+Number(a.amount||0),0);
     const totalEl=document.getElementById('home-total');
     if(totalEl)totalEl.textContent=total>0?fmt(total):'—';
     const acEl=document.getElementById('home-accounts');
-    if(acEl)acEl.textContent=active.length>0?active.length+'口座':'—';
+    if(acEl)acEl.textContent=active.length>0?active.length+'件':'—';
   }catch(e){}
 
   // ── 2. 前回CSV比（スナップショット差分）──
   try{
-    const snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');
+    const snapsRaw=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');
+    // 同じ日付の重複スナップショットは最後の1件だけ採用。
+    // 同日保存を「前回比」と誤認して大きな増減を出さない。
+    const byDate=new Map();
+    (Array.isArray(snapsRaw)?snapsRaw:[]).forEach(x=>{if(x&&x.date&&Number.isFinite(Number(x.total)))byDate.set(String(x.date),x);});
+    const snaps=[...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const diffEl=document.getElementById('home-diff');
     const prevEl=document.getElementById('home-prev-diff');
     if(snaps.length>=2){
-      const d=snaps[snaps.length-1].total-snaps[snaps.length-2].total;
+      const cur=snaps[snaps.length-1],prev=snaps[snaps.length-2];
+      const d=Number(cur.total)-Number(prev.total);
       const sign=d>=0?'＋':'';
       const col=d>=0?'#4ade80':'#f87171';
-      if(diffEl){diffEl.textContent=sign+Math.round(d).toLocaleString()+'円';diffEl.style.color=col;}
-      if(prevEl){prevEl.textContent='前回比 '+sign+Math.round(d).toLocaleString()+'円';prevEl.style.color=col;}
+      if(diffEl){diffEl.textContent=sign+Math.round(d).toLocaleString()+'円';diffEl.style.color=col;diffEl.title=`${prev.date} → ${cur.date}`;}
+      if(prevEl){prevEl.textContent=`総資産 ${prev.date}比 ${sign}${Math.round(d).toLocaleString()}円`;prevEl.style.color=col;}
       const tb=document.getElementById('hbadge-trend');
-      if(tb)tb.textContent=snaps.length+'件記録済み';
+      if(tb)tb.textContent=snaps.length+'日記録済み';
     }else{
       if(diffEl){diffEl.textContent='—';diffEl.style.color='';}
+      if(prevEl){prevEl.textContent='比較用スナップショット不足';prevEl.style.color='rgba(255,255,255,0.5)';}
       const tb=document.getElementById('hbadge-trend');
-      if(tb)tb.textContent=snaps.length>0?snaps.length+'件記録':'CSVなし';
+      if(tb)tb.textContent=snaps.length>0?snaps.length+'日記録':'CSVなし';
     }
   }catch(e){}
 
@@ -3558,29 +3565,52 @@ function refreshHome(){
     let dailyRankings=[];
     try{
       const q=(typeof amLoadDailyQuotes==='function')?amLoadDailyQuotes():null;
-      if(q&&q.quotes&&(Date.now()-q.ts)<24*3600*1000){
+      const todayLocal=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+      // BEST/WORSTは「株数の増減を含む評価額差」ではなく、1株/1口あたりの価格騰落だけで判定する。
+      // quote cache は当日取得分だけ使用。前日のキャッシュを翌日に流用しない。
+      if(q&&q.quotes&&q.ts){
+        const qd0=new Date(q.ts);
+        const qDate=`${qd0.getFullYear()}-${String(qd0.getMonth()+1).padStart(2,'0')}-${String(qd0.getDate()).padStart(2,'0')}`;
+        if(qDate===todayLocal()){
+          const merged=new Map();
+          const targets=amDailyTargets(homeAccounts.filter(a=>!a.sold&&Number(a.amount||0)>0));
+          targets.forEach(t=>{
+            const qd=q.quotes[t.qcode];
+            if(!qd||qd.err||!(Number(qd.prev)>0)||!(Number(qd.cur)>0))return;
+            const pct=(Number(qd.cur)-Number(qd.prev))/Number(qd.prev)*100;
+            const key=String(t.qcode).toUpperCase();
+            const name=(typeof amLotBaseName==='function'?amLotBaseName(t.a.name):String(t.a.name||''));
+            if(!merged.has(key))merged.set(key,{name,pct});
+          });
+          dailyRankings=[...merged.values()].filter(x=>Number.isFinite(x.pct));
+        }
+      }
+      // 当日quoteが無い場合は、各銘柄に保存済みの現在値/前日終値を使う。
+      if(!dailyRankings.length){
         const merged=new Map();
-        const targets=amDailyTargets(homeAccounts.filter(a=>!a.sold));
-        targets.forEach(t=>{
-          const qd=q.quotes[t.qcode];
-          if(!qd||qd.err||!(qd.prev>0)||!(qd.cur>0))return;
-          const pct=(qd.cur-qd.prev)/qd.prev*100;
-          const key=amLotKey(t.a);
-          const name=(typeof amLotBaseName==='function'?amLotBaseName(t.a.name):String(t.a.name||''));
-          if(!merged.has(key))merged.set(key,{name,pct});
+        homeAccounts.filter(a=>!a.sold&&Number(a.amount||0)>0).forEach(a=>{
+          const cur=Number(a.marketPrice||a.price||0),prev=Number(a.prevClose||0);
+          if(!(cur>0&&prev>0))return;
+          const code=String(a.code||'').trim().toUpperCase();
+          if(!code)return;
+          const pct=(cur-prev)/prev*100;
+          const name=(typeof amLotBaseName==='function'?amLotBaseName(a.name):String(a.name||''));
+          if(!merged.has(code))merged.set(code,{name,pct});
         });
-        dailyRankings=[...merged.values()].filter(x=>Number.isFinite(x.pct));
+        dailyRankings=[...merged.values()].filter(x=>Number.isFinite(x.pct)&&Math.abs(x.pct)<50);
       }
     }catch(e){}
-    const sourceRanks=dailyRankings.length?dailyRankings:rankings.map(x=>({...x,name:(typeof amLotBaseName==='function'?amLotBaseName(x.name):x.name)}));
+    // 正しい価格騰落データが無い時は無理にprevSBIAmountから作らない。
+    // 売買（100株売却など）をWORST/BESTとして誤表示するのを防ぐ。
+    const sourceRanks=dailyRankings;
     const positives=sourceRanks.filter(x=>x.pct>0).sort((a,b)=>b.pct-a.pct);
     const negatives=sourceRanks.filter(x=>x.pct<0).sort((a,b)=>a.pct-b.pct);
     const best=positives[0]||null,worst=negatives[0]||null;
     const bn=document.getElementById('home-best-name'),bp=document.getElementById('home-best-pct');
     const wn=document.getElementById('home-worst-name'),wp=document.getElementById('home-worst-pct');
-    if(bn)bn.textContent=best?best.name:'プラス銘柄なし';
+    if(bn)bn.textContent=best?best.name:(sourceRanks.length?'プラス銘柄なし':'価格データなし');
     if(bp)bp.textContent=best?'＋'+best.pct.toFixed(1)+'%':'—';
-    if(wn)wn.textContent=worst?worst.name:'マイナス銘柄なし';
+    if(wn)wn.textContent=worst?worst.name:(sourceRanks.length?'マイナス銘柄なし':'価格データなし');
     if(wp)wp.textContent=worst?worst.pct.toFixed(1)+'%':'—';
   }catch(e){}
 
@@ -3647,41 +3677,29 @@ function homeRenderMiniHeatmap(){
   const el=document.getElementById('home-heatmap-mini');
   if(!el)return;
   try{
-    const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    const PAYPAY=/PayPay|ペイペイ|確定拠出|ＤＣ年金|DC年金|iDeCo|イデコ/i;
-    const items=accs.filter(a=>!a.sold&&a.prevSBIAmount>0&&!PAYPAY.test(a.name)&&a.amount>0);
-    if(!items.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">SBI CSVを読み込むと表示されます</div>';return;}
-    const total=items.reduce((s,a)=>s+a.amount,0);
-    // 変動率計算
-    const withPct=items.map(a=>{
-      const d=a.amount-a.prevSBIAmount;
-      const pct=a.prevSBIAmount>0?d/a.prevSBIAmount*100:0;
-      return{...a,pct};
-    });
-    withPct.sort((a,b)=>b.amount-a.amount);
-    const color=p=>{
-      if(p>=3)return'#16a34a';if(p>=1.5)return'#22c55e';if(p>=0.5)return'#4ade80';
-      if(p>=-0.5)return'#6b7280';if(p>=-1.5)return'#f87171';if(p>=-3)return'#ef4444';
-      return'#b91c1c';
-    };
-    const textCol=p=>Math.abs(p)<1.5?'#fff':'#fff';
-    const W=el.clientWidth||320;
-    // 簡易タイル
-    const cols=Math.min(4,Math.ceil(Math.sqrt(withPct.length)));
-    const html=withPct.slice(0,12).map(a=>{
-      const pct=a.pct;
-      const s=pct>=0?'＋':'';
-      const shortName=a.name.length>6?a.name.slice(0,6)+'…':a.name;
-      return`<div style="background:${color(pct)};border-radius:6px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px">
-        <div style="font-size:9px;color:rgba(255,255,255,0.85);font-weight:600;text-align:center;line-height:1.2">${shortName}</div>
-        <div style="font-size:12px;font-weight:800;color:#fff;margin-top:2px">${s}${pct.toFixed(1)}%</div>
-      </div>`;
-    }).join('');
-    el.style.display='grid';
-    el.style.gridTemplateColumns=`repeat(${cols},1fr)`;
-    el.style.gap='4px';
-    el.innerHTML=html;
-  }catch(e){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">データなし</div>';}
+    const accs=(typeof amAccounts!=='undefined'&&Array.isArray(amAccounts))?amAccounts:JSON.parse(localStorage.getItem('assetAccounts')||'[]');
+    const q=(typeof amLoadDailyQuotes==='function')?amLoadDailyQuotes():null;
+    const now=new Date(),today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    let items=[];
+    if(q&&q.quotes&&q.ts){
+      const d=new Date(q.ts),qDate=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if(qDate===today){
+        const merged=new Map();
+        amDailyTargets(accs.filter(a=>!a.sold&&Number(a.amount||0)>0)).forEach(t=>{
+          const z=q.quotes[t.qcode]; if(!z||z.err||!(Number(z.prev)>0)||!(Number(z.cur)>0))return;
+          const key=String(t.qcode).toUpperCase(),pct=(Number(z.cur)-Number(z.prev))/Number(z.prev)*100;
+          if(!merged.has(key))merged.set(key,{name:amLotBaseName(t.a.name),amount:Number(t.a.amount||0),pct});
+          else merged.get(key).amount+=Number(t.a.amount||0);
+        });
+        items=[...merged.values()];
+      }
+    }
+    if(!items.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0;grid-column:1/-1">当日の価格データ取得後に表示します</div>';return;}
+    items.sort((a,b)=>b.amount-a.amount);
+    const color=p=>p>=3?'#16a34a':p>=1.5?'#22c55e':p>=0.5?'#4ade80':p>=-0.5?'#6b7280':p>=-1.5?'#f87171':p>=-3?'#ef4444':'#b91c1c';
+    el.innerHTML=items.slice(0,12).map(a=>{const sg=a.pct>=0?'＋':'';const nm=a.name.length>6?a.name.slice(0,6)+'…':a.name;return `<div style="background:${color(a.pct)};border-radius:6px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px"><div style="font-size:9px;color:rgba(255,255,255,0.85);font-weight:600;text-align:center;line-height:1.2">${nm}</div><div style="font-size:12px;font-weight:800;color:#fff;margin-top:2px">${sg}${a.pct.toFixed(1)}%</div></div>`;}).join('');
+    el.style.display='grid';el.style.gridTemplateColumns='repeat(4,1fr)';el.style.gap='4px';
+  }catch(e){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">表示データを確認できません</div>';}
 }
 
 // ============================================================
