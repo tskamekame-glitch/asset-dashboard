@@ -7052,22 +7052,51 @@ function amShowSBIDiffBanner(totalBefore,totalAfter,log,reflectedCount,beforeSna
     itemDiffs.splice(8);
   }
 
-  // 取り込み差額を「既存保有」「現金」「新規追加」に分解する。
-  // CSVだけでは既存銘柄の追加買付と純粋な価格変動を完全分離できないため、
-  // 既存保有は誤認防止のため「評価額変動（価格変動・追加買付等を含む）」と明示する。
-  const allDiffs=[...keys].map(k=>{
-    const b=bm.get(k), a=am.get(k), oldVal=b?b.value:0, newVal=a?a.value:0;
-    return {name:(a||b||{}).name||'名称不明',oldVal,newVal,diff:newVal-oldVal};
-  }).filter(x=>Math.abs(x.diff)>=1);
-  const isCashName=n=>/(預かり|預り|現金|買付余力|銀行|普通預金|cash)/i.test(String(n||''));
-  const newAddDiff=allDiffs.filter(x=>x.oldVal<=0&&x.newVal>0&&!isCashName(x.name)).reduce((t,x)=>t+x.diff,0);
-  const cashDiff=allDiffs.filter(x=>isCashName(x.name)).reduce((t,x)=>t+x.diff,0);
-  const existingDiff=diff-newAddDiff-cashDiff;
-  const metric=(label,value,note)=>{
-    const sg=value>=0?'+':'', cc=value>=0?'var(--green)':'var(--danger)';
-    return `<div style="padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg1);min-width:0"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><div style="font-size:14px;font-weight:800;color:${cc}">${sg}${fmt(Math.round(value))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;line-height:1.35">${note}</div></div>`;
+  // 総資産差額を「相場」「売却振替」「買付振替」「入出金」「純増減」に分けて表示する。
+  // 売買は資産内の移動なので純増減には加算しない。CSVに約定単価がない場合は株数差×取込後価格で振替額を推定する。
+  const detailAggregate=list=>{
+    const m=new Map();
+    (Array.isArray(list)?list:[]).forEach(a=>{
+      if(!a||a.sold)return;
+      const k=keyOf(a), cur=m.get(k)||{name:a.name||a.code||'名称不明',value:0,shares:0,price:0,isCash:false};
+      cur.value+=Number(a.amount||0);
+      cur.shares+=Number(a.shares||a.units||0);
+      if(Number(a.price||0)>0)cur.price=Number(a.price);
+      cur.isCash=/(預かり|預り|現金|買付余力|銀行|普通預金|cash)/i.test(String(a.name||''));
+      if(a.name)cur.name=a.name; m.set(k,cur);
+    });
+    return m;
   };
-  const breakdownHtml=`<div style="margin:8px 0 10px"><div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:6px">変動の内訳</div><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">${metric('① 既存保有',existingDiff,'価格変動・追加買付等')}${metric('② 現金増減',cashDiff,'SBI預かり等')}${metric('③ 新規追加',newAddDiff,'前回0円→今回残高あり')}</div><div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.45">※ SBI保有CSVだけでは、既存銘柄の「値動き」と「追加買付」を完全には分離できません。①は既存保有の評価額変動として表示します。</div></div>`;
+  const bdm=detailAggregate(beforeSnapshot), adm=detailAggregate(afterSnapshot);
+  const dkeys=new Set([...bdm.keys(),...adm.keys()]);
+  let securityDiff=0,cashDiff=0,saleTransfer=0,buyTransfer=0;
+  const tradeRows=[];
+  dkeys.forEach(k=>{
+    const b=bdm.get(k)||{name:'名称不明',value:0,shares:0,price:0,isCash:false};
+    const a=adm.get(k)||{name:b.name,value:0,shares:0,price:0,isCash:b.isCash};
+    const vd=Number(a.value||0)-Number(b.value||0);
+    if(a.isCash||b.isCash){cashDiff+=vd;return;}
+    securityDiff+=vd;
+    const qd=Number(a.shares||0)-Number(b.shares||0);
+    if(Math.abs(qd)>0.000001){
+      const px=Number(a.price||0)>0?Number(a.price):Number(b.price||0)>0?Number(b.price):0;
+      // priceが取れない投信等は評価額差を振替推定に使う。
+      const est=px>0?Math.abs(qd)*px:Math.abs(vd);
+      if(qd<0){saleTransfer+=est;tradeRows.push({name:a.name||b.name,type:'売却',amount:est,qty:Math.abs(qd)});}
+      else {buyTransfer+=est;tradeRows.push({name:a.name||b.name,type:'買付',amount:est,qty:Math.abs(qd)});}
+    }
+  });
+  // 証券評価額の変化 = 相場変動 + 買付 - 売却 とみなし、内部振替を除いた相場分を推定。
+  const marketDiff=securityDiff-buyTransfer+saleTransfer;
+  // 現金変化 = 売却 - 買付 + 入出金 とみなし、売買振替を除いた外部資金移動を推定。
+  const externalCashDiff=cashDiff-saleTransfer+buyTransfer;
+  const trueDiff=marketDiff+externalCashDiff;
+  const metric=(label,value,note,neutral=false)=>{
+    const sg=value>=0?'+':'', cc=neutral?'var(--accent)':(value>=0?'var(--green)':'var(--danger)');
+    return `<div style="padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg1);min-width:0"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><div style="font-size:14px;font-weight:800;color:${cc}">${neutral?'':sg}${fmt(Math.round(value))}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;line-height:1.35">${note}</div></div>`;
+  };
+  const tradeDetail=tradeRows.length?`<div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.45">売買検出：${tradeRows.slice(0,6).map(x=>`${esc(x.name)} ${x.type} ${Number(x.qty).toLocaleString('ja-JP')}株`).join(' ／ ')}${tradeRows.length>6?' ほか':''}</div>`:'';
+  const breakdownHtml=`<div style="margin:8px 0 10px"><div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:6px">総資産変動を5つに分解</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">${metric('① 相場による増減',marketDiff,'売買による残高移動を除いた推定値')}${metric('② 売却→現金',saleTransfer,'資産内の移動・総資産には中立',true)}${metric('③ 現金→買付',buyTransfer,'資産内の移動・総資産には中立',true)}${metric('④ 入出金等',externalCashDiff,'売買振替を除いた現金増減')}${metric('⑤ 本当の総資産増減',trueDiff,'①＋④。売買振替は二重計上しない')}</div>${tradeDetail}<div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.45">※ ②③はCSVの株数差と価格からの推定です。約定単価がCSVにない場合、実際の受渡額と少しずれることがあります。⑤は総資産の前回差額と一致するよう、売買を「株↔現金の振替」として扱います。</div></div>`;
 
   const itemHtml=itemDiffs.map(d=>{
     const s=d.diff>=0?'+':'';
