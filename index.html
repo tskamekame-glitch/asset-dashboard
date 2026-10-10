@@ -3826,14 +3826,17 @@ function amRender(){
   const activeAccounts=amAccounts.filter(a=>!a.sold&&Number(a.amount||0)>0);
   const soldAccounts=amAccounts.filter(a=>a.sold);
 
-  const total=activeAccounts.reduce((s,a)=>s+a.amount,0);
-  const cats={};activeAccounts.forEach(a=>{cats[a.cat]=(cats[a.cat]||0)+a.amount;});
+  // 金額はCSV/Drive復元時に文字列になる場合があるため、必ず数値化して集計する。
+  // 文字列のまま加算すると 1000 + "2000" → "10002000" となり、総資産・カテゴリ金額が壊れる。
+  const amountNum=a=>{const n=Number(a&&a.amount);return Number.isFinite(n)?n:0;};
+  const total=activeAccounts.reduce((s,a)=>s+amountNum(a),0);
+  const cats={};activeAccounts.forEach(a=>{const cat=a.cat||'その他';cats[cat]=(cats[cat]||0)+amountNum(a);});
   amRenderReminder();
 
   // 確定損益バナー
   amRenderSoldBanner(soldAccounts);
 
-  document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}口座${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
+  document.getElementById('totalCard').innerHTML=`<div class="total-card"><div class="label">総資産（保有中）</div><div class="value">${fmt(total)}</div><div class="sub">${activeAccounts.length}保有件数${soldAccounts.length>0?` ／ 売却済み${soldAccounts.length}件`:''}</div></div>`;
   try{dailyPnlRender();}catch(e){}
   document.getElementById('mgSummaryGrid').innerHTML=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cat,amt])=>`<div class="metric"><div class="label">${AM_CAT_EMOJI[cat]||''} ${cat}</div><div class="value">${fmt(amt)}</div><div class="sub">${total>0?Math.round(amt/total*100):0}%</div></div>`).join('');
   // カテゴリ内訳：棒グラフではなく円グラフで表示
