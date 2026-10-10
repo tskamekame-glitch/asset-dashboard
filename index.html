@@ -17208,7 +17208,7 @@ function amPwRender(){
     const code=String(a.code||a.ticker||a.symbol||'').trim(),cur=amPwCurrentPrice(a),buy=Number(a.targetBuyPrice||0),sell=Number(a.targetSellPrice||0),purchase=Number(a.costPrice||0);
     const ratio=total?Number(a.amount||0)/total*100:0,targetRatio=Number(a.targetRatio||0),t=techMap[code];
     if(t && typeof tpComposite==='function'){
-      try{const h={code,name:a.name,amount:Number(a.amount||0),cost:purchase,target:Number(a.analystTarget||a.targetPrice||0)};const c=tpComposite(t,h);let reason='売買判断の総合スコア '+c.score+'/100';if(Number.isFinite(t.rsi))reason+='・RSI '+t.rsi.toFixed(0);if(t.ratio!=null)reason+='・信用倍率 '+Number(t.ratio).toFixed(1)+'倍';return {action:c.action,score:c.score,reason};}catch(e){}
+      try{const h={code,name:a.name,amount:Number(a.amount||0),cost:purchase,target:Number(a.analystTarget||a.targetPrice||0)};const c=tpComposite(t,h);let reason='売買判断の総合スコア '+c.score+'/100';if(Number.isFinite(t.rsi))reason+='・RSI '+t.rsi.toFixed(0);if(t.ratio!=null)reason+='・信用倍率 '+Number(t.ratio).toFixed(1)+'倍';return {action:c.action,score:c.score,reason,dataReady:true};}catch(e){}
     }
     let score=50,reasons=[];
     if(buy>0&&cur>0){const d=(buy-cur)/cur*100;if(cur<=buy){score+=15;reasons.push('目標買値以下');}else if(d>-5){score+=6;reasons.push('目標買値まで'+Math.abs(d).toFixed(1)+'%');}}
@@ -17217,7 +17217,7 @@ function amPwRender(){
     if(targetRatio>0){const gap=targetRatio-ratio;if(gap>=2){score+=8;reasons.push('目標比率まで不足');}else if(gap<=-2){score-=8;reasons.push('目標比率を超過');}}
     let action=score>=68?'買い増し':score>=58?'押し目待ち':score>=43?'保有':score>=32?'利確検討':'警戒';
     if(sell>0&&cur>=sell)action='利確検討';
-    return {action,score:Math.max(0,Math.min(100,Math.round(score))),reason:reasons.join('・')||'売買判断データ不足'};
+    return {action,score:Math.max(0,Math.min(100,Math.round(score))),reason:reasons.join('・')||'価格・取得単価だけでは売買判断できません',dataReady:false};
   }
   const rank={買い増し:0,押し目待ち:1,保有:2,利確検討:3,警戒:4};
   const rows=baseRows.map(a=>({a,j:judge(a)})).sort((x,y)=>(rank[x.j.action]??9)-(rank[y.j.action]??9)||y.j.score-x.j.score||Number(y.a.amount||0)-Number(x.a.amount||0));
@@ -17238,9 +17238,12 @@ function amPwRender(){
     const statusColor=status==='買い増し候補'?'#16a34a':status==='売却候補'?'#dc2626':'var(--text2)';
     const priceHint=buy>0&&cur>0?(cur<=buy?`買値を${Math.abs(buyGap).toFixed(1)}%下回る`:`買値まで${Math.abs(buyGap).toFixed(1)}%`):'買値未設定';
     const sellHint=sell>0&&cur>0?(cur>=sell?'売値到達':`売値まで${Math.max(0,sellGap).toFixed(1)}%`):'売値未設定';
+    const dataNote=j.dataReady
+      ? `<div style="font-size:9px;color:var(--text3);margin-top:3px;line-height:1.45"><b style="color:${m.fg}">理由：</b>${escv(j.reason)}</div>`
+      : `<div style="font-size:9px;color:#b06000;margin-top:3px;line-height:1.45"><b>参考判定：</b>${escv(j.reason)}。<br>正確な判定には「売買判断」で確定終値を取得してください。<button type="button" onclick="switchTab('tradejudge');setTimeout(()=>{try{tjRefreshAll()}catch(e){}},250)" style="margin-top:4px;border:1px solid #e6b566;background:#fff8e1;color:#9a6700;border-radius:6px;padding:3px 7px;font-size:9px;font-weight:800;cursor:pointer">🚦 売買判断を更新</button></div>`;
     return `<tr style="border-bottom:1px solid var(--border);background:${m.bg}55">
       <td style="padding:8px 7px;position:sticky;left:0;background:var(--bg);z-index:1;min-width:155px"><div style="font-weight:700;font-size:11px">${escv(amPwTicker(a))}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escv(a.name||'')}</div></td>
-      <td style="padding:7px;min-width:150px"><div style="display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:${m.bg};color:${m.fg};font-weight:900;font-size:11px">${m.icon} ${j.action}</div><div style="font-size:10px;font-weight:700;color:${m.fg};margin-top:4px">${m.text}</div><div style="font-size:9px;color:var(--text3);margin-top:3px;line-height:1.4">${escv(j.reason)}</div></td>
+      <td style="padding:7px;min-width:185px"><div style="display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:${m.bg};color:${m.fg};font-weight:900;font-size:11px">${m.icon} ${j.action}${j.dataReady?'':'（参考）'}</div><div style="font-size:10px;font-weight:700;color:${m.fg};margin-top:4px">${m.text}</div>${dataNote}</td>
       <td style="padding:8px 6px;text-align:center;white-space:nowrap"><b style="font-size:15px;color:${m.fg}">${j.score}</b><span style="font-size:9px;color:var(--text3)">/100</span></td>
       <td style="padding:8px 6px;text-align:right;white-space:nowrap"><b>${cur>0?unit+amPwMoney(cur):'—'}</b><div style="font-size:9px;color:var(--text3)">¥${amPwMoney(a.amount)}</div></td>
       <td style="padding:8px 6px;text-align:right;white-space:nowrap"><b>${purchase>0?unit+amPwMoney(purchase):'—'}</b><div style="font-size:10px;font-weight:700;color:${pnlRate!==null?(pnlRate>=0?'#16a34a':'#dc2626'):'var(--text3)'}">${pnlRate!==null?(pnlRate>=0?'+':'')+pnlRate.toFixed(1)+'%':'—'}</div></td>
@@ -17252,7 +17255,7 @@ function amPwRender(){
       <td style="padding:6px;min-width:80px"><button class="btn-sm" onclick="amPwSave(${a.id})">保存</button></td>
     </tr>`;
   }).join('');
-  el.innerHTML=`<div style="padding:0 16px 9px;font-size:11px;color:var(--text3);line-height:1.6"><b style="color:var(--text2)">左から「今どうする」を確認</b> → 必要なら目標買値・売値を編集。売買判断の最新データがある銘柄はテクニカル・需給・業績を含む総合判定を優先します。</div>
+  el.innerHTML=`<div style="padding:0 16px 9px;font-size:11px;color:var(--text3);line-height:1.7"><b style="color:var(--text2)">左から「今どうする」を確認</b> → 必要なら目標買値・売値を編集。<br><b style="color:#9a6700">「参考」表示の銘柄：</b>確定終値などの売買判断データが未取得です。各行の「🚦 売買判断を更新」を押すと、売買判断タブへ移動して最新データを取得します。<br><b style="color:var(--text2)">判定理由：</b>総合判定がある銘柄はスコア・RSI・信用倍率等を表示し、データ不足時は目標買値・売値、取得価格、保有比率のどの条件で参考判定したかを表示します。</div>
   <div style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">${summary}<span style="font-size:11px;padding:7px 10px;border-radius:9px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div>
   <div style="margin:0 16px 14px;border:1px solid var(--border);border-radius:10px;overflow:auto;background:var(--bg)"><table style="border-collapse:separate;border-spacing:0;width:100%;min-width:1250px;font-size:11px"><thead><tr style="background:var(--bg2);position:sticky;top:0;z-index:2"><th style="padding:8px 6px;text-align:left;position:sticky;left:0;background:var(--bg2);z-index:3">銘柄</th><th style="padding:8px 6px;text-align:left">今どうする</th><th style="padding:8px 6px">総合</th><th style="padding:8px 6px;text-align:right">現在値／評価額</th><th style="padding:8px 6px;text-align:right">取得価格／損益</th><th style="padding:8px 6px">目標買値</th><th style="padding:8px 6px">目標売値</th><th style="padding:8px 6px">目標比率</th><th style="padding:8px 6px">自分の管理区分</th><th style="padding:8px 6px">メモ</th><th style="padding:8px 6px">保存</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
