@@ -926,7 +926,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <!-- ── ヒートマップ ── -->
     <div style="padding:0 14px 8px">
       <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px;cursor:pointer" onclick="switchTab('trend')">
-        <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:0.04em;margin-bottom:8px">🔥 ヒートマップ（前回CSV比）</div>
+        <div style="font-size:11px;color:var(--text2);font-weight:600;letter-spacing:0.04em;margin-bottom:8px">🔥 ヒートマップ（確定終値比）</div>
         <div id="home-heatmap-mini" style="min-height:80px">
           <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">SBI CSVを読み込むと表示されます</div>
         </div>
@@ -1040,15 +1040,15 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
             <button onclick="amSetHmView('comp')" data-v="comp" style="font-size:11px;padding:3px 9px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">資産構成</button>
           </div>
           <div id="am-hm-btns" style="display:flex;gap:2px;background:rgba(128,128,128,0.1);border-radius:8px;padding:2px">
-            <button onclick="amSetHeatmapMode('csv')" data-m="csv" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">前回比</button>
-            <button onclick="amSetHeatmapMode('daily')" data-m="daily" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">当日</button>
+            <button onclick="amSetHeatmapMode('daily')" data-m="daily" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">終値比</button>
+            
             <button onclick="amSetHeatmapMode('m1')" data-m="m1" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">月間</button>
             <button onclick="amSetHeatmapMode('y1')" data-m="y1" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">年間</button>
             <button onclick="amSetHeatmapMode('all')" data-m="all" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">全期間</button>
           </div>
         </div>
       </div>
-      <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=前回CSV比変動率</div>
+      <div style="padding:0 16px 4px;font-size:11px;color:var(--text3)" id="amHeatmapSubtitle">面積=評価額 / 色=直近2営業日の確定終値騰落率</div>
       <div id="amHeatmapTotal" style="padding:0 16px 6px;font-size:13px"></div>
       <div id="amHeatmap" style="padding:0 0 12px;margin:0 16px"></div>
     </div>
@@ -3683,7 +3683,7 @@ function homeRenderMiniHeatmap(){
     let items=[];
     if(q&&q.quotes&&q.ts){
       const d=new Date(q.ts),qDate=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      if(qDate===today){
+      if(true){
         const merged=new Map();
         amDailyTargets(accs.filter(a=>!a.sold&&Number(a.amount||0)>0)).forEach(t=>{
           const z=q.quotes[t.qcode]; if(!z||z.err||!(Number(z.prev)>0)||!(Number(z.cur)>0))return;
@@ -3694,7 +3694,7 @@ function homeRenderMiniHeatmap(){
         items=[...merged.values()];
       }
     }
-    if(!items.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0;grid-column:1/-1">当日の価格データ取得後に表示します</div>';return;}
+    if(!items.length){el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0;grid-column:1/-1">確定終値データ取得後に表示します</div>';return;}
     items.sort((a,b)=>b.amount-a.amount);
     const color=p=>p>=3?'#16a34a':p>=1.5?'#22c55e':p>=0.5?'#4ade80':p>=-0.5?'#6b7280':p>=-1.5?'#f87171':p>=-3?'#ef4444':'#b91c1c';
     el.innerHTML=items.slice(0,12).map(a=>{const sg=a.pct>=0?'＋':'';const nm=a.name.length>6?a.name.slice(0,6)+'…':a.name;return `<div style="background:${color(a.pct)};border-radius:6px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px"><div style="font-size:9px;color:rgba(255,255,255,0.85);font-weight:600;text-align:center;line-height:1.2">${nm}</div><div style="font-size:12px;font-weight:800;color:#fff;margin-top:2px">${sg}${a.pct.toFixed(1)}%</div></div>`;}).join('');
@@ -3917,9 +3917,10 @@ function amRender(){
   }
 }
 // ── 保有銘柄ヒートマップ（Squarified Treemap） ──
-// モード: 'csv'=前回CSV比 / 'daily'=当日騰落（前日終値 vs 現在値）
+// モード: 'daily'=直近2営業日の確定終値比較 / 'all'=取得来
 // ビュー: 'map'=ヒートマップ / 'top10'=上位10銘柄 / 'comp'=資産構成
-let amHeatmapMode=localStorage.getItem('amHeatmapMode')||'csv';
+let amHeatmapMode=localStorage.getItem('amHeatmapMode')||'daily';
+if(amHeatmapMode==='csv')amHeatmapMode='daily';
 let amHmView=localStorage.getItem('amHmView')||'map';
 let amDailyFetching=false;
 const AM_QUOTE_KEY='amDailyQuotes_v3';
@@ -3980,8 +3981,8 @@ function amEnsureImportSnapshot(broker,accounts){
   return amCaptureImportSnapshot(broker,accounts);
 }
 function amSetHeatmapMode(m){
-  // 株価のWeb自動取得は停止。ヒートマップはCSV取込値のみを正とする。
-  if(m!=='csv'&&m!=='all')m='csv';
+  // ヒートマップは直近2営業日の確定終値比較を基本とする。
+  if(m!=='daily'&&m!=='all')m='daily';
   if(AM_QUOTE_MODES.includes(m)&&amHeatmapMode===m){
     // 同じ期間モードで再タップ → 強制更新
     try{const q=amLoadDailyQuotes();if(q){q.ts=0;localStorage.setItem(AM_QUOTE_KEY,JSON.stringify(q));}}catch(e){}
@@ -3992,7 +3993,7 @@ function amSetHeatmapMode(m){
 }
 function amUpdateHmBtns(){
   document.querySelectorAll('#am-hm-btns button').forEach(b=>{
-    const hide=['daily','m1','y1'].includes(b.dataset.m);
+    const hide=['m1','y1','csv'].includes(b.dataset.m);
     b.style.display=hide?'none':'';
     const on=b.dataset.m===amHeatmapMode;
     b.style.background=on?'var(--accent,#185FA5)':'transparent';
@@ -4030,45 +4031,30 @@ async function amFetchDailyQuotes(codes){
         const pairs=ts.map((t,i)=>({t:t*1000,c:clRaw[i]})).filter(x=>x.c!=null);
         const meta=result?.meta||{};
         if(pairs.length>=2){
-          const cur=(meta.regularMarketPrice&&meta.regularMarketPrice>0)?meta.regularMarketPrice:pairs[pairs.length-1].c;
-          // 前日終値の決定: 配列末尾＝当日バーとは限らない（Yahoo側の更新タイミング次第で
-          // 当日分がまだ追加されていないことがあり、その場合 pairs[length-2] は「一昨日」になってしまう）。
-          // 1) meta.previousClose があれば最優先（Yahooが明示する「前日終値」そのもの）
-          //    ※ meta.chartPreviousCloseは「前日」ではなく「リクエストしたrangeの開始日より前の終値」
-          //      （range=1yなら約1年前）を指すことがあるため、前日終値の代用としては使わない
-          // 2) 無ければ、配列末尾バーの日付が「今日」と一致するかで pairs[length-2]/[length-1] を切り替える
-          const metaPrevClose=meta.previousClose;
-          let prev,prevT;
-          if(metaPrevClose>0){
-            prev=metaPrevClose;
-            prevT=pairs[pairs.length-2].t;
-          }else{
-            const lastBarDate=new Date(pairs[pairs.length-1].t);
-            const now=new Date();
-            const lastIsToday=lastBarDate.getFullYear()===now.getFullYear()&&lastBarDate.getMonth()===now.getMonth()&&lastBarDate.getDate()===now.getDate();
-            if(lastIsToday){prev=pairs[pairs.length-2].c;prevT=pairs[pairs.length-2].t;}
-            else{prev=pairs[pairs.length-1].c;prevT=pairs[pairs.length-1].t;}
-          }
-          // 異常値ガード：日付は直近でも価格だけが大きく乖離している（配列の日付と終値がズレている等の
-          // データ不整合）ケースがあるため、curと3倍以上乖離するprevは信頼せず、末尾から遡って
-          // 妥当な範囲（cur比1/3〜3倍）に収まる直近の終値を探す。見つからなければprevなし扱いにする
-          if(prev>0&&cur>0){
-            const ratio=cur/prev;
-            if(ratio>3||ratio<1/3){
-              let fixed=null;
-              for(let i=pairs.length-2;i>=0;i--){
-                const c=pairs[i].c;
-                if(c>0){const r=cur/c;if(r<=3&&r>=1/3){fixed=pairs[i];break;}}
-              }
-              if(fixed){prev=fixed.c;prevT=fixed.t;}else{prev=null;}
-            }
-          }
+          // ヒートマップではリアルタイム値を使わず、確定した日足終値だけを使う。
+          // 取引時間中の当日バーは未確定なので除外し、直近2営業日の終値を比較する。
+          const isJp=/^[0-9]{3,4}[A-Z]?$/.test(String(code).toUpperCase());
+          const tz=isJp?'Asia/Tokyo':'America/New_York';
+          const parts=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+          const pp=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+          const todayKey=`${pp.year}-${pp.month}-${pp.day}`;
+          const nowMin=Number(pp.hour)*60+Number(pp.minute);
+          const closeMin=isJp?(15*60+40):(16*60+10);
+          const dayKey=t=>{const z=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(t));const o=Object.fromEntries(z.map(x=>[x.type,x.value]));return `${o.year}-${o.month}-${o.day}`;};
+          let completed=pairs.slice();
+          if(completed.length&&dayKey(completed[completed.length-1].t)===todayKey&&nowMin<closeMin)completed=completed.slice(0,-1);
+          if(completed.length<2)throw new Error('completed closes unavailable');
+          const curPair=completed[completed.length-1];
+          const prevPair=completed[completed.length-2];
+          const cur=curPair.c;
+          const prev=prevPair.c;
+          const prevT=prevPair.t;
           // 約1ヶ月前・約1年前に最も近い終値
           const near=days=>{const tg=Date.now()-days*86400000;let best=null,bd=Infinity;for(const p of pairs){const d=Math.abs(p.t-tg);if(d<bd){bd=d;best=p;}}return best;};
           const m1p=near(30);
           const y1p=pairs[0];// 1yレンジの先頭≒1年前（上場が新しい場合は上場来）
           quotes[code]={cur,prev:prev>0?prev:null,m1:m1p?m1p.c:null,y1:y1p.c,
-            curT:pairs[pairs.length-1].t,prevT:prev>0?prevT:null,m1T:m1p?m1p.t:null,y1T:y1p.t,fetchedAt:Date.now()};
+            curT:curPair.t,prevT:prev>0?prevT:null,m1T:m1p?m1p.t:null,y1T:y1p.t,fetchedAt:Date.now()};
         }else{
           quotes[code]={err:1};
         }
@@ -4412,7 +4398,7 @@ function amRenderHeatmap(accounts,total){
     const missing=targets.filter(t=>!isCodeFresh(t.qcode));
     if(missing.length){
       el.innerHTML=`<p style="text-align:center;color:var(--text3);font-size:13px;padding:16px">📡 株価を取得中...（${targets.length}銘柄）</p>`;
-      if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色='+({daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
+      if(subtitleEl0)subtitleEl0.textContent='面積=評価額 / 色='+({daily:'確定終値騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode]||'騰落率');
       if(!amDailyFetching){
         amFetchDailyQuotes([...new Set(targets.map(t=>t.qcode))]).then(()=>{
           try{amRenderHeatmap(accounts,total);}catch(e){}
@@ -4422,7 +4408,7 @@ function amRenderHeatmap(accounts,total){
     }
     if(subtitleEl0){
       const d=new Date(q.ts);
-      const modeLabel={daily:'当日騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode];
+      const modeLabel={daily:'確定終値騰落率',m1:'月間騰落率',y1:'年間騰落率'}[amHeatmapMode];
       const baseTKey={daily:'prevT',m1:'m1T',y1:'y1T'}[amHeatmapMode];
       let rangeStr='';
       for(const t of targets){
@@ -4438,7 +4424,7 @@ function amRenderHeatmap(accounts,total){
   }else{
     // ── 前回CSV比モード ──
     // 株価Web取得は行わず、SBI/moomooのCSV取込時に保存した前回評価額だけを使用。
-    if(subtitleEl0)subtitleEl0.textContent='色=前回CSV比変動率【前回CSV取込時 → 現在】・SBI/moomoo CSV取込値のみを使用';
+    if(subtitleEl0)subtitleEl0.textContent='色=直近2営業日の確定終値騰落率';
   }
 
   // 色: モードに応じたしきい値（日次±3% / 月間±10% / 年間・全期間±30%）
