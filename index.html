@@ -14692,6 +14692,7 @@ window.switchTab=function(t){
   _origSwitch&&_origSwitch(t);
   if(t==='watchlist'){wlRender();secOnTabOpen();wlAutoSync();/* Sheetsから自動読込（60秒スロットル）。手動↓読込も引き続き可 */}
   if(t==='cashflow'){cfRender();}
+  if(t==='pricewatch'){try{amPwRender();}catch(e){console.warn('pricewatch render',e)}}
   if(t==='tsumitate'){
     tsRender();tsAutoSync();
     let sub='quota';
@@ -17207,9 +17208,9 @@ function amPwRender(){
   const escv=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const cellInput=(id,val,ph,step='any')=>`<input id="${id}" type="number" inputmode="decimal" step="${step}" value="${val||''}" placeholder="${ph||''}" style="width:100%;box-sizing:border-box;padding:6px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px">`;
   let techMap={};
-  try{const c=typeof tpCache==='function'?tpCache():null;(c?.rows||[]).forEach(t=>{techMap[String(t.code||t.ticker||'').trim()]=t;});}catch(e){}
+  try{const c=typeof tpCache==='function'?tpCache():null;(c?.rows||[]).forEach(t=>{const k=String(t.code||t.ticker||'').trim().toUpperCase().replace(/\.T$/,'');techMap[k]=t;});}catch(e){}
   function judge(a){
-    const code=String(a.code||a.ticker||a.symbol||'').trim(),cur=amPwCurrentPrice(a),buy=Number(a.targetBuyPrice||0),sell=Number(a.targetSellPrice||0),purchase=Number(a.costPrice||0);
+    const code=String(a.code||a.ticker||a.symbol||'').trim().toUpperCase().replace(/\.T$/,''),cur=amPwCurrentPrice(a),buy=Number(a.targetBuyPrice||0),sell=Number(a.targetSellPrice||0),purchase=Number(a.costPrice||0);
     const ratio=total?Number(a.amount||0)/total*100:0,targetRatio=Number(a.targetRatio||0),t=techMap[code];
     if(t && typeof tpComposite==='function'){
       try{const h={code,name:a.name,amount:Number(a.amount||0),cost:purchase,target:Number(a.analystTarget||a.targetPrice||0)};const c=tpComposite(t,h);let reason='売買判断の総合スコア '+c.score+'/100';if(Number.isFinite(t.rsi))reason+='・RSI '+t.rsi.toFixed(0);if(t.ratio!=null)reason+='・信用倍率 '+Number(t.ratio).toFixed(1)+'倍';return {action:c.action,score:c.score,reason,dataReady:true};}catch(e){}
@@ -19087,7 +19088,7 @@ async function tjRefreshAll(){
   let jpBench=[],usBench=[];try{[jpBench,usBench]=await Promise.all([tjSeries('^N225'),tjSeries('^GSPC')]);}catch(e){}
   const jpC=jpBench.map(x=>x.c),usC=usBench.map(x=>x.c);const rows=[],missing=[];let done=0;
   for(const h of hs){try{const ser=await tjSeries(h.code),chk=tjPriceLooksValid(h,ser);if(!chk.ok)missing.push({...h,reason:chk.reason});else rows.push(tjAnalyze(h,ser,(/^(\d{4}|\d{3}[A-Z])$/.test(h.code)?jpC:usC)));}catch(e){console.warn('tradejudge',h.code,e);missing.push({...h,reason:e?.message||'取得失敗'})}done++;if(st)st.textContent=`⏳ ${done}/${hs.length}銘柄を分析中…`;}
-  localStorage.setItem(TJ_KEY,JSON.stringify({at:new Date().toISOString(),rows,missing}));tjRender(rows,missing);if(st)st.textContent=`✓ ${rows.length}/${hs.length}銘柄を分析しました${missing.length?'（未分析 '+missing.length+'銘柄）':''}：${new Date().toLocaleString('ja-JP')}`;showToast('売買判断を更新しました');
+  localStorage.setItem(TJ_KEY,JSON.stringify({at:new Date().toISOString(),rows,missing}));tjRender(rows,missing);try{if(typeof amPwRender==='function')amPwRender();}catch(e){console.warn('pricewatch refresh',e)}try{if(typeof tpRender==='function')tpRender();}catch(e){}if(st)st.textContent=`✓ ${rows.length}/${hs.length}銘柄を分析しました${missing.length?'（未分析 '+missing.length+'銘柄）':''}：${new Date().toLocaleString('ja-JP')}`;showToast('売買判断を更新しました。価格管理にも反映しました');
 }
 
 </script>
