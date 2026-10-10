@@ -4282,15 +4282,25 @@ function amMovementRows(accounts){
   const snaps={'SBI証券':amEnsureImportSnapshot('SBI証券',accounts),'moomoo証券':amEnsureImportSnapshot('moomoo証券',accounts)};
   return Object.values(groups).map(g=>{
     let prev=0,base=0,pnl=0,prevClose=0,price=0,priceWeight=0;
+    // 含み損益率は「評価額(円) ÷ 取得原価(外貨×為替)」では計算しない。
+    // 外国株の fxRate が未設定/別通貨の値だと IonQ や SK hynix の損益率が
+    // 数千%～-90%級に壊れるため、株式は現在値と取得単価を同一通貨のまま比較する。
+    // 投資信託など取得価格が総額で保存されるものだけ amount / costPrice を使う。
+    let pnlLocalNow=0,pnlLocalCost=0,pnlFundNow=0,pnlFundCost=0;
     g.rows.forEach(a=>{
       const broker=String(a.broker||'SBI証券').trim()||'SBI証券';
       const snap=snaps[broker];
       const sv=snap?.items?.[amImportSnapshotKey(a,broker)];
       if(sv&&Number(sv.amount)>0)prev+=Number(sv.amount);
-      const c=Number(a.costPrice||0),sh=Number(a.shares||0);
-      if(c>0&&sh>0){base+=c*sh*(a.priceCurrency&&a.priceCurrency!=='JPY'?Number(a.fxRate||1):1);}
-      if(Number.isFinite(Number(a.amount)))pnl+=Number(a.amount||0)-(c>0&&sh>0?c*sh*(a.priceCurrency&&a.priceCurrency!=='JPY'?Number(a.fxRate||1):1):0);
-      const pr=Number(a.price||a.marketPrice||0);
+      const c=Number(a.costPrice||0),sh=Number(a.shares||0),pr0=Number(a.price||a.marketPrice||0);
+      const isFund=/インデックス|投信|ファンド/i.test(String(a.cat||'')+' '+String(a.name||'')) && !(sh>0&&pr0>0);
+      if(isFund){
+        if(c>0&&Number(a.amount||0)>0){pnlFundCost+=c;pnlFundNow+=Number(a.amount||0);}
+      }else if(c>0&&sh>0&&pr0>0){
+        pnlLocalCost+=c*sh;
+        pnlLocalNow+=pr0*sh;
+      }
+      const pr=pr0;
       // CSVで前日終値を持たない銘柄（特にSBI）は共通の当日株価キャッシュを利用する。
       // これによりSBI＋moomooを同じ「今日」分析に含める。
       const q=quoteOf(a);
@@ -4300,7 +4310,10 @@ function amMovementRows(accounts){
     });
     const importPct=prev>0?(g.amount-prev)/prev*100:null;
     const dailyPct=prevClose>0&&priceWeight>0?(price/prevClose-1)*100:null;
-    const pnlPct=base>0?pnl/base*100:null;
+    const calcCost=pnlLocalCost+pnlFundCost, calcNow=pnlLocalNow+pnlFundNow;
+    const pnlPct=calcCost>0?(calcNow/calcCost-1)*100:null;
+    // 金額の含み損益は従来どおり円評価額ベース。ただしランキング率には使わない。
+    base=calcCost; pnl=calcNow-calcCost;
     return {...g,importPct,dailyPct,pnlPct,pnl,base,prev};
   }).filter(g=>g.amount>0);
 }
