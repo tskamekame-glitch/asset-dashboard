@@ -1466,8 +1466,10 @@ function amConcSector(a){
 }
 function amConcRender(){
   const el=document.getElementById('amConcentrationPanel');if(!el)return;
+  // 集中度は現在画面で使用中の amAccounts だけを正本にする。
+  // localStorage を追加マージすると、部分売却前の旧IDレコードが残っている場合に
+  // 同一銘柄が二重計上され、売却済み株数が集中度へ戻ってしまうため。
   let src=Array.isArray(amAccounts)?amAccounts.slice():[];
-  try{const ls=JSON.parse(localStorage.getItem('assetAccounts')||'[]');if(Array.isArray(ls)){const ids=new Set(src.map(a=>String(a.id||'')));ls.forEach(a=>{if(!ids.has(String(a.id||'')))src.push(a);});}}catch(e){}
   const active=a=>{const sold=String(a.sold??'').toLowerCase();return sold!=='true'&&sold!=='1'&&sold!=='yes'&&!a.sold;};
   const rows=src.filter(a=>active(a)&&amConcNum(a.amount)>0&&a.cat!=='銀行'&&!/現金|預り|預かり|年金|確定拠出/.test(String(a.name||'')));
   if(!rows.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">投資銘柄がありません。</div>';return;}
