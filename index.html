@@ -17200,6 +17200,15 @@ function amPwCurrentPrice(a){
 }
 function amPwMoney(v){return Number(v||0).toLocaleString('ja-JP',{maximumFractionDigits:0});}
 function amPwPriceGap(current,target){return current>0&&target>0?(current-target)/target*100:null;}
+function amPwOpenFundEdit(id){
+  const a=amAccounts.find(x=>String(x.id)===String(id));
+  if(!a){showToast('銘柄が見つかりません');return;}
+  openEditModal(a.id);
+  setTimeout(()=>{
+    const target=document.getElementById('fPer')||document.getElementById('fForwardPER')||document.getElementById('fRevenueGrowth');
+    if(target){target.scrollIntoView({behavior:'smooth',block:'center'});try{target.focus()}catch(e){}}
+  },350);
+}
 function amPwRender(){
   const el=document.getElementById('amPriceWatchPanel'); if(!el)return;
   const baseRows=(Array.isArray(amAccounts)?amAccounts:[]).filter(amPwIsInvestment);
@@ -17279,7 +17288,7 @@ function amPwRender(){
     const priceHint=buy>0&&cur>0?(cur<=buy?`買値を${Math.abs(buyGap).toFixed(1)}%下回る`:`買値まで${Math.abs(buyGap).toFixed(1)}%`):'買値未設定';
     const sellHint=sell>0&&cur>0?(cur>=sell?'売値到達':`売値まで${Math.max(0,sellGap).toFixed(1)}%`):'売値未設定';
     const dataNote=j.dataReady
-      ? `<div style="margin-top:6px;display:grid;gap:5px"><div style="font-size:11px;color:var(--text2);line-height:1.5"><b style="color:${m.fg}">総合理由：</b>${escv(j.reason)}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span style="padding:4px 7px;border-radius:7px;background:#eef4ff;color:#1967d2;font-size:10px;font-weight:800">📈 テクニカル：${escv(j.techAction||'—')}</span><span style="padding:4px 7px;border-radius:7px;background:#f1f8e9;color:#397326;font-size:10px;font-weight:800">📊 ファンダ：${escv(j.fundAction||'データ不足')}</span></div><div style="font-size:10px;color:var(--text3);line-height:1.5"><b>テクニカル理由：</b>${escv(j.techReason||'—')}<br><b>ファンダ理由：</b>${escv(j.fundReason||'—')}</div></div>`
+      ? `<div style="margin-top:6px;display:grid;gap:5px"><div style="font-size:11px;color:var(--text2);line-height:1.5"><b style="color:${m.fg}">総合理由：</b>${escv(j.reason)}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><span style="padding:4px 7px;border-radius:7px;background:#eef4ff;color:#1967d2;font-size:10px;font-weight:800">📈 テクニカル：${escv(j.techAction||'—')}</span><span style="padding:4px 7px;border-radius:7px;background:#f1f8e9;color:#397326;font-size:11px;font-weight:800">📊 ファンダ：${escv(j.fundAction||'データ不足')}</span>${j.fundAction==='データ不足'?`<button type="button" onclick="amPwOpenFundEdit(${JSON.stringify(a.id)})" style="border:1px solid #86b96d;background:#f1f8e9;color:#397326;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:900;cursor:pointer">✎ ファンダ情報を入力</button>`:''}</div><div style="font-size:11px;color:var(--text3);line-height:1.55"><b>テクニカル理由：</b>${escv(j.techReason||'—')}<br><b>ファンダ理由：</b>${escv(j.fundReason||'—')}</div></div>`
       : `<div style="font-size:9px;color:#b06000;margin-top:3px;line-height:1.45"><b>参考判定：</b>${escv(j.reason)}。<br>正確な判定には「売買判断」で確定終値を取得してください。<button type="button" onclick="switchTab('tradejudge');setTimeout(()=>{try{tjRefreshAll()}catch(e){}},250)" style="margin-top:4px;border:1px solid #e6b566;background:#fff8e1;color:#9a6700;border-radius:6px;padding:3px 7px;font-size:9px;font-weight:800;cursor:pointer">🚦 売買判断を更新</button></div>`;
     return `<tr style="border-bottom:1px solid var(--border);background:${m.bg}55">
       <td style="padding:8px 7px;position:sticky;left:0;background:var(--bg);z-index:1;min-width:155px"><div style="font-weight:700;font-size:11px">${escv(amPwTicker(a))}</div><div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escv(a.name||'')}</div></td>
