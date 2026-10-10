@@ -17207,13 +17207,34 @@ function amPwRender(){
   const total=baseRows.reduce((s,a)=>s+Number(a.amount||0),0);
   const escv=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const cellInput=(id,val,ph,step='any')=>`<input id="${id}" type="number" inputmode="decimal" step="${step}" value="${val||''}" placeholder="${ph||''}" style="width:100%;box-sizing:border-box;padding:6px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px">`;
-  let techMap={};
-  try{const c=typeof tpCache==='function'?tpCache():null;(c?.rows||[]).forEach(t=>{const k=String(t.code||t.ticker||'').trim().toUpperCase().replace(/\.T$/,'');techMap[k]=t;});}catch(e){}
+  let techMap={},techCacheAt='';
+  const pwNorm=v=>String(v||'').trim().toUpperCase().replace(/\.T$/,'').replace(/[^0-9A-Z]/g,'');
+  const pwName=v=>String(v||'').trim().toUpperCase().replace(/[\s　・･()（）]/g,'');
+  try{
+    const c=typeof tpCache==='function'?tpCache():JSON.parse(localStorage.getItem('tradeJudgeCacheV1')||'{}');
+    techCacheAt=c?.at||'';
+    (c?.rows||[]).forEach(t=>{
+      const keys=[pwNorm(t.code),pwNorm(t.ticker),pwNorm(t.symbol),pwName(t.name)].filter(Boolean);
+      keys.forEach(k=>techMap[k]=t);
+    });
+  }catch(e){console.warn('pricewatch tech cache',e)}
   function judge(a){
-    const code=String(a.code||a.ticker||a.symbol||'').trim().toUpperCase().replace(/\.T$/,''),cur=amPwCurrentPrice(a),buy=Number(a.targetBuyPrice||0),sell=Number(a.targetSellPrice||0),purchase=Number(a.costPrice||0);
-    const ratio=total?Number(a.amount||0)/total*100:0,targetRatio=Number(a.targetRatio||0),t=techMap[code];
-    if(t && typeof tpComposite==='function'){
-      try{const h={code,name:a.name,amount:Number(a.amount||0),cost:purchase,target:Number(a.analystTarget||a.targetPrice||0)};const c=tpComposite(t,h);let reason='売買判断の総合スコア '+c.score+'/100';if(Number.isFinite(t.rsi))reason+='・RSI '+t.rsi.toFixed(0);if(t.ratio!=null)reason+='・信用倍率 '+Number(t.ratio).toFixed(1)+'倍';return {action:c.action,score:c.score,reason,dataReady:true};}catch(e){}
+    const code=pwNorm(a.code||a.ticker||a.symbol||''),cur=amPwCurrentPrice(a),buy=Number(a.targetBuyPrice||0),sell=Number(a.targetSellPrice||0),purchase=Number(a.costPrice||0);
+    const ratio=total?Number(a.amount||0)/total*100:0,targetRatio=Number(a.targetRatio||0);
+    const t=techMap[code]||techMap[pwNorm(a.ticker)]||techMap[pwNorm(a.symbol)]||techMap[pwName(a.name)];
+    if(t){
+      try{
+        const h={code:code||pwNorm(t.code),name:a.name,amount:Number(a.amount||0),cost:purchase,target:Number(a.analystTargetPrice||a.analystTarget||a.targetPrice||0),fper:Number(a.forwardPER||0)||null,pbr:Number(a.pbr||0)||null,rev:Number(a.revenueGrowth||0)||null,op:Number(a.opProfitGrowth||0)||null,eps1:Number(a.eps1||0)||null,eps2:Number(a.eps2||0)||null};
+        const c=typeof tpComposite==='function'?tpComposite(t,h):{action:t.label,score:t.score};
+        let reason='売買判断 '+(c.action||t.label||'保有')+'・スコア '+Number(c.score??t.score??0)+'/100';
+        if(Number.isFinite(t.rsi))reason+='・RSI '+t.rsi.toFixed(1);
+        if(t.macBull!=null)reason+='・MACD '+(t.macBull?'○':'×');
+        if(t.ratio!=null)reason+='・信用倍率 '+Number(t.ratio).toFixed(1)+'倍';
+        return {action:c.action||t.label||'保有',score:Number(c.score??t.score??50),reason,dataReady:true};
+      }catch(e){
+        console.warn('pricewatch composite',code,e);
+        return {action:t.label||'保有',score:Number(t.score||50),reason:'売買判断データを反映',dataReady:true};
+      }
     }
     let score=50,reasons=[];
     if(buy>0&&cur>0){const d=(buy-cur)/cur*100;if(cur<=buy){score+=15;reasons.push('目標買値以下');}else if(d>-5){score+=6;reasons.push('目標買値まで'+Math.abs(d).toFixed(1)+'%');}}
@@ -17260,9 +17281,15 @@ function amPwRender(){
       <td style="padding:6px;min-width:80px"><button class="btn-sm" onclick="amPwSave(${a.id})">保存</button></td>
     </tr>`;
   }).join('');
-  el.innerHTML=`<div style="padding:0 16px 9px;font-size:11px;color:var(--text3);line-height:1.7"><b style="color:var(--text2)">左から「今どうする」を確認</b> → 必要なら目標買値・売値を編集。<br><b style="color:#9a6700">「参考」表示の銘柄：</b>確定終値などの売買判断データが未取得です。各行の「🚦 売買判断を更新」を押すと、売買判断タブへ移動して最新データを取得します。<br><b style="color:var(--text2)">判定理由：</b>総合判定がある銘柄はスコア・RSI・信用倍率等を表示し、データ不足時は目標買値・売値、取得価格、保有比率のどの条件で参考判定したかを表示します。</div>
+  const cacheStamp=techCacheAt?new Date(techCacheAt).toLocaleString('ja-JP'):'未取得';
+  el.innerHTML=`<div style="padding:0 16px 9px;font-size:11px;color:var(--text3);line-height:1.7"><b style="color:var(--text2)">売買判断データ：</b>${escv(cacheStamp)}<br><b style="color:var(--text2)">左から「今どうする」を確認</b> → 必要なら目標買値・売値を編集。<br><b style="color:#9a6700">「参考」表示の銘柄：</b>確定終値などの売買判断データが未取得です。各行の「🚦 売買判断を更新」を押すと、売買判断タブへ移動して最新データを取得します。<br><b style="color:var(--text2)">判定理由：</b>総合判定がある銘柄はスコア・RSI・信用倍率等を表示し、データ不足時は目標買値・売値、取得価格、保有比率のどの条件で参考判定したかを表示します。</div>
   <div style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">${summary}<span style="font-size:11px;padding:7px 10px;border-radius:9px;background:var(--bg2)">投資資産 ¥${amPwMoney(total)}</span></div>
   <div style="margin:0 16px 14px;border:1px solid var(--border);border-radius:10px;overflow:auto;background:var(--bg)"><table style="border-collapse:separate;border-spacing:0;width:100%;min-width:1250px;font-size:11px"><thead><tr style="background:var(--bg2);position:sticky;top:0;z-index:2"><th style="padding:8px 6px;text-align:left;position:sticky;left:0;background:var(--bg2);z-index:3">銘柄</th><th style="padding:8px 6px;text-align:left">今どうする</th><th style="padding:8px 6px">総合</th><th style="padding:8px 6px;text-align:right">現在値／評価額</th><th style="padding:8px 6px;text-align:right">取得価格／損益</th><th style="padding:8px 6px">目標買値</th><th style="padding:8px 6px">目標売値</th><th style="padding:8px 6px">目標比率</th><th style="padding:8px 6px">自分の管理区分</th><th style="padding:8px 6px">メモ</th><th style="padding:8px 6px">保存</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+const __amPwSwitchBase=window.switchTab;
+if(typeof __amPwSwitchBase==='function'&&!window.__amPwSwitchWrapped){
+  window.__amPwSwitchWrapped=true;
+  window.switchTab=function(tab){const r=__amPwSwitchBase.apply(this,arguments);if(tab==='pricewatch')setTimeout(()=>{try{amPwRender()}catch(e){console.warn('pricewatch tab render',e)}},0);return r;};
 }
 async function amPwSave(id){
   const a=amAccounts.find(x=>x.id===id);if(!a)return;
