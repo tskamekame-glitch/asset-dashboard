@@ -4453,8 +4453,8 @@ function amHmSelectTile(id,sectionKey){
   amHmSelectedIdBySection[sectionKey]=id;
   const gv=(info.gain!=null&&isFinite(info.gain))?info.gain:(info.pct||0);
   const pos=gv>=0;
-  const gCol=pos?'#ff5b5b':'#57a8ff';
-  const edge=pos?'#e8483f':'#2f9ee8';
+  const gCol=item.gain==null?'#aaa':pos?'#ff5b5b':'#57a8ff';
+  const edge=item.gain==null?'#777':pos?'#e8483f':'#2f9ee8';
   const modeLabel=({daily:'当日',m1:'月間',y1:'年間',all:'取得来',csv:'前回比'})[amHeatmapMode]||'期間';
   const gainStr=(info.gain!=null&&isFinite(info.gain))?`${info.gain>=0?'＋':'－'}${Math.abs(Math.round(info.gain)).toLocaleString()}円`:'—';
   const pctStr=(info.pct!=null&&isFinite(info.pct))?` (${info.pct>=0?'+':''}${info.pct.toFixed(2)}%)`:'';
@@ -11330,7 +11330,7 @@ function slSaveEntry(){
   };
   if(slEditingId){const idx=slData.findIndex(x=>x.id===slEditingId);slData[idx]={...slData[idx],...entry};}
   else{slData.push(entry);}
-  slSaveData();slCloseModal();slRender();showToast('💴 売却記録を保存しました');
+  slSaveData();slCloseModal();slRender();if(typeof pnlRender==='function')pnlRender();showToast('💴 売却記録を保存しました');
 }
 function slDeleteEntry(){if(!confirm('削除しますか？'))return;slData=slData.filter(x=>x.id!==slEditingId);slSaveData();slCloseModal();slRender();}
 function slExport(){
@@ -15791,9 +15791,17 @@ function pnlCalcRealized(y1,m1,y2,m2){
     return cur>=from&&cur<=to;
   };
   const items=[];
+  const sales=(typeof slData!=='undefined'&&slData.length?slData:JSON.parse(localStorage.getItem('sellRecords_v1')||'[]'));
+  const sameSale=(a,d)=>a.soldDate===d.date&&(a.code&&d.code?String(a.code)===String(d.code):String(a.name||'').replace(/\s/g,'')===String(d.name||'').replace(/\s/g,''))&&Number(a.soldAmount||0)===Number(d.sellTotal||0)&&(!d.broker||!a.broker||d.broker===a.broker);
+  sales.filter(d=>inRange(d.date)).forEach(d=>{
+    const acc=(typeof amAccounts!=='undefined'?amAccounts:[]).find(a=>sameSale(a,d));
+    if(!pnlBrokerMatch({...d,broker:d.broker||(d.sbiTradeKey?'SBI証券':acc?.broker||''),note:d.memo||''}))return;
+    const known=d.gain!==null&&d.gain!==undefined&&Number.isFinite(Number(d.gain)),cost=d.cost==null?null:Number(d.cost);
+    items.push({id:'sl-'+String(d.id).replace(/[^a-zA-Z0-9_-]/g,''),saleRecordId:d.id,source:'sell',name:d.name,cat:d.cat,gain:known?Number(d.gain):null,pct:known&&cost>0?Number(d.gain)/cost*100:null,soldTotal:Number(d.sellTotal)||0,costTotal:cost,shares:Number(d.shares)||0,costUnit:Number(d.buyPrice)||0,soldUnit:Number(d.sellPrice)||0,buyDate:'',soldDate:d.date||'',date:d.date||'日付未設定',code:d.code||pnlResolveCode(d.name),costPrice:Number(d.buyPrice)||0,isIndex:INDEX_CATS_SOLD.includes(d.cat),badge:known?'売却':'損益未確認',badgeColor:known?'#8e44ad':'#777',type:'realized',tax:d.tax,net:d.net,fee:d.fee});
+  });
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>a.sold&&inRange(a.soldDate)&&pnlBrokerMatch(a)).forEach(a=>{
+    accs.filter(a=>a.sold&&!sales.some(d=>sameSale(a,d))&&inRange(a.soldDate)&&pnlBrokerMatch(a)).forEach(a=>{
       // インデックス投信: costPriceは売却時に取得総額として保存済み(shares倍しない)
       // 個別株等: shares×costPriceが取得総額
       const isIndex=INDEX_CATS_SOLD.includes(a.cat);
@@ -15827,7 +15835,7 @@ function pnlToggleRealizedDetail(id){
   if(ch)ch.style.transform=open?'rotate(0deg)':'rotate(90deg)';
 }
 function pnlRealizedDetailHtml(item){
-  const yen=n=>'¥'+Math.round(n).toLocaleString();
+  const yen=n=>n==null?'未確認':'¥'+Math.round(n).toLocaleString();
   const unit=v=>(v%1!==0)?v.toLocaleString(undefined,{maximumFractionDigits:4}):v.toLocaleString();
   const isFX=item.cat==='FX';
   const rows=[];
@@ -15857,8 +15865,10 @@ function pnlRealizedDetailHtml(item){
     if(isFinite(days)&&days>=0)period=item.buyDate+' → '+item.soldDate+'（'+days+'日間）';
   }else if(item.soldDate){period='売却日 '+item.soldDate;}
   const pos=item.gain>=0;
-  const gCol=pos?'#ff5b5b':'#57a8ff';
-  rows.push(['確定損益','<span style="font-weight:800;color:'+gCol+'">'+(pos?'＋':'－')+Math.abs(Math.round(item.gain)).toLocaleString()+'円'+(item.pct!=null?'（'+(item.pct>=0?'＋':'－')+Math.abs(item.pct).toFixed(1)+'%）':'')+'</span>']);
+  const gCol=item.gain==null?'#aaa':pos?'#ff5b5b':'#57a8ff';
+  if(item.source==='sell'){rows.push(['手数料',yen(item.fee)]);rows.push(['税額',yen(item.tax)]);rows.push(['受渡金額',yen(item.net)]);}
+  if(item.gain==null)rows.push(['確定損益','未確認（取得費が必要）']);
+  else rows.push(['確定損益','<span style="font-weight:800;color:'+gCol+'">'+(pos?'＋':'－')+Math.abs(Math.round(item.gain)).toLocaleString()+'円'+(item.pct!=null?'（'+(item.pct>=0?'＋':'－')+Math.abs(item.pct).toFixed(1)+'%）':'')+'</span>']);
   return `<div style="margin-top:9px;padding-top:9px;border-top:0.5px solid rgba(255,255,255,0.08)">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px">
       ${rows.map(r=>`<div><div style="font-size:9px;color:rgba(255,255,255,0.4)">${r[0]}</div><div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.85);font-variant-numeric:tabular-nums">${r[1]}</div></div>`).join('')}
@@ -15915,6 +15925,9 @@ function pnlRender(){
     subEl.textContent=(pnlBroker==='all'?'':pnlBroker+'・')+`評価 ${(uTotal>=0?'＋':'－')+Math.abs(Math.round(uTotal)).toLocaleString()}円 ／ 確定 ${(rTotal>=0?'＋':'－')+Math.abs(Math.round(rTotal)).toLocaleString()}円${pnlCumulative?'（累計）':'（'+rangeLabel+'）'}`;
   }
 
+  const unknownCount=items.filter(i=>i.type==='realized'&&i.gain==null).length;
+  if(unknownCount){subEl.textContent+=` ／ 損益未確認 ${unknownCount}件（合計から除外）`;totalEl.textContent=items.some(i=>i.gain!=null)?totalEl.textContent+'（確認済分）':'未確認';}
+
   // リスト描画（kaView風・銘柄別ランキング）
   if(!items.length){
     listEl.innerHTML='<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.4);font-size:14px">データがありません</div>';
@@ -15923,9 +15936,9 @@ function pnlRender(){
 
   listEl.innerHTML=items.map(item=>{
     const pos=item.gain>=0;
-    const gCol=pos?'#ff5b5b':'#57a8ff';
-    const edge=pos?'#e8483f':'#2f9ee8';
-    const gainStr=(pos?'＋':'－')+Math.abs(Math.round(item.gain)).toLocaleString()+'円';
+    const gCol=item.gain==null?'#aaa':pos?'#ff5b5b':'#57a8ff';
+    const edge=item.gain==null?'#777':pos?'#e8483f':'#2f9ee8';
+    const gainStr=item.gain==null?'未確認':(pos?'＋':'－')+Math.abs(Math.round(item.gain)).toLocaleString()+'円';
     const pctStr=item.pct!=null?((item.pct>=0?'＋':'－')+Math.abs(item.pct).toFixed(1)+'%'):'';
     const subLabel=item.type==='unrealized'?'累計損益':
                    item.type==='realized'?('確定損益'+(item.date&&item.date!=='日付未設定'?' · '+item.date:'')):'損益';
@@ -15940,11 +15953,11 @@ function pnlRender(){
           :''))
       :'';
     const editBtn=item.type==='realized'&&item.id!=null
-      ?`<span onclick="event.stopPropagation();amOpenSoldModal(${item.id})" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
+      ?`<span onclick="event.stopPropagation();${item.source==='sell'?`slOpenModal('${esc(item.saleRecordId)}')`:`amOpenSoldModal(${item.id})`}" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
       :'';
     const isRealized=item.type==='realized'&&item.id!=null;
     const detailHtml=isRealized?`<div id="pnl-rd-${item.id}" style="display:none">${pnlRealizedDetailHtml(item)}</div>`:'';
-    const clickAttr=isRealized?` onclick="pnlToggleRealizedDetail(${item.id})"`:'';
+    const clickAttr=isRealized?` onclick="pnlToggleRealizedDetail('${item.id}')"`:'';
     const chevron=isRealized
       ?`<span id="pnl-rc-${item.id}" style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1;transition:transform 0.15s;display:inline-block">›</span>`
       :`<span style="color:rgba(255,255,255,0.35);font-size:17px;line-height:1">›</span>`;
