@@ -6672,7 +6672,7 @@ async function importCSV(e){
     if(!text || text.includes('�'))text=sjis||utf;
     text=String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
 
-    if(/約定日/.test(text)&&/約定単価/.test(text)&&/取引|売買/.test(text)){sbiTradeOpen();document.getElementById('sbiTradeText').value=text;sbiTradePreview();return;}
+    if(sbiTaxIsText(text)||(/約定日/.test(text)&&/約定単価/.test(text)&&/取引|売買/.test(text))){sbiTradeOpen();document.getElementById('sbiTradeText').value=text;sbiTradePreview();return;}
 
     if(/保有証券一覧|ポートフォリオ一覧/.test(text)){const st=sbiTradeState();if(st.baseline){st.baseline=null;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));await sbiTradeSaveCloud(st);}}
 
@@ -6986,19 +6986,19 @@ async function amSaveToSheet(){
 async function slSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId)return;
   try{
-    const cols=['id','name','cat','shares','sellPrice','buyPrice','date','account','memo','sellTotal','cost','gain','tax','net','sbiTradeKey','code','settlementDate','fee','broker'];
+    const cols=['id','name','cat','shares','sellPrice','buyPrice','date','account','memo','sellTotal','cost','gain','tax','net','sbiTradeKey','code','settlementDate','fee','broker','taxCostSource','taxBuyDate'];
     const values=[cols,...slData.map(d=>cols.map(k=>d[k]!==undefined&&d[k]!==null?d[k]:''))];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`sell!A1:S${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(slData.length+1<500)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`sell!A${slData.length+2}:S1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`sell!A1:U${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(slData.length+1<500)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`sell!A${slData.length+2}:U1000`});
   }catch(e){console.error('slSaveToSheet error',e);}
 }
 async function slLoadFromSheet(){
   if(!amIsOnline||!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'sell!A2:S1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'sell!A2:U1000'});
     const rows=res.result.values||[];
     if(rows.length===0)return;
-    const cols=['id','name','cat','shares','sellPrice','buyPrice','date','account','memo','sellTotal','cost','gain','tax','net','sbiTradeKey','code','settlementDate','fee','broker'];
+    const cols=['id','name','cat','shares','sellPrice','buyPrice','date','account','memo','sellTotal','cost','gain','tax','net','sbiTradeKey','code','settlementDate','fee','broker','taxCostSource','taxBuyDate'];
     const numKeys=new Set(['shares','sellPrice','buyPrice','sellTotal','cost','gain','tax','net','fee']);
     slData=rows.filter(r=>r[0]).map(r=>{
       const obj={};
@@ -15797,7 +15797,7 @@ function pnlCalcRealized(y1,m1,y2,m2){
     const acc=(typeof amAccounts!=='undefined'?amAccounts:[]).find(a=>sameSale(a,d));
     if(!pnlBrokerMatch({...d,broker:d.broker||(d.sbiTradeKey?'SBI証券':acc?.broker||''),note:d.memo||''}))return;
     const known=d.gain!==null&&d.gain!==undefined&&Number.isFinite(Number(d.gain)),cost=d.cost==null?null:Number(d.cost);
-    items.push({id:'sl-'+String(d.id).replace(/[^a-zA-Z0-9_-]/g,''),saleRecordId:d.id,source:'sell',name:d.name,cat:d.cat,gain:known?Number(d.gain):null,pct:known&&cost>0?Number(d.gain)/cost*100:null,soldTotal:Number(d.sellTotal)||0,costTotal:cost,shares:Number(d.shares)||0,costUnit:Number(d.buyPrice)||0,soldUnit:Number(d.sellPrice)||0,buyDate:'',soldDate:d.date||'',date:d.date||'日付未設定',code:d.code||pnlResolveCode(d.name),costPrice:Number(d.buyPrice)||0,isIndex:INDEX_CATS_SOLD.includes(d.cat),badge:known?'売却':'損益未確認',badgeColor:known?'#8e44ad':'#777',type:'realized',tax:d.tax,net:d.net,fee:d.fee});
+    items.push({id:'sl-'+String(d.id).replace(/[^a-zA-Z0-9_-]/g,''),saleRecordId:d.id,source:'sell',name:d.name,cat:d.cat,gain:known?Number(d.gain):null,pct:known&&cost>0?Number(d.gain)/cost*100:null,soldTotal:Number(d.sellTotal)||0,costTotal:cost,shares:Number(d.shares)||0,costUnit:Number(d.buyPrice)||0,soldUnit:Number(d.sellPrice)||0,buyDate:d.taxBuyDate||'',soldDate:d.date||'',date:d.date||'日付未設定',code:d.code||pnlResolveCode(d.name),costPrice:Number(d.buyPrice)||0,isIndex:INDEX_CATS_SOLD.includes(d.cat),badge:known?'売却':'損益未確認',badgeColor:known?'#8e44ad':'#777',type:'realized',tax:d.tax,net:d.net,fee:d.fee});
   });
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
@@ -17166,7 +17166,7 @@ function rbRenderHistory(){const el=document.getElementById('rb-history');if(!el
 function rbClearHistory(){if(!confirm('月次リバランス履歴をすべて削除しますか？'))return;localStorage.removeItem(RB_KEY);rbRenderHistory();}
 (function(){const s=rbLoadSettings();setTimeout(()=>{try{if(document.getElementById('rb-month-buy')&&s.buy!==undefined)document.getElementById('rb-month-buy').value=s.buy; if(document.getElementById('rb-min-cash')&&s.minCash!==undefined)document.getElementById('rb-min-cash').value=s.minCash;rbRender();}catch(e){}},1200);const base=window.amRender;if(typeof base==='function'&&!window.__rbAmWrapped){window.__rbAmWrapped=true;window.amRender=function(){const r=base.apply(this,arguments);try{rbRender();}catch(e){}return r;};}})();
 </script>
-<div id="sbiTradeModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:10000;align-items:center;justify-content:center"><div style="background:var(--bg);color:var(--text);padding:20px;border-radius:14px;width:min(900px,94vw);max-height:90vh;overflow:auto"><button class="btn-sm" style="float:right" onclick="document.getElementById('sbiTradeModal').style.display='none'">閉じる</button><h2>SBI国内株式・現物 売買履歴</h2><div style="font-size:12px;color:var(--text3)">実CSV対応版 2026-10-14 ／投資信託の行は除外表示</div><p style="font-size:12px">過去分は「履歴だけ補完」で取り込み、その後に最新の保有CSVを取り込んでください。取得費のない過去分の損益は未確認として保存します。預かり金は自動加算しません。</p><input type="file" accept=".csv,.tsv,.txt" multiple onchange="sbiTradeFile(event)"><p style="font-size:12px">当日約定一覧は見出しと表を一緒にコピーしてください。結合セルで銘柄コードや取引区分が欠ける場合は、下記の見出し形式に整えてください（画像は対象外）。</p><textarea id="sbiTradeText" style="width:100%;height:160px;box-sizing:border-box" placeholder="銘柄コード&#9;銘柄名&#9;取引&#9;預り区分&#9;約定日&#9;受渡日&#9;株数&#9;平均約定単価&#9;手数料&#9;譲渡益税&#9;受渡金額"></textarea><p><select id="sbiTradeMode"><option value="history">過去分を含め履歴だけ補完（推奨）</option><option value="balance">基準日より後の売買を保有残高へ反映</option></select> <button class="btn-accent" onclick="sbiTradePreview()">確認</button></p><details><summary>保有残高の自動反映を設定</summary><p style="font-size:12px">現在の残高がこの日までの売買を反映済みであることを確認して保存。基準日の翌日以降の買付と売却を漏れなく取り込みます。新しい保有CSVを取り込んだ後は基準を保存し直してください。基準日に未反映の取引がある場合は使用しないでください。</p><input type="date" id="sbiTradeBaseDate"><button class="btn-sm" onclick="sbiTradeBaseline()">現在の残高を基準として保存</button></details><p><button class="btn-sm" onclick="sbiTradeExport()">取引台帳・残高バックアップ</button></p><div id="sbiTradeResult" style="white-space:pre-wrap;overflow:auto"></div></div></div>
+<div id="sbiTradeModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:10000;align-items:center;justify-content:center"><div style="background:var(--bg);color:var(--text);padding:20px;border-radius:14px;width:min(900px,94vw);max-height:90vh;overflow:auto"><button class="btn-sm" style="float:right" onclick="document.getElementById('sbiTradeModal').style.display='none'">閉じる</button><h2>SBI国内株式・現物 売買履歴</h2><div style="font-size:12px;color:var(--text3)">実CSV・譲渡益税明細対応版 2026-10-14 ／投資信託の行は除外表示</div><p style="font-size:12px">約定履歴CSVで売却を登録し、譲渡益税明細CSVで取得費・確定損益を補完できます。過去分は「履歴だけ補完」で取り込み、その後に最新の保有CSVを取り込んでください。取得費のない過去分の損益は未確認として保存します。預かり金は自動加算しません。</p><input type="file" accept=".csv,.tsv,.txt" multiple onchange="sbiTradeFile(event)"><p style="font-size:12px">当日約定一覧は見出しと表を一緒にコピーしてください。結合セルで銘柄コードや取引区分が欠ける場合は、下記の見出し形式に整えてください（画像は対象外）。</p><textarea id="sbiTradeText" style="width:100%;height:160px;box-sizing:border-box" placeholder="銘柄コード&#9;銘柄名&#9;取引&#9;預り区分&#9;約定日&#9;受渡日&#9;株数&#9;平均約定単価&#9;手数料&#9;譲渡益税&#9;受渡金額"></textarea><p><select id="sbiTradeMode"><option value="history">過去分を含め履歴だけ補完（推奨）</option><option value="balance">基準日より後の売買を保有残高へ反映</option></select> <button class="btn-accent" onclick="sbiTradePreview()">確認</button></p><details><summary>保有残高の自動反映を設定</summary><p style="font-size:12px">現在の残高がこの日までの売買を反映済みであることを確認して保存。基準日の翌日以降の買付と売却を漏れなく取り込みます。新しい保有CSVを取り込んだ後は基準を保存し直してください。基準日に未反映の取引がある場合は使用しないでください。</p><input type="date" id="sbiTradeBaseDate"><button class="btn-sm" onclick="sbiTradeBaseline()">現在の残高を基準として保存</button></details><p><button class="btn-sm" onclick="sbiTradeExport()">取引台帳・残高バックアップ</button></p><div id="sbiTradeResult" style="white-space:pre-wrap;overflow:auto"></div></div></div>
 <script>
 // SBI domestic cash trades: historical imports never decrement current holdings.
 const SBI_TRADE_STATE='indexSbiTrades_v1';
@@ -17199,7 +17199,7 @@ function sbiTradeLegacy(t){return slData.filter(d=>!d.sbiTradeKey&&d.date===t.da
 let sbiTradePending=[];
 function sbiTradeOpen(){document.getElementById('sbiTradeModal').style.display='flex';document.getElementById('sbiTradeResult').textContent='CSVまたは見出し付きの表を入力し、「確認」を押してください。';}
 async function sbiTradeFile(e){try{const parts=[];for(const f of e.target.files){const b=await f.arrayBuffer(),u=new TextDecoder('utf-8').decode(b);parts.push(u.includes('�')?new TextDecoder('shift-jis').decode(b):u);}document.getElementById('sbiTradeText').value=parts.join('\n');sbiTradePreview();}catch(err){document.getElementById('sbiTradeResult').textContent=err.message;}e.target.value='';}
-function sbiTradePreview(){try{const parsed=sbiTradeParse(document.getElementById('sbiTradeText').value),seen=new Set();sbiTradePending=parsed.filter(t=>{if(seen.has(t.key))return false;seen.add(t.key);return true;});const st=sbiTradeState(),known=new Set(st.trades.map(t=>t.key));document.getElementById('sbiTradeResult').innerHTML=(parsed.excluded.length?'<p style="color:var(--danger)">除外した行（反映しません）：<br>'+parsed.excluded.map(sbiTradeEsc).join('<br>')+'</p>':'')+'<p>同一日・銘柄・口座・売買・数量・単価を重複判定キーに使用。同条件の別約定は区別できないため、分割約定は事前に確認してください。</p><table style="width:100%;font-size:12px"><tr><th>約定日</th><th>銘柄</th><th>取引</th><th>数量</th><th>単価</th><th>処理</th></tr>'+sbiTradePending.map(t=>`<tr><td>${t.date}</td><td>${sbiTradeEsc(t.name)} ${t.code}</td><td>${t.side==='sell'?'売':'買'}</td><td>${t.shares}</td><td>${t.price}</td><td>${known.has(t.key)||slData.some(d=>d.sbiTradeKey===t.key)?'取込済':t.side==='sell'&&sbiTradeLegacy(t).length?'既存売却と一致（履歴を追加しない）':'新規'}</td></tr>`).join('')+'</table><button class="btn-accent" onclick="sbiTradeApply()">この内容を反映</button>'; }catch(e){sbiTradePending=[];document.getElementById('sbiTradeResult').textContent=e.message;}}
+function sbiTradePreview(){try{const source=document.getElementById('sbiTradeText').value;if(sbiTaxIsText(source)){sbiTaxPreview(source);return;}const parsed=sbiTradeParse(source),seen=new Set();sbiTradePending=parsed.filter(t=>{if(seen.has(t.key))return false;seen.add(t.key);return true;});const st=sbiTradeState(),known=new Set(st.trades.map(t=>t.key));document.getElementById('sbiTradeResult').innerHTML=(parsed.excluded.length?'<p style="color:var(--danger)">除外した行（反映しません）：<br>'+parsed.excluded.map(sbiTradeEsc).join('<br>')+'</p>':'')+'<p>同一日・銘柄・口座・売買・数量・単価を重複判定キーに使用。同条件の別約定は区別できないため、分割約定は事前に確認してください。</p><table style="width:100%;font-size:12px"><tr><th>約定日</th><th>銘柄</th><th>取引</th><th>数量</th><th>単価</th><th>処理</th></tr>'+sbiTradePending.map(t=>`<tr><td>${t.date}</td><td>${sbiTradeEsc(t.name)} ${t.code}</td><td>${t.side==='sell'?'売':'買'}</td><td>${t.shares}</td><td>${t.price}</td><td>${known.has(t.key)||slData.some(d=>d.sbiTradeKey===t.key)?'取込済':t.side==='sell'&&sbiTradeLegacy(t).length?'既存売却と一致（履歴を追加しない）':'新規'}</td></tr>`).join('')+'</table><button class="btn-accent" onclick="sbiTradeApply()">この内容を反映</button>'; }catch(e){sbiTradePending=[];document.getElementById('sbiTradeResult').textContent=e.message;}}
 function sbiTradeBaseline(){const date=document.getElementById('sbiTradeBaseDate').value;if(!date){alert('現在の保有残高が、いつの売買まで反映済みか日付を指定してください');return;}const st=sbiTradeState();if(st.baseline&&!confirm('基準残高を現在の保有残高に置き換えますか？'))return;st.baseline={date,accounts:JSON.parse(JSON.stringify(amAccounts.filter(a=>!a.sold&&a.broker==='SBI証券'&&a.code)))};localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));document.getElementById('sbiTradeResult').textContent=`${date} 終了時点の基準残高を保存しました。以後の買付・売却を漏れなく取り込んでください。`;sbiTradeSaveCloud(st);}
 async function sbiTradeApply(){try{
  // Reparse editable source; never apply stale preview data.
@@ -17219,6 +17219,32 @@ async function sbiTradeApply(){try{
  }catch(e){document.getElementById('sbiTradeResult').textContent='反映できません：'+e.message;}}
 async function sbiTradeSaveCloud(st){if(!amIsOnline||!amSpreadsheetId)return;try{const info=await gapi.client.sheets.spreadsheets.get({spreadsheetId:amSpreadsheetId,fields:'sheets.properties.title'});if(!info.result.sheets.some(s=>s.properties.title==='sbi_trade_state'))await gapi.client.sheets.spreadsheets.batchUpdate({spreadsheetId:amSpreadsheetId,resource:{requests:[{addSheet:{properties:{title:'sbi_trade_state'}}}]}});const chunks=JSON.stringify(st).match(/[\s\S]{1,30000}/g)||[];await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:'sbi_trade_state!A:A'});await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:'sbi_trade_state!A1',valueInputOption:'RAW',resource:{values:chunks.map(x=>[x])}});}catch(e){showToast('取引台帳はこの端末に保存済み。同期失敗のため他端末での取り込みを控えてください',7000);}}
 function sbiTradeExport(){const data=JSON.stringify({state:sbiTradeState(),sales:slData,accounts:amAccounts},null,2),url=URL.createObjectURL(new Blob([data],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='sbi-trades-backup.json';a.click();URL.revokeObjectURL(url);}
+
+</script>
+<script>
+function sbiTaxIsText(text){return /特定口座損益明細|取得\/新規金額/.test(text)&&/損益金額\/徴収額/.test(text);}
+function sbiTaxParse(text){
+ const rows=sbiTradeCells(text.replace(/^\uFEFF/,'')),h=rows.findIndex(r=>r.includes('取得/新規金額')&&r.includes('損益金額/徴収額'));if(h<0)throw Error('譲渡益税明細の見出しが見つかりません');
+ const head=rows[h],ix=k=>head.indexOf(k),num=v=>{const x=String(v??'').replace(/[,，\s株口円￥¥]/g,'');if(!x||/^[-—]+$/.test(x))return null;const n=Number(x);return Number.isFinite(n)?n:null;},trades=[],excluded=[],taxRows=[];
+ for(let i=h+1;i<rows.length;i++){const r=rows[i],get=k=>r[ix(k)]||'',type=get('取引');if(/譲渡益税徴収額|譲渡益税還付金/.test(r[0])){taxRows.push({date:sbiTradeDate(get('受渡日')),amount:num(get('損益金額/徴収額')),label:r[0]});continue;}
+  if(!type)continue;if(type!=='現物売'&&type!=='株式現物売'){excluded.push(`${get('銘柄')||type}（${type}・対象外）`);continue;}
+  if(get('譲渡益取消区分').trim())throw Error(`行${i+1}: 取消・訂正区分があるため自動補完できません`);
+  const t={code:get('銘柄コード').trim().toUpperCase(),name:get('銘柄').trim(),date:sbiTradeDate(get('約定日')),settle:sbiTradeDate(get('受渡日')),shares:num(get('数量')),cost:num(get('取得/新規金額')),gain:num(get('損益金額/徴収額')),total:num(get('売却/決済金額')),fee:num(get('費用')),buyDate:sbiTradeDate(get('取得/新規年月日'))};
+  if(!/^(\d{4}|\d{3}[A-Z])$/.test(t.code)||!t.date||!(t.shares>0)||t.cost===null||t.gain===null||!(t.total>0))throw Error(`行${i+1}: コード・日付・数量・取得金額・損益を確認してください`);
+  t.fee=t.fee===null?0:t.fee;t.price=(t.total+t.fee)/t.shares;t.side='sell';t.account='特定';t.key=sbiTradeKey(t);if(trades.some(x=>x.key===t.key))throw Error(`行${i+1}: 同じ売却明細が複数あります`);trades.push(t);
+ }
+ if(!trades.length)throw Error('国内現物株式の売却損益がありません');return {trades,excluded,taxRows};
+}
+function sbiTaxPreview(text){const p=sbiTaxParse(text),sum=p.trades.reduce((s,t)=>s+t.gain,0);document.getElementById('sbiTradeResult').innerHTML=`<p>譲渡益税明細：売却 ${p.trades.length}件／税引前損益合計 ${sum.toLocaleString()}円。既存の売却を補完し、未登録分は追加します。保有株数は変更しません。</p><p>税徴収・還付は受渡日単位の別明細なので、銘柄別に推定配分しません。NISA分はこの資料の対象外です。</p><table style="width:100%;font-size:12px"><tr><th>約定日</th><th>銘柄</th><th>数量</th><th>取得費</th><th>確定損益</th></tr>${p.trades.map(t=>`<tr><td>${t.date}</td><td>${sbiTradeEsc(t.name)}</td><td>${t.shares}</td><td>${t.cost.toLocaleString()}</td><td>${t.gain.toLocaleString()}</td></tr>`).join('')}</table><p>対象外：${p.excluded.map(sbiTradeEsc).join('、')||'なし'}</p><button class="btn-accent" onclick="sbiTaxApply()">取得費・損益を反映</button>`;}
+async function sbiTaxApply(){try{
+ const p=sbiTaxParse(document.getElementById('sbiTradeText').value),next=JSON.parse(JSON.stringify(slData));let added=0,updated=0;for(const t of p.trades){
+ const matches=next.filter(d=>sbiTradeAccount(d.account)==='特定'&&(!d.broker||d.broker==='SBI証券')&&d.date===t.date&&Number(d.shares)===t.shares&&(String(d.code||'').trim()===t.code||String(d.name||'').replace(/\s/g,'')===t.name.replace(/\s/g,''))&&Math.abs(Number(d.sellTotal)-(t.total+t.fee))<1);
+ if(matches.length>1)throw Error(`${t.code} ${t.date}: 売却候補が複数あるため補完を停止しました`);
+ let d=matches[0];if(!d){d={id:slUID(),name:t.name,cat:'個別株',shares:t.shares,sellPrice:t.price,date:t.date,account:'特定',sellTotal:t.total+t.fee,tax:null,net:null};next.push(d);added++;}else updated++;
+ Object.assign(d,{code:t.code,broker:'SBI証券',sbiTradeKey:d.sbiTradeKey||t.key,buyPrice:t.cost/t.shares,cost:t.cost,gain:t.gain,fee:t.fee,settlementDate:t.settle,taxCostSource:'SBI譲渡益税明細',taxBuyDate:t.buyDate,memo:(d.memo||'').replace('取得費未記載の場合は確定損益未確認。','').replace(/\nSBI譲渡益税明細の取得金額・損益金額で確認済み。/g,'')+'\nSBI譲渡益税明細の取得金額・損益金額で確認済み。'});
+ }
+ const st=sbiTradeState();localStorage.setItem('indexSbiTrades_beforeImport',JSON.stringify({accounts:amAccounts,sales:slData,state:st}));st.taxRows=p.taxRows;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));slData=next;slSaveData();slRender();pnlRender();await slSaveToSheet();await sbiTradeSaveCloud(st);document.getElementById('sbiTradeResult').textContent=`損益を反映しました：既存売却 ${updated}件を補完／未登録売却 ${added}件を追加。税引前損益 ${p.trades.reduce((s,t)=>s+t.gain,0).toLocaleString()}円。NISA分は未補完です。`;
+ }catch(e){document.getElementById('sbiTradeResult').textContent='補完できません：'+e.message;}}
 
 </script>
 </body>
