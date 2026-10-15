@@ -6080,10 +6080,12 @@ async function amSBIImport(event){
   if(event?.target)event.target.value='';
   if(!files.length)return;
 
+  const portfolioTexts=[],otherFiles=[];
+  try{for(const f of files){const b=await f.arrayBuffer(),u=new TextDecoder('utf-8').decode(b),t=u.includes('�')?new TextDecoder('shift-jis').decode(b):u;if(sbiPortfolioIsText(t))portfolioTexts.push(t);else otherFiles.push(f);}if(portfolioTexts.length)await sbiPortfolioApply(portfolioTexts);}catch(err){showToast('SBI保有CSVの反映を停止しました：'+err.message,10000);return;}
   // SBI CSVは複数形式（ポートフォリオ一覧／保有証券一覧／旧形式）が存在するため、
   // 資産管理のSBIボタンでも統合CSV処理を共通利用する。
   // これにより、文字コード判定や新しいSBI CSV形式の判定が分岐ごとに食い違う問題を防止。
-  for(const file of files){
+  for(const file of otherFiles){
     try{
       const bytes=await new Promise((resolve,reject)=>{
         const r=new FileReader();
@@ -6761,6 +6763,8 @@ async function importCSV(e){
     if(sbiTaxIsText(text)||(/約定日/.test(text)&&/約定単価/.test(text)&&/取引|売買/.test(text))){sbiTradeOpen();document.getElementById('sbiTradeText').value=text;sbiTradePreview();return;}
 
     if(/保有証券一覧|ポートフォリオ一覧/.test(text)){const st=sbiTradeState();if(st.baseline){st.baseline=null;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));await sbiTradeSaveCloud(st);}}
+
+    if(sbiPortfolioIsText(text)){await sbiPortfolioApply([text]);e.target.value='';return;}
 
     // ── SBI「ポートフォリオ一覧」実形式専用処理 ──
     // SBIの実ファイルは「銘柄（コード）/買付日/数量/.../評価額」のロット一覧。
@@ -17745,6 +17749,17 @@ async function tjRefreshAll(){
 }
 
 
+</script>
+<script>
+function sbiPortfolioIsText(t){return /^"?ポートフォリオ一覧"?/m.test(t)&&/数量/.test(t)&&/評価額/.test(t);}
+function sbiPortfolioParse(texts){const rows=[],pages=new Set();for(const text of new Set(texts)){let section='';const page=String(text).match(/ページ[：:]\s*(\d+)/);if(page&&pages.has(page[1]))throw Error('同じページ番号の異なるCSVがあります。同じ時点の各ページを1つずつ選択してください');if(page)pages.add(page[1]);for(const r of sbiTradeCells(text)){const c=r[0]||'';if(/^(株式|投資信託)[（(]/.test(c)&&!/合計/.test(c)){section=c;continue;}if(!section||r.length<11||/合計|^評価額$|^銘柄（コード）$|^ファンド名$/.test(c))continue;const fund=/^投資信託/.test(section),m=c.match(/^([0-9]{4}|[0-9]{3}[A-Z])\s+(.+)$/i);if(!fund&&!m)continue;const num=v=>{const n=Number(String(v||'').replace(/[,＋+]/g,''));return Number.isFinite(n)?n:null;};const amount=num(r[10]),qty=num(r[2]),cost=num(r[4]),price=num(r[5]);if(amount===null||qty===null||cost===null||price===null)throw Error('数値を解析できません：'+c);if(amount<=0)continue;rows.push({code:fund?'':m[1].toUpperCase(),name:fund?c:m[2],fund,account:/NISA.*つみたて/.test(section)?'tsumitate':/NISA.*成長/.test(section)?'growth':'none',shares:fund?qty/10000:qty,costPrice:cost,price,amount,buyDate:sbiTradeDate(r[1])});}}
+ if(!rows.length)throw Error('有効な保有行がありません');return rows;}
+function sbiPortfolioNorm(s){return String(s||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();}
+function sbiPortfolioGroups(rows){const groups=new Map();for(const r of rows){const k=(r.fund?'F|'+sbiPortfolioNorm(r.name):'S|'+r.code)+'|'+r.account;if(!groups.has(k))groups.set(k,{...r,shares:0,amount:0,costTotal:0,history:[]});const g=groups.get(k);g.shares+=r.shares;g.amount+=r.amount;g.costTotal+=r.costPrice*r.shares;if(r.buyDate)g.history.push({date:r.buyDate,shares:r.shares,costPrice:r.costPrice,broker:'SBI証券'});}for(const g of groups.values()){g.costPrice=g.shares?g.costTotal/g.shares:g.costPrice;g.amount=Math.round(g.amount*100)/100;}return [...groups.values()];}
+async function sbiPortfolioApply(texts){const rows=sbiPortfolioParse(texts),groups=sbiPortfolioGroups(rows),next=JSON.parse(JSON.stringify(amAccounts));let added=0,updated=0,id=next.reduce((m,a)=>Math.max(m,Number(a.id)||0),0)+1;
+ for(const g of groups){const candidates=next.filter(a=>!a.sold&&Number(a.amount)>0&&(!a.broker||a.broker==='SBI証券')&&(a.nisaType||'none')===g.account&&(g.code?(String(a.code||'').toUpperCase()===g.code||(!a.code&&sbiPortfolioNorm(a.name)===sbiPortfolioNorm(g.name))):(!a.code&&sbiPortfolioNorm(a.name)===sbiPortfolioNorm(g.name))));if(candidates.length>1)throw Error(`${g.name}：同じ口座区分の既存行が複数あります。重複チェックで確認してください`);let a=candidates[0];if(!a){a={id:id++,cat:g.fund?(/日経|TOPIX|日本/.test(g.name)?'日本インデックス':'全世界インデックス'):'個別株'};next.push(a);added++;}else updated++;
+ Object.assign(a,{name:g.name,code:g.code,broker:'SBI証券',nisaType:g.account,shares:g.shares,price:g.price,costPrice:g.costPrice,amount:g.amount,updated:todayStr(),note:`[SBI CSV ${todayStr()}]`,importSource:'sbi_csv'});if(g.history.length){a.purchaseHistory=g.history;a.buyDate=g.history.map(x=>x.date).sort()[0];}}
+ localStorage.setItem('sbiPortfolio_beforeImport',JSON.stringify(amAccounts));amAccounts=next;window.amAccounts=amAccounts;const st=sbiTradeState();st.baseline=null;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));amSaveToLocal();amRender();refreshHome();await amSaveToSheet();await sbiTradeSaveCloud(st);const total=groups.reduce((s,g)=>s+g.amount,0),message=`SBI保有CSV：${rows.length}明細 → ${groups.length}銘柄・口座／${added}件追加・${updated}件更新／評価額 ${total.toLocaleString('ja-JP',{maximumFractionDigits:2})}円。CSVにない行は保持。`;showToast(message,10000);const audit=document.getElementById('sbiSyncAudit');if(audit){audit.style.display='block';audit.textContent=message;}}
 </script>
 </body>
 </html>
