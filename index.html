@@ -914,7 +914,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
       <button class="btn-sm" onclick="amMigrateConfirmedContribution()" style="color:#0F6E56;border-color:#0F6E56" title="確定拠出年金口座を残高入力方式に変換">🔄 DC年金データ移行</button>
       <input type="file" id="importInput" accept=".csv" style="display:none" onchange="importCSV(event)">
       <button class="btn-sm" onclick="sbiTradeOpen()">📥 SBI売買履歴（CSV・貼付）</button>
-      <input type="file" id="amSBIInput" accept=".csv" style="display:none" onchange="amSBIImport(event)">
+      <input type="file" id="amSBIInput" accept=".csv" multiple style="display:none" onchange="amSBIImport(event)">
       <input type="file" id="amMoomooInput" accept=".csv" multiple style="display:none" onchange="amMoomooImport(event)">
     </div>
     <div class="section" id="chartSection">
