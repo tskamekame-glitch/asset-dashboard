@@ -7,7 +7,6 @@ from urllib.parse import urljoin
 
 import pdfplumber
 import requests
-from supabase import create_client
 
 
 JPX_PAGE = (
@@ -15,10 +14,6 @@ JPX_PAGE = (
     "statistics-equities/margin/01.html"
 )
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_SERVICE_ROLE_KEY = os.environ[
-    "SUPABASE_SERVICE_ROLE_KEY"
-]
 
 
 def get_latest_pdf_url():
@@ -125,6 +120,17 @@ def parse_nonnegative_integer(value):
     return int(digits)
 
 
+def normalize_security_code(value):
+    """PDFの5文字コードは、普通株等を表す末尾0のみ除去する。
+
+    13010 -> 1301、285A0 -> 285A。未知の枝番は推測しない。
+    """
+    value = normalize_cell(value).upper()
+    if re.fullmatch(r"(?:\d{4}|\d{3}[A-Z])0", value):
+        value = value[:-1]
+    return value if valid_security_code(value) else None
+
+
 def valid_security_code(value):
     """
     JPXの証券コードを判定。
@@ -149,7 +155,7 @@ def find_date_from_url(pdf_url):
 
     if not match:
         raise RuntimeError(
-            "JPX PDF URLから公表日を取得できませんでした"
+            "JPX PDF URLから申込日を取得できませんでした"
         )
 
     return (
@@ -232,9 +238,9 @@ def parse_table_row(
     if len(cells) < 10:
         return None
 
-    code = cells[3].upper()
+    code = normalize_security_code(cells[3])
 
-    if not valid_security_code(code):
+    if code is None:
         return None
 
     unit = cells[5].lower()
@@ -286,7 +292,7 @@ def parse_pdf(
     ) as pdf:
 
         print(
-            "公表日:",
+            "申込日:",
             date,
             flush=True
         )
@@ -437,9 +443,11 @@ def validate_rows(rows):
 
 
 def save_to_supabase(rows):
+    from supabase import create_client
+
     supabase = create_client(
-        SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     )
 
     batch_size = 500
@@ -516,6 +524,10 @@ def main():
     # DB書き込みより前に必ず検証
     #
     validate_rows(rows)
+
+    if "--dry-run" in sys.argv[1:]:
+        print("検証完了（--dry-run: DBへの保存なし）", flush=True)
+        return
 
     save_to_supabase(rows)
 
