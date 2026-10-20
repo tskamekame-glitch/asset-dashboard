@@ -651,7 +651,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <div class="page-inner sd-page">
     <div class="sd-head"><div><div class="sd-eyebrow">株価 × 信用需給</div><h2>需給分析</h2></div><button class="sd-btn" onclick="sdSyncHoldings(true)">↻ 保有銘柄同期</button></div>
     <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">☁️ Google Drive同期</div><div id="gdrive-connected" style="display:none;padding:10px 12px;border-radius:10px;background:var(--bg3);font-weight:700">✓ Google Drive 接続設定済み <span style="font-weight:400;color:var(--text3);font-size:11px">（ページ表示時に最新データを自動読込）</span></div><details id="gdrive-setup" style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--text2)">Google Drive設定を変更</summary><div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px"><input id="gdrive-client-id" placeholder="Google OAuth クライアントID（…apps.googleusercontent.com）"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="sd-btn" onclick="gdriveSaveConfig()">設定保存・Google Driveに接続</button><button class="sd-btn secondary" onclick="gdrivePush(true)">Driveへ保存</button><button class="sd-btn secondary" onclick="gdrivePull(true)">Driveから読込</button></div></details><div id="gdrive-status" class="sd-note" style="margin-top:8px">初回設定後は、MacでPDF取込時に自動保存し、iPhone/Macでこのページを開くと最新データを自動読込します。</div></div>
-    <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">信用残 PDF取込（簡単方式）</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="sd-btn secondary" onclick="window.open('https://www.jpx.co.jp/markets/statistics-equities/margin/01.html','_blank')">JPX公式データを開く</button><input id="sd-jpx-file" type="file" accept=".pdf,application/pdf" style="max-width:100%"><button class="sd-btn" onclick="sdImportJpxFile()">JPX PDFを読み込む</button><button class="sd-btn secondary" onclick="sdSyncHoldings(true)">保有銘柄を再同期</button></div><div id="sd-sync-status" class="sd-note" style="margin-top:8px">JPX公式ページから最新の「銘柄別信用取引残高」PDFを保存し、そのPDFをそのまま選択してください。資産管理の保有日本株と「新規銘柄を需給分析」で登録した銘柄を抽出し、信用買残・信用売残を履歴へ追加します。</div><div id="sd-import-detail" class="sd-note" style="margin-top:8px;display:none;padding:10px 12px;border-radius:10px;background:#f7f7f8;line-height:1.65;white-space:normal"></div></div>
+    <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">信用残 PDF取込（簡単方式）</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="sd-btn secondary" onclick="window.open('https://www.jpx.co.jp/markets/statistics-equities/margin/01.html','_blank')">JPX公式データを開く</button><input id="sd-jpx-file" type="file" accept=".pdf,application/pdf" multiple style="max-width:100%"><button class="sd-btn" onclick="sdImportJpxFile()">選択したPDFをまとめて読み込む</button><button class="sd-btn secondary" onclick="sdSyncHoldings(true)">保有銘柄を再同期</button></div><div id="sd-sync-status" class="sd-note" style="margin-top:8px">JPX公式ページから最新の「銘柄別信用取引残高」PDFを保存し、PDFは複数選択できます。選択した順に読み込み、同じ基準日は更新します。資産管理の保有日本株と「新規銘柄を需給分析」で登録した銘柄を抽出し、信用買残・信用売残を履歴へ追加します。</div><div id="sd-import-detail" class="sd-note" style="margin-top:8px;display:none;padding:10px 12px;border-radius:10px;background:#f7f7f8;line-height:1.65;white-space:normal"></div></div>
     <div class="card" style="margin-bottom:12px;padding:12px 14px">
       <div class="sd-cardtitle">需給ランキング</div>
       <div id="sd-ranking" class="sd-note" style="margin-top:8px">2回分以上の信用残データがある銘柄を自動判定します。</div>
@@ -17392,10 +17392,19 @@ function sdCleanHeader(x){return String(x||'').replace(/[\s　_\-()（）]/g,'')
 function sdParseInt(x){const v=String(x??'').replace(/[▲△,，\s株]/g,'').trim();if(!v)return null;const n=Number(v);return Number.isFinite(n)?Math.abs(Math.trunc(n)):null}
 function sdNormDate(x){let v=String(x||'').trim();let m=v.match(/(20\d{2})[\/\.\-年]\s*(\d{1,2})[\/\.\-月]\s*(\d{1,2})/);if(m)return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;m=v.match(/(20\d{2})(\d{2})(\d{2})/);if(m)return `${m[1]}-${m[2]}-${m[3]}`;return ''}
 function sdFindCol(headers,names){const h=headers.map(sdCleanHeader);for(const n of names){const k=sdCleanHeader(n),i=h.findIndex(x=>x===k||x.includes(k));if(i>=0)return i}return -1}
+let sdPdfBatchRunning=false;
 async function sdImportJpxFile(){
-  const input=document.getElementById('sd-jpx-file'),file=input?.files?.[0];
-  if(!file){showToast('先にJPXのPDFを選択してください');return}
-  if(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf'){showToast('JPXのPDFを選択してください');return}
+ if(sdPdfBatchRunning){showToast('PDFを取り込み中です。完了までお待ちください');return;}
+ const input=document.getElementById('sd-jpx-file'),files=Array.from(input?.files||[]);if(!files.length){showToast('先にJPXのPDFを選択してください');return;}
+ sdPdfBatchRunning=true;const buttons=[...document.querySelectorAll('[onclick="sdImportJpxFile()"]')],results=[];buttons.forEach(b=>b.disabled=true);if(input)input.disabled=true;
+ try{for(let i=0;i<files.length;i++){const file=files[i];sdStatus(`PDF ${i+1}/${files.length}：${file.name} を取り込み中…`);try{const result=await sdImportJpxOne(file);results.push({...result,ok:true});}catch(e){results.push({file:file.name,ok:false,error:String(e?.message||e)});} }
+ const succeeded=results.filter(r=>r.ok).length,failed=results.length-succeeded,batch={batch:true,files:results,at:new Date().toISOString()};localStorage.setItem(SD_IMPORT_RESULT,JSON.stringify(batch));sdRenderImportResult(batch);sdStatus(`PDF取込完了：成功 ${succeeded}/${files.length}ファイル${failed?' ／ 失敗 '+failed+'ファイル（下の詳細を確認）':''}。同じ基準日のデータは更新し、履歴を重複追加しません。`);showToast(`PDF取込：${succeeded}件成功${failed?'・'+failed+'件失敗':''}`);if(succeeded&&typeof gdrivePush==='function')setTimeout(()=>gdrivePush(false),300);
+ }catch(e){sdStatus('PDF取込結果の保存・表示に失敗：'+String(e?.message||e));}finally{sdPdfBatchRunning=false;buttons.forEach(b=>b.disabled=false);if(input){input.disabled=false;input.value='';}}
+}
+
+async function sdImportJpxOne(file){
+  if(!file||(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf'))throw new Error('JPXのPDFを選択してください');
+  let pdf=null;
   sdStatus('JPX PDFを解析中… 初回は数十秒かかる場合があります。');
   try{
     let pdfjsLib=window.pdfjsLib;
@@ -17404,8 +17413,8 @@ async function sdImportJpxFile(){
     }
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
     const data=new Uint8Array(await file.arrayBuffer());
-    const pdf=await pdfjsLib.getDocument({data}).promise;
-    const hm=sdSyncHoldings(false),st=sdStore();
+    pdf=await pdfjsLib.getDocument({data}).promise;
+    const hm=sdSyncHoldings(false),st=JSON.parse(JSON.stringify(sdStore()));
     // 保有銘柄に加え、需給分析で手動登録した新規検討銘柄もPDFから抽出する。
     const wanted=new Set([...Object.keys(hm),...Object.keys(st.symbols)]);
     const found={}; let detectedDate='';
@@ -17490,8 +17499,8 @@ async function sdImportJpxFile(){
     const result={date:detectedDate,file:file.name,imported,total:wanted.size,matchedText,missingText};
     localStorage.setItem(SD_IMPORT_RESULT,JSON.stringify(result));
     sdPut(st);sdInit();sdRender();sdRenderImportResult(result);
-    sdStatus(`取込完了：${detectedDate} の保有日本株 ${imported}/${wanted.size}銘柄を反映しました。未取得 ${missingCodes.length}銘柄。PDF：${file.name}`);showToast(`信用残 ${imported}/${wanted.size}銘柄を取り込みました`);setTimeout(()=>gdrivePush(false),300);
-  }catch(e){console.warn(e);sdStatus('PDF取込に失敗：'+e.message);showToast('JPX PDFを取り込めませんでした')}
+    return result;
+  }finally{if(pdf&&typeof pdf.destroy==='function'){try{await pdf.destroy();}catch(e){console.warn('PDF解放',e);}}}
 }
 
 function sdRenderImportResult(result){
@@ -17499,6 +17508,8 @@ function sdRenderImportResult(result){
   let r=result;
   if(!r){try{r=JSON.parse(localStorage.getItem(SD_IMPORT_RESULT)||'null')}catch(e){r=null}}
   if(!r){detail.style.display='none';detail.innerHTML='';return}
+  if(r.batch){detail.style.display='block';detail.innerHTML='<b>PDFごとの取り込み結果</b><ul style="margin:8px 0;padding-left:20px">'+r.files.map(x=>'<li style="margin:8px 0">'+(x.ok?'✓ ':'⚠ ')+esc(x.file)+(x.ok?'：基準日 '+esc(x.date)+' ／ '+x.imported+'/'+x.total+'銘柄を反映'+(x.missingText&&x.missingText!=='なし'?'<br>未取得：'+esc(x.missingText):''):'：'+esc(x.error))+'</li>').join('')+'</ul>';return;}
+
   const miss=String(r.missingText||'なし');
   detail.innerHTML=`<div style="font-size:14px;font-weight:800;margin-bottom:6px">取得結果：${Number(r.imported||0)}/${Number(r.total||0)}銘柄</div><div style="margin-bottom:6px"><b>取得できた銘柄：</b>${esc(String(r.matchedText||'なし'))}</div><div style="padding:8px 10px;border-radius:8px;background:${miss==='なし'?'rgba(46,125,50,.08)':'rgba(211,47,47,.08)'}"><b>${miss==='なし'?'✓ 未取得銘柄なし':'⚠ 取得できなかった銘柄：'}</b>${miss==='なし'?'':esc(miss)}</div><div style="margin-top:6px;font-size:10px;color:var(--text3)">${esc(String(r.date||''))} ／ ${esc(String(r.file||''))}</div>`;
   detail.style.display='block';
