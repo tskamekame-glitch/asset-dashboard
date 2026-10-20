@@ -17423,13 +17423,15 @@ async function sdImportJpxFile(){
     for(let pn=1;pn<=pdf.numPages;pn++){
       sdStatus(`JPX PDFを解析中… ${pn}/${pdf.numPages}ページ`);
       const page=await pdf.getPage(pn),tc=await page.getTextContent();
+      const pageDate=sdJpxReferenceDate(tc.items.map(x=>String(x.str||'')).join(' '));
+      if(pageDate){if(detectedDate&&detectedDate!==pageDate)throw new Error('ページ間で申込基準日が一致しません。別日のPDFが混在していないか確認してください。');detectedDate=pageDate;}
       const items=tc.items.filter(x=>String(x.str||'').trim()).map(x=>({t:String(x.str).trim(),x:x.transform[4],y:x.transform[5]}));
       const lines=[];
       items.sort((a,b)=>b.y-a.y||a.x-b.x);
       for(const it of items){let line=lines.find(l=>Math.abs(l.y-it.y)<=2.2);if(!line){line={y:it.y,a:[]};lines.push(line)}line.a.push(it)}
       for(const line of lines){
         line.a.sort((a,b)=>a.x-b.x); const toks=line.a.map(x=>x.t); const joined=toks.join(' ');
-        if(!detectedDate){const m=joined.match(/(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);if(m)detectedDate=`${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`}
+        // 申込基準日はページ全体から検出し、作成日とは区別します。
         // JPX PDFでは同じ表のセルでも日本語/英語が別Y座標になることがある。
         // 「株数 Shs.」と銘柄コードが同一テキスト行にあることを前提にせず、
         // 保有コード（JPXの5桁コード末尾0も含む）がある行を基準に残高列を読む。
@@ -17471,7 +17473,7 @@ async function sdImportJpxFile(){
         if(m){const sell=sdParseInt(m[1]),buy=sdParseInt(m[2]);if(sell!==null&&buy!==null)found[c]={sell,buy}}
       }
     }
-    if(!detectedDate)throw new Error('PDFから信用残の基準日を確認できません。日付を推測して登録しないため取り込みを停止しました。');
+    if(!detectedDate)throw new Error('PDF本文の「申込み現在」または「As of ... application based」から基準日を確認できません。JPXの銘柄別信用取引残高PDFか確認してください。');
     let imported=0;
     for(const [code,v] of Object.entries(found)){
       const o=st.symbols[code],a=hm[code]||{}; if(!o)continue;
@@ -17838,6 +17840,14 @@ function sdRender(){
  for(const [id,data,opt] of defs){const canvas=document.getElementById(id);const chart=new Chart(canvas,sdSingleConfig(rows.map(x=>x.date),data,opt));if(id==='sd-chart')sdChart=chart;else sdMiniCharts.push(chart);}if(ps.length)sdMiniCharts.push(new Chart(pc,sdSingleConfig(ps.map(x=>x[0]),ps.map(x=>x[1]),{label:'株価',unit:'円',color:'#2384d1',zero:false})));
  set('sd-chart-empty',rows.length<2?'比較する履歴はまだ1回分です。':'');document.getElementById('sd-chart-empty').style.display=rows.length<2?'block':'none';set('sd-price',ps.length?n(ps.at(-1)[1])+'円（'+ps.at(-1)[0]+'）':'株価日未確認');set('sd-per',r.per==null?'—':n(r.per)+'倍');set('sd-fper',r.fper==null?'—':n(r.fper)+'倍');set('sd-pbr',r.pbr==null?'—':n(r.pbr)+'倍');set('sd-target',r.target==null?'—':n(r.target)+'円');set('sd-upside',r.target>0&&ps.length?((r.target/ps.at(-1)[1]-1)*100).toFixed(1)+'%':'—');
  document.getElementById('sd-table').innerHTML=rows.slice(-12).reverse().map(x=>`<tr><td>${esc(x.date)}</td><td>${n(x.buy/10000)}</td><td>${n(x.sell/10000)}</td><td>${x.sell>0?n(x.buy/x.sell):'—'}</td><td>${x.price>0?n(x.price):'—'}<br><small>${esc(sdPriceDate(x)||'日付未確認')}</small></td></tr>`).join('');
+}
+
+</script>
+<script>
+function sdJpxReferenceDate(text){
+ const t=String(text||'').normalize('NFKC').replace(/\s/g,''),patterns=[/(20\d{2})[\/年.-](\d{1,2})[\/月.-](\d{1,2})日?申込(?:み)?(?:現在)?/g,/Asof(20\d{2})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:applicationbased)/gi],dates=new Set();
+ for(const re of patterns)for(const m of t.matchAll(re)){const date=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`,d=new Date(date+'T00:00:00Z');if(!Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===date)dates.add(date);}
+ if(dates.size>1)throw Error('PDF内の申込基準日が複数あります。日付の異なる資料が混在していないか確認してください。');return [...dates][0]||'';
 }
 
 </script>
