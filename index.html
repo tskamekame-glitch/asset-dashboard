@@ -4814,7 +4814,7 @@ function amRenderSoldSection(soldAccounts){
 const INDEX_CATS_SOLD=['全世界インデックス','日本インデックス','インドインデックス'];
 let amSoldTargetId=null;
 function amOpenSoldModal(id){
-  const a=amAccounts.find(x=>x.id===id);if(!a)return;
+  const a=amAccounts.find(x=>String(x.id)===String(id));if(!a){showToast('編集対象の資産記録が見つかりません');return;}id=a.id;pnlMountEditor('amSoldModalBg');
   amSoldTargetId=id;
   document.getElementById('amSoldModalName').textContent=a.name;
   const isIndex=INDEX_CATS_SOLD.includes(a.cat);
@@ -11369,13 +11369,19 @@ function slCalc(){
 }
 
 function slOpenModal(id=null){
+  if(id!==null&&id!==undefined){
+    let record=slData.find(x=>String(x.id)===String(id));
+    if(!record){let stored=[];try{stored=JSON.parse(localStorage.getItem(SL_KEY)||'[]');}catch(e){}if(Array.isArray(stored)){const known=new Set(slData.map(x=>String(x.id)));for(const x of stored)if(!known.has(String(x.id))){slData.push(x);known.add(String(x.id));}}record=slData.find(x=>String(x.id)===String(id));}
+    if(!record){showToast('編集対象の売却記録が見つかりません。再読み込みして確認してください');return;}id=record.id;
+  }
+  pnlMountEditor('slModal');
   slEditingId=id;
   document.getElementById('slModalTitle').textContent=id?'売却記録を編集':'売却を記録';
   document.getElementById('sl-delete-section').style.display=id?'block':'none';
   document.getElementById('sl-calc-box').style.display='none';
   const today=new Date().toISOString().slice(0,10);
   if(id){
-    const d=slData.find(x=>x.id===id);
+    const d=slData.find(x=>String(x.id)===String(id));
     if(d){
       document.getElementById('sl-f-name').value=d.name||'';
       document.getElementById('sl-f-cat').value=d.cat||'個別株';
@@ -11383,7 +11389,7 @@ function slOpenModal(id=null){
       document.getElementById('sl-f-sell-price').value=d.sellPrice||'';
       document.getElementById('sl-f-buy-price').value=d.buyPrice||'';
       document.getElementById('sl-f-date').value=d.date||today;
-      document.getElementById('sl-f-account').value=d.account||'特定';
+      document.getElementById('sl-f-account').value=/NISA/.test(d.account||'')?'NISA':/^FX/.test(d.account||'')?'FX口座':/一般/.test(d.account||'')?'一般':'特定';
       document.getElementById('sl-f-memo').value=d.memo||'';
       slCalc();
     }
@@ -11420,11 +11426,11 @@ function slSaveEntry(){
     account,memo:document.getElementById('sl-f-memo').value.trim(),
     sellTotal,cost:buyPrice>0?cost:null,gain,tax,net,
   };
-  if(slEditingId){const idx=slData.findIndex(x=>x.id===slEditingId);slData[idx]={...slData[idx],...entry};}
+  if(slEditingId!==null&&slEditingId!==undefined){const idx=slData.findIndex(x=>String(x.id)===String(slEditingId));if(idx<0){showToast('編集対象の記録がなくなったため保存を停止しました');return;}entry.id=slData[idx].id;slData[idx]={...slData[idx],...entry};}
   else{slData.push(entry);}
   slSaveData();slCloseModal();slRender();if(typeof pnlRender==='function')pnlRender();showToast('💴 売却記録を保存しました');
 }
-function slDeleteEntry(){if(!confirm('削除しますか？'))return;slData=slData.filter(x=>x.id!==slEditingId);slSaveData();slCloseModal();slRender();}
+function slDeleteEntry(){if(!confirm('削除しますか？'))return;slData=slData.filter(x=>String(x.id)!==String(slEditingId));slSaveData();slCloseModal();slRender();if(typeof pnlRender==='function')pnlRender();}
 function slExport(){
   const blob=new Blob([JSON.stringify(slData,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -16045,7 +16051,7 @@ function pnlRender(){
           :''))
       :'';
     const editBtn=item.type==='realized'&&item.id!=null
-      ?`<span onclick="event.stopPropagation();${item.source==='sell'?`slOpenModal('${esc(item.saleRecordId)}')`:`amOpenSoldModal(${item.id})`}" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
+      ?`<span onclick="event.stopPropagation();pnlOpenRecordEditor('${item.source==='sell'?'sell':'asset'}',decodeURIComponent('${encodeURIComponent(String(item.source==='sell'?item.saleRecordId:item.id)).replace(/'/g,'%27')}'))" style="font-size:10px;color:#35e0a1;cursor:pointer;margin-left:8px;text-decoration:underline">✏️ 編集</span>`
       :'';
     const isRealized=item.type==='realized'&&item.id!=null;
     const detailHtml=isRealized?`<div id="pnl-rd-${item.id}" style="display:none">${pnlRealizedDetailHtml(item)}</div>`:'';
@@ -17860,6 +17866,15 @@ function sdJpxReferenceDate(text){
  for(const re of patterns)for(const m of t.matchAll(re)){const date=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`,d=new Date(date+'T00:00:00Z');if(!Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===date)dates.add(date);}
  if(dates.size>1)throw Error('PDF内の申込基準日が複数あります。日付の異なる資料が混在していないか確認してください。');return [...dates][0]||'';
 }
+
+</script>
+<script>
+function pnlOpenRecordEditor(source,id){
+ try{if(source==='sell'){slOpenModal(id);return;}
+  let a=amAccounts.find(x=>String(x.id)===String(id));if(!a){let stored=[];try{stored=JSON.parse(localStorage.getItem('assetAccounts')||'[]');}catch(e){}a=stored.find(x=>String(x.id)===String(id));if(a)amAccounts.push(a);}if(!a){showToast('編集対象の資産記録が見つかりません。再読み込みして確認してください');return;}amOpenSoldModal(a.id);
+ }catch(e){console.error('pnl edit',e);showToast('編集画面を開けません：'+String(e?.message||e));}
+}
+function pnlMountEditor(id){const modal=document.getElementById(id);if(!modal)throw Error('編集画面が見つかりません');if(modal.parentElement!==document.body)document.body.appendChild(modal);modal.style.zIndex='12000';return modal;}
 
 </script>
 </body>
