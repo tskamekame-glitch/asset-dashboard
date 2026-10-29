@@ -652,7 +652,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
   <div class="page-inner sd-page">
     <div class="sd-head"><div><div class="sd-eyebrow">株価 × 信用需給</div><h2>需給分析</h2></div><button class="sd-btn" onclick="sdSyncHoldings(true)">↻ 保有銘柄同期</button></div>
     <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">☁️ Google Drive同期</div><div id="gdrive-connected" style="display:none;padding:10px 12px;border-radius:10px;background:var(--bg3);font-weight:700">✓ Google Drive 接続設定済み <span style="font-weight:400;color:var(--text3);font-size:11px">（ページ表示時に最新データを自動読込）</span></div><details id="gdrive-setup" style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--text2)">Google Drive設定を変更</summary><div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px"><input id="gdrive-client-id" placeholder="Google OAuth クライアントID（…apps.googleusercontent.com）"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="sd-btn" onclick="gdriveSaveConfig()">設定保存・Google Driveに接続</button><button class="sd-btn secondary" onclick="gdrivePush(true)">Driveへ保存</button><button class="sd-btn secondary" onclick="gdrivePull(true)">Driveから読込</button></div></details><div id="gdrive-status" class="sd-note" style="margin-top:8px">初回設定後は、MacでPDF取込時に自動保存し、iPhone/Macでこのページを開くと最新データを自動読込します。</div></div>
-    <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">信用残 PDF取込（簡単方式）</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="sd-btn secondary" onclick="window.open('https://www.jpx.co.jp/markets/statistics-equities/margin/01.html','_blank')">JPX公式データを開く</button><input id="sd-jpx-file" type="file" accept=".pdf,application/pdf" multiple style="max-width:100%"><button class="sd-btn" onclick="sdImportJpxFile()">選択したPDFをまとめて読み込む</button><button class="sd-btn secondary" onclick="sdSyncHoldings(true)">保有銘柄を再同期</button></div><div id="sd-sync-status" class="sd-note" style="margin-top:8px">JPX公式ページから最新の「銘柄別信用取引残高」PDFを保存し、PDFは複数選択できます。選択した順に読み込み、同じ基準日は更新します。資産管理の保有日本株と「新規銘柄を需給分析」で登録した銘柄を抽出し、信用買残・信用売残を履歴へ追加します。</div><div id="sd-import-detail" class="sd-note" style="margin-top:8px;display:none;padding:10px 12px;border-radius:10px;background:#f7f7f8;line-height:1.65;white-space:normal"></div></div>
+    <div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="sd-cardtitle">信用残 PDF取込（簡単方式）</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="sd-btn secondary" onclick="window.open('https://www.jpx.co.jp/markets/statistics-equities/margin/01.html','_blank')">JPX公式データを開く</button><input id="sd-jpx-file" type="file" accept=".pdf,application/pdf" multiple style="max-width:100%"><button class="sd-btn" onclick="sdImportJpxFile()">選択したPDFをまとめて読み込む</button><button class="sd-btn secondary" onclick="sdSyncHoldings(true)">保有銘柄を再同期</button></div><div id="sd-sync-status" class="sd-note" style="margin-top:8px">JPX公式ページから最新の「銘柄別信用取引残高」PDFを保存し、PDFは複数選択できます。分析対象が未登録でも信用残を保存し、後から銘柄コードを入力して表示できます。直近6基準日分のPDFデータを保持します。資産管理の保有日本株と「新規銘柄を需給分析」で登録した銘柄を抽出し、信用買残・信用売残を履歴へ追加します。</div><div id="sd-import-detail" class="sd-note" style="margin-top:8px;display:none;padding:10px 12px;border-radius:10px;background:#f7f7f8;line-height:1.65;white-space:normal"></div></div>
     <div class="card" style="margin-bottom:12px;padding:12px 14px">
       <div class="sd-cardtitle">需給ランキング</div>
       <div id="sd-ranking" class="sd-note" style="margin-top:8px">2回分以上の信用残データがある銘柄を自動判定します。</div>
@@ -17370,26 +17370,24 @@ setTimeout(gdriveInit,1200);
 let sdChart=null;
 const SD_LAST_SYNC='sdJpxFreeLastSyncV1';
 const SD_IMPORT_RESULT='sdJpxImportResultV1';
-function sdStore(){try{return JSON.parse(localStorage.getItem('supplyDemandV1')||'{"symbols":{}}')}catch(e){return {symbols:{}}}}
+function sdStore(){let st;try{st=JSON.parse(localStorage.getItem('supplyDemandV1')||'{"symbols":{}}');}catch(e){throw Error('保存済み需給データを読めません。バックアップまたは同期元を確認してください');}if(!st||typeof st!=='object'||Array.isArray(st))throw Error('保存済み需給データの形式が不正です');if(!st.symbols||typeof st.symbols!=='object'||Array.isArray(st.symbols))st.symbols={};return st;}
 function sdPut(x){localStorage.setItem('supplyDemandV1',JSON.stringify(x))}
 function sdKey(){return document.getElementById('sd-symbol')?.value||''}
 function sdStatus(msg){const e=document.getElementById('sd-sync-status');if(e)e.textContent=msg}
 function sdInit(){const st=sdStore(),sel=document.getElementById('sd-symbol');sdRenderRanking();if(!sel)return;let keys=Object.keys(st.symbols);const old=sel.value;sel.innerHTML=keys.map(k=>`<option value="${esc(k)}">${esc(st.symbols[k].name||k)} (${esc(k)})</option>`).join('')+`<option value="__new__">＋ 新しい銘柄</option>`;if(keys.includes(old))sel.value=old;else if(keys.length)sel.value=keys[0];else sel.value='__new__'}
-function sdHoldingMap(){const map={};try{let a=[];try{if(typeof amAccounts!=='undefined'&&Array.isArray(amAccounts)&&amAccounts.length)a=amAccounts}catch(_e){}if(!a.length)a=JSON.parse(localStorage.getItem('assetAccounts')||'[]');(Array.isArray(a)?a:[]).forEach(x=>{if(x.sold)return;let c=String(x.ticker||x.code||x.symbol||'').trim().replace(/\.T$/i,'');if(!/^(?:\d{4,5}|\d{3}[A-Za-z]0?)$/.test(c))return; c=c.toUpperCase(); const k=(c.length===5&&c.endsWith('0'))?c.slice(0,-1):c;const amt=Number(x.amount||0);if(!(amt>0))return;if(!map[k])map[k]={code:k,name:String(x.name||k),price:0,per:null,fper:null,pbr:null,target:null};const m=map[k];if(Number(x.price)>0){m.price=Number(x.price);m.priceDate=x.priceDate||'';m.priceObservedDate=x.updated||'';}if(Number(x.per)>0)m.per=Number(x.per);if(Number(x.forwardPER)>0)m.fper=Number(x.forwardPER);if(Number(x.pbr)>0)m.pbr=Number(x.pbr);if(Number(x.analystTarget||x.targetPrice)>0)m.target=Number(x.analystTarget||x.targetPrice);});}catch(e){}return map}
-function sdSyncHoldings(manual=false){const hm=sdHoldingMap(),st=sdStore();let added=0,updated=0;Object.values(hm).forEach(h=>{if(!st.symbols[h.code]){st.symbols[h.code]={name:h.name,code:h.code,rows:[],linked:true};added++}else{st.symbols[h.code].name=h.name||st.symbols[h.code].name;st.symbols[h.code].linked=true;updated++}st.symbols[h.code].asset=h;});sdPut(st);sdInit();if(manual){sdInit();sdRender();sdStatus(`資産管理から日本株 ${Object.keys(hm).length}銘柄を連携（新規${added}・更新${updated}）。米国株等は信用残対象外です。`);showToast('保有銘柄を需給分析へ同期しました')}return hm}
+function sdSyncHoldings(manual=false){const hm=sdHoldingMap(),st=sdStore();let added=0,updated=0;Object.values(hm).forEach(h=>{if(!st.symbols[h.code]){st.symbols[h.code]={name:h.name,code:h.code,rows:[],linked:true};added++}else{st.symbols[h.code].name=h.name||st.symbols[h.code].name;st.symbols[h.code].linked=true;updated++}st.symbols[h.code].asset=h;sdUsePdfArchive(st,h.code);});sdPut(st);sdInit();if(manual){sdInit();sdRender();sdStatus(`資産管理から日本株 ${Object.keys(hm).length}銘柄を連携（新規${added}・更新${updated}）。米国株等は信用残対象外です。`);showToast(Object.keys(hm).length?'保有銘柄を需給分析へ同期しました':'保有日本株が見つかりません。資産管理の読込・銘柄コードを確認してください')}return hm}
 function sdAnalyzeNewCode(){
   const input=document.getElementById('sd-new-code'), status=document.getElementById('sd-new-status');
-  let code=String(input?.value||'').trim().toUpperCase().replace(/\.T$/i,'').replace(/[^0-9A-Z]/g,'');
-  if(code.length===5&&code.endsWith('0'))code=code.slice(0,-1);
+  let code=sdJapaneseCode(input?.value);
   if(!/^(?:\d{4}|\d{3}[A-Z])$/.test(code)){showToast('日本株の銘柄コードを入力してください');if(status)status.textContent='例：7974、285A のように入力してください。';return}
   const st=sdStore();
   if(!st.symbols[code])st.symbols[code]={name:code,code,rows:[],linked:false,watch:true};
   else st.symbols[code].watch=true;
-  sdPut(st);sdInit();
+  sdUsePdfArchive(st,code);sdPut(st);sdInit();
   const sel=document.getElementById('sd-symbol');if(sel)sel.value=code;
   sdRender();
   const rows=st.symbols[code]?.rows||[];
-  if(status)status.textContent=rows.length>=2?`${code} の保存済み信用残 ${rows.length}回分を表示しました。`:`${code} を分析対象に追加しました。グラフ表示には信用残データが必要です。上の「信用残 PDF取込」で最新JPX PDFを読み込んでください。`;
+  if(status)status.textContent=rows.length>=1?`${code} の保存済み信用残 ${rows.length}回分を表示しました。${rows.length<2?'前回比較にはもう1基準日分のPDFが必要です。':''}`:`${code} を分析対象に追加しました。グラフ表示には信用残データが必要です。上の「信用残 PDF取込」で最新JPX PDFを読み込んでください。`;
   document.getElementById('sd-dashboard')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function sdSaveMeta(){const st=sdStore(), code=(document.getElementById('sd-code').value||'').trim(),name=(document.getElementById('sd-name').value||'').trim();if(!code||!name){showToast('銘柄名とコードを入力してください');return}const cur=sdKey(),old=(cur&&cur!=='__new__')?st.symbols[cur]:null;st.symbols[code]={name,code,rows:old?.rows||[],asset:old?.asset||null,linked:old?.linked||false};if(cur&&cur!==code&&cur!=='__new__')delete st.symbols[cur];sdPut(st);sdInit();document.getElementById('sd-symbol').value=code;sdRender();showToast('銘柄情報を保存しました')}
@@ -17424,7 +17422,7 @@ async function sdImportJpxOne(file){
     const hm=sdSyncHoldings(false),st=JSON.parse(JSON.stringify(sdStore()));
     // 保有銘柄に加え、需給分析で手動登録した新規検討銘柄もPDFから抽出する。
     const wanted=new Set([...Object.keys(hm),...Object.keys(st.symbols)]);
-    const found={}; let detectedDate='';
+    const found={},allFound={}; let detectedDate='';
     function normCode(raw){
       raw=String(raw||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
       if(/^(?:\d{4}|\d{3}[A-Z])$/.test(raw))return raw;
@@ -17481,6 +17479,7 @@ async function sdImportJpxOne(file){
       // Y座標ずれ対策。ページ全体の文字列から「銘柄コード + ISIN + 株数 Shs.」を
       // 一組として厳密に照合する。数値の途中に偶然コード文字列が現れても拾わない。
       const flat=tc.items.map(x=>String(x.str||'').trim()).filter(Boolean).join(' ').replace(/[，]/g,',');
+      Object.assign(allFound,sdParseAllJpxShares(flat));
       for(const c of wanted){
         const rawCode=/^\d{4}$/.test(c)?c+'0':(/^\d{3}[A-Z]$/.test(c)?c+'0':c);
         const escCode=rawCode.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -17490,6 +17489,10 @@ async function sdImportJpxOne(file){
       }
     }
     if(!detectedDate)throw new Error('PDF本文の「申込み現在」または「As of ... application based」から基準日を確認できません。JPXの銘柄別信用取引残高PDFか確認してください。');
+    Object.assign(allFound,found);
+    if(!Object.keys(allFound).length)throw new Error('PDFに信用残の株数行を検出できません。JPXの銘柄別信用取引残高（mtall）PDFか確認してください。');
+    for(const code of wanted)if(allFound[code])found[code]=allFound[code];
+    st.pdfArchive=(st.pdfArchive||[]).filter(x=>x.date!==detectedDate);st.pdfArchive.push({date:detectedDate,file:file.name,data:allFound});st.pdfArchive.sort((a,b)=>a.date.localeCompare(b.date));st.pdfArchive=st.pdfArchive.slice(-6);
     let imported=0;
     for(const [code,v] of Object.entries(found)){
       const o=st.symbols[code],a=hm[code]||{}; if(!o)continue;
@@ -17498,12 +17501,12 @@ async function sdImportJpxOne(file){
       const ix=o.rows.findIndex(x=>x.date===detectedDate); if(ix>=0)o.rows[ix]=row;else o.rows.push(row);
       o.rows.sort((a,b)=>a.date.localeCompare(b.date)); imported++;
     }
-    if(!imported)throw new Error(`保有銘柄の信用残をPDFから検出できませんでした（保有${wanted.size}銘柄）。PDF内のコード行を再確認してください。`);
+    // 分析対象が未登録でも、PDF自体の信用残は保存して後から照合できます。
     const matchedCodes=Object.keys(found).filter(code=>wanted.has(code));
     const missingCodes=[...wanted].filter(code=>!found[code]);
     const matchedText=matchedCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
     const missingText=missingCodes.map(code=>`${hm[code]?.name||st.symbols[code]?.name||code}（${code}）`).join('、')||'なし';
-    const result={date:detectedDate,file:file.name,imported,total:wanted.size,matchedText,missingText};
+    const result={date:detectedDate,file:file.name,imported,total:wanted.size,matchedText,missingText,cachedCount:Object.keys(allFound).length,cacheOnly:imported===0,targetIssues:sdHoldingIssues};
     localStorage.setItem(SD_IMPORT_RESULT,JSON.stringify(result));
     sdPut(st);sdInit();sdRender();sdRenderImportResult(result);
     return result;
@@ -17515,7 +17518,7 @@ function sdRenderImportResult(result){
   let r=result;
   if(!r){try{r=JSON.parse(localStorage.getItem(SD_IMPORT_RESULT)||'null')}catch(e){r=null}}
   if(!r){detail.style.display='none';detail.innerHTML='';return}
-  if(r.batch){detail.style.display='block';detail.innerHTML='<b>PDFごとの取り込み結果</b><ul style="margin:8px 0;padding-left:20px">'+r.files.map(x=>'<li style="margin:8px 0">'+(x.ok?'✓ ':'⚠ ')+esc(x.file)+(x.ok?'：基準日 '+esc(x.date)+' ／ '+x.imported+'/'+x.total+'銘柄を反映'+(x.missingText&&x.missingText!=='なし'?'<br>未取得：'+esc(x.missingText):''):'：'+esc(x.error))+'</li>').join('')+'</ul>';return;}
+  if(r.batch){detail.style.display='block';detail.innerHTML='<b>PDFごとの取り込み結果</b><ul style="margin:8px 0;padding-left:20px">'+r.files.map(x=>'<li style="margin:8px 0">'+(x.ok?'✓ ':'⚠ ')+esc(x.file)+(x.ok?'：基準日 '+esc(x.date)+(x.cacheOnly?' ／ PDFの信用残 '+x.cachedCount+'銘柄を保存。'+(x.total?'登録対象と一致する銘柄はありません。':'分析対象が未登録です。')+'「新規銘柄を需給分析」にコードを入力するか、資産管理で保有CSVを読み込んでください。':' ／ '+x.imported+'/'+x.total+'銘柄を反映')+(x.missingText&&x.missingText!=='なし'?'<br>未取得：'+esc(x.missingText):'')+(x.targetIssues?.length?'<br>保有データのコード未確認：'+x.targetIssues.map(a=>esc(a.name)).join('、'):''):'：'+esc(x.error))+'</li>').join('')+'</ul>';return;}
 
   const miss=String(r.missingText||'なし');
   detail.innerHTML=`<div style="font-size:14px;font-weight:800;margin-bottom:6px">取得結果：${Number(r.imported||0)}/${Number(r.total||0)}銘柄</div><div style="margin-bottom:6px"><b>取得できた銘柄：</b>${esc(String(r.matchedText||'なし'))}</div><div style="padding:8px 10px;border-radius:8px;background:${miss==='なし'?'rgba(46,125,50,.08)':'rgba(211,47,47,.08)'}"><b>${miss==='なし'?'✓ 未取得銘柄なし':'⚠ 取得できなかった銘柄：'}</b>${miss==='なし'?'':esc(miss)}</div><div style="margin-top:6px;font-size:10px;color:var(--text3)">${esc(String(r.date||''))} ／ ${esc(String(r.file||''))}</div>`;
@@ -17876,6 +17879,20 @@ function pnlOpenRecordEditor(source,id){
  }catch(e){console.error('pnl edit',e);showToast('編集画面を開けません：'+String(e?.message||e));}
 }
 function pnlMountEditor(id){const modal=document.getElementById(id);if(!modal)throw Error('編集画面が見つかりません');if(modal.parentElement!==document.body)document.body.appendChild(modal);modal.style.zIndex='12000';return modal;}
+
+</script>
+<script>
+let sdHoldingIssues=[];
+function sdJapaneseCode(value){let c=String(value||'').normalize('NFKC').trim().toUpperCase().replace(/\.T$/,'');if(/^(?:\d{4}|\d{3}[A-Z])0$/.test(c))c=c.slice(0,-1);return /^(?:\d{4}|\d{3}[A-Z])$/.test(c)?c:'';}
+function sdHoldingMap(){
+ const mem=typeof amAccounts!=='undefined'&&Array.isArray(amAccounts)?amAccounts:[],win=typeof window!=='undefined'&&Array.isArray(window.amAccounts)?window.amAccounts:[];let saved=[];try{const x=JSON.parse(localStorage.getItem('assetAccounts')||'[]');if(Array.isArray(x))saved=x;}catch(e){}const merged=new Map();for(const a of [...saved,...win,...mem])merged.set(a.id!=null?'id:'+a.id:JSON.stringify([a.broker,a.name,a.code,a.nisaType]),a);
+ const norm=s=>String(s||'').normalize('NFKC').replace(/\s/g,'').toLowerCase(),known=new Map(),add=(name,c)=>{if(!name||!c)return;const n=norm(name);if(!known.has(n))known.set(n,new Set());known.get(n).add(c);};let old={};try{old=sdStore().symbols||{};}catch(e){}for(const [key,a] of Object.entries(old))add(a.name,sdJapaneseCode(a.code||key));for(const a of merged.values()){const c=[a.code,a.ticker,a.symbol].map(sdJapaneseCode).find(Boolean);add(a.name,c);}
+ const map={};sdHoldingIssues=[];for(const a of merged.values()){if(a.sold||!['個別株','高配当','外国株式'].includes(a.cat)||!(Number(String(a.amount||0).replace(/,/g,''))>0))continue;let code=[a.code,a.ticker,a.symbol].map(sdJapaneseCode).find(Boolean);if(!code){const m=String(a.name||'').normalize('NFKC').match(/^((?:\d{4}|\d{3}[A-Z]))\s/);if(m)code=sdJapaneseCode(m[1]);}if(!code){const set=known.get(norm(a.name));if(set?.size===1)code=[...set][0];}if(!code){if(a.cat!=='外国株式')sdHoldingIssues.push({name:a.name||'銘柄名なし',reason:'日本株コード未設定'});continue;}
+ if(!map[code])map[code]={code,name:String(a.name||code),price:0,per:null,fper:null,pbr:null,target:null};const h=map[code];if(Number(a.price)>0){h.price=Number(a.price);h.priceDate=a.priceDate||'';h.priceObservedDate=a.updated||'';}if(Number(a.per)>0)h.per=Number(a.per);if(Number(a.forwardPER)>0)h.fper=Number(a.forwardPER);if(Number(a.pbr)>0)h.pbr=Number(a.pbr);if(Number(a.analystTarget||a.targetPrice)>0)h.target=Number(a.analystTarget||a.targetPrice);
+ }return map;
+}
+function sdParseAllJpxShares(text){const found={},flat=String(text||'').normalize('NFKC').replace(/，/g,',');const re=/(?:^|[^0-9A-Z])((?:\d{4}|\d{3}[A-Z])0?)\s*JP[0-9A-Z]{10}\s*株数\s*Shs\.?\s*([\d,]+)\s+(?:[▲△+\-]\s*)?(?:[\d,]+|--|—)\s+(?:[\d.]+%|\*|--|—)\s+([\d,]+)/gi;for(const m of flat.matchAll(re)){const code=sdJapaneseCode(m[1]),sell=Number(m[2].replace(/,/g,'')),buy=Number(m[3].replace(/,/g,''));if(code&&Number.isFinite(sell)&&Number.isFinite(buy))found[code]={sell,buy};}return found;}
+function sdUsePdfArchive(st,code){const o=st.symbols?.[code];if(!o)return 0;o.rows=o.rows||[];let added=0;for(const p of st.pdfArchive||[]){const r=p.data?.[code];if(!r||o.rows.some(x=>x.date===p.date))continue;o.rows.push({date:p.date,buy:r.buy,sell:r.sell,price:0,priceDate:'',source:'JPX PDF（保存済み）'});added++;}o.rows.sort((a,b)=>a.date.localeCompare(b.date));return added;}
 
 </script>
 </body>
