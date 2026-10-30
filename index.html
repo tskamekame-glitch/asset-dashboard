@@ -3806,73 +3806,13 @@ function amUpdateHmBtns(){
 }
 // Worker経由で前日終値と現在値を取得（4並列・キャッシュ保存）
 async function amFetchDailyQuotes(codes){
-  if(amDailyFetching)return;
-  amDailyFetching=true;
-  const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/';
-  const old=amLoadDailyQuotes();
-  const quotes=(old&&old.quotes)||{};
-  const queue=[...codes];
-  const runners=Array.from({length:4},async()=>{
-    while(queue.length){
-      const code=queue.shift();
-      try{
-        const resp=await fetch(`${WORKER}?code=${code}&range=1y&_ts=${Date.now()}`,{cache:'no-store'});
-        if(!resp.ok)throw new Error('http '+resp.status);
-        const data=await resp.json();
-        const result=data?.chart?.result?.[0];
-        const ts=result?.timestamp||[];
-        const clRaw=result?.indicators?.quote?.[0]?.close||[];
-        const pairs=ts.map((t,i)=>({t:t*1000,c:clRaw[i]})).filter(x=>x.c!=null);
-        const meta=result?.meta||{};
-        if(pairs.length>=2){
-          const cur=(meta.regularMarketPrice&&meta.regularMarketPrice>0)?meta.regularMarketPrice:pairs[pairs.length-1].c;
-          // 前日終値の決定: 配列末尾＝当日バーとは限らない（Yahoo側の更新タイミング次第で
-          // 当日分がまだ追加されていないことがあり、その場合 pairs[length-2] は「一昨日」になってしまう）。
-          // 1) meta.previousClose があれば最優先（Yahooが明示する「前日終値」そのもの）
-          //    ※ meta.chartPreviousCloseは「前日」ではなく「リクエストしたrangeの開始日より前の終値」
-          //      （range=1yなら約1年前）を指すことがあるため、前日終値の代用としては使わない
-          // 2) 無ければ、配列末尾バーの日付が「今日」と一致するかで pairs[length-2]/[length-1] を切り替える
-          const metaPrevClose=meta.previousClose;
-          let prev,prevT;
-          if(metaPrevClose>0){
-            prev=metaPrevClose;
-            prevT=pairs[pairs.length-2].t;
-          }else{
-            const lastBarDate=new Date(pairs[pairs.length-1].t);
-            const now=new Date();
-            const lastIsToday=lastBarDate.getFullYear()===now.getFullYear()&&lastBarDate.getMonth()===now.getMonth()&&lastBarDate.getDate()===now.getDate();
-            if(lastIsToday){prev=pairs[pairs.length-2].c;prevT=pairs[pairs.length-2].t;}
-            else{prev=pairs[pairs.length-1].c;prevT=pairs[pairs.length-1].t;}
-          }
-          // 異常値ガード：日付は直近でも価格だけが大きく乖離している（配列の日付と終値がズレている等の
-          // データ不整合）ケースがあるため、curと3倍以上乖離するprevは信頼せず、末尾から遡って
-          // 妥当な範囲（cur比1/3〜3倍）に収まる直近の終値を探す。見つからなければprevなし扱いにする
-          if(prev>0&&cur>0){
-            const ratio=cur/prev;
-            if(ratio>3||ratio<1/3){
-              let fixed=null;
-              for(let i=pairs.length-2;i>=0;i--){
-                const c=pairs[i].c;
-                if(c>0){const r=cur/c;if(r<=3&&r>=1/3){fixed=pairs[i];break;}}
-              }
-              if(fixed){prev=fixed.c;prevT=fixed.t;}else{prev=null;}
-            }
-          }
-          // 約1ヶ月前・約1年前に最も近い終値
-          const near=days=>{const tg=Date.now()-days*86400000;let best=null,bd=Infinity;for(const p of pairs){const d=Math.abs(p.t-tg);if(d<bd){bd=d;best=p;}}return best;};
-          const m1p=near(30);
-          const y1p=pairs[0];// 1yレンジの先頭≒1年前（上場が新しい場合は上場来）
-          quotes[code]={cur,prev:prev>0?prev:null,m1:m1p?m1p.c:null,y1:y1p.c,
-            curT:pairs[pairs.length-1].t,prevT:prev>0?prevT:null,m1T:m1p?m1p.t:null,y1T:y1p.t,fetchedAt:Date.now()};
-        }else{
-          quotes[code]={err:1};
-        }
-      }catch(e){quotes[code]={err:1};}
-    }
-  });
-  await Promise.all(runners);
-  try{localStorage.setItem(AM_QUOTE_KEY,JSON.stringify({ts:Date.now(),quotes}));}catch(e){}
-  amDailyFetching=false;
+ if(amDailyFetching)return;amDailyFetching=true;const WORKER='https://small-poetry-c9c2.tskamekame.workers.dev/',old=amLoadDailyQuotes(),quotes={...(old?.quotes||{})},queue=[...new Set(codes)];
+ try{await Promise.all(Array.from({length:Math.min(4,queue.length)},async()=>{while(queue.length){const code=queue.shift(),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);try{
+ const resp=await fetch(`${WORKER}?code=${encodeURIComponent(code)}&range=1y&_ts=${Date.now()}`,{cache:'no-store',signal:controller.signal});if(!resp.ok)throw Error('HTTP '+resp.status);const json=await resp.json(),r=json?.chart?.result?.[0],meta=r?.meta||{},raw=r?.indicators?.quote?.[0]?.close||[],pairs=(r?.timestamp||[]).map((t,i)=>({t:Number(t)*1000,c:raw[i]==null?null:Number(raw[i])})).filter(p=>p.c>0&&Number.isFinite(p.t)).sort((a,b)=>a.t-b.t);if(pairs.length<2)throw Error('価格履歴不足');
+ const timezone=meta.exchangeTimezoneName||(/^(?:\d{4}|\d{3}[A-Z])$/.test(code)?'Asia/Tokyo':'America/New_York'),last=pairs.at(-1),metaTime=Number(meta.regularMarketTime)*1000,useMeta=Number(meta.regularMarketPrice)>0&&metaTime>0&&metaTime<=Date.now()+60000&&metaTime>=last.t,cur=useMeta?Number(meta.regularMarketPrice):last.c,curT=useMeta?metaTime:last.t,curDate=dailyPnlYmd(curT,timezone),prevBar=[...pairs].reverse().find(p=>dailyPnlYmd(p.t,timezone)<curDate);if(!prevBar)throw Error('前取引日の終値が未取得');
+ // Both prices belong to a single response; never combine a saved account price with this previous close.
+ const prev=useMeta&&Number(meta.previousClose)>0?Number(meta.previousClose):prevBar.c,prevT=prevBar.t,near=days=>{const tg=Date.now()-days*86400000;return pairs.reduce((best,p)=>Math.abs(p.t-tg)<Math.abs(best.t-tg)?p:best,pairs[0]);},m1p=near(30),y1p=pairs[0];quotes[code]={cur,prev,curT,prevT,m1:m1p.c,m1T:m1p.t,y1:y1p.c,y1T:y1p.t,fetchedAt:Date.now(),timezone,currency:meta.currency||(/^(?:\d{4}|\d{3}[A-Z])$/.test(code)?'JPY':'')};
+ }catch(e){const previous=quotes[code];quotes[code]=previous&&dailyPnlQuoteValid(previous)?{...previous,refreshError:String(e?.message||e)}:{err:1,message:String(e?.message||e),fetchedAt:Date.now()};}finally{clearTimeout(timer);}}}));localStorage.setItem(AM_QUOTE_KEY,JSON.stringify({ts:Date.now(),quotes}));}finally{amDailyFetching=false;}
 }
 
 // ── 同一銘柄ロットの合算（追加購入対応） ──
@@ -18089,45 +18029,40 @@ function marketSaveSettings(){
 function marketFmt(n){return n>0?Number(n).toLocaleString('ja-JP',{maximumFractionDigits:4}):'—';}
 function dailyPnlNum(v){const n=Number(v);return Number.isFinite(n)?n:0;}
 let dailyPnlExclusions=[];
+let dailyPnlFetchAttempts={};
 function dailyPnlYmd(value,zone='Asia/Tokyo'){if(value==null||value==='')return '';if(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value))return value;const d=new Date(value);if(Number.isNaN(d.getTime()))return '';return new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);}
+function dailyPnlScope(){
+ const src=typeof amAccounts!=='undefined'&&Array.isArray(amAccounts)?amAccounts:[],active=src.filter(a=>!a.sold&&['個別株','高配当','外国株式'].includes(a.cat)&&Number(a.amount)>0&&Number(a.shares)>0),dates=new Map(),group=a=>String(a.broker||'未設定')+'|'+(a.cat==='外国株式'?'外国株':'国内株');
+ for(const a of active){const d=dailyPnlYmd(a.updated);if(d&&(!dates.has(group(a))||d>dates.get(group(a))))dates.set(group(a),d);}
+ const eligible=[],excluded=[];for(const a of active){const d=dailyPnlYmd(a.updated),latest=dates.get(group(a)),age=d?(Date.now()-Date.parse(d+'T00:00:00+09:00'))/86400000:Infinity;if(!d||age<0||age>7||d!==latest){excluded.push({name:a.name||a.code||'銘柄名なし',code:a.code||'',reason:!d?'保有データ更新日が未確認':`保有データが古い（${d}／同じ口座・市場の最新更新日 ${latest||'未確認'}）`});}else eligible.push(a);}
+ return {eligible,excluded};
+}
+function dailyPnlQuote(a,cache){const code=String(a.code||a.ticker||'').trim().toUpperCase().replace(/\.T$/,'');return cache?.quotes?.[code]||cache?.quotes?.[code+'.T']||null;}
+function dailyPnlQuoteValid(q){const num=v=>v!=null&&v!==''&&Number.isFinite(Number(v));if(!q||q.err||!['cur','prev','curT','prevT','fetchedAt'].every(k=>num(q[k]))||!(q.cur>0&&q.prev>0&&q.prevT<q.curT))return false;const zone=q.timezone||'Asia/Tokyo';return Date.now()-q.fetchedAt<36*3600000&&q.fetchedAt<=Date.now()+60000&&dailyPnlYmd(q.prevT,zone)<dailyPnlYmd(q.curT,zone);}
 function dailyPnlRows(){
- const today=dailyPnlYmd(Date.now()),src=typeof amAccounts!=='undefined'&&Array.isArray(amAccounts)?amAccounts:[],cache=amLoadDailyQuotes()||{},groups=new Map();dailyPnlExclusions=[];
- const num=v=>v==null||v===''?null:(Number.isFinite(Number(v))?Number(v):null),skip=(a,reason)=>dailyPnlExclusions.push({name:String(a.name||a.code||'銘柄名なし'),code:String(a.code||''),updated:a.updated||'',reason});
- for(const a of src){if(a.sold||!['個別株','高配当','外国株式'].includes(a.cat)||!(Number(a.amount)>0)||!(Number(a.shares)>0))continue;
-  const code=String(a.code||a.ticker||'').trim().toUpperCase().replace(/\.T$/,'');if(!code){skip(a,'銘柄コード未設定');continue;}
-  // Saving a category or viewing a page must never turn an old quote into today's price.
-  const importedDate=dailyPnlYmd(a.updated);if(importedDate!==today){skip(a,`本日未更新（資産データ更新日：${importedDate||'不明'}）`);continue;}
-  const foreign=a.cat==='外国株式',ccy=String(a.priceCcy||a.priceCurrency||(foreign?'':'JPY')).toUpperCase();if(!ccy){skip(a,'価格の通貨が未確認');continue;}
-  const fx=ccy==='JPY'?1:num(a.fxRate);if(!(fx>0)){skip(a,'円換算レート未設定');continue;}const shares=num(a.shares),price=num(a.price);if(!(price>0)){skip(a,'株価未設定');continue;}
-  let pnl,base,priceDate='',dataAt='';
-  // This CSV's daily P&L is for this individual lot, not per-share and not another lot's.
-  const csvPnl=num(a.dailyPnl),isMoomoo=String(a.marketSource||'')==='moomoo CSV';
-  if(isMoomoo&&csvPnl!==null){
-   if(dailyPnlYmd(a.marketUpdated)!==today){skip(a,'前日比損益の取込日が本日ではありません');continue;}
-   pnl=csvPnl*fx;base=Number(a.amount)-pnl;dataAt=a.marketUpdated;priceDate=a.dailyPnlAsOf||a.priceDate||'';
-  }else{
-   const q=(cache.quotes||{})[code]||(cache.quotes||{})[code+'.T'],qPrice=num(q?.cur),qPrev=num(q?.prev),fetched=num(q?.fetchedAt),curT=num(q?.curT),prevT=num(q?.prevT),zone=/^(?:\d{4}|\d{3}[A-Z])$/.test(code)?'Asia/Tokyo':'America/New_York';
-   if(!(qPrice>0&&qPrev>0&&fetched>0&&curT>0&&prevT>0)){skip(a,'同じデータからの株価・前日終値を確認できません');continue;}
-   if(dailyPnlYmd(fetched)!==today||fetched>Date.now()+60000){skip(a,'比較用株価データが本日取得分ではありません');continue;}
-   const quoteDate=dailyPnlYmd(curT,zone),prevDate=dailyPnlYmd(prevT,zone);
-   if(!(prevT<curT)||!quoteDate||!prevDate||prevDate>=quoteDate||Date.now()-curT>5*86400000){skip(a,'比較する価格の基準日が不整合または古すぎます');continue;}
-   // Do not compare a saved old price against a new external previous close.
-   if(Math.abs(price-qPrice)>Math.max(0.005,qPrice*0.000001)){skip(a,'登録株価と比較用データの株価が一致しません。保有CSVを更新してください');continue;}
-   if(a.priceDate&&dailyPnlYmd(a.priceDate)!==quoteDate){skip(a,'登録株価日と比較用株価日が一致しません');continue;}
-   pnl=(qPrice-qPrev)*shares*fx;base=qPrev*shares*fx;priceDate=quoteDate;dataAt=new Date(fetched).toISOString();
-  }
-  if(!Number.isFinite(pnl)||!(base>0)){skip(a,'前日比の計算基準額を確認できません');continue;}
-  let g=groups.get(code);if(!g){g={...a,code,shares:0,amount:0,pnl:0,base:0,stockPnl:0,fxPnl:0,ccy,priceDate,importDate:today,dataAt};groups.set(code,g);}g.shares+=shares;g.amount+=Number(a.amount);g.pnl+=pnl;g.base+=base;g.stockPnl+=pnl;if(new Date(dataAt)>new Date(g.dataAt))g.dataAt=dataAt;if(g.priceDate!==priceDate)g.priceDate='';
- }
- return [...groups.values()].map(g=>({...g,pct:g.base>0?g.pnl/g.base*100:null}));
+ const {eligible,excluded}=dailyPnlScope(),cache=amLoadDailyQuotes()||{},groups=new Map(),num=v=>v==null||v===''?null:Number.isFinite(Number(v))?Number(v):null;dailyPnlExclusions=[...excluded];const skip=(a,reason)=>dailyPnlExclusions.push({name:String(a.name||a.code||'銘柄名なし'),code:String(a.code||''),reason});
+ for(const a of eligible){const code=String(a.code||a.ticker||'').trim().toUpperCase().replace(/\.T$/,'');if(!code){skip(a,'銘柄コード未設定');continue;}const q=dailyPnlQuote(a,cache),ccy=String(a.priceCcy||a.priceCurrency||q?.currency||(a.cat==='外国株式'?'':'JPY')).toUpperCase(),fx=ccy==='JPY'?1:num(a.fxRate);if(!ccy||!(fx>0)){skip(a,'通貨または円換算レートが未設定');continue;}
+  const sh=Number(a.shares);let pnl,base,priceDate='',previousDate='',dataAt='',source='',stockPnl;
+  const csvPnl=num(a.dailyPnl),isCsv=String(a.marketSource||'')==='moomoo CSV'&&csvPnl!==null&&dailyPnlYmd(a.marketUpdated)===dailyPnlYmd(a.updated);
+  if(isCsv){pnl=csvPnl*fx;base=Number(a.amount)-pnl;dataAt=a.marketUpdated;priceDate=a.dailyPnlAsOf||a.priceDate||'';source='moomoo CSV（取込 '+dailyPnlYmd(a.marketUpdated)+'）';stockPnl=pnl;}
+  else if(dailyPnlQuoteValid(q)){pnl=(Number(q.cur)-Number(q.prev))*sh*fx;base=Number(q.prev)*sh*fx;priceDate=dailyPnlYmd(q.curT,q.timezone||(/^(?:\d{4}|\d{3}[A-Z])$/.test(code)?'Asia/Tokyo':'America/New_York'));previousDate=dailyPnlYmd(q.prevT,q.timezone||(/^(?:\d{4}|\d{3}[A-Z])$/.test(code)?'Asia/Tokyo':'America/New_York'));dataAt=new Date(q.fetchedAt).toISOString();source='市場データの株価・前日終値';stockPnl=pnl;}
+  else{skip(a,'比較できる市場データが未取得です。前日比データを更新してください');continue;}
+  if(!Number.isFinite(pnl)||!(base>0)){skip(a,'前日比の計算基準額が未確認');continue;}let g=groups.get(code);if(!g){g={...a,code,shares:0,amount:0,pnl:0,base:0,stockPnl:0,fxPnl:0,ccy,priceDate,previousDate,importDate:dailyPnlYmd(a.updated),dataAt,source};groups.set(code,g);}g.shares+=sh;g.amount+=Number(a.amount);g.pnl+=pnl;g.base+=base;g.stockPnl+=stockPnl;if(new Date(dataAt)>new Date(g.dataAt))g.dataAt=dataAt;if(g.priceDate!==priceDate)g.priceDate='';if(g.source!==source)g.source='CSV・市場データ（各保有分の前日比）';
+ }return [...groups.values()].map(g=>({...g,pct:g.base>0?g.pnl/g.base*100:null}));
 }
 function dailyPnlExclusionHtml(){if(!dailyPnlExclusions.length)return '';return `<details style="margin-top:10px;font-size:11px;color:var(--text2)"><summary style="cursor:pointer">集計対象外 ${dailyPnlExclusions.length}件（理由を確認）</summary><ul style="padding-left:18px;line-height:1.8">${dailyPnlExclusions.map(x=>`<li>${marketEsc(x.name)} ${marketEsc(x.code)}：${marketEsc(x.reason)}</li>`).join('')}</ul></details>`;}
+function dailyPnlQueueRefresh(force=false){
+ const {eligible}=dailyPnlScope();if(typeof amFetchDailyQuotes!=='function'||amDailyFetching)return false;const cache=amLoadDailyQuotes()||{},codes=[...new Set(eligible.filter(a=>!(String(a.marketSource||'')==='moomoo CSV'&&a.dailyPnl!=null&&dailyPnlYmd(a.marketUpdated)===dailyPnlYmd(a.updated))).map(a=>String(a.code||a.ticker||'').trim().toUpperCase().replace(/\.T$/,''))).values()].filter(c=>c&&(force||!dailyPnlQuoteValid(cache.quotes?.[c]||cache.quotes?.[c+'.T']))&&(force||!dailyPnlFetchAttempts[c]||Date.now()-dailyPnlFetchAttempts[c]>300000));
+ if(!codes.length)return false;for(const c of codes)dailyPnlFetchAttempts[c]=Date.now();Promise.resolve(amFetchDailyQuotes(codes)).catch(e=>console.warn('前日比更新',e)).finally(()=>dailyPnlRender());return true;
+}
+function dailyPnlRefresh(){dailyPnlQueueRefresh(true);dailyPnlRender();}
 
 function dailyPnlRender(){
   const el=document.getElementById('dailyPnlPanel'); if(!el)return;
-  // このパネルの表示では外部株価取得や資産データの更新を行いません。
+  const fetching=dailyPnlQueueRefresh();
+  const refreshButton='<button type="button" onclick="dailyPnlRefresh()" style="margin:8px 0;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);cursor:pointer">前日比データを更新</button>';
   const rows=dailyPnlRows();
-  if(!rows.length){el.innerHTML='<div style="padding:14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg);font-size:12px"><b>本日の評価損益：未集計</b><p>本日更新された資産と、同じ基準で比較できる前日比データがそろっていません。保有CSVまたは銘柄の市場データを更新してください。</p>'+dailyPnlExclusionHtml()+'</div>';return;}
+  if(!rows.length){el.innerHTML='<div style="padding:14px;border:0.5px solid var(--border);border-radius:14px;background:var(--bg);font-size:12px"><b>本日の評価損益：'+(fetching||amDailyFetching?'前日比データ取得中…':'未集計')+'</b><p>直近の保有データと、同じ取得元の株価・前日終値で集計します。'+(fetching||amDailyFetching?'取得が完了すると自動表示します。':'データを取得できない場合は、下の対象外理由をご確認ください。')+'</p>'+refreshButton+dailyPnlExclusionHtml()+'</div>';return;}
   const total=rows.reduce((s,a)=>s+a.pnl,0), base=rows.reduce((s,a)=>s+a.base,0);
   const pct=base?total/base*100:0;
   const gains=rows.filter(a=>a.pnl>0).sort((a,b)=>b.pnl-a.pnl), losses=rows.filter(a=>a.pnl<0).sort((a,b)=>a.pnl-b.pnl), sectors={};
@@ -18135,11 +18070,11 @@ function dailyPnlRender(){
   const secRows=Object.entries(sectors).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
   const fmtPnl=v=>`${v>=0?'+':''}${Math.round(v).toLocaleString('ja-JP')}円`;
   const color=v=>v>=0?'var(--green)':'var(--accent)';
-  const contributionList=(list,title)=>`<section style="margin:0 0 12px"><div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px">${title}</div>${list.length?list.slice(0,5).map(a=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${marketEsc(a.name||a.code)} <span style="color:var(--text3)">${marketEsc(a.code||'')}</span><small style="display:block;color:var(--text3)">${a.priceDate?'株価日 '+marketEsc(a.priceDate):'価格日は未確認（CSV取込日で表示）'}</small></span><span style="font-weight:700;color:${color(a.pnl)};white-space:nowrap">${fmtPnl(a.pnl)}</span></div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:5px 0">該当銘柄なし</div>'}</section>`;
+  const contributionList=(list,title)=>`<section style="margin:0 0 12px"><div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px">${title}</div>${list.length?list.slice(0,5).map(a=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:11px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${marketEsc(a.name||a.code)} <span style="color:var(--text3)">${marketEsc(a.code||'')}</span><small style="display:block;color:var(--text3)">${a.priceDate?'株価日 '+marketEsc(a.priceDate):'価格日は未確認'} ／ 保有更新 ${marketEsc(a.importDate||'—')}<br>${marketEsc(a.source||'')}</small></span><span style="font-weight:700;color:${color(a.pnl)};white-space:nowrap">${fmtPnl(a.pnl)}</span></div>`).join(''):'<div style="font-size:11px;color:var(--text3);padding:5px 0">該当銘柄なし</div>'}</section>`;
   const negativeList=contributionList(losses,'下落への影響 TOP5'),positiveList=contributionList(gains,'上昇への影響 TOP5');
   const item=total<0?negativeList+positiveList:positiveList+negativeList;
   const secHtml=secRows.map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0"><span>${marketEsc(k)}</span><span style="font-weight:700;color:${color(v)}">${fmtPnl(v)}</span></div>`).join('');
-  el.innerHTML=`<div style="margin:0 0 12px;background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--text2);font-weight:700">📈 本日の評価損益</div><div style="font-size:21px;font-weight:800;color:${color(total)};margin-top:2px">${fmtPnl(total)} <span style="font-size:12px">(${pct>=0?'+':''}${pct.toFixed(2)}%)</span></div></div><div style="font-size:10px;color:var(--text3);text-align:right">本日更新分のみ・外貨は登録為替で円換算<br>データ取込：${marketEsc(dailyPnlYmd(Date.now()))} ／ ${rows.length}銘柄を集計</div></div><div class="daily-pnl-breakdown"><div><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">銘柄別の増減（影響額順）</div>${item}</div><div><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">セクター別（影響の大きい順）</div>${secHtml||'—'}</div></div><div style="font-size:9px;color:var(--text3);margin-top:8px">※本日更新し、前日比の根拠を確認できた保有分だけを集計します。未更新・比較不能分は除外。各TOP5は集計内訳の一部です。為替だけの変動は含めません。</div>${dailyPnlExclusionHtml()}</div>`;
+  el.innerHTML=`<div style="margin:0 0 12px;background:var(--bg);border:0.5px solid var(--border);border-radius:14px;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--text2);font-weight:700">📈 本日の評価損益</div><div style="font-size:21px;font-weight:800;color:${color(total)};margin-top:2px">${fmtPnl(total)} <span style="font-size:12px">(${pct>=0?'+':''}${pct.toFixed(2)}%)</span></div></div><div style="font-size:10px;color:var(--text3);text-align:right">直近取引日の前日比・登録株数で試算<br>${rows.length}銘柄を集計 ／ データ取得・取込：${marketEsc(new Date(Math.max(...rows.map(a=>new Date(a.dataAt).getTime()).filter(Number.isFinite))).toLocaleString('ja-JP'))}${refreshButton}</div></div><div class="daily-pnl-breakdown"><div><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">銘柄別の増減（影響額順）</div>${item}</div><div><div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">セクター別（影響の大きい順）</div>${secHtml||'—'}</div></div><div style="font-size:9px;color:var(--text3);margin-top:8px">※同じ口座・市場の直近の保有更新分と、同じ取得元の前日比で計算した参考値です。取引日前は直近取引日のデータを表示。古い保有分・比較不能分は除外し、外貨は登録為替で円換算します。資産管理の残高・登録株価は上書きしません。</div>${dailyPnlExclusionHtml()}</div>`;
 }
 function marketAge(d){if(!d)return null;const x=new Date(d),t=new Date();return Math.floor((t-x)/60000);}
 async function marketFetchQuote(a){
