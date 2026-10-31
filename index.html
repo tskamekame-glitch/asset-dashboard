@@ -1555,6 +1555,14 @@ function amImportDiffRender(){
       </div>
       <div class="account-list" id="amRiskMetricsPanel"></div>
     </div>
+    <!-- 判断ログ・事後検証 -->
+    <div class="section" id="amDecisionLogSection">
+      <div class="section-head" onclick="toggleSection('amDecisionLogSection')">
+        <div class="section-head-left"><span>📒</span><h2>判断ログ・事後検証</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amDecisionLogPanel"></div>
+    </div>
     <script>
 // 月次運用成績：assetSnapshots の月末スナップショットから表示
 function amMonthlyPerfNum(v){ const n=Number(v||0); return Number.isFinite(n)?n:0; }
@@ -1670,6 +1678,155 @@ function amRiskMetricsRender(){
     window.amMonthlyPerfRender=function(){const r=base.apply(this,arguments);try{amRiskMetricsRender();}catch(e){console.error('amRiskMetricsRender',e)}return r;};
   }
   [900,2500,4500].forEach(ms=>setTimeout(()=>{try{amRiskMetricsRender();}catch(e){}},ms));
+})();
+    </script>
+    <script>
+// ============================================================
+// 判断ログ・事後検証：判断時点の株価・理由を記録し、1週/1か月/3か月後に自動採点
+// 価格履歴は assetSnapshots 内の銘柄別 price（記録日のみ）＋現在の保有価格を使う
+// ============================================================
+const DL_KEY='amDecisionLogV1';
+const DL_TAGS=['決算期待','需給','割安','モメンタム','配当','テーマ','その他'];
+const DL_ACTIONS={buy:'買い',sell:'売り',hold:'保有継続',watch:'様子見'};
+function dlEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function dlLoadLog(){try{const x=JSON.parse(localStorage.getItem(DL_KEY)||'[]');return Array.isArray(x)?x:[]}catch(e){return[]}}
+function dlSaveLog(log){if(typeof amSafeSetItem==='function')amSafeSetItem(DL_KEY,JSON.stringify(log));else try{localStorage.setItem(DL_KEY,JSON.stringify(log))}catch(e){}}
+function dlAddDays(dateStr,days){const d=new Date(dateStr+'T00:00:00');d.setDate(d.getDate()+days);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function dlAddMonths(dateStr,months){const parts=String(dateStr).split('-').map(Number);const base=new Date(parts[0],(parts[1]||1)-1+months,1);const lastDay=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();const day=Math.min(parts[2]||1,lastDay);return base.getFullYear()+'-'+String(base.getMonth()+1).padStart(2,'0')+'-'+String(day).padStart(2,'0')}
+function dlPriceSeries(code,snaps,accounts,todayStr){
+  const c=String(code||'').trim().toUpperCase();if(!c)return[];
+  const byDate={};
+  (Array.isArray(snaps)?snaps:[]).forEach(s=>{if(!s||!s.date||!Array.isArray(s.accounts))return;const a=s.accounts.find(x=>x&&String(x.code||'').trim().toUpperCase()===c&&Number(x.price)>0);if(a)byDate[String(s.date)]=Number(a.price)});
+  // 現在の保有価格を最新点として補う（スナップショットに今日分が無い場合）
+  const cur=(Array.isArray(accounts)?accounts:[]).find(x=>x&&!x.sold&&String(x.code||'').trim().toUpperCase()===c&&Number(x.price)>0);
+  if(cur&&todayStr&&!byDate[todayStr])byDate[todayStr]=Number(cur.price);
+  return Object.keys(byDate).sort().map(d=>({date:d,price:byDate[d]}));
+}
+function dlPriceAtOrAfter(series,dateStr){for(const p of series){if(p.date>=dateStr)return p}return null}
+function dlComputeReview(entry,series){
+  const out={w1:null,m1:null,m3:null,cur:null,entryPrice:null};
+  if(!entry)return out;
+  let base=Number(entry.price)>0?Number(entry.price):null;
+  if(base==null){const p=dlPriceAtOrAfter(series,entry.date)||(series.length?series[series.length-1]:null);if(p)base=p.price}
+  out.entryPrice=base;
+  if(base==null||!series.length)return out;
+  const calc=(targetDate)=>{const p=dlPriceAtOrAfter(series,targetDate);if(!p)return null;return{ret:p.price/base-1,date:p.date,price:p.price}};
+  out.w1=calc(dlAddDays(entry.date,7));
+  out.m1=calc(dlAddMonths(entry.date,1));
+  out.m3=calc(dlAddMonths(entry.date,3));
+  const last=series[series.length-1];
+  if(last&&last.date>=entry.date)out.cur={ret:last.price/base-1,date:last.date,price:last.price};
+  return out;
+}
+function dlScore(entry,ret){if(ret==null)return null;return entry&&entry.action==='sell'?-ret:ret}
+function dlBestReview(entry,review){
+  const order=['m3','m1','w1','cur'];
+  for(const k of order){if(review&&review[k])return{horizon:k,ret:review[k].ret,score:dlScore(entry,review[k].ret)}}
+  return null;
+}
+function dlTagStats(log,reviewsById){
+  const stats={};
+  (log||[]).forEach(e=>{
+    const best=dlBestReview(e,reviewsById?reviewsById[e.id]:null);
+    if(!best)return;
+    (e.tags||[]).forEach(t=>{
+      if(!stats[t])stats[t]={n:0,hits:0,sum:0};
+      stats[t].n++;stats[t].sum+=best.score;if(best.score>0)stats[t].hits++;
+    });
+  });
+  Object.values(stats).forEach(s=>{s.hitRate=s.n?s.hits/s.n:null;s.avg=s.n?s.sum/s.n:null});
+  return stats;
+}
+function dlHoldingsList(){
+  let accs=[];try{accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]')}catch(e){}
+  const seen={},list=[];
+  (Array.isArray(accs)?accs:[]).forEach(a=>{if(!a||a.sold)return;const code=String(a.code||'').trim();const key=(code||a.name||'').toUpperCase();if(!key||seen[key])return;seen[key]=1;list.push({code:code,name:a.name||'',price:Number(a.price||0)})});
+  return list;
+}
+function dlFillPrice(){
+  const code=(document.getElementById('dl-code')?.value||'').trim().toUpperCase();
+  const nameEl=document.getElementById('dl-name'),priceEl=document.getElementById('dl-price');
+  const h=dlHoldingsList().find(x=>x.code&&x.code.toUpperCase()===code);
+  if(h){if(nameEl&&!nameEl.value)nameEl.value=h.name;if(priceEl&&!priceEl.value&&h.price>0)priceEl.value=h.price}
+}
+function dlAddEntry(){
+  const date=document.getElementById('dl-date')?.value||'';
+  const code=(document.getElementById('dl-code')?.value||'').trim().toUpperCase();
+  const name=(document.getElementById('dl-name')?.value||'').trim();
+  const action=document.getElementById('dl-action')?.value||'buy';
+  const price=Number(document.getElementById('dl-price')?.value||0);
+  const target=Number(document.getElementById('dl-target')?.value||0);
+  const stop=Number(document.getElementById('dl-stop')?.value||0);
+  const note=(document.getElementById('dl-note')?.value||'').trim();
+  const tags=[...document.querySelectorAll('input[name="dl-tag"]:checked')].map(x=>x.value);
+  if(!date||!code){if(typeof showToast==='function')showToast('日付と銘柄コードを入力してください');return}
+  const log=dlLoadLog();
+  log.push({id:'dl'+Date.now().toString(36),date:date,code:code,name:name,action:action,price:price>0?price:null,target:target>0?target:null,stop:stop>0?stop:null,tags:tags,note:note,createdAt:new Date().toISOString()});
+  dlSaveLog(log);
+  if(typeof showToast==='function')showToast('判断ログに記録しました');
+  dlRender();
+}
+function dlDeleteEntry(id){if(!confirm('この判断ログを削除しますか？'))return;dlSaveLog(dlLoadLog().filter(x=>x.id!==id));dlRender()}
+function dlRender(){
+  const el=document.getElementById('amDecisionLogPanel');if(!el)return;
+  const holdings=dlHoldingsList();
+  const today=new Date(),todayStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  let snaps=[];try{snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]')}catch(e){}
+  let accounts=[];try{accounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]')}catch(e){}
+  const log=dlLoadLog().slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const pct=v=>v==null?'—':(v>=0?'+':'')+(v*100).toFixed(1)+'%';
+  const cell=r=>{if(!r)return '<span style="color:var(--text3)">—</span>';const c=r.ret>=0?'#C0392B':'#2563EB';return '<span style="color:'+c+';font-weight:700">'+pct(r.ret)+'</span>'};
+  // レビュー計算
+  const reviews={};
+  log.forEach(e=>{reviews[e.id]=dlComputeReview(e,dlPriceSeries(e.code,snaps,accounts,todayStr))});
+  const stats=dlTagStats(log,reviews);
+  let html='';
+  // ---- 記録フォーム ----
+  html+='<div style="padding:0 16px 12px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">';
+  html+='<label style="font-size:11px;color:var(--text3)">日付<input type="date" id="dl-date" value="'+todayStr+'" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">銘柄コード<input type="text" id="dl-code" list="dl-holdings" placeholder="例：285A" onblur="dlFillPrice()" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></label>';
+  html+='<datalist id="dl-holdings">'+holdings.map(h=>'<option value="'+dlEsc(h.code)+'">'+dlEsc(h.name)+'</option>').join('')+'</datalist>';
+  html+='<label style="font-size:11px;color:var(--text3)">銘柄名<input type="text" id="dl-name" placeholder="任意" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">判断<select id="dl-action" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"><option value="buy">買い</option><option value="sell">売り</option><option value="hold">保有継続</option><option value="watch">様子見</option></select></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">判断時の株価<input type="number" id="dl-price" placeholder="空欄なら履歴から自動" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">目標株価<input type="number" id="dl-target" placeholder="任意" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">撤退ライン<input type="number" id="dl-stop" placeholder="任意" style="width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"></label>';
+  html+='</div>';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center"><span style="font-size:11px;color:var(--text3)">理由：</span>'+DL_TAGS.map(t=>'<label style="font-size:11px;border:1px solid var(--border);border-radius:999px;padding:4px 9px"><input type="checkbox" name="dl-tag" value="'+t+'"> '+t+'</label>').join('')+'</div>';
+  html+='<div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="dl-note" placeholder="メモ（任意）" style="flex:1;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)"><button class="btn-sm" onclick="dlAddEntry()" style="flex:none">記録する</button></div>';
+  html+='<div style="font-size:10px;color:var(--text3);margin-top:6px">事後検証の価格は、推移スナップショットに記録された株価と現在の保有価格から自動計算します（記録日のみのため、判定日直後の記録日で評価）。売り判断は、その後の下落をプラスとして採点します。</div></div>';
+  // ---- 理由タグ別成績 ----
+  const tagRows=Object.entries(stats).sort((a,b)=>b[1].n-a[1].n);
+  if(tagRows.length){
+    html+='<div style="padding:0 16px 6px;font-size:11px;font-weight:700">理由タグ別の成績（最も長い判定期間で集計）</div><div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px">';
+    tagRows.forEach(([t,s])=>{const c=s.avg==null?'var(--text3)':s.avg>=0?'#C0392B':'#2563EB';html+='<span style="border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:11px">'+dlEsc(t)+'：'+s.n+'件／的中 '+Math.round((s.hitRate||0)*100)+'%／平均 <b style="color:'+c+'">'+pct(s.avg)+'</b></span>'});
+    html+='</div>';
+  }
+  // ---- 一覧 ----
+  if(!log.length){html+='<div style="padding:4px 16px 14px;color:var(--text3);font-size:12px">まだ記録がありません。売買や保有継続を決めたときに、理由と一緒に残しておくと後で検証できます。</div>'}
+  else{
+    html+='<div style="overflow-x:auto;padding:0 16px 14px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px"><thead><tr style="color:var(--text3);text-align:right;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:7px 4px">日付／銘柄</th><th style="text-align:left">判断</th><th>判断時株価</th><th>現在</th><th>1週後</th><th>1か月後</th><th>3か月後</th><th></th></tr></thead><tbody>';
+    log.forEach(e=>{
+      const r=reviews[e.id];
+      const badge=e.action==='sell'?'#2563EB':e.action==='buy'?'#C0392B':'var(--text2)';
+      html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;text-align:left"><b>'+dlEsc(e.code)+'</b> '+dlEsc(e.name||'')+'<br><span style="color:var(--text3)">'+dlEsc(e.date)+(e.tags&&e.tags.length?'／'+e.tags.map(dlEsc).join('・'):'')+(e.note?'<br>'+dlEsc(e.note):'')+(e.target||e.stop?'<br><span style="color:var(--text3)">目標 '+(e.target||'—')+'／撤退 '+(e.stop||'—')+'</span>':'')+'</span></td>';
+      html+='<td style="text-align:left;color:'+badge+';font-weight:700">'+dlEsc(DL_ACTIONS[e.action]||e.action)+'</td>';
+      html+='<td style="text-align:right">'+(r.entryPrice!=null?Math.round(r.entryPrice).toLocaleString():'—')+'</td>';
+      html+='<td style="text-align:right">'+cell(r.cur)+(r.cur?'<br><span style="color:var(--text3)">'+dlEsc(r.cur.date)+'</span>':'')+'</td>';
+      html+='<td style="text-align:right">'+cell(r.w1)+'</td><td style="text-align:right">'+cell(r.m1)+'</td><td style="text-align:right">'+cell(r.m3)+'</td>';
+      html+='<td style="text-align:right"><button class="btn-sm" onclick="dlDeleteEntry(\''+e.id+'\')">削除</button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  el.innerHTML=html;
+}
+(function(){
+  if(typeof window.amMonthlyPerfRender==='function'&&!window.__dlWrapped){
+    window.__dlWrapped=true;
+    const base=window.amMonthlyPerfRender;
+    window.amMonthlyPerfRender=function(){const r=base.apply(this,arguments);try{dlRender();}catch(e){console.error('dlRender',e)}return r;};
+  }
+  [1500,3500].forEach(ms=>setTimeout(()=>{try{dlRender()}catch(e){}},ms));
 })();
     </script>
     <div id="accountSections"></div>
@@ -17393,6 +17550,7 @@ const GDRIVE_KEYS=[
  'tsumitateFunds_v1','assetTradingRules_v1','assetRebalanceHistory_v1','assetRebalanceSettings_v1',
  'assetImportantEvents_v1','assetEarningsPlans_v1',
  'amPerformanceDecisions_v1','amPerformanceMode_v1','tradeJudgeCandidatesV1','marketDataSettingsV1',
+ 'amDecisionLogV1',
  'trGainExclude','trGainExcludeDefaultsSet','tr_target_foreign_pct'
 ];
 /* 同期しないもの（端末ごとに再取得・再生成できるキャッシュ／一時データ／端末固有設定）:
