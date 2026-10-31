@@ -725,6 +725,8 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 <!-- ========== HOME ========== -->
 <div class="panel active" id="tab-home">
   <div style="background:var(--bg);min-height:100vh;padding-bottom:80px">
+    <!-- 週次更新ウィザード -->
+    <div style="padding:12px 14px 0"><div id="weeklyWizardPanel" style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px"></div></div>
 
     <!-- ── TOP HERO：資産総額 ＋ ベスト/ワースト ── -->
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:8px;padding:12px 14px 8px">
@@ -17993,6 +17995,85 @@ function sdHoldingMap(){
 function sdParseAllJpxShares(text){const found={},flat=String(text||'').normalize('NFKC').replace(/，/g,',');const re=/(?:^|[^0-9A-Z])((?:\d{4}|\d{3}[A-Z])0?)\s*JP[0-9A-Z]{10}\s*株数\s*Shs\.?\s*([\d,]+)\s+(?:[▲△+\-]\s*)?(?:[\d,]+|--|—)\s+(?:[\d.]+%|\*|--|—)\s+([\d,]+)/gi;for(const m of flat.matchAll(re)){const code=sdJapaneseCode(m[1]),sell=Number(m[2].replace(/,/g,'')),buy=Number(m[3].replace(/,/g,''));if(code&&Number.isFinite(sell)&&Number.isFinite(buy))found[code]={sell,buy};}return found;}
 function sdUsePdfArchive(st,code){const o=st.symbols?.[code];if(!o)return 0;o.rows=o.rows||[];let added=0;for(const p of st.pdfArchive||[]){const r=p.data?.[code];if(!r||o.rows.some(x=>x.date===p.date))continue;o.rows.push({date:p.date,buy:r.buy,sell:r.sell,price:0,priceDate:'',source:'JPX PDF（保存済み）'});added++;}o.rows.sort((a,b)=>a.date.localeCompare(b.date));return added;}
 
+</script>
+<script>
+// ============================================================
+// 週次更新ウィザード：月曜の資産管理更新をチェックリスト化＋データ健全性チェック
+// 進捗はISO週単位で保持し、週が変わると自動リセット
+// ============================================================
+const WW_KEY='amWeeklyWizardV1';
+function wwWeekKey(d){const date=d?new Date(d):new Date();const t=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const day=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-day+3);const firstThu=new Date(Date.UTC(t.getUTCFullYear(),0,4));const fd=(firstThu.getUTCDay()+6)%7;firstThu.setUTCDate(firstThu.getUTCDate()-fd+3);const week=1+Math.round((t-firstThu)/(7*86400000));return t.getUTCFullYear()+'-W'+String(week).padStart(2,'0')}
+function wwLoad(){const wk=wwWeekKey();try{const s=JSON.parse(localStorage.getItem(WW_KEY)||'null');if(s&&s.week===wk&&s.checks)return s}catch(e){}return{week:wk,checks:{}}}
+function wwSave(s){try{localStorage.setItem(WW_KEY,JSON.stringify(s))}catch(e){}}
+function wwToggle(step,checked){const s=wwLoad();s.checks[step]=!!checked;wwSave(s);wwRender()}
+function wwReset(){if(!confirm('今週のウィザード進捗をリセットしますか？'))return;wwSave({week:wwWeekKey(),checks:{}});wwRender();if(typeof showToast==='function')showToast('ウィザードをリセットしました')}
+function wwHealth(){
+  let snaps=[];try{snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]')}catch(e){snaps=[]}
+  const items=[];
+  if(!Array.isArray(snaps)||!snaps.length){items.push({ok:false,text:'スナップショットがありません。「📈 推移に記録」から開始してください'});return{items:items,flowMissing:0,months:0}}
+  const sorted=snaps.filter(x=>x&&x.date).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const byMonth={};sorted.forEach(x=>{byMonth[String(x.date).slice(0,7)]=x});
+  const months=Object.keys(byMonth).sort();
+  const latest=sorted[sorted.length-1];
+  const now=new Date(),curYm=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  items.push({ok:true,text:'最新スナップショット：'+latest.date+'（全'+sorted.length+'件）'});
+  // 欠け月（最初〜最後の間でスナップショットが1件もない月）
+  const missing=[];if(months.length){let[aY,aM]=months[0].split('-').map(Number);const[bY,bM]=months[months.length-1].split('-').map(Number);while(aY<bY||(aY===bY&&aM<=bM)){const ym=aY+'-'+String(aM).padStart(2,'0');if(!byMonth[ym])missing.push(ym);aM++;if(aM>12){aM=1;aY++}}}
+  items.push(missing.length?{ok:false,text:'スナップショットの欠け月：'+missing.map(x=>x.replace('-','/')).join('、')} : {ok:true,text:'スナップショットの欠け月はありません'});
+  items.push(byMonth[curYm]?{ok:true,text:'今月（'+curYm.replace('-','/')+'）のスナップショットあり'}:{ok:false,text:'今月（'+curYm.replace('-','/')+'）のスナップショットはまだありません'});
+  // 純入金未入力の月（2か月目以降）
+  const flowMissingMonths=months.slice(1).filter(ym=>{const f=byMonth[ym].netFlow;return f===undefined||f===null||f===''});
+  items.push(flowMissingMonths.length?{ok:false,text:'純入金/出金が未入力の月：'+flowMissingMonths.length+'件（'+flowMissingMonths.slice(-4).map(x=>x.replace('-','/')).join('、')+'）— リスク指標が未調整になります'}:{ok:true,text:'純入金/出金は全ての月に入力済みです'});
+  // localStorage使用量
+  let total=0;try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);total+=(k.length+(localStorage.getItem(k)||'').length)*2}}catch(e){}
+  items.push({ok:total<4*1048576,text:'localStorage使用量 約'+(total/1048576).toFixed(2)+'MB'+(total>=4*1048576?'（上限に近づいています）':'')});
+  return{items:items,flowMissing:flowMissingMonths.length,months:months.length};
+}
+async function wwBackupInfo(){
+  const el=document.getElementById('ww-backup-info');if(!el)return;
+  try{
+    if(typeof gdriveCfg!=='function'||!gdriveCfg().clientId){el.textContent='Driveバックアップ：未設定（Drive接続後に確認できます）';return}
+    if(typeof safetyListDriveBackups!=='function'){el.textContent='Driveバックアップ：確認できませんでした';return}
+    const files=await safetyListDriveBackups();
+    if(!files.length){el.innerHTML='<span style="color:#B45309">⚠ Driveバックアップ：まだありません。ステップ5で保存してください</span>';return}
+    const latest=files[0],created=latest.createdTime?new Date(latest.createdTime):null;
+    const ageDays=created?Math.floor((Date.now()-created.getTime())/86400000):null;
+    el.innerHTML=(ageDays!=null&&ageDays>14?'<span style="color:#B45309">⚠ </span>':'✓ ')+'Driveバックアップ：最新 '+(created?created.toLocaleString('ja-JP'):latest.name)+'（全'+files.length+'世代）'+(ageDays!=null?'・'+ageDays+'日前':'');
+  }catch(e){el.textContent='Driveバックアップ：確認できませんでした（未接続の可能性）'}
+}
+function wwGoImport(){try{switchTab('manager')}catch(e){}setTimeout(()=>{const i=document.getElementById('amSBIInput');if(i)i.click();else if(typeof showToast==='function')showToast('資産管理タブでCSV取込を行ってください')},350)}
+function wwGoDiff(){try{switchTab('manager')}catch(e){}if(typeof showToast==='function')showToast('取込結果と差分を確認してください')}
+function wwDoRecord(){try{sendToTrend()}catch(e){if(typeof showToast==='function')showToast('記録に失敗しました')}setTimeout(wwRender,800)}
+function wwGoFlow(){try{switchTab('manager')}catch(e){}setTimeout(()=>{const s=document.getElementById('amMonthlyPerformanceSection');if(s)s.scrollIntoView({behavior:'smooth',block:'start'})},350)}
+async function wwDoSave(){try{await gdrivePush(true)}catch(e){}try{await safetyDriveBackup()}catch(e){}setTimeout(wwRender,500)}
+function wwRender(){
+  const el=document.getElementById('weeklyWizardPanel');if(!el)return;
+  const s=wwLoad();
+  // 自動判定：本日のスナップショットがあればステップ3を完了扱い
+  try{const today=new Date(),ts=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');const snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');if(Array.isArray(snaps)&&snaps.some(x=>x&&x.date===ts)&&!s.checks.s3){s.checks.s3=true;wwSave(s)}}catch(e){}
+  const H=wwHealth();
+  const steps=[
+    {id:'s1',label:'SBI CSVを取り込む',hint:'保有・取引CSVを資産管理へ取込',btn:'CSVを選ぶ',fn:'wwGoImport()'},
+    {id:'s2',label:'取込結果と差分を確認する',hint:'件数・評価額・未反映行をチェック',btn:'確認へ',fn:'wwGoDiff()'},
+    {id:'s3',label:'推移に記録する',hint:'今日のスナップショットを保存（記録済みなら自動でチェック）',btn:'📈 記録する',fn:'wwDoRecord()'},
+    {id:'s4',label:'純入金/出金を入力する',hint:'今月分を月次運用成績へ（リスク指標の精度が上がります）',btn:'入力へ',fn:'wwGoFlow()'},
+    {id:'s5',label:'Driveへ保存＋全体バックアップ',hint:'同期と3世代バックアップを更新',btn:'保存する',fn:'wwDoSave()'}
+  ];
+  const done=steps.filter(x=>s.checks[x.id]).length;
+  let html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800;font-size:14px">🧭 週次更新ウィザード <span style="font-weight:400;color:var(--text3);font-size:11px">'+s.week+'</span></div><button class="btn-sm" onclick="wwReset()">リセット</button></div>';
+  html+='<div style="height:8px;background:var(--bg3,#e5e7eb);border-radius:999px;margin:10px 0 4px"><div style="height:8px;width:'+(done/steps.length*100)+'%;background:#0F6E56;border-radius:999px"></div></div><div style="font-size:11px;color:var(--text3);margin-bottom:10px">'+done+' / '+steps.length+' 完了</div>';
+  html+='<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-size:11px;font-weight:700;margin-bottom:6px">データ健全性チェック</div>';
+  H.items.forEach(it=>{html+='<div style="font-size:11px;line-height:1.7;color:'+(it.ok?'var(--text2)':'#B45309')+'">'+(it.ok?'✓ ':'⚠ ')+it.text+'</div>'});
+  html+='<div id="ww-backup-info" style="font-size:11px;line-height:1.7;color:var(--text2)">Driveバックアップ：確認中…</div></div>';
+  steps.forEach((st,i)=>{
+    const checked=s.checks[st.id]?' checked':'';
+    html+='<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--border)"><input type="checkbox"'+checked+' onchange="wwToggle(\''+st.id+'\',this.checked)" style="width:18px;height:18px;margin-top:1px;flex:none"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;'+(checked?'color:var(--text3);text-decoration:line-through':'')+'">'+(i+1)+'. '+st.label+'</div><div style="font-size:11px;color:var(--text3)">'+st.hint+'</div></div><button class="btn-sm" onclick="'+st.fn+'" style="flex:none">'+st.btn+'</button></div>';
+  });
+  html+='<div style="font-size:10px;color:var(--text3);padding-top:8px">進捗は週単位で保持され、週が変わると自動でリセットされます。チェックは手動でも付け外しできます。</div>';
+  el.innerHTML=html;
+  wwBackupInfo();
+}
+[1200,3200].forEach(ms=>setTimeout(()=>{try{wwRender()}catch(e){}},ms));
 </script>
 </body>
 </html>
