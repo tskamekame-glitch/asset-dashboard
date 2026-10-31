@@ -1545,6 +1545,14 @@ function amImportDiffRender(){
       </div>
       <div class="account-list" id="amMonthlyPerformancePanel"></div>
     </div>
+    <!-- リスク指標 -->
+    <div class="section" id="amRiskMetricsSection">
+      <div class="section-head" onclick="toggleSection('amRiskMetricsSection')">
+        <div class="section-head-left"><span>📉</span><h2>リスク指標</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amRiskMetricsPanel"></div>
+    </div>
     <script>
 // 月次運用成績：assetSnapshots の月末スナップショットから表示
 function amMonthlyPerfNum(v){ const n=Number(v||0); return Number.isFinite(n)?n:0; }
@@ -1580,6 +1588,78 @@ function amMonthlyPerfRender(){
     window.amRender=function(){ const r=base.apply(this,arguments); try{amMonthlyPerfRender();}catch(e){console.error('amMonthlyPerfRender',e)} return r; };
   }
   [500,1500,3000,5000].forEach(ms=>setTimeout(()=>{try{amMonthlyPerfRender();}catch(e){}},ms));
+})();
+    </script>
+    <script>
+// ============================================================
+// リスク指標：月末スナップショット＋純入金から入出金調整後の月次リターンを算出
+// 計算式は月次運用成績と同一（実質運用損益＝資産増減−純入金、利回り＝損益÷(前月末＋入金の正部分)）
+// ============================================================
+function amRiskCompute(snaps){
+  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
+  const sorted=(Array.isArray(snaps)?snaps:[]).filter(x=>x&&x.date).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const byMonth={};sorted.forEach(x=>{const ym=String(x.date).slice(0,7);if(ym)byMonth[ym]=x;});
+  const months=Object.keys(byMonth).sort();
+  const series=[];
+  for(let i=1;i<months.length;i++){
+    const ym=months[i],sn=byMonth[ym],prev=byMonth[months[i-1]];
+    const flowRaw=sn.netFlow;
+    if(flowRaw===undefined||flowRaw===null||flowRaw==='')continue; // 純入金未入力の月は対象外（月次成績と同じ扱い）
+    const flow=num(flowRaw),total=num(sn.total),prevTotal=num(prev.total);
+    const operating=total-prevTotal-flow;
+    const base=prevTotal+Math.max(0,flow);
+    if(!(base>0))continue;
+    series.push({ym:ym,r:operating/base,operating:operating});
+  }
+  const n=series.length;
+  const out={series:series,months:months.length,n:n,mean:null,std:null,volAnnual:null,sharpe:null,cumReturn:null,maxDD:null,maxDDPeak:null,maxDDTrough:null,winRate:null,best:null,worst:null,index:[]};
+  if(!n)return out;
+  const mean=series.reduce((s,x)=>s+x.r,0)/n;out.mean=mean;
+  if(n>=2){const varSum=series.reduce((s,x)=>s+(x.r-mean)*(x.r-mean),0)/(n-1);out.std=Math.sqrt(varSum);out.volAnnual=out.std*Math.sqrt(12);if(out.std>0)out.sharpe=mean/out.std*Math.sqrt(12);}
+  let idx=100;out.index=[{ym:'開始',v:100}];
+  let peak=100,peakYm='開始',maxDD=0,ddPeak='開始',ddTrough='開始';
+  for(const x of series){idx=idx*(1+x.r);out.index.push({ym:x.ym,v:idx});if(idx>peak){peak=idx;peakYm=x.ym}const dd=peak>0?(idx/peak-1):0;if(dd<maxDD){maxDD=dd;ddPeak=peakYm;ddTrough=x.ym}}
+  out.cumReturn=idx/100-1;out.maxDD=maxDD;out.maxDDPeak=ddPeak;out.maxDDTrough=ddTrough;
+  out.winRate=series.filter(x=>x.r>0).length/n;
+  out.best=series.reduce((a,x)=>x.r>(a?a.r:-Infinity)?x:a,null);
+  out.worst=series.reduce((a,x)=>x.r<(a?a.r:Infinity)?x:a,null);
+  return out;
+}
+function amRiskMetricsRender(){
+  const el=document.getElementById('amRiskMetricsPanel');if(!el)return;
+  let snaps=[];try{snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]');}catch(e){snaps=[];}
+  if(!Array.isArray(snaps)||!snaps.length){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px">スナップショットがありません。資産管理の「📈 推移に記録」を実行し、月次運用成績で純入金/出金を入力すると計算できます。</div>';return;}
+  const R=amRiskCompute(snaps);
+  const pct=(v,d)=>v==null?'—':(v>=0?'+':'')+(v*100).toFixed(d==null?2:d)+'%';
+  const pctPlain=(v,d)=>v==null?'—':(v*100).toFixed(d==null?2:d)+'%';
+  if(!R.n){el.innerHTML='<div style="padding:14px 16px;color:var(--text3);font-size:12px;line-height:1.7">計算できる月がまだありません。リスク指標には「月末スナップショットが2か月分以上」かつ「月次運用成績で純入金/出金が入力済みの月」が必要です（未入力の月は対象外）。現在スナップショットのある月は '+R.months+' か月です。</div>';return;}
+  const warn=R.n<6?'<div style="padding:0 16px 10px;font-size:11px;color:#B45309">⚠ 対象が '+R.n+' か月のみのため、目安としてご覧ください（6か月以上で安定します）。</div>':'';
+  const period=R.series[0].ym.replace('-','/')+' 〜 '+R.series[R.series.length-1].ym.replace('-','/');
+  let html='<div style="padding:0 16px 10px;font-size:11px;color:var(--text3);line-height:1.55">月次運用成績と同じ入出金調整後の月次リターン（対象 '+R.n+' か月：'+period+'）から計算。純入金未入力の月と、月末スナップショットのない月は対象外です。</div>'+warn;
+  html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px">';
+  const cards=[
+    ['年率ボラティリティ',R.volAnnual==null?'—':pctPlain(R.volAnnual,1),'月次標準偏差 '+(R.std==null?'—':pctPlain(R.std,2))],
+    ['最大ドローダウン',R.maxDD==null?'—':pctPlain(R.maxDD,1),(R.maxDD!=null&&R.maxDD<0)?(R.maxDDPeak.replace('-','/')+' → '+R.maxDDTrough.replace('-','/')):'下落局面なし'],
+    ['シャープレシオ',R.sharpe==null?'—':R.sharpe.toFixed(2),'無リスク金利 0% 前提'],
+    ['累計実質リターン',pct(R.cumReturn,1),'入出金調整後・対象月のみ'],
+    ['プラス月の割合',R.winRate==null?'—':Math.round(R.winRate*100)+'%','対象 '+R.n+' か月中'],
+    ['月平均リターン',pct(R.mean,2),'最良 '+pct(R.best?R.best.r:null,1)+'／最悪 '+pct(R.worst?R.worst.r:null,1)]
+  ];
+  cards.forEach(c=>{html+='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 7px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+c[0]+'</div><div style="font-size:15px;font-weight:800">'+c[1]+'</div><div style="font-size:10px;color:var(--text3);margin-top:3px">'+c[2]+'</div></div>';});
+  html+='</div>';
+  html+='<div style="padding:0 16px 6px;font-size:11px;color:var(--text3)">月次リターン（直近12か月）</div><div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px">';
+  R.series.slice(-12).forEach(x=>{const c=x.r>=0?'#C0392B':'#2563EB';html+='<span style="border:1px solid var(--border);border-radius:999px;padding:4px 9px;font-size:11px">'+x.ym.replace('-','/')+' <b style="color:'+c+'">'+pct(x.r,1)+'</b></span>';});
+  html+='</div>';
+  html+='<div style="padding:0 16px 14px;font-size:10px;color:var(--text3);line-height:1.6">※ 月次粒度の概算です。ボラティリティ・シャープレシオは月次リターンを年率換算（×√12）。最大ドローダウンは入出金調整後の累積指数（開始=100）ベースのため、入金による見かけの下落は含みません。</div>';
+  el.innerHTML=html;
+}
+(function(){
+  if(typeof window.amMonthlyPerfRender==='function'&&!window.__amRiskWrapped){
+    window.__amRiskWrapped=true;
+    const base=window.amMonthlyPerfRender;
+    window.amMonthlyPerfRender=function(){const r=base.apply(this,arguments);try{amRiskMetricsRender();}catch(e){console.error('amRiskMetricsRender',e)}return r;};
+  }
+  [900,2500,4500].forEach(ms=>setTimeout(()=>{try{amRiskMetricsRender();}catch(e){}},ms));
 })();
     </script>
     <div id="accountSections"></div>
