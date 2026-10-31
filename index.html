@@ -1563,6 +1563,14 @@ function amImportDiffRender(){
       </div>
       <div class="account-list" id="amDecisionLogPanel"></div>
     </div>
+    <!-- 売買前チェックリスト -->
+    <div class="section" id="amPreTradeCheckSection">
+      <div class="section-head" onclick="toggleSection('amPreTradeCheckSection')">
+        <div class="section-head-left"><span>✅</span><h2>売買前チェックリスト</h2></div>
+        <span><span class="chevron">▼</span></span>
+      </div>
+      <div class="account-list" id="amPreTradeCheckPanel"></div>
+    </div>
     <script>
 // 月次運用成績：assetSnapshots の月末スナップショットから表示
 function amMonthlyPerfNum(v){ const n=Number(v||0); return Number.isFinite(n)?n:0; }
@@ -1827,6 +1835,212 @@ function dlRender(){
     window.amMonthlyPerfRender=function(){const r=base.apply(this,arguments);try{dlRender();}catch(e){console.error('dlRender',e)}return r;};
   }
   [1500,3500].forEach(ms=>setTimeout(()=>{try{dlRender()}catch(e){}},ms));
+})();
+    </script>
+    <script>
+// ============================================================
+// 売買前チェックリスト：発注前に、既存の売買ルール・配分・決算日・需給・リスク指標と照合
+// データは再利用のみ（assetAccounts / assetTradingRules_v1 / supplyDemandV1 / assetSnapshots / amDecisionLogV1）
+// これはルールとの照合結果の表示であり、売買の推奨ではありません
+// ============================================================
+const PC_DRAFT_KEY='amPreTradeCheckV1';
+function pcEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function pcNum(v){const n=Number(v);return Number.isFinite(n)?n:0}
+function pcIsSemiText(s){return /半導体|メモリ|AI|GPU|HDD|データセンター/i.test(String(s||''))}
+function pcDaysDiff(fromStr,toStr){const a=new Date(fromStr+'T00:00:00'),b=new Date(toStr+'T00:00:00');if(isNaN(a.getTime())||isNaN(b.getTime()))return null;return Math.round((b-a)/86400000)}
+function pcTodayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+// 純粋関数：入力と集めたデータからチェック結果を返す（テスト可能）
+function pcComputeChecks(input,data){
+  const checks=[];const push=(label,status,detail)=>checks.push({label:label,status:status,detail:detail});
+  const price=pcNum(input.price),shares=pcNum(input.shares);
+  if(!(price>0)||!(shares>0)){push('予定価格・株数','bad','予定価格と株数を入力してください');return checks}
+  const trade=price*shares,buy=input.action!=='sell',rules=data.rules||{maxStock:20,maxSemi:45,minCash:10,earnDays:7,analysisDays:30,buyOver:0};
+  const h=data.holding||null,curAmt=h?pcNum(h.amount):0,total=pcNum(data.totalInvest);
+  const postAmt=buy?curAmt+trade:Math.max(0,curAmt-trade);
+  const postTotal=buy?total+trade:Math.max(0,total-trade);
+  // 保有株数（売り）
+  if(!buy){
+    if(!h)push('保有の確認','bad','この銘柄の保有が見つかりません');
+    else if(pcNum(h.shares)>0){if(shares>pcNum(h.shares))push('保有株数','bad','保有 '+pcNum(h.shares).toLocaleString()+'株を超える売却株数です');else push('保有株数','ok','保有 '+pcNum(h.shares).toLocaleString()+'株のうち '+shares.toLocaleString()+'株を売却予定')}
+    else push('保有株数','na','保有株数がデータにありません');
+  }
+  // 1銘柄比率
+  if(total>0){
+    const curR=total?curAmt/total*100:0,postR=postTotal?postAmt/postTotal*100:0;
+    const det='現在 '+curR.toFixed(1)+'% → 取引後 '+postR.toFixed(1)+'%（上限 '+rules.maxStock+'%）';
+    if(buy)push('1銘柄の保有比率',postR>rules.maxStock?'bad':postR>rules.maxStock*0.9?'warn':'ok',det);
+    else push('1銘柄の保有比率',postR>rules.maxStock?'warn':'ok',det+(postR>rules.maxStock?'（売却後も上限超過）':''));
+  } else push('1銘柄の保有比率','na','保有データがありません');
+  // 現金比率
+  if(data.cash==null||data.cash===undefined)push('現金比率','na','投資可能現金を取得できませんでした');
+  else{
+    const cash=pcNum(data.cash);
+    if(buy){
+      if(trade>cash)push('現金比率','bad','買付額 ¥'+Math.round(trade).toLocaleString()+' が投資可能現金 ¥'+Math.round(cash).toLocaleString()+' を上回ります');
+      else{const pc2=cash-trade,den=postTotal+pc2,pct=den>0?pc2/den*100:0;push('現金比率',pct<rules.minCash?'bad':pct<rules.minCash+2?'warn':'ok','取引後の現金比率 約'+pct.toFixed(1)+'%（最低 '+rules.minCash+'%）')}
+    }else{const pc2=cash+trade,den=postTotal+pc2,pct=den>0?pc2/den*100:0;push('現金比率','ok','売却後の現金比率 約'+pct.toFixed(1)+'%（最低 '+rules.minCash+'%）')}
+  }
+  // 半導体・AI集中
+  const semi=h?pcIsSemiText([h.name,h.code,h.sector,h.strategy].join(' ')):false;
+  if(!semi)push('半導体・AI比率','na','対象外（半導体・AI関連と判定されませんでした）');
+  else if(total>0){const postSemi=buy?pcNum(data.semiTotal)+trade:Math.max(0,pcNum(data.semiTotal)-trade);const pct=postTotal?postSemi/postTotal*100:0;push('半導体・AI比率',buy?(pct>rules.maxSemi?'bad':pct>rules.maxSemi*0.9?'warn':'ok'):'ok','取引後の半導体・AI比率 約'+pct.toFixed(1)+'%（上限 '+rules.maxSemi+'%）')}
+  else push('半導体・AI比率','na','保有データがありません');
+  // 決算までの日数
+  if(!h||!h.earningsDate)push('決算までの日数','na','決算日が未登録です（価格管理で登録すると判定できます）');
+  else{const days=pcDaysDiff(data.todayStr,h.earningsDate);
+    if(days===null)push('決算までの日数','na','決算日の形式を確認できません');
+    else if(days<0)push('決算までの日数','warn','登録された決算日（'+h.earningsDate+'）は過ぎています。日付の更新が必要かもしれません');
+    else if(days<=rules.earnDays)push('決算までの日数',buy?'bad':'warn','決算まであと '+days+' 日（売買ルールの決算前回避期間 '+rules.earnDays+' 日以内）');
+    else push('決算までの日数','ok','決算まであと '+days+' 日')}
+  // 分析の鮮度
+  if(!h||!h.lastAnalysisDate)push('分析の鮮度','na','最終分析日が未登録です');
+  else{const age=pcDaysDiff(h.lastAnalysisDate,data.todayStr);
+    if(age===null)push('分析の鮮度','na','最終分析日の形式を確認できません');
+    else push('分析の鮮度',age>rules.analysisDays?'warn':'ok','最終分析は '+age+' 日前（目安 '+rules.analysisDays+' 日以内）')}
+  // 目標価格
+  if(buy){
+    if(h&&pcNum(h.targetBuy)>0){const gap=(price-pcNum(h.targetBuy))/pcNum(h.targetBuy)*100;push('目標買値との関係',gap>pcNum(rules.buyOver)?'bad':'ok','目標買値 ¥'+Math.round(pcNum(h.targetBuy)).toLocaleString()+' に対して '+(gap>=0?'+':'')+gap.toFixed(1)+'%（許容 +'+pcNum(rules.buyOver)+'%まで）')}
+    else push('目標買値との関係','na','目標買値が未設定です（価格管理で登録できます）');
+  }else{
+    if(h&&pcNum(h.targetSell)>0){const gap=(pcNum(h.targetSell)-price)/pcNum(h.targetSell)*100;push('目標売値との関係',price>=pcNum(h.targetSell)?'ok':'warn',price>=pcNum(h.targetSell)?'目標売値 ¥'+Math.round(pcNum(h.targetSell)).toLocaleString()+' に到達しています':'目標売値 ¥'+Math.round(pcNum(h.targetSell)).toLocaleString()+' まであと '+gap.toFixed(1)+'%')}
+    else push('目標売値との関係','na','目標売値が未設定です');
+  }
+  // 高値比（スナップショットの価格履歴）
+  const series=(data.series||[]).filter(x=>x&&pcNum(x.price)>0);
+  if(series.length>=2){const high=Math.max.apply(null,series.map(x=>pcNum(x.price)));const dd=high>0?price/high-1:0;const det='記録上の高値 ¥'+Math.round(high).toLocaleString()+' に対して '+(dd*100).toFixed(1)+'% の位置';
+    if(buy)push('株価の位置（高値比）',dd>=-0.03?'warn':dd<=-0.2?'warn':'ok',det+(dd>=-0.03?'（高値圏です）':dd<=-0.2?'（大きく下落した銘柄です。理由を確認しましたか）':''));
+    else push('株価の位置（高値比）',dd<=-0.2?'warn':'ok',det);
+  } else push('株価の位置（高値比）','na','推移の価格履歴が不足しています（記録日の価格のみ）');
+  // 需給（信用残）
+  const rows=(data.sdRows||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  if(rows.length>=2){const last=rows[rows.length-1],prev=rows[rows.length-2];const chg=pcNum(prev.buy)>0?pcNum(last.buy)/pcNum(prev.buy)-1:null;const ratio=pcNum(last.sell)>0?pcNum(last.buy)/pcNum(last.sell):null;
+    const det='買い残 前回比 '+(chg===null?'—':(chg>=0?'+':'')+(chg*100).toFixed(1)+'%')+'／貸借倍率 '+(ratio===null?'—':ratio.toFixed(1)+'倍')+'（'+pcEsc(last.date||'')+' 時点）';
+    if(buy&&(chg!==null&&chg>=0.2))push('需給（信用残）','warn',det+'。買い残が増えています');
+    else if(buy&&(ratio!==null&&ratio>=10))push('需給（信用残）','warn',det+'。買い残に偏っています');
+    else push('需給（信用残）','ok',det);
+  } else if(rows.length===1)push('需給（信用残）','na','信用残は1回分のみで、前回比較ができません');
+  else push('需給（信用残）','na','需給データがありません（日本株は需給タブで取り込めます）');
+  // ポートフォリオ全体のリスク（直近月）
+  const risk=data.risk;
+  if(risk&&Array.isArray(risk.series)&&risk.series.length){const lastR=risk.series[risk.series.length-1];
+    if(buy&&lastR.r<=-0.05)push('全体の地合い（直近月）','warn','直近月の月次リターンは '+(lastR.r*100).toFixed(1)+'% と大きくマイナスでした');
+    else push('全体の地合い（直近月）','ok','直近月の月次リターンは '+(lastR.r>=0?'+':'')+(lastR.r*100).toFixed(1)+'%');
+  } else push('全体の地合い（直近月）','na','月次リターンのデータがまだありません');
+  // 判断ログとの整合
+  const logs=(data.logs||[]).filter(e=>e&&String(e.code||'').toUpperCase()===String(input.code||'').toUpperCase());
+  let logStatus='na',logDet='この銘柄の判断ログは未記録です（チェック後に下のボタンで記録できます）';
+  for(const e of logs){const d=pcDaysDiff(e.date,data.todayStr);if(d===null||d<0)continue;
+    if(d<=30&&((buy&&e.action==='sell')||(!buy&&e.action==='buy'))){logStatus='warn';logDet='直近30日以内に逆方向の判断ログがあります（'+e.date+' '+(e.action==='buy'?'買い':'売り')+'）。方針変更の理由を確認してください';break}
+    if(d<=7&&((buy&&e.action==='buy')||(!buy&&e.action==='sell'))){logStatus='ok';logDet='直近7日以内に同方向の判断ログがあります（'+e.date+'）'}
+  }
+  push('判断ログとの整合',logStatus,logDet);
+  // 自己確認（手動）
+  const man=input.manual||{};
+  push('自己確認：理由',man.reason?'ok':'warn',man.reason?'判断理由を言葉で説明できます':'判断理由を言葉で説明できるか確認してください');
+  push('自己確認：撤退ライン',man.stop?'ok':'warn',man.stop?'撤退ライン・見直し条件を決めました':'撤退ライン・見直し条件を決めてください');
+  push('自己確認：開示確認',man.disclosure?'ok':'warn',man.disclosure?'最新の決算・開示を確認しました':'最新の決算・開示を確認してください');
+  return checks;
+}
+function pcGatherData(code){
+  const c=String(code||'').trim().toUpperCase();
+  let accounts=[];try{accounts=JSON.parse(localStorage.getItem('assetAccounts')||'[]')}catch(e){}
+  if(!Array.isArray(accounts))accounts=[];
+  const agg={};let total=0,semiTotal=0;
+  accounts.forEach(a=>{if(!a||a.sold||!(pcNum(a.amount)>0))return;
+    const isCash=a.cat==='銀行'||a.cat==='FX'||/現金|預り|預かり|年金|確定拠出/.test(String(a.name||''));
+    if(isCash)return;total+=pcNum(a.amount);
+    const key=String(a.code||a.ticker||a.symbol||a.name||'').trim().toUpperCase();if(!key)return;
+    if(!agg[key])agg[key]={code:key,name:a.name||'',amount:0,shares:0,price:0,sector:'',strategy:'',earningsDate:'',lastAnalysisDate:'',targetBuy:0,targetSell:0};
+    const g=agg[key];g.amount+=pcNum(a.amount);g.shares+=pcNum(a.shares);if(pcNum(a.price)>0)g.price=pcNum(a.price);
+    if(a.sector)g.sector=String(a.sector);if(a.strategy)g.strategy=String(a.strategy);if(a.earningsDate)g.earningsDate=String(a.earningsDate);if(a.lastAnalysisDate)g.lastAnalysisDate=String(a.lastAnalysisDate);
+    if(pcNum(a.targetBuyPrice)>0)g.targetBuy=pcNum(a.targetBuyPrice);if(pcNum(a.targetSellPrice)>0)g.targetSell=pcNum(a.targetSellPrice);
+  });
+  Object.values(agg).forEach(g=>{if(pcIsSemiText([g.name,g.code,g.sector,g.strategy].join(' ')))semiTotal+=g.amount});
+  let cash=null;try{if(typeof amStage1GetInvestableCashByBank==='function'){const r=amStage1GetInvestableCashByBank(typeof amAccounts!=='undefined'?amAccounts:accounts);if(r&&isFinite(Number(r.total)))cash=Number(r.total)}}catch(e){}
+  let snaps=[];try{snaps=JSON.parse(localStorage.getItem('assetSnapshots')||'[]')}catch(e){}
+  let series=[];try{if(typeof dlPriceSeries==='function')series=dlPriceSeries(c,snaps,accounts,pcTodayStr())}catch(e){}
+  let sdRows=[];try{const st=JSON.parse(localStorage.getItem('supplyDemandV1')||'{}');const sym=st&&st.symbols?st.symbols[c]:null;if(sym&&Array.isArray(sym.rows))sdRows=sym.rows}catch(e){}
+  let risk=null;try{if(typeof amRiskCompute==='function')risk=amRiskCompute(snaps)}catch(e){}
+  let logs=[];try{if(typeof dlLoadLog==='function')logs=dlLoadLog()}catch(e){}
+  let rules={maxStock:20,maxSemi:45,minCash:10,earnDays:7,analysisDays:30,buyOver:0};try{if(typeof ruleLoad==='function')rules=Object.assign({},rules,ruleLoad())}catch(e){}
+  return {holding:c?agg[c]||null:null,holdings:Object.values(agg).sort((a,b)=>b.amount-a.amount),totalInvest:total,semiTotal:semiTotal,cash:cash,series:series,sdRows:sdRows,risk:risk,logs:logs,rules:rules,todayStr:pcTodayStr()};
+}
+function pcReadForm(){
+  const g=id=>document.getElementById(id);
+  return {code:(g('pc-code')?.value||'').trim().toUpperCase(),action:g('pc-action')?.value||'buy',price:g('pc-price')?.value||'',shares:g('pc-shares')?.value||'100',manual:{reason:!!g('pc-manual-reason')?.checked,stop:!!g('pc-manual-stop')?.checked,disclosure:!!g('pc-manual-disclosure')?.checked}};
+}
+function pcSaveDraft(s){try{localStorage.setItem(PC_DRAFT_KEY,JSON.stringify(s))}catch(e){}}
+function pcLoadDraft(){try{const x=JSON.parse(localStorage.getItem(PC_DRAFT_KEY)||'null');return x&&typeof x==='object'?x:null}catch(e){return null}}
+function pcFillFromHolding(){
+  const code=(document.getElementById('pc-code')?.value||'').trim().toUpperCase();if(!code)return;
+  const data=pcGatherData(code),h=data.holding,info=document.getElementById('pc-holding-info');
+  if(h){const nameEl=document.getElementById('pc-name');if(nameEl)nameEl.textContent=h.name||'';
+    const priceEl=document.getElementById('pc-price');if(priceEl&&h.price>0&&(!priceEl.value||pcNum(priceEl.value)===pcNum(priceEl.dataset.cur||0)))priceEl.value=h.price;
+    if(priceEl)priceEl.dataset.cur=h.price||'';
+    if(info)info.textContent='現在：'+(h.price>0?'¥'+Math.round(h.price).toLocaleString():'価格—')+'／保有 ¥'+Math.round(h.amount).toLocaleString()+(h.shares>0?'／'+h.shares.toLocaleString()+'株':'')+'／全体の '+(data.totalInvest?((h.amount/data.totalInvest*100).toFixed(1)+'%'):'—');
+  }else if(info)info.textContent='保有にない銘柄です（新規買いとしてチェックします）';
+}
+function pcUpdate(){
+  const s=pcReadForm();pcSaveDraft(s);
+  const out=document.getElementById('pc-results');if(!out)return;
+  const data=pcGatherData(s.code);
+  const checks=pcComputeChecks({code:s.code,action:s.action,price:s.price,shares:s.shares,manual:s.manual},data);
+  window.__pcLast={state:s,checks:checks};
+  const counts={ok:0,warn:0,bad:0,na:0};checks.forEach(x=>counts[x.status]=(counts[x.status]||0)+1);
+  const icon={ok:'🟢',warn:'🟡',bad:'🔴',na:'⚪'};
+  const trade=pcNum(s.price)*pcNum(s.shares);
+  let html='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">';
+  [['🔴 要見直し',counts.bad,'var(--danger)'],['🟡 要確認',counts.warn,'#B45309'],['🟢 クリア',counts.ok,'#15803D'],['⚪ データなし',counts.na,'var(--text3)']].forEach(c=>{html+='<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 7px;text-align:center"><div style="font-size:10px;color:var(--text3)">'+c[0]+'</div><div style="font-size:17px;font-weight:800;color:'+c[2]+'">'+c[1]+'</div></div>'});
+  html+='</div>';
+  html+='<div style="font-size:12px;margin-bottom:8px">予定額：<b>¥'+Math.round(trade).toLocaleString()+'</b>（'+pcEsc(s.code||'—')+' '+pcNum(s.shares).toLocaleString()+'株 × ¥'+Math.round(pcNum(s.price)).toLocaleString()+'）　'+(counts.bad?'🔴 要見直しの項目があります。内容を確認してから判断してください。':counts.warn?'🟡 確認項目が残っています。':'🟢 自動チェックは全てクリアです。')+'</div>';
+  checks.forEach(x=>{html+='<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px"><span>'+icon[x.status]+'</span><div><b>'+pcEsc(x.label)+'</b><div style="color:var(--text2);font-size:11px;line-height:1.55">'+pcEsc(x.detail)+'</div></div></div>'});
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn-sm" onclick="pcSendToLog()">この内容で判断ログに記録する</button></div>';
+  html+='<div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6">※ 売買ルール（資産管理の売買ルール設定）・保有・現金・決算日・信用残・リスク指標との照合結果です。売買の推奨ではありません。⚪はデータ未登録のため判定できていない項目です。</div>';
+  out.innerHTML=html;
+}
+function pcSendToLog(){
+  const last=window.__pcLast;if(!last||!last.state.code){if(typeof showToast==='function')showToast('銘柄コードを入力してください');return}
+  if(typeof dlLoadLog!=='function'||typeof dlSaveLog!=='function'){if(typeof showToast==='function')showToast('判断ログ機能が見つかりません');return}
+  const s=last.state,counts={ok:0,warn:0,bad:0,na:0};last.checks.forEach(x=>counts[x.status]++);
+  const data=pcGatherData(s.code);
+  const log=dlLoadLog();
+  log.push({id:'dl'+Date.now().toString(36),date:pcTodayStr(),code:s.code,name:data.holding?data.holding.name:'',action:s.action,price:pcNum(s.price)>0?pcNum(s.price):null,target:null,stop:null,tags:[],note:'売買前チェック実施（🔴'+counts.bad+'／🟡'+counts.warn+'／🟢'+counts.ok+'／⚪'+counts.na+'）予定 '+pcNum(s.shares).toLocaleString()+'株',createdAt:new Date().toISOString()});
+  dlSaveLog(log);
+  if(typeof showToast==='function')showToast('判断ログに記録しました');
+  try{dlRender()}catch(e){}
+  pcUpdate();
+}
+function pcRender(){
+  const el=document.getElementById('amPreTradeCheckPanel');if(!el)return;
+  const saved=pcLoadDraft()||{code:'',action:'buy',price:'',shares:'100',manual:{reason:false,stop:false,disclosure:false}};
+  const cur=document.getElementById('pc-code')?pcReadForm():saved;
+  const data=pcGatherData(cur.code);
+  const inp='width:100%;padding:6px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text)';
+  let html='<div style="padding:0 16px 12px"><div style="font-size:11px;color:var(--text3);line-height:1.55;margin-bottom:8px">銘柄・予定価格・株数を入れると、その場で売買ルールと照合します。発注前の最終確認用です。</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">';
+  html+='<label style="font-size:11px;color:var(--text3)">銘柄コード<input type="text" id="pc-code" list="pc-holdings" placeholder="例：285A" value="'+pcEsc(cur.code||'')+'" onblur="pcFillFromHolding();pcUpdate()" onchange="pcFillFromHolding();pcUpdate()" style="'+inp+'"></label>';
+  html+='<datalist id="pc-holdings">'+data.holdings.map(h=>'<option value="'+pcEsc(h.code)+'">'+pcEsc(h.name)+'</option>').join('')+'</datalist>';
+  html+='<label style="font-size:11px;color:var(--text3)">売買<select id="pc-action" onchange="pcUpdate()" style="'+inp+'"><option value="buy"'+(cur.action!=='sell'?' selected':'')+'>買い</option><option value="sell"'+(cur.action==='sell'?' selected':'')+'>売り</option></select></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">予定価格<input type="number" id="pc-price" value="'+pcEsc(cur.price||'')+'" placeholder="現在値" oninput="pcUpdate()" style="'+inp+'"></label>';
+  html+='<label style="font-size:11px;color:var(--text3)">株数<input type="number" id="pc-shares" value="'+pcEsc(cur.shares||'100')+'" oninput="pcUpdate()" style="'+inp+'"></label>';
+  html+='</div>';
+  html+='<div style="font-size:11px;color:var(--text3);margin-top:6px"><span id="pc-name" style="font-weight:700;color:var(--text2)"></span> <span id="pc-holding-info"></span></div>';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><span style="font-size:11px;color:var(--text3)">自己確認：</span>'
+    +'<label style="font-size:11px;border:1px solid var(--border);border-radius:999px;padding:4px 9px"><input type="checkbox" id="pc-manual-reason" onchange="pcUpdate()"'+(cur.manual&&cur.manual.reason?' checked':'')+'> 理由を説明できる</label>'
+    +'<label style="font-size:11px;border:1px solid var(--border);border-radius:999px;padding:4px 9px"><input type="checkbox" id="pc-manual-stop" onchange="pcUpdate()"'+(cur.manual&&cur.manual.stop?' checked':'')+'> 撤退ラインを決めた</label>'
+    +'<label style="font-size:11px;border:1px solid var(--border);border-radius:999px;padding:4px 9px"><input type="checkbox" id="pc-manual-disclosure" onchange="pcUpdate()"'+(cur.manual&&cur.manual.disclosure?' checked':'')+'> 最新の決算・開示を確認した</label></div>';
+  html+='<div id="pc-results" style="margin-top:10px"></div></div>';
+  el.innerHTML=html;
+  if(cur.code)pcFillFromHolding();
+  pcUpdate();
+}
+(function(){
+  if(typeof window.amMonthlyPerfRender==='function'&&!window.__pcWrapped){
+    window.__pcWrapped=true;
+    const base=window.amMonthlyPerfRender;
+    window.amMonthlyPerfRender=function(){const r=base.apply(this,arguments);try{pcRender()}catch(e){console.error('pcRender',e)}return r;};
+  }
+  [2200,4200].forEach(ms=>setTimeout(()=>{try{pcRender()}catch(e){}},ms));
 })();
     </script>
     <div id="accountSections"></div>
