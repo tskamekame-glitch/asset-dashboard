@@ -613,6 +613,7 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
 
 </style>
 <style>.daily-pnl-breakdown{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;margin-top:12px}@media(max-width:600px){.daily-pnl-breakdown{grid-template-columns:minmax(0,1fr)}}</style>
+<style>.trade-cash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:10px}.trade-cash-box{margin:14px 12px;padding:14px;border:1px solid #555;border-radius:12px;background:#f5f6f7;color:#202124;--text3:#62666b;--text2:#444}.trade-cash-box .value{font-size:18px;font-weight:700}#trade-cash-modal label{display:flex;flex-direction:column;gap:4px;font-size:12px}#trade-cash-modal input,#trade-cash-modal select{padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text)}</style>
 </head>
 <body>
 
@@ -2896,6 +2897,7 @@ function ruleCurrentPrice(r){
 </div>
 <div class="panel" id="tab-sell">
   <div class="phead"><div class="phead-inner"><h1>💴 売却収支</h1><div style="display:flex;gap:6px"><button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="slExport()">↓ 出力</button><button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="slImportClick()">↑ 取込</button><button class="btn-accent" onclick="slOpenModal()">＋ 追加</button></div></div></div>
+  <div style="padding:12px 16px"><label style="font-size:12px">口座区分 <select id="sl-account-scope" onchange="tradeAccountSet(this.value)" style="padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text)"><option value="all">全口座</option><option value="specified">特定口座のみ</option><option value="nisa">NISAのみ</option></select></label> <span style="font-size:11px;color:var(--text3)">両タブ共通の絞り込み／このタブは全期間</span></div>
   <input type="file" id="sl-import-file" accept=".json" style="display:none" onchange="slImport(event)">
   <div class="page-inner">
     <!-- 税務サマリー -->
@@ -11857,71 +11859,6 @@ function slRenderTaxSummary(){
   `;
 }
 
-function slRender(){
-  // 移行: 旧バージョンで「その他/特定口座」として同期されたFX記録をFX扱いに更新
-  try{
-    let migrated=false;
-    slData.forEach(d=>{
-      if(d.amSynced&&/SBI FX/.test(d.memo||'')&&d.cat!=='FX'){
-        d.cat='FX';d.account='FX口座';
-        if(d.tax){d.tax=0;d.net=(d.sellTotal||0);}
-        migrated=true;
-      }
-    });
-    if(migrated)slSaveData();
-  }catch(e){}
-  const list=document.getElementById('sl-list');
-  const empty=document.getElementById('sl-empty');
-  const summary=document.getElementById('sl-summary');
-  if(!list||!empty||!summary)return;
-  try{slRenderTaxSummary();}catch(e){}
-  if(!slData.length){list.innerHTML='';empty.style.display='block';summary.innerHTML='';return;}
-  empty.style.display='none';
-  // サマリー集計
-  const totalSell=slData.reduce((s,d)=>s+(d.sellTotal||0),0);
-  const totalGain=slData.filter(d=>d.gain!==null).reduce((s,d)=>s+(d.gain||0),0);
-  const totalTax=slData.reduce((s,d)=>s+(d.tax||0),0);
-  const totalNet=slData.reduce((s,d)=>s+(d.net||0),0);
-  summary.innerHTML=`
-    <div class="metric"><div class="label">売却金額合計</div><div class="value">${slFmt(totalSell)}</div></div>
-    <div class="metric"><div class="label">損益合計</div><div class="value ${totalGain>=0?'up':'down'}">${slFmtSign(totalGain)}</div></div>
-    <div class="metric"><div class="label">税金合計</div><div class="value">${slFmt(totalTax)}</div></div>
-    <div class="metric"><div class="label">税引後手取り</div><div class="value ${totalNet>=totalSell?'up':'down'}">${slFmt(totalNet)}</div></div>
-  `;
-  // 記録一覧（新しい順）
-  const sorted=[...slData].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  list.innerHTML=sorted.map(d=>{
-    const isNISA=d.account==='NISA';
-    const gainColor=d.gain>=0?'var(--green,#2ecc71)':'var(--danger,#e74c3c)';
-    return`<div class="invest-card" style="margin-bottom:10px">
-  <div class="card-top">
-    <div class="card-left">
-      <div class="fund-name">${d.name}</div>
-      <div class="fund-meta">
-        <span class="status-badge sb-done">${d.account}</span>
-        <span class="status-badge" style="background:#33333322;color:var(--text2)">${d.cat}</span>
-        ${d.shares?`<span class="status-badge sb-pending">${d.shares.toLocaleString()}株</span>`:''}
-        <span style="font-size:11px;color:var(--text3)">${d.date||''}</span>
-      </div>
-    </div>
-    <div class="card-right">
-      <div class="main-amount">${slFmt(d.sellTotal||0)}</div>
-      <div class="main-label">売却金額</div>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
-    ${d.sellPrice?`<div><div style="font-size:10px;color:var(--text3)">売却単価</div><div style="font-size:12px">¥${d.sellPrice.toLocaleString()}</div></div>`:''}
-    ${d.buyPrice?`<div><div style="font-size:10px;color:var(--text3)">取得単価</div><div style="font-size:12px">¥${d.buyPrice.toLocaleString()}</div></div>`:''}
-    ${d.gain!==null?`<div><div style="font-size:10px;color:var(--text3)">税引前損益</div><div style="font-size:12px;font-weight:600;color:${gainColor}">${slFmtSign(d.gain)}</div></div>`:''}
-    <div><div style="font-size:10px;color:var(--text3)">税金</div><div style="font-size:12px">${isNISA?'¥0（非課税）':/^FX/.test(d.account||'')?'申告時課税':slFmt(d.tax||0)}</div></div>
-    <div><div style="font-size:10px;color:var(--text3)">税引後手取り</div><div style="font-size:13px;font-weight:700">${slFmt(d.net||0)}</div></div>
-  </div>
-  ${d.memo?`<div class="card-memo">${d.memo}</div>`:''}
-  <div class="card-actions"><button class="action-btn" onclick="slOpenModal('${d.id}')">編集</button></div>
-</div>`;
-  }).join('');
-}
-
 </script>
 <script>
 // サイドFIRE精密シミュレーター初期値を既存FIRE設定から同期
@@ -12062,6 +11999,7 @@ window.addEventListener('load', function(){
       <button id="pnl-tab-unrealized" onclick="pnlSetMode('unrealized')" style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.65);transition:all 0.15s">評価損益</button>
       <button id="pnl-tab-realized"   onclick="pnlSetMode('realized')"   style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.65);transition:all 0.15s">確定損益</button>
     </div>
+    <div style="margin-bottom:10px"><label style="font-size:12px">口座区分 <select id="pnl-account-scope" onchange="tradeAccountSet(this.value)" style="padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text)"><option value="all">全口座</option><option value="specified">特定口座のみ</option><option value="nisa">NISAのみ</option></select></label></div>
     <!-- フィルタ行: 全銘柄チップ + 累計チェック + 期間レンジ -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div style="position:relative">
@@ -12096,7 +12034,8 @@ window.addEventListener('load', function(){
     <span style="position:absolute;right:11px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,0.35);font-size:19px">›</span>
   </div>
   <!-- リスト -->
-  <div id="pnl-list" style="padding:0 12px 4px"></div>
+  <div id="pnl-separate-summary" class="trade-cash-box"></div>
+<div id="pnl-list" style="padding:0 12px 4px"></div>
  </div>
 </div>
 
@@ -16125,7 +16064,7 @@ function pnlCalcUnrealized(){
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
     const fxRate=(typeof amGetFxRate==='function')?amGetFxRate():145;
     accs.filter(a=>
-      !a.sold &&
+      !a.sold && tradeAccountMatches(a) &&
       a.amount>0 &&
       !EXCL.includes(a.cat) &&
       a.costPrice>0 &&
@@ -16182,8 +16121,8 @@ function pnlCalcRealized(y1,m1,y2,m2){
   };
   const items=[];
   const sales=(typeof slData!=='undefined'&&slData.length?slData:JSON.parse(localStorage.getItem('sellRecords_v1')||'[]'));
-  const sameSale=(a,d)=>a.soldDate===d.date&&(a.code&&d.code?String(a.code)===String(d.code):String(a.name||'').replace(/\s/g,'')===String(d.name||'').replace(/\s/g,''))&&Number(a.soldAmount||0)===Number(d.sellTotal||0)&&(!d.broker||!a.broker||d.broker===a.broker);
-  sales.filter(d=>inRange(d.date)).forEach(d=>{
+  const sameSale=(a,d)=>a.soldDate===d.date&&(tradeAccountKind(a)==='unknown'||tradeAccountKind(d)==='unknown'||tradeAccountKind(a)===tradeAccountKind(d))&&(a.code&&d.code?String(a.code)===String(d.code):String(a.name||'').replace(/\s/g,'')===String(d.name||'').replace(/\s/g,''))&&Number(a.soldAmount||0)===Number(d.sellTotal||0)&&(!d.broker||!a.broker||d.broker===a.broker);
+  sales.filter(d=>tradeAccountMatches(d)&&!['dividend','sale_tax','dividend_tax'].includes(d.type)&&inRange(d.date)).forEach(d=>{
     const acc=(typeof amAccounts!=='undefined'?amAccounts:[]).find(a=>sameSale(a,d));
     if(!pnlBrokerMatch({...d,broker:d.broker||(d.sbiTradeKey?'SBI証券':acc?.broker||''),note:d.memo||''}))return;
     const known=d.gain!==null&&d.gain!==undefined&&Number.isFinite(Number(d.gain)),cost=d.cost==null?null:Number(d.cost);
@@ -16191,7 +16130,7 @@ function pnlCalcRealized(y1,m1,y2,m2){
   });
   try{
     const accs=JSON.parse(localStorage.getItem('assetAccounts')||'[]');
-    accs.filter(a=>a.sold&&!sales.some(d=>sameSale(a,d))&&inRange(a.soldDate)&&pnlBrokerMatch(a)).forEach(a=>{
+    accs.filter(a=>a.sold&&tradeAccountMatches(a)&&!sales.some(d=>sameSale(a,d))&&inRange(a.soldDate)&&pnlBrokerMatch(a)).forEach(a=>{
       // インデックス投信: costPriceは売却時に取得総額として保存済み(shares倍しない)
       // 個別株等: shares×costPriceが取得総額
       const isIndex=INDEX_CATS_SOLD.includes(a.cat);
@@ -16318,6 +16257,8 @@ function pnlRender(){
   const unknownCount=items.filter(i=>i.type==='realized'&&i.gain==null).length;
   if(unknownCount){subEl.textContent+=` ／ 損益未確認 ${unknownCount}件（合計から除外）`;totalEl.textContent=items.some(i=>i.gain!=null)?totalEl.textContent+'（確認済分）':'未確認';}
 
+  subEl.textContent+=' ／ '+(tradeAccountScope==='all'?'全口座':tradeAccountScope==='nisa'?'NISAのみ':'特定口座のみ');
+  tradePnlExtra(pnlCumulative?null:y1,m1,y2,m2);
   // リスト描画（kaView風・銘柄別ランキング）
   if(!items.length){
     listEl.innerHTML='<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.4);font-size:14px">データがありません</div>';
@@ -17617,15 +17558,15 @@ function sbiTaxParse(text){
  const rows=sbiTradeCells(text.replace(/^\uFEFF/,'')),h=rows.findIndex(r=>r.includes('取得/新規金額')&&r.includes('損益金額/徴収額'));if(h<0)throw Error('譲渡益税明細の見出しが見つかりません');
  const head=rows[h],ix=k=>head.indexOf(k),num=v=>{const x=String(v??'').replace(/[,，\s株口円￥¥]/g,'');if(!x||/^[-—]+$/.test(x))return null;const n=Number(x);return Number.isFinite(n)?n:null;},trades=[],excluded=[],taxRows=[];
  for(let i=h+1;i<rows.length;i++){const r=rows[i],get=k=>r[ix(k)]||'',type=get('取引');if(/譲渡益税徴収額|譲渡益税還付金/.test(r[0])){taxRows.push({date:sbiTradeDate(get('受渡日')),amount:num(get('損益金額/徴収額')),label:r[0]});continue;}
-  if(!type)continue;if(type!=='現物売'&&type!=='株式現物売'){excluded.push(`${get('銘柄')||type}（${type}・対象外）`);continue;}
+  if(!type)continue;if(/配当金|分配金/.test(type))continue;if(type!=='現物売'&&type!=='株式現物売'){excluded.push(`${get('銘柄')||type}（${type}・対象外）`);continue;}
   if(get('譲渡益取消区分').trim())throw Error(`行${i+1}: 取消・訂正区分があるため自動補完できません`);
   const t={code:get('銘柄コード').trim().toUpperCase(),name:get('銘柄').trim(),date:sbiTradeDate(get('約定日')),settle:sbiTradeDate(get('受渡日')),shares:num(get('数量')),cost:num(get('取得/新規金額')),gain:num(get('損益金額/徴収額')),total:num(get('売却/決済金額')),fee:num(get('費用')),buyDate:sbiTradeDate(get('取得/新規年月日'))};
   if(!/^(\d{4}|\d{3}[A-Z])$/.test(t.code)||!t.date||!(t.shares>0)||t.cost===null||t.gain===null||!(t.total>0))throw Error(`行${i+1}: コード・日付・数量・取得金額・損益を確認してください`);
   t.fee=t.fee===null?0:t.fee;t.price=(t.total+t.fee)/t.shares;t.side='sell';t.account='特定';t.key=sbiTradeKey(t);if(trades.some(x=>x.key===t.key))throw Error(`行${i+1}: 同じ売却明細が複数あります`);trades.push(t);
  }
- if(!trades.length)throw Error('国内現物株式の売却損益がありません');return {trades,excluded,taxRows};
+ const cashRows=accountingParseCashRows(text);if(!trades.length&&!cashRows.length)throw Error('取り込み可能な売却・配当・税額の明細がありません');return {trades,excluded,taxRows,cashRows};
 }
-function sbiTaxPreview(text){const p=sbiTaxParse(text),sum=p.trades.reduce((s,t)=>s+t.gain,0);document.getElementById('sbiTradeResult').innerHTML=`<p>譲渡益税明細：売却 ${p.trades.length}件／税引前損益合計 ${sum.toLocaleString()}円。既存の売却を補完し、未登録分は追加します。保有株数は変更しません。</p><p>税徴収・還付は受渡日単位の別明細なので、銘柄別に推定配分しません。NISA分はこの資料の対象外です。</p><table style="width:100%;font-size:12px"><tr><th>約定日</th><th>銘柄</th><th>数量</th><th>取得費</th><th>確定損益</th></tr>${p.trades.map(t=>`<tr><td>${t.date}</td><td>${sbiTradeEsc(t.name)}</td><td>${t.shares}</td><td>${t.cost.toLocaleString()}</td><td>${t.gain.toLocaleString()}</td></tr>`).join('')}</table><p>対象外：${p.excluded.map(sbiTradeEsc).join('、')||'なし'}</p><button class="btn-accent" onclick="sbiTaxApply()">取得費・損益を反映</button>`;}
+function sbiTaxPreview(text){const p=sbiTaxParse(text),sum=p.trades.reduce((s,t)=>s+t.gain,0);document.getElementById('sbiTradeResult').innerHTML=`<p>譲渡益税明細：売却 ${p.trades.length}件／税引前損益合計 ${sum.toLocaleString()}円。既存の売却を補完し、未登録分は追加します。保有株数は変更しません。</p><p>税徴収・還付は受渡日単位の別明細なので、銘柄別に推定配分しません。NISA分はこの資料の対象外です。</p><table style="width:100%;font-size:12px"><tr><th>約定日</th><th>銘柄</th><th>数量</th><th>取得費</th><th>確定損益</th></tr>${p.trades.map(t=>`<tr><td>${t.date}</td><td>${sbiTradeEsc(t.name)}</td><td>${t.shares}</td><td>${t.cost.toLocaleString()}</td><td>${t.gain.toLocaleString()}</td></tr>`).join('')}</table><p>別集計：配当 ${p.cashRows.filter(r=>r.type==='dividend').length}明細／税額 ${p.cashRows.filter(r=>r.type!=='dividend').length}明細。<br>対象外：${p.excluded.map(sbiTradeEsc).join('、')||'なし'}</p><button class="btn-accent" onclick="sbiTaxApply()">取得費・損益を反映</button>`;}
 async function sbiTaxApply(){try{
  const p=sbiTaxParse(document.getElementById('sbiTradeText').value),next=JSON.parse(JSON.stringify(slData));let added=0,updated=0;for(const t of p.trades){
  const matches=next.filter(d=>sbiTradeAccount(d.account)==='特定'&&(!d.broker||d.broker==='SBI証券')&&d.date===t.date&&Number(d.shares)===t.shares&&(String(d.code||'').trim()===t.code||String(d.name||'').replace(/\s/g,'')===t.name.replace(/\s/g,''))&&Math.abs(Number(d.sellTotal)-(t.total+t.fee))<1);
@@ -17633,7 +17574,7 @@ async function sbiTaxApply(){try{
  let d=matches[0];if(!d){d={id:slUID(),name:t.name,cat:'個別株',shares:t.shares,sellPrice:t.price,date:t.date,account:'特定',sellTotal:t.total+t.fee,tax:null,net:null};next.push(d);added++;}else updated++;
  Object.assign(d,{code:t.code,broker:'SBI証券',sbiTradeKey:d.sbiTradeKey||t.key,buyPrice:t.cost/t.shares,cost:t.cost,gain:t.gain,fee:t.fee,settlementDate:t.settle,taxCostSource:'SBI譲渡益税明細',taxBuyDate:t.buyDate,memo:(d.memo||'').replace('取得費未記載の場合は確定損益未確認。','').replace(/\nSBI譲渡益税明細の取得金額・損益金額で確認済み。/g,'')+'\nSBI譲渡益税明細の取得金額・損益金額で確認済み。'});
  }
- const st=sbiTradeState();localStorage.setItem('indexSbiTrades_beforeImport',JSON.stringify({accounts:amAccounts,sales:slData,state:st}));st.taxRows=p.taxRows;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));slData=next;slSaveData();slRender();pnlRender();await slSaveToSheet();await sbiTradeSaveCloud(st);document.getElementById('sbiTradeResult').textContent=`損益を反映しました：既存売却 ${updated}件を補完／未登録売却 ${added}件を追加。税引前損益 ${p.trades.reduce((s,t)=>s+t.gain,0).toLocaleString()}円。NISA分は未補完です。`;
+ const st=sbiTradeState();localStorage.setItem('indexSbiTrades_beforeImport',JSON.stringify({accounts:amAccounts,sales:slData,state:st}));tradeMergeCash(st,p.cashRows);st.taxRows=p.taxRows;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));slData=next;slSaveData();slRender();pnlRender();await slSaveToSheet();await sbiTradeSaveCloud(st);document.getElementById('sbiTradeResult').textContent=`損益を反映しました：既存売却 ${updated}件を補完／未登録売却 ${added}件を追加。税引前損益 ${p.trades.reduce((s,t)=>s+t.gain,0).toLocaleString()}円。配当・税額 ${p.cashRows.length}明細は別集計へ保存。NISA分は未補完です。`;
  }catch(e){document.getElementById('sbiTradeResult').textContent='補完できません：'+e.message;}}
 
 </script>
@@ -18334,6 +18275,32 @@ function wwRender(){
   wwBackupInfo();
 }
 [1200,3200].forEach(ms=>setTimeout(()=>{try{wwRender()}catch(e){}},ms));
+</script>
+<div id="trade-cash-modal" style="display:none;position:fixed;inset:0;z-index:13000;background:#0008;align-items:center;justify-content:center;padding:16px"><div style="padding:20px;border-radius:14px;background:var(--bg);color:var(--text);width:min(480px,94vw);max-height:90vh;overflow:auto"><h3>配当・税額を登録／編集</h3><input id="trade-cash-id" type="hidden"><div style="display:grid;gap:12px"><label>種類<select id="trade-cash-type"><option value="dividend">配当・分配金（税引前）</option><option value="sale_tax">売却に対する税額</option><option value="dividend_tax">配当に対する税額</option></select></label><label>受渡日／支払日<input id="trade-cash-date" type="date"></label><label>口座<select id="trade-cash-account"><option value="specified">特定口座</option><option value="nisa">NISA</option><option value="general">一般口座</option><option value="unknown">未分類</option></select></label><label>証券会社<input id="trade-cash-broker"></label><label>銘柄・摘要<input id="trade-cash-name"></label><label>金額（円）<input id="trade-cash-amount" type="number" step="any"></label><small>配当は税引前金額、税額は徴収をプラス・還付をマイナスで入力してください。売却損益には含めません。</small><button class="btn-accent" onclick="tradeCashSave()">保存</button><button class="btn-sm" onclick="document.getElementById('trade-cash-modal').style.display='none'">閉じる</button></div></div></div>
+<script>
+const TRADE_FILTER_KEY='tradeAccountFilter_v1';
+let tradeAccountScope=(()=>{try{const x=localStorage.getItem(TRADE_FILTER_KEY);return ['all','specified','nisa'].includes(x)?x:'all';}catch(e){return 'all';}})();
+function tradeAccountKind(a){if(typeof a==='string'){if(/NISA|ニーサ/i.test(a))return 'nisa';if(/特定/.test(a))return 'specified';if(/一般/.test(a))return 'general';if(/FX/i.test(a))return 'fx';return 'unknown';}if(!a)return 'unknown';if(a.accountKind)return a.accountKind;const explicit=tradeAccountKind(a.account||a.accountType||'');if(explicit!=='unknown')return explicit;if(a.cat==='FX')return 'fx';if(['growth','tsumitate','NISA成長','NISAつみたて'].includes(a.nisaType))return 'nisa';try{const k=JSON.parse(a.sbiTradeKey||'null');if(k){const type=tradeAccountKind(k[2]);if(type!=='unknown')return type;}}catch(e){}const note=tradeAccountKind(a.note||a.memo||'');if(note!=='unknown')return note;if(a.nisaType==='none')return 'specified';return 'unknown';}
+function tradeAccountMatches(a){return tradeAccountScope==='all'||tradeAccountKind(a)===tradeAccountScope;}
+function tradeAccountLabel(a){return ({specified:'特定口座',nisa:'NISA',general:'一般口座',fx:'FX口座',unknown:'口座未分類'})[tradeAccountKind(a)]||'口座未分類';}
+function tradeAccountSet(value){if(!['all','specified','nisa'].includes(value))return;tradeAccountScope=value;localStorage.setItem(TRADE_FILTER_KEY,value);for(const id of ['pnl-account-scope','sl-account-scope']){const el=document.getElementById(id);if(el)el.value=value;}if(typeof slRender==='function')slRender();if(typeof pnlRender==='function')pnlRender();}
+function tradeMoney(v,signed=false){if(v==null||!Number.isFinite(Number(v)))return '未確認';return (signed&&v>0?'＋':'')+Math.round(v).toLocaleString('ja-JP')+'円';}
+function tradeNum(v){return v==null||v===''?null:Number.isFinite(Number(v))?Number(v):null;}
+function tradeInRange(date,y1,m1,y2,m2){if(y1==null)return true;if(!/^\d{4}-\d{2}/.test(String(date||'')))return false;const d=Number(date.slice(0,4))*100+Number(date.slice(5,7));return d>=y1*100+m1&&d<=y2*100+m2;}
+function tradeCashRows(){const st=sbiTradeState(),map=new Map((st.cashRows||[]).map(r=>[r.id,r]));for(const r of st.taxRows||[]){if(r.amount==null||!r.date)continue;const type=/配当/.test(r.label||'')?'dividend_tax':'sale_tax',id='SBI|'+type+'|'+r.date+'|';if(!map.has(id))map.set(id,{id,date:r.date,type,amount:/還付/.test(r.label||'')?-Math.abs(r.amount):Number(r.amount),accountKind:'specified',broker:'SBI証券',name:r.label||'税額',source:'SBI譲渡益税明細'});}return [...map.values()];}
+function tradeCashFiltered(y1,m1,y2,m2,brokerFilter=false){return tradeCashRows().filter(r=>tradeAccountMatches(r)&&tradeInRange(r.date,y1,m1,y2,m2)&&(!brokerFilter||pnlBrokerMatch(r)));}
+function tradeCashSummaryHtml(rows){const kinds=[['dividend','配当・分配金（税引前）'],['sale_tax','売却の税額（徴収−還付）'],['dividend_tax','配当の税額（徴収−還付）']];return '<div class="trade-cash-grid">'+kinds.map(([type,label])=>{const rs=rows.filter(r=>r.type===type);return '<div class="metric"><div class="label">'+label+'</div><div class="value">'+(rs.length?tradeMoney(rs.reduce((s,r)=>s+Number(r.amount),0)):'記録なし')+'</div><small>'+rs.length+'明細</small></div>';}).join('')+'</div><p style="font-size:11px;color:var(--text3);line-height:1.6">配当・税額は受渡日／支払日基準。取り込み・登録済みの明細だけを集計します。売却損益には加算・減算せず、売却履歴の概算税額も加算しません。</p>';}
+function tradePnlExtra(y1,m1,y2,m2){const e=document.getElementById('pnl-separate-summary');if(!e)return;e.innerHTML='<div style="font-size:12px;font-weight:700;margin-bottom:8px">配当・税額（売却損益とは別集計）</div>'+tradeCashSummaryHtml(tradeCashFiltered(y1,m1,y2,m2,true));const sel=document.getElementById('pnl-account-scope');if(sel)sel.value=tradeAccountScope;}
+function accountingParseCashRows(text){const rows=sbiTradeCells(text.replace(/^\uFEFF/,'')),h=rows.findIndex(r=>r.includes('損益金額/徴収額')&&r.includes('取引'));if(h<0)return [];const head=rows[h],ix=k=>head.indexOf(k),groups=new Map();for(const r of rows.slice(h+1)){const get=k=>r[ix(k)]||'',label=r[0]||'',type=get('取引'),isTax=/^(?:譲渡益税|配当所得税).*(?:徴収|還付)/.test(label);let kind,amount,name,code='';if(isTax){kind=/^配当/.test(label)?'dividend_tax':'sale_tax';amount=Number(String(get('損益金額/徴収額')).replace(/[,，\s]/g,''));if(!Number.isFinite(amount))throw Error('税額の数値を読み取れません');if(/還付/.test(label))amount=-Math.abs(amount);name=label;}else if(/配当金|分配金/.test(type)&&!/税|徴収|還付/.test(type)){kind='dividend';amount=Number(String(get('損益金額/徴収額')).replace(/[,，\s]/g,''));if(!Number.isFinite(amount))throw Error('配当金額を読み取れません');name=get('銘柄');code=get('銘柄コード').trim();}else continue;const date=sbiTradeDate(get('受渡日'));if(!date)throw Error('配当・税額の受渡日を読み取れません');const id='SBI|'+kind+'|'+date+'|'+(kind==='dividend'?(code||name):'');if(!groups.has(id))groups.set(id,{id,type:kind,date,name,code,amount:0,accountKind:'specified',broker:'SBI証券',source:'SBI譲渡益税明細'});groups.get(id).amount+=amount;}return [...groups.values()];}
+function tradeMergeCash(state,rows){const map=new Map(tradeCashRows().map(r=>[r.id,r]));for(const r of rows)map.set(r.id,r);state.cashRows=[...map.values()];return state;}
+function slRender(){const list=document.getElementById('sl-list'),empty=document.getElementById('sl-empty'),summary=document.getElementById('sl-summary');if(!list||!empty||!summary)return;const selected=(slData||[]).filter(d=>tradeAccountMatches(d)&&!['dividend','sale_tax','dividend_tax'].includes(d.type));const known=selected.filter(d=>tradeNum(d.gain)!==null),gain=known.reduce((s,d)=>s+Number(d.gain),0),unknown=selected.length-known.length;const sel=document.getElementById('sl-account-scope');if(sel)sel.value=tradeAccountScope;
+ summary.innerHTML='<div class="metric"><div class="label">売却金額（全期間）</div><div class="value">'+tradeMoney(selected.reduce((s,d)=>s+(Number(d.sellTotal)||0),0))+'</div></div><div class="metric"><div class="label">売却損益（税引前）</div><div class="value '+(gain>=0?'up':'down')+'">'+(known.length?tradeMoney(gain,true):'未確認')+'</div><small>'+selected.length+'件'+(unknown?'／損益未確認 '+unknown+'件を除外':'')+'</small></div>';
+ empty.style.display=selected.length?'none':'block';empty.innerHTML='選択した口座の売却記録がありません';list.innerHTML=[...selected].sort((a,b)=>String(b.date||'').localeCompare(a.date||'')).map(d=>'<div class="card" style="padding:14px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:10px"><div><b>'+esc(d.name||'')+'</b> <small>'+esc(tradeAccountLabel(d))+'</small><div style="font-size:11px;color:var(--text3);margin-top:5px">約定日 '+esc(d.date||'未設定')+' ／ '+esc(d.broker||'証券会社未設定')+'</div></div><b style="white-space:nowrap;color:'+(d.gain==null?'var(--text3)':d.gain>=0?'var(--green)':'var(--danger)')+'">'+tradeMoney(d.gain,true)+'</b></div><div style="font-size:12px;margin-top:10px">数量 '+(Number(d.shares)||0).toLocaleString()+' ／ 売却金額 '+tradeMoney(d.sellTotal)+' ／ 取得費 '+tradeMoney(d.cost)+'</div><button class="btn-sm" style="margin-top:10px" onclick="slOpenModal(decodeURIComponent(\''+encodeURIComponent(String(d.id)).replace(/'/g,'%27')+'\'))">編集</button></div>').join('');
+ const tax=document.getElementById('sl-tax-summary'),cash=tradeCashFiltered(null);if(tax)tax.innerHTML='<b>配当・税額（全期間・別集計）</b>'+tradeCashSummaryHtml(cash)+'<button class="btn-sm" onclick="tradeCashEdit()">＋ 配当・税額を登録</button> <button class="btn-sm" onclick="sbiTradeExport()">配当・税額を含むバックアップ</button>'+tradeNisaUsageHtml()+'<details style="margin-top:10px"><summary>配当・税額の明細 '+cash.length+'件</summary>'+cash.sort((a,b)=>b.date.localeCompare(a.date)).map(r=>'<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">'+esc(r.date)+' ／ '+esc(({dividend:'配当・分配金',sale_tax:'売却税額',dividend_tax:'配当税額'})[r.type]||r.type)+' ／ '+esc(r.name||'')+' ／ '+esc(tradeAccountLabel(r))+' ／ '+tradeMoney(r.amount)+' <button class="btn-sm" onclick="tradeCashEdit(decodeURIComponent(\''+encodeURIComponent(r.id).replace(/'/g,'%27')+'\'))">編集</button></div>').join('')+'</details>';}
+function tradeCashEdit(id=''){const row=tradeCashRows().find(r=>r.id===id);document.getElementById('trade-cash-id').value=id;for(const [f,v] of Object.entries({type:row?.type||'dividend',date:row?.date||new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Tokyo'}),account:row?.accountKind||'nisa',broker:row?.broker||'SBI証券',name:row?.name||'',amount:row?.amount??''}))document.getElementById('trade-cash-'+f).value=v;document.getElementById('trade-cash-modal').style.display='flex';}
+async function tradeCashSave(){try{const id=document.getElementById('trade-cash-id').value,amount=tradeNum(document.getElementById('trade-cash-amount').value),date=sbiTradeDate(document.getElementById('trade-cash-date').value);if(amount===null||!date)throw Error('日付と金額を入力してください');const state=sbiTradeState(),map=new Map(tradeCashRows().map(r=>[r.id,r])),old=map.get(id)||{};const row={...old,id:id||'manual|'+Date.now()+'|'+Math.random().toString(36).slice(2),date,type:document.getElementById('trade-cash-type').value,accountKind:document.getElementById('trade-cash-account').value,broker:document.getElementById('trade-cash-broker').value.trim(),name:document.getElementById('trade-cash-name').value.trim(),amount,source:'手動登録・編集'};map.set(row.id,row);state.cashRows=[...map.values()];localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(state));document.getElementById('trade-cash-modal').style.display='none';slRender();pnlRender();await sbiTradeSaveCloud(state);}catch(e){showToast(e.message);}}
+function tradeNisaUsageHtml(){if(typeof pfNisaGetYearUsage!=='function')return '';try{const n=pfNisaGetYearUsage(new Date().getFullYear());return '<details style="margin-top:12px"><summary>NISA枠の利用状況（従来の設定値）</summary><p style="font-size:12px">'+esc(n.year)+'：つみたて枠 '+tradeMoney(n.tsY)+' ／ '+tradeMoney(n.T)+'、成長投資枠 '+tradeMoney(n.sg)+' ／ '+tradeMoney(n.G)+'</p></details>';}catch(e){return '';}}
+
 </script>
 </body>
 </html>
