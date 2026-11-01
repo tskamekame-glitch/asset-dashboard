@@ -2897,7 +2897,7 @@ function ruleCurrentPrice(r){
 </div>
 <div class="panel" id="tab-sell">
   <div class="phead"><div class="phead-inner"><h1>💴 売却収支</h1><div style="display:flex;gap:6px"><button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="slExport()">↓ 出力</button><button class="btn-accent" style="font-size:12px;padding:6px 10px" onclick="slImportClick()">↑ 取込</button><button class="btn-accent" onclick="slOpenModal()">＋ 追加</button></div></div></div>
-  <div style="padding:12px 16px"><label style="font-size:12px">口座区分 <select id="sl-account-scope" onchange="tradeAccountSet(this.value)" style="padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text)"><option value="all">全口座</option><option value="specified">特定口座のみ</option><option value="nisa">NISAのみ</option></select></label> <span style="font-size:11px;color:var(--text3)">両タブ共通の絞り込み／このタブは全期間</span></div>
+  <div style="padding:12px 16px"><label style="font-size:12px">口座区分 <select id="sl-account-scope" onchange="tradeAccountSet(this.value)" style="padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text)"><option value="all">全口座</option><option value="specified">特定口座のみ</option><option value="nisa">NISAのみ</option><option value="general">一般口座のみ</option></select></label> <span style="font-size:11px;color:var(--text3)">両タブ共通の絞り込み／このタブは全期間</span></div>
   <input type="file" id="sl-import-file" accept=".json" style="display:none" onchange="slImport(event)">
   <div class="page-inner">
     <!-- 税務サマリー -->
@@ -5252,12 +5252,12 @@ function amSyncSoldToSlData(a, soldAmount, soldPrice, soldDate, isIndex){
   try{
     if(typeof slData==='undefined'||typeof slUID==='undefined')return;
     // 既に同じ銘柄・同じ日付で登録されていたら重複追加しない
-    const isDup=slData.some(d=>d.name===a.name&&d.date===soldDate&&d.amSynced);
+    const isDup=slData.some(d=>d.name===a.name&&d.date===soldDate&&d.amSynced&&tradeAccountKind(d)===(tradeAccountKind(a)==='unknown'?'specified':tradeAccountKind(a)));
     if(isDup)return;
 
     const NISA_PAT=/NISA|ニーサ/i;
     const isFX=a.cat==='FX';
-    const account=isFX?'FX口座':(NISA_PAT.test(a.note||'')?'NISA':'特定口座');
+    const account=isFX?'FX口座':tradeAccountKind(a)==='general'?'一般':tradeAccountKind(a)==='nisa'?'NISA':'特定口座';
     const isNISA=account==='NISA';
 
     // カテゴリ変換
@@ -7356,13 +7356,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','prevMoomooAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','purchaseHistory','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','prevMoomooAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','purchaseHistory','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice','account'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.prevMoomooAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',JSON.stringify(a.purchaseHistory||[]),a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.prevMoomooAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',JSON.stringify(a.purchaseHistory||[]),a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||'',a.account||''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AV${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AV1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AW${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AW1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -7452,7 +7452,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AV1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AW1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>{
       const hasPH=typeof r[28]==='string' && /^\s*\[/.test(r[28]);
@@ -7473,7 +7473,7 @@ async function amLoadFromSheet(){
         revenueGrowth:r[idx(37)]!==undefined&&r[idx(37)]!==''?parseFloat(r[idx(37)])||0:undefined,
         opProfitGrowth:r[idx(38)]!==undefined&&r[idx(38)]!==''?parseFloat(r[idx(38)])||0:undefined,
         lastAnalysisDate:r[idx(39)]||'', analysisSource:r[idx(40)]||'', marketUpdated:r[idx(41)]||'', marketSource:r[idx(42)]||'',
-        prevClose:r[idx(43)]?parseFloat(r[idx(43)])||0:0, priceCurrency:r[idx(44)]||'', marketError:r[idx(45)]||'', marketPrice:r[idx(46)]?parseFloat(r[idx(46)])||0:0
+        prevClose:r[idx(43)]?parseFloat(r[idx(43)])||0:0, priceCurrency:r[idx(44)]||'', marketError:r[idx(45)]||'', marketPrice:r[idx(46)]?parseFloat(r[idx(46)])||0:0, account:r[idx(47)]||''
       };
     });
     // sold=falseのものはundefinedにクリーン（旧データ互換）
@@ -11999,7 +11999,7 @@ window.addEventListener('load', function(){
       <button id="pnl-tab-unrealized" onclick="pnlSetMode('unrealized')" style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.65);transition:all 0.15s">評価損益</button>
       <button id="pnl-tab-realized"   onclick="pnlSetMode('realized')"   style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,0.65);transition:all 0.15s">確定損益</button>
     </div>
-    <div style="margin-bottom:10px"><label style="font-size:12px">口座区分 <select id="pnl-account-scope" onchange="tradeAccountSet(this.value)" style="padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text)"><option value="all">全口座</option><option value="specified">特定口座のみ</option><option value="nisa">NISAのみ</option></select></label></div>
+    <div style="margin-bottom:10px"><label style="font-size:12px">口座区分 <select id="pnl-account-scope" onchange="tradeAccountSet(this.value)" style="padding:7px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text)"><option value="all">全口座</option><option value="specified">特定口座のみ</option><option value="nisa">NISAのみ</option><option value="general">一般口座のみ</option></select></label></div>
     <!-- フィルタ行: 全銘柄チップ + 累計チェック + 期間レンジ -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div style="position:relative">
@@ -16257,7 +16257,7 @@ function pnlRender(){
   const unknownCount=items.filter(i=>i.type==='realized'&&i.gain==null).length;
   if(unknownCount){subEl.textContent+=` ／ 損益未確認 ${unknownCount}件（合計から除外）`;totalEl.textContent=items.some(i=>i.gain!=null)?totalEl.textContent+'（確認済分）':'未確認';}
 
-  subEl.textContent+=' ／ '+(tradeAccountScope==='all'?'全口座':tradeAccountScope==='nisa'?'NISAのみ':'特定口座のみ');
+  subEl.textContent+=' ／ '+(tradeAccountScope==='all'?'全口座':tradeAccountScope==='nisa'?'NISAのみ':tradeAccountScope==='general'?'一般口座のみ':'特定口座のみ');
   tradePnlExtra(pnlCumulative?null:y1,m1,y2,m2);
   // リスト描画（kaView風・銘柄別ランキング）
   if(!items.length){
@@ -17525,7 +17525,7 @@ function sbiTradeParse(text){
  if(errors.length)throw Error(errors.join('\n'));if(!trades.length)throw Error('有効な国内株式の現物取引がありません。'+excluded.join('\n'));trades.excluded=excluded;return trades;
 }
 function sbiTradeEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function sbiTradeMatch(t,a){return String(a.broker||'')==='SBI証券'&&String(a.code||'').toUpperCase()===t.code&&sbiTradeAccount(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':a.note||'特定')===t.account;}
+function sbiTradeMatch(t,a){return String(a.broker||'')==='SBI証券'&&String(a.code||'').toUpperCase()===t.code&&sbiTradeAccount(a.account||a.accountType||(a.nisaType==='growth'?'NISA成長':a.nisaType==='tsumitate'?'NISAつみたて':a.note||'特定'))===t.account;}
 function sbiTradeLegacy(t){return slData.filter(d=>!d.sbiTradeKey&&d.date===t.date&&Number(d.shares)===t.shares&&Math.abs(Number(d.sellPrice)-t.price)<0.001&&sbiTradeAccount(d.account)===t.account&&(String(d.code||'')===t.code||String(d.name||'').replace(/\s/g,'')===t.name.replace(/\s/g,'')));}
 let sbiTradePending=[];
 function sbiTradeOpen(){document.getElementById('sbiTradeModal').style.display='flex';document.getElementById('sbiTradeResult').textContent='CSVまたは見出し付きの表を入力し、「確認」を押してください。';}
@@ -18111,13 +18111,13 @@ async function tjRefreshAll(onlyCode){
 </script>
 <script>
 function sbiPortfolioIsText(t){return /^"?ポートフォリオ一覧"?/m.test(t)&&/数量/.test(t)&&/評価額/.test(t);}
-function sbiPortfolioParse(texts){const rows=[],pages=new Set();for(const text of new Set(texts)){let section='';const page=String(text).match(/ページ[：:]\s*(\d+)/);if(page&&pages.has(page[1]))throw Error('同じページ番号の異なるCSVがあります。同じ時点の各ページを1つずつ選択してください');if(page)pages.add(page[1]);for(const r of sbiTradeCells(text)){const c=r[0]||'';if(/^(株式|投資信託)[（(]/.test(c)&&!/合計/.test(c)){section=c;continue;}if(!section||r.length<11||/合計|^評価額$|^銘柄（コード）$|^ファンド名$/.test(c))continue;const fund=/^投資信託/.test(section),m=c.match(/^([0-9]{4}|[0-9]{3}[A-Z])\s+(.+)$/i);if(!fund&&!m)continue;const num=v=>{const n=Number(String(v||'').replace(/[,＋+]/g,''));return Number.isFinite(n)?n:null;};const amount=num(r[10]),qty=num(r[2]),cost=num(r[4]),price=num(r[5]);if(amount===null||qty===null||cost===null||price===null)throw Error('数値を解析できません：'+c);if(amount<=0)continue;rows.push({code:fund?'':m[1].toUpperCase(),name:fund?c:m[2],fund,account:/NISA.*つみたて/.test(section)?'tsumitate':/NISA.*成長/.test(section)?'growth':'none',shares:fund?qty/10000:qty,costPrice:cost,price,amount,buyDate:sbiTradeDate(r[1])});}}
+function sbiPortfolioParse(texts){const rows=[],pages=new Set();for(const text of new Set(texts)){let section='';const page=String(text).match(/ページ[：:]\s*(\d+)/);if(page&&pages.has(page[1]))throw Error('同じページ番号の異なるCSVがあります。同じ時点の各ページを1つずつ選択してください');if(page)pages.add(page[1]);for(const r of sbiTradeCells(text)){const c=r[0]||'';if(/^(株式|投資信託)[（(]/.test(c)&&!/合計/.test(c)){section=c;continue;}if(!section||r.length<11||/合計|^評価額$|^銘柄（コード）$|^ファンド名$/.test(c))continue;const fund=/^投資信託/.test(section),m=c.match(/^([0-9]{4}|[0-9]{3}[A-Z])\s+(.+)$/i);if(!fund&&!m)continue;const num=v=>{const n=Number(String(v||'').replace(/[,＋+]/g,''));return Number.isFinite(n)?n:null;};const amount=num(r[10]),qty=num(r[2]),cost=num(r[4]),price=num(r[5]);if(amount===null||qty===null||cost===null||price===null)throw Error('数値を解析できません：'+c);if(amount<=0)continue;rows.push({code:fund?'':m[1].toUpperCase(),name:fund?c:m[2],fund,account:/NISA.*つみたて/.test(section)?'tsumitate':/NISA.*成長/.test(section)?'growth':/一般/.test(section)?'general':'none',shares:fund?qty/10000:qty,costPrice:cost,price,amount,buyDate:sbiTradeDate(r[1])});}}
  if(!rows.length)throw Error('有効な保有行がありません');return rows;}
 function sbiPortfolioNorm(s){return String(s||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();}
 function sbiPortfolioGroups(rows){const groups=new Map();for(const r of rows){const k=(r.fund?'F|'+sbiPortfolioNorm(r.name):'S|'+r.code)+'|'+r.account;if(!groups.has(k))groups.set(k,{...r,shares:0,amount:0,costTotal:0,history:[]});const g=groups.get(k);g.shares+=r.shares;g.amount+=r.amount;g.costTotal+=r.costPrice*r.shares;if(r.buyDate)g.history.push({date:r.buyDate,shares:r.shares,costPrice:r.costPrice,broker:'SBI証券'});}for(const g of groups.values()){g.costPrice=g.shares?g.costTotal/g.shares:g.costPrice;g.amount=Math.round(g.amount*100)/100;}return [...groups.values()];}
 async function sbiPortfolioApply(texts){const rows=sbiPortfolioParse(texts),groups=sbiPortfolioGroups(rows),next=JSON.parse(JSON.stringify(amAccounts));let added=0,updated=0,id=next.reduce((m,a)=>Math.max(m,Number(a.id)||0),0)+1;
- for(const g of groups){const candidates=next.filter(a=>!a.sold&&Number(a.amount)>0&&(!a.broker||a.broker==='SBI証券')&&(a.nisaType||'none')===g.account&&(g.code?(String(a.code||'').toUpperCase()===g.code||(!a.code&&sbiPortfolioNorm(a.name)===sbiPortfolioNorm(g.name))):(!a.code&&sbiPortfolioNorm(a.name)===sbiPortfolioNorm(g.name))));if(candidates.length>1)throw Error(`${g.name}：同じ口座区分の既存行が複数あります。重複チェックで確認してください`);let a=candidates[0];if(!a){a={id:id++,cat:g.fund?(/日経|TOPIX|日本/.test(g.name)?'日本インデックス':'全世界インデックス'):'個別株'};next.push(a);added++;}else updated++;
- Object.assign(a,{name:g.name,code:g.code,broker:'SBI証券',nisaType:g.account,shares:g.shares,price:g.price,costPrice:g.costPrice,amount:g.amount,updated:todayStr(),note:`[SBI CSV ${todayStr()}]`,importSource:'sbi_csv'});if(g.history.length){a.purchaseHistory=g.history;a.buyDate=g.history.map(x=>x.date).sort()[0];}}
+ for(const g of groups){const candidates=next.filter(a=>!a.sold&&Number(a.amount)>0&&(!a.broker||a.broker==='SBI証券')&&(g.account==='general'?tradeAccountKind(a)==='general':(a.nisaType||'none')===g.account&&tradeAccountKind(a)!=='general')&&(g.code?(String(a.code||'').toUpperCase()===g.code||(!a.code&&sbiPortfolioNorm(a.name)===sbiPortfolioNorm(g.name))):(!a.code&&sbiPortfolioNorm(a.name)===sbiPortfolioNorm(g.name))));if(candidates.length>1)throw Error(`${g.name}：同じ口座区分の既存行が複数あります。重複チェックで確認してください`);let a=candidates[0];if(!a){a={id:id++,cat:g.fund?(/日経|TOPIX|日本/.test(g.name)?'日本インデックス':'全世界インデックス'):'個別株'};next.push(a);added++;}else updated++;
+ Object.assign(a,{name:g.name,code:g.code,broker:'SBI証券',nisaType:g.account==='general'?'none':g.account,account:g.account==='general'?'一般':g.account==='none'?'特定':g.account==='growth'?'NISA成長':'NISAつみたて',shares:g.shares,price:g.price,costPrice:g.costPrice,amount:g.amount,updated:todayStr(),note:`[SBI CSV ${todayStr()}]`,importSource:'sbi_csv'});if(g.history.length){a.purchaseHistory=g.history;a.buyDate=g.history.map(x=>x.date).sort()[0];}}
  localStorage.setItem('sbiPortfolio_beforeImport',JSON.stringify(amAccounts));amAccounts=next;window.amAccounts=amAccounts;const st=sbiTradeState();st.baseline=null;localStorage.setItem(SBI_TRADE_STATE,JSON.stringify(st));amSaveToLocal();amRender();refreshHome();await amSaveToSheet();await sbiTradeSaveCloud(st);const total=groups.reduce((s,g)=>s+g.amount,0),message=`SBI保有CSV：${rows.length}明細 → ${groups.length}銘柄・口座／${added}件追加・${updated}件更新／評価額 ${total.toLocaleString('ja-JP',{maximumFractionDigits:2})}円。CSVにない行は保持。`;showToast(message,10000);const audit=document.getElementById('sbiSyncAudit');if(audit){audit.style.display='block';audit.textContent=message;}}
 </script>
 <script>
@@ -18279,11 +18279,11 @@ function wwRender(){
 <div id="trade-cash-modal" style="display:none;position:fixed;inset:0;z-index:13000;background:#0008;align-items:center;justify-content:center;padding:16px"><div style="padding:20px;border-radius:14px;background:var(--bg);color:var(--text);width:min(480px,94vw);max-height:90vh;overflow:auto"><h3>配当・税額を登録／編集</h3><input id="trade-cash-id" type="hidden"><div style="display:grid;gap:12px"><label>種類<select id="trade-cash-type"><option value="dividend">配当・分配金（税引前）</option><option value="sale_tax">売却に対する税額</option><option value="dividend_tax">配当に対する税額</option></select></label><label>受渡日／支払日<input id="trade-cash-date" type="date"></label><label>口座<select id="trade-cash-account"><option value="specified">特定口座</option><option value="nisa">NISA</option><option value="general">一般口座</option><option value="unknown">未分類</option></select></label><label>証券会社<input id="trade-cash-broker"></label><label>銘柄・摘要<input id="trade-cash-name"></label><label>金額（円）<input id="trade-cash-amount" type="number" step="any"></label><small>配当は税引前金額、税額は徴収をプラス・還付をマイナスで入力してください。売却損益には含めません。</small><button class="btn-accent" onclick="tradeCashSave()">保存</button><button class="btn-sm" onclick="document.getElementById('trade-cash-modal').style.display='none'">閉じる</button></div></div></div>
 <script>
 const TRADE_FILTER_KEY='tradeAccountFilter_v1';
-let tradeAccountScope=(()=>{try{const x=localStorage.getItem(TRADE_FILTER_KEY);return ['all','specified','nisa'].includes(x)?x:'all';}catch(e){return 'all';}})();
+let tradeAccountScope=(()=>{try{const x=localStorage.getItem(TRADE_FILTER_KEY);return ['all','specified','nisa','general'].includes(x)?x:'all';}catch(e){return 'all';}})();
 function tradeAccountKind(a){if(typeof a==='string'){if(/NISA|ニーサ/i.test(a))return 'nisa';if(/特定/.test(a))return 'specified';if(/一般/.test(a))return 'general';if(/FX/i.test(a))return 'fx';return 'unknown';}if(!a)return 'unknown';if(a.accountKind)return a.accountKind;const explicit=tradeAccountKind(a.account||a.accountType||'');if(explicit!=='unknown')return explicit;if(a.cat==='FX')return 'fx';if(['growth','tsumitate','NISA成長','NISAつみたて'].includes(a.nisaType))return 'nisa';try{const k=JSON.parse(a.sbiTradeKey||'null');if(k){const type=tradeAccountKind(k[2]);if(type!=='unknown')return type;}}catch(e){}const note=tradeAccountKind(a.note||a.memo||'');if(note!=='unknown')return note;if(a.nisaType==='none')return 'specified';return 'unknown';}
 function tradeAccountMatches(a){return tradeAccountScope==='all'||tradeAccountKind(a)===tradeAccountScope;}
 function tradeAccountLabel(a){return ({specified:'特定口座',nisa:'NISA',general:'一般口座',fx:'FX口座',unknown:'口座未分類'})[tradeAccountKind(a)]||'口座未分類';}
-function tradeAccountSet(value){if(!['all','specified','nisa'].includes(value))return;tradeAccountScope=value;localStorage.setItem(TRADE_FILTER_KEY,value);for(const id of ['pnl-account-scope','sl-account-scope']){const el=document.getElementById(id);if(el)el.value=value;}if(typeof slRender==='function')slRender();if(typeof pnlRender==='function')pnlRender();}
+function tradeAccountSet(value){if(!['all','specified','nisa','general'].includes(value))return;tradeAccountScope=value;localStorage.setItem(TRADE_FILTER_KEY,value);for(const id of ['pnl-account-scope','sl-account-scope']){const el=document.getElementById(id);if(el)el.value=value;}if(typeof slRender==='function')slRender();if(typeof pnlRender==='function')pnlRender();}
 function tradeMoney(v,signed=false){if(v==null||!Number.isFinite(Number(v)))return '未確認';return (signed&&v>0?'＋':'')+Math.round(v).toLocaleString('ja-JP')+'円';}
 function tradeNum(v){return v==null||v===''?null:Number.isFinite(Number(v))?Number(v):null;}
 function tradeInRange(date,y1,m1,y2,m2){if(y1==null)return true;if(!/^\d{4}-\d{2}/.test(String(date||'')))return false;const d=Number(date.slice(0,4))*100+Number(date.slice(5,7));return d>=y1*100+m1&&d<=y2*100+m2;}
