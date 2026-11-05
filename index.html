@@ -3943,7 +3943,7 @@ function amNormalizeLedger(){
     if(/^SWCC$/i.test(name) && cat==='外国株式')a.cat='個別株';
     const broker=String(a.broker||'').trim();
     const code=norm(a.code||'');
-    const key=[broker,code?'c:'+code:'n:'+norm(name),nisa(a),String(a.cat||'')].join('|');
+    const key=[broker,code?'c:'+code:'n:'+norm(name),nisa(a),String(a.cat||''),a.separateLot?('lot:'+String(a.id)):'' ].join('|');
     // 同一証券会社・同一銘柄・同一NISA区分は1行に集約（ロット分割は評価額・株数を合算）
     if(!groups.has(key)){groups.set(key,a);clean.push(a);}
     else{
@@ -5680,8 +5680,12 @@ async function amCopyAccount(id){
   const copy={...orig,id:newId,updated:todayStr()};
   // 売却関連・前回SBI金額・SBI同期タグは新規コピーには引き継がない
   delete copy.sold;delete copy.soldDate;delete copy.soldAmount;delete copy.soldPrice;
-  delete copy.prevSBIAmount;
+  delete copy.prevSBIAmount;delete copy.prevMoomooAmount;
   copy.memo='';
+  // 台帳の自動集約（同一証券会社・銘柄コード・NISA区分・カテゴリを1行に合算）で
+  // 元銘柄へ吸収されて消えないよう、コピーは独立ロットとして扱う（amNormalizeLedger側で集約対象外）。
+  copy.separateLot=true;
+  if(Array.isArray(copy.purchaseHistory))copy.purchaseHistory=copy.purchaseHistory.map(h=>({...h}));
   amAccounts.splice(idx+1,0,copy);// コピー元の直後に挿入
   amSaveToLocal();
   amRender();
@@ -7356,13 +7360,13 @@ async function amSaveToSheet(){
   if(!amIsOnline||!amSpreadsheetId){amSaveToLocal();return;}
   setSyncStatus('syncing','保存中...');
   try{
-    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','prevMoomooAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','purchaseHistory','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice','account'];
+    const hdr=['id','name','cat','amount','note','shares','price','updated','code','costPrice','fxRate','sold','soldDate','soldAmount','soldPrice','prevSBIAmount','prevMoomooAmount','earningsDate','sell1','sell2','sell3','per','pbr','eps1','eps2','sector','broker','buyDate','purchaseHistory','nisaType','targetBuyPrice','targetSellPrice','targetRatio','watchStatus','watchMemo','strategy','analystTargetPrice','forwardPER','revenueGrowth','opProfitGrowth','lastAnalysisDate','analysisSource','marketUpdated','marketSource','prevClose','priceCurrency','marketError','marketPrice','account','separateLot'];
     const values=[hdr,...amAccounts.map(a=>[
       a.id,a.name,a.cat,a.amount,a.note||'',a.shares||0,a.price||0,a.updated,a.code||'',a.costPrice||0,
-      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.prevMoomooAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',JSON.stringify(a.purchaseHistory||[]),a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||'',a.account||''
+      a.fxRate||'',a.sold?'1':'',a.soldDate||'',a.soldAmount||'',a.soldPrice||'',a.prevSBIAmount||'',a.prevMoomooAmount||'',a.earningsDate||'',a.sell1||'',a.sell2||'',a.sell3||'',a.per||'',a.pbr||'',a.eps1||'',a.eps2||'',a.sector||'',a.broker||'',a.buyDate||'',JSON.stringify(a.purchaseHistory||[]),a.nisaType||'',a.targetBuyPrice||'',a.targetSellPrice||'',a.targetRatio||'',a.watchStatus||'',a.watchMemo||'',a.strategy||'',a.analystTargetPrice||'',a.forwardPER||'',a.revenueGrowth??'',a.opProfitGrowth??'',a.lastAnalysisDate||'',a.analysisSource||'',a.marketUpdated||'',a.marketSource||'',a.prevClose||'',a.priceCurrency||'',a.marketError||'',a.marketPrice||'',a.account||'',a.separateLot?'1':''
     ])];
-    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AW${values.length+10}`,valueInputOption:'RAW',resource:{values}});
-    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AW1000`});
+    await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!A1:AX${values.length+10}`,valueInputOption:'RAW',resource:{values}});
+    if(amAccounts.length+1<200)await gapi.client.sheets.spreadsheets.values.clear({spreadsheetId:amSpreadsheetId,range:`accounts!A${amAccounts.length+2}:AX1000`});
     // 推移グラフの損益計算から除外する銘柄リストをQ1セルに保存（端末間で共有するため）
     await gapi.client.sheets.spreadsheets.values.update({spreadsheetId:amSpreadsheetId,range:`accounts!Q1`,valueInputOption:'RAW',resource:{values:[[JSON.stringify(trGainExcludeNames)]]}});
     amSaveToLocal();setSyncStatus('ok','同期済み✓');showToast('✓ 保存・同期しました');
@@ -7452,7 +7456,7 @@ async function amFindOrCreateSheet(){
 async function amLoadFromSheet(){
   if(!amSpreadsheetId)return;
   try{
-    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AW1000'});
+    const res=await gapi.client.sheets.spreadsheets.values.get({spreadsheetId:amSpreadsheetId,range:'accounts!A2:AX1000'});
     const rows=res.result.values||[];
     amAccounts=rows.filter(r=>r[0]).map(r=>{
       const hasPH=typeof r[28]==='string' && /^\s*\[/.test(r[28]);
@@ -7473,7 +7477,7 @@ async function amLoadFromSheet(){
         revenueGrowth:r[idx(37)]!==undefined&&r[idx(37)]!==''?parseFloat(r[idx(37)])||0:undefined,
         opProfitGrowth:r[idx(38)]!==undefined&&r[idx(38)]!==''?parseFloat(r[idx(38)])||0:undefined,
         lastAnalysisDate:r[idx(39)]||'', analysisSource:r[idx(40)]||'', marketUpdated:r[idx(41)]||'', marketSource:r[idx(42)]||'',
-        prevClose:r[idx(43)]?parseFloat(r[idx(43)])||0:0, priceCurrency:r[idx(44)]||'', marketError:r[idx(45)]||'', marketPrice:r[idx(46)]?parseFloat(r[idx(46)])||0:0, account:r[idx(47)]||''
+        prevClose:r[idx(43)]?parseFloat(r[idx(43)])||0:0, priceCurrency:r[idx(44)]||'', marketError:r[idx(45)]||'', marketPrice:r[idx(46)]?parseFloat(r[idx(46)])||0:0, account:r[idx(47)]||'', separateLot:r[idx(48)]==='1'||r[idx(48)]===true
       };
     });
     // sold=falseのものはundefinedにクリーン（旧データ互換）
