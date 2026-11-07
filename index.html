@@ -910,6 +910,17 @@ tr.wl-row-order td:first-child{box-shadow:inset 3px 0 0 #185FA5}
     <div id="soldSummaryBanner"></div>
     <div id="totalCard"></div>
     <div id="dailyPnlPanel"></div>
+    <div id="amFundamentalsPanel" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📊 分析情報一括更新</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:10px">週次ファンダメンタルJSON（asset-fundamentals-v1）を読み込むと、PER・予想PER・PBR・アナリスト目標株価・売上高／営業利益前年比・次回決算日を、銘柄編集の分析欄へまとめて反映します。残高・株数・株価・取得単価は変更しません。JSONに無い項目は今の値をそのまま残します。</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button class="btn-sm" type="button" onclick="document.getElementById('fupFileInput').click()">📥 更新JSONを読み込む</button>
+        <input type="file" id="fupFileInput" accept=".json,application/json" style="display:none" onchange="fupOnFile(event)">
+        <button class="btn-sm" type="button" id="fupApplyBtn" onclick="fupApply()" disabled style="font-weight:700;color:#0F6E56;border-color:#0F6E56">一括保存</button>
+        <span id="fupStatus" style="font-size:11px;color:var(--text3)"></span>
+      </div>
+      <div id="fupPreview" style="margin-top:10px"></div>
+    </div>
     <div class="summary-grid" id="mgSummaryGrid"></div>
     <div class="export-bar">
       <button class="btn-sm" onclick="amExportCSV()">↓ CSV書き出し</button>
@@ -19214,3 +19225,172 @@ function opsRender(){
 }
 setTimeout(()=>{try{opsRender()}catch(e){}},1200);
 </script>
+
+<script>
+// ============================================================
+// 分析情報一括更新（asset-fundamentals-v1 JSON の読み込み）
+// 週次ファンダメンタルJSONを、資産管理の銘柄編集と同じ分析フィールド
+// （per / forwardPER / pbr / analystTargetPrice / revenueGrowth /
+//   opProfitGrowth / earningsDate / lastAnalysisDate / analysisSource）
+// へ反映する。残高・株数・株価・取得単価には一切触れない。
+// JSONに含まれない項目は既存値を保持する（上書きで消さない）。
+// ============================================================
+let fupPending=null;
+const FUP_FIELDS=[
+  {key:'per',label:'PER'},
+  {key:'forwardPER',label:'予想PER'},
+  {key:'pbr',label:'PBR'},
+  {key:'analystTargetPrice',label:'アナリスト目標株価'},
+  {key:'revenueGrowth',label:'売上高前年比(%)'},
+  {key:'opProfitGrowth',label:'営業利益前年比(%)'},
+  {key:'earningsDate',label:'次回決算日'}
+];
+function fupEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fupNormCode(c){return String(c||'').trim().toUpperCase();}
+function fupFmtVal(key,v){
+  if(v===undefined||v===null||v==='')return '未設定';
+  if(key==='earningsDate')return String(v);
+  const n=Number(v);
+  return Number.isFinite(n)?String(Math.round(n*100)/100):String(v);
+}
+function fupSetStatus(msg,isError){
+  const el=document.getElementById('fupStatus');
+  if(el){el.textContent=msg||'';el.style.color=isError?'var(--danger)':'var(--text3)';}
+}
+function fupOnFile(ev){
+  const file=ev.target.files&&ev.target.files[0];
+  ev.target.value='';
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{fupLoad(String(reader.result||''));}
+    catch(e){console.warn('fup load err',e);fupPending=null;fupRenderPreview();fupSetStatus('読み込みに失敗しました：'+(e&&e.message?e.message:e),true);}
+  };
+  reader.onerror=()=>{fupSetStatus('ファイルの読み込みに失敗しました',true);};
+  reader.readAsText(file);
+}
+function fupLoad(text){
+  const data=JSON.parse(text);
+  if(!data||data.format!=='asset-fundamentals-v1')throw new Error('形式が asset-fundamentals-v1 ではありません');
+  if(!Array.isArray(data.records)||!data.records.length)throw new Error('records がありません');
+  if(typeof amAccounts==='undefined'||!Array.isArray(amAccounts)||!amAccounts.length){
+    fupPending={data,plans:[],unmatched:data.records.slice(),noData:true};
+    fupRenderPreview();
+    fupSetStatus('保有データがまだ読み込まれていません',true);
+    return;
+  }
+  const byId=new Map(),byCode=new Map();
+  amAccounts.forEach(a=>{
+    if(!a||a.sold)return;
+    byId.set(String(a.id),a);
+    const c=fupNormCode(a.code);
+    if(c){if(!byCode.has(c))byCode.set(c,[]);byCode.get(c).push(a);}
+  });
+  const plans=[],unmatched=[];
+  data.records.forEach(rec=>{
+    if(!rec||typeof rec!=='object')return;
+    const targetMap=new Map();
+    (Array.isArray(rec.ids)?rec.ids:[]).forEach(id=>{
+      const a=byId.get(String(id));
+      if(a)targetMap.set(a.id,a);
+    });
+    (byCode.get(fupNormCode(rec.code))||[]).forEach(a=>targetMap.set(a.id,a));
+    const targets=[...targetMap.values()];
+    if(!targets.length){unmatched.push(rec);return;}
+    const fields=(rec.fields&&typeof rec.fields==='object')?rec.fields:{};
+    const checked=rec.checkedAt||data.checkedAt||'';
+    const targetPlans=targets.map(a=>{
+      const changes=[];
+      FUP_FIELDS.forEach(f=>{
+        if(!(f.key in fields))return;
+        const raw=fields[f.key];
+        if(f.key==='earningsDate'){
+          const to=String(raw||'').trim();
+          if(!to)return;
+          if(String(a[f.key]||'')!==to)changes.push({key:f.key,label:f.label,from:a[f.key]||'',to});
+        }else{
+          const to=Number(raw);
+          if(!Number.isFinite(to))return;
+          const cur=Number(a[f.key]);
+          if(!Number.isFinite(cur)||Math.abs(cur-to)>1e-9)changes.push({key:f.key,label:f.label,from:(a[f.key]??''),to});
+        }
+      });
+      const metaDiff=(checked&&(a.lastAnalysisDate||'')!==checked)||(rec.source&&(a.analysisSource||'')!==rec.source);
+      return {accountId:a.id,accountName:a.name||'',changes,metaDiff};
+    });
+    plans.push({record:rec,targets:targetPlans});
+  });
+  fupPending={data,plans,unmatched,noData:false};
+  fupRenderPreview();
+  const updCount=plans.reduce((n,p)=>n+p.targets.filter(t=>t.changes.length||t.metaDiff).length,0);
+  fupSetStatus(updCount?('プレビューを確認して「一括保存」を押してください'):('変更はありませんでした'));
+}
+function fupRenderPreview(){
+  const box=document.getElementById('fupPreview');
+  const btn=document.getElementById('fupApplyBtn');
+  if(!box)return;
+  if(!fupPending){box.innerHTML='';if(btn)btn.disabled=true;return;}
+  const {data,plans,unmatched}=fupPending;
+  const updTargets=plans.reduce((n,p)=>n+p.targets.filter(t=>t.changes.length||t.metaDiff).length,0);
+  let html='<div style="font-size:12px;line-height:1.7">';
+  html+='<div>確認日：<b>'+fupEsc(data.checkedAt||'—')+'</b> ／ JSON銘柄：<b>'+plans.length+unmatched.length+'</b>件 ／ 保有と一致：<b>'+plans.length+'</b>件 ／ 更新する口座：<b>'+updTargets+'</b>件'+(unmatched.length?' ／ 対象外（保有なし・売却済みのみ）：<b>'+unmatched.length+'</b>件':'')+'</div>';
+  plans.forEach(p=>{
+    const rec=p.record;
+    html+='<div style="border-top:0.5px solid var(--border);padding:7px 0">';
+    html+='<div style="font-weight:600">'+fupEsc(rec.name||'')+'（'+fupEsc(rec.code||'')+'）</div>';
+    p.targets.forEach(t=>{
+      html+='<div style="color:var(--text2);font-size:11px">▸ '+fupEsc(t.accountName||('ID '+t.accountId))+'：';
+      if(t.changes.length){
+        html+=t.changes.map(ch=>fupEsc(ch.label)+' '+fupEsc(fupFmtVal(ch.key,ch.from))+' → <b>'+fupEsc(fupFmtVal(ch.key,ch.to))+'</b>').join('、');
+        if(t.metaDiff)html+='（最終分析確認日・情報源も更新）';
+      }else if(t.metaDiff){
+        html+='数値の変更なし（最終分析確認日・情報源のみ更新）';
+      }else{
+        html+='変更なし';
+      }
+      html+='</div>';
+    });
+    if(rec.earningsStatus==='estimated'&&!(rec.fields&&rec.fields.earningsDate)){
+      html+='<div style="color:var(--text3);font-size:11px">次回決算日は未確認のため、現在の値を保持します</div>';
+    }
+    html+='</div>';
+  });
+  if(unmatched.length){
+    html+='<div style="border-top:0.5px solid var(--border);padding:7px 0;color:var(--text3);font-size:11px">対象外：'+unmatched.map(r=>fupEsc((r.name||'')+'（'+(r.code||'')+'）')).join('、')+'</div>';
+  }
+  html+='</div>';
+  box.innerHTML=html;
+  if(btn)btn.disabled=!(updTargets>0);
+}
+async function fupApply(){
+  if(!fupPending||fupPending.noData)return;
+  const btn=document.getElementById('fupApplyBtn');
+  if(btn)btn.disabled=true;
+  let applied=0;
+  fupPending.plans.forEach(p=>{
+    const rec=p.record;
+    const checked=rec.checkedAt||fupPending.data.checkedAt||'';
+    p.targets.forEach(t=>{
+      if(!t.changes.length&&!t.metaDiff)return;
+      const a=amAccounts.find(x=>x.id===t.accountId);
+      if(!a||a.sold)return;
+      t.changes.forEach(ch=>{a[ch.key]=(ch.key==='earningsDate')?String(ch.to):Number(ch.to);});
+      if(checked)a.lastAnalysisDate=checked;
+      if(rec.source)a.analysisSource=rec.source;
+      a.updated=(typeof todayStr==='function')?todayStr():new Date().toISOString().slice(0,10);
+      applied++;
+    });
+  });
+  const checkedAt=fupPending.data.checkedAt||'';
+  fupPending=null;
+  try{amSaveToLocal();}catch(e){console.warn('fup save local err',e);}
+  try{amRender();}catch(e){console.warn('fup render err',e);}
+  try{await amSaveToSheet();}catch(e){console.warn('fup save sheet err',e);}
+  try{refreshHome();}catch(e){}
+  const box=document.getElementById('fupPreview');
+  if(box)box.innerHTML='<div style="font-size:12px;color:#0F6E56">✓ 一括保存しました（確認日 '+fupEsc(checkedAt)+' のJSONで '+applied+'件の口座を更新）。銘柄編集の分析欄と、業績判断・売買判断など各タブへ反映されます。</div>';
+  fupSetStatus('');
+  if(typeof showToast==='function')showToast('✓ 分析情報を一括更新しました（'+applied+'件）');
+}
+</script>
+
